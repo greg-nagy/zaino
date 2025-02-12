@@ -70,36 +70,14 @@ pub struct StateService {
 impl StateService {
     /// Initializes a new StateService instance and starts sync process.
     pub async fn spawn(config: StateServiceConfig) -> Result<Self, StateServiceError> {
-        let rpc_client = match config.validator_cookie_auth {
-            true => JsonRpcConnector::new_with_cookie_auth(
-                test_node_and_return_url(
-                    config.validator_rpc_address,
-                    config.validator_cookie_auth,
-                    config.validator_cookie_path.clone(),
-                    None,
-                    None,
-                )
-                .await?,
-                Path::new(
-                    &config
-                        .validator_cookie_path
-                        .clone()
-                        .expect("validator cookie authentication path missing"),
-                ),
-            )?,
-            false => JsonRpcConnector::new_with_basic_auth(
-                test_node_and_return_url(
-                    config.validator_rpc_address,
-                    false,
-                    None,
-                    Some(config.validator_rpc_user.clone()),
-                    Some(config.validator_rpc_password.clone()),
-                )
-                .await?,
-                config.validator_rpc_user.clone(),
-                config.validator_rpc_password.clone(),
-            )?,
-        };
+        let rpc_client = JsonRpcConnector::new_from_config_parts(
+            config.validator_cookie_auth,
+            config.validator_rpc_address,
+            config.validator_rpc_user.clone(),
+            config.validator_rpc_password.clone(),
+            config.validator_cookie_path.clone(),
+        )
+        .await?;
 
         let (read_state_service, latest_chain_tip, chain_tip_change, sync_task_handle) =
             init_read_state_with_syncer(

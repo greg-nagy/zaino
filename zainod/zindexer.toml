@@ -5,10 +5,10 @@
 # Zainod's gRPC server listen address.
 #
 # Must use TLS when connecting to non localhost addresses.
-gprc_listen_address = "localhost:8137"
+grpc_listen_address = "localhost:8137"
 
 # Enables TLS for the gRPC server.
-gprc_tls = false
+grpc_tls = false
 
 # Path to the TLS certificate file in PEM format.
 # Required if `tls` is true.
@@ -23,7 +23,7 @@ tls_key_path = "None"
 # JsonRPC client config:
 
 # Full node / validator listen address.
-# 
+#
 # Must be a "pravate" address as defined in [IETF RFC 1918] for ipv4 addreses and [IETF RFC 4193] for ipv6 addreses.
 #
 # Must use validator rpc cookie authentication when connecting to non localhost addresses.
@@ -99,6 +99,5 @@ no_db = false
 #
 # For use by lightweight wallets that do not want to run any extra processes.
 #
-# NOTE: Currently unimplemented as will require either a Tonic backend or a JsonRPC server.
-# no_state = false
+ no_state = false
 

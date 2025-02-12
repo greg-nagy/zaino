@@ -3,11 +3,41 @@
 use std::{
     net::{IpAddr, SocketAddr, ToSocketAddrs},
     path::PathBuf,
+    str::FromStr,
 };
 
+use toml::Value;
 use tracing::warn;
 
 use crate::error::IndexerError;
+
+/// Arguments:
+/// config: the config to parse
+/// field: the name of the variable to define, which matches the name of
+///     the config field
+/// kind: the toml::Value variant to parse the config field as
+/// default: the default config to fall back on
+/// handle: a function which returns an Option. Usually, this is
+///     simply [Some], to wrap the parsed value in Some when found
+macro_rules! parse_field_or_warn_and_default {
+    ($config:ident, $field:ident, $kind:ident, $default:ident, $handle:expr) => {
+        let $field = $config
+            .get(stringify!($field))
+            .map(|value| match value {
+                Value::String(string) if string == "None" => None,
+                Value::$kind(val_inner) => $handle(val_inner.clone()),
+                _ => {
+                    warn!("Invalid `{}`, using default.", stringify!($field));
+                    None
+                }
+            })
+            .unwrap_or_else(|| {
+                warn!("Missing `{}`, using default.", stringify!($field));
+                None
+            })
+            .unwrap_or_else(|| $default.$field);
+    };
+}
 
 /// Config information required for Zaino.
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -271,166 +301,125 @@ pub fn load_config(file_path: &std::path::PathBuf) -> Result<IndexerConfig, Inde
         let parsed_config: toml::Value = toml::from_str(&contents)
             .map_err(|e| IndexerError::ConfigError(format!("TOML parsing error: {}", e)))?;
 
-        let grpc_listen_address = parsed_config
-            .get("grpc_listen_address")
-            .and_then(|v| v.as_str())
-            .map(|addr| {
-                fetch_socket_addr_from_hostname(addr).unwrap_or_else(|_| {
+        parse_field_or_warn_and_default!(
+            parsed_config,
+            grpc_listen_address,
+            String,
+            default_config,
+            |val: String| match fetch_socket_addr_from_hostname(val.as_str()) {
+                Ok(val) => Some(val),
+                Err(_) => {
                     warn!("Invalid `grpc_listen_address`, using default.");
-                    default_config.grpc_listen_address
-                })
-            })
-            .unwrap_or_else(|| {
-                warn!("Missing `grpc_listen_address`, using default.");
-                default_config.grpc_listen_address
-            });
+                    None
+                }
+            }
+        );
 
-        let tls = parsed_config
-            .get("tls")
-            .and_then(|v| v.as_bool())
-            .unwrap_or_else(|| {
-                warn!("Missing `tls`, using default.");
-                default_config.grpc_tls
-            });
+        parse_field_or_warn_and_default!(parsed_config, grpc_tls, Boolean, default_config, Some);
+        parse_field_or_warn_and_default!(
+            parsed_config,
+            tls_cert_path,
+            String,
+            default_config,
+            |v| Some(Some(v))
+        );
+        parse_field_or_warn_and_default!(
+            parsed_config,
+            tls_key_path,
+            String,
+            default_config,
+            |v| Some(Some(v))
+        );
 
-        let tls_cert_path = parsed_config
-            .get("tls_cert_path")
-            .and_then(|v| v.as_str().map(|s| s.to_string()))
-            .or_else(|| {
-                warn!("Missing `tls_cert_path`, using default.");
-                default_config.tls_cert_path.clone()
-            });
+        parse_field_or_warn_and_default!(
+            parsed_config,
+            validator_listen_address,
+            String,
+            default_config,
+            |val: String| match fetch_socket_addr_from_hostname(val.as_str()) {
+                Ok(val) => Some(val),
+                Err(_) => {
+                    warn!("Invalid `validator_listen_address`, using default.");
+                    None
+                }
+            }
+        );
 
-        let tls_key_path = parsed_config
-            .get("tls_key_path")
-            .and_then(|v| v.as_str().map(|s| s.to_string()))
-            .or_else(|| {
-                warn!("Missing `tls_key_path`, using default.");
-                default_config.tls_key_path.clone()
-            });
-
-        let validator_listen_address = parsed_config
-            .get("validator_listen_address")
-            .and_then(|v| v.as_str())
-            .map(|addr| {
-                fetch_socket_addr_from_hostname(addr).unwrap_or_else(|_| {
-                    warn!("Invalid `grpc_listen_address`, using default.");
-                    default_config.validator_listen_address
-                })
-            })
-            .unwrap_or_else(|| {
-                warn!("Missing `grpc_listen_address`, using default.");
-                default_config.grpc_listen_address
-            });
-
-        let validator_cookie_auth = parsed_config
-            .get("validator_cookie_auth")
-            .and_then(|v| v.as_bool())
-            .unwrap_or_else(|| {
-                warn!("Missing `validator_cookie_auth`, using default.");
-                default_config.validator_cookie_auth
-            });
-
-        let validator_cookie_path = parsed_config
-            .get("validator_cookie_path")
-            .and_then(|v| v.as_str().map(|s| s.to_string()))
-            .or_else(|| {
-                warn!("Missing `validator_cookie_path`, using default.");
-                default_config.validator_cookie_path.clone()
-            });
-
-        let node_user = parsed_config
-            .get("node_user")
-            .and_then(|v| v.as_str().map(|s| s.to_string()))
-            .or_else(|| {
-                warn!("Missing `node_user`, using default.");
-                default_config.validator_user.clone()
-            });
-
-        let node_password = parsed_config
-            .get("node_password")
-            .and_then(|v| v.as_str().map(|s| s.to_string()))
-            .or_else(|| {
-                warn!("Missing `node_password`, using default.");
-                default_config.validator_password.clone()
-            });
-
-        let map_capacity = parsed_config
-            .get("map_capacity")
-            .and_then(|v| v.as_integer().map(|n| n as usize))
-            .or_else(|| {
-                warn!("Missing `map_capacity`, using default.");
-                default_config.map_capacity
-            });
-
-        let map_shard_amount = parsed_config
-            .get("map_shard_amount")
-            .and_then(|v| v.as_integer().map(|n| n as usize))
-            .or_else(|| {
-                warn!("Missing `map_shard_amount`, using default.");
-                default_config.map_shard_amount
-            });
-
-        let db_path = parsed_config
-            .get("db_path")
-            .and_then(|v| v.as_str())
-            .filter(|s| !s.trim().eq_ignore_ascii_case("None"))
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                warn!("Missing `db_path` or set to 'None', using default.");
-                default_config.db_path.clone()
-            });
-
-        let db_size = parsed_config
-            .get("db_size")
-            .and_then(|v| v.as_integer().map(|n| n as usize))
-            .or_else(|| {
-                warn!("Missing `db_size`, using default.");
-                default_config.db_size
-            });
-
-        let network = parsed_config
-            .get("network")
-            .and_then(|v| v.as_str().map(|s| s.to_string()))
-            .unwrap_or_else(|| {
-                warn!("Missing `network`, using default.");
-                default_config.network.clone()
-            });
-
-        let no_sync = parsed_config
-            .get("no_sync")
-            .and_then(|v| v.as_bool())
-            .unwrap_or_else(|| {
-                warn!("Missing `no_sync`, using default.");
-                default_config.no_sync
-            });
-
-        let no_db = parsed_config
-            .get("no_db")
-            .and_then(|v| v.as_bool())
-            .unwrap_or_else(|| {
-                warn!("Missing `no_db`, using default.");
-                default_config.no_db
-            });
-
-        let no_state = parsed_config
-            .get("no_state")
-            .and_then(|v| v.as_bool())
-            .unwrap_or_else(|| {
-                warn!("Missing `no_state`, using default.");
-                default_config.no_state
-            });
+        parse_field_or_warn_and_default!(
+            parsed_config,
+            validator_cookie_auth,
+            Boolean,
+            default_config,
+            Some
+        );
+        parse_field_or_warn_and_default!(
+            parsed_config,
+            validator_cookie_path,
+            String,
+            default_config,
+            |v| Some(Some(v))
+        );
+        parse_field_or_warn_and_default!(
+            parsed_config,
+            validator_user,
+            String,
+            default_config,
+            |v| Some(Some(v))
+        );
+        parse_field_or_warn_and_default!(
+            parsed_config,
+            validator_password,
+            String,
+            default_config,
+            |v| Some(Some(v))
+        );
+        parse_field_or_warn_and_default!(
+            parsed_config,
+            map_capacity,
+            Integer,
+            default_config,
+            |v| Some(Some(v as usize))
+        );
+        parse_field_or_warn_and_default!(
+            parsed_config,
+            map_shard_amount,
+            Integer,
+            default_config,
+            |v| Some(Some(v as usize))
+        );
+        parse_field_or_warn_and_default!(
+            parsed_config,
+            db_path,
+            String,
+            default_config,
+            |v: String| {
+                match PathBuf::from_str(v.as_str()) {
+                    Ok(path) => Some(path),
+                }
+            }
+        );
+        parse_field_or_warn_and_default!(
+            parsed_config,
+            db_size,
+            Integer,
+            default_config,
+            |v| Some(Some(v as usize))
+        );
+        parse_field_or_warn_and_default!(parsed_config, network, String, default_config, Some);
+        parse_field_or_warn_and_default!(parsed_config, no_sync, Boolean, default_config, Some);
+        parse_field_or_warn_and_default!(parsed_config, no_db, Boolean, default_config, Some);
+        parse_field_or_warn_and_default!(parsed_config, no_state, Boolean, default_config, Some);
 
         let config = IndexerConfig {
             grpc_listen_address,
-            grpc_tls: tls,
+            grpc_tls,
             tls_cert_path,
             tls_key_path,
             validator_listen_address,
             validator_cookie_auth,
             validator_cookie_path,
-            validator_user: node_user,
-            validator_password: node_password,
+            validator_user,
+            validator_password,
             map_capacity,
             map_shard_amount,
             db_path,

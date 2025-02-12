@@ -65,6 +65,7 @@ impl TonicServer {
 
         let task_status = status.clone();
         let server_handle = tokio::task::spawn(async move {
+            task_status.store(StatusType::Ready.into());
             server_future.await?;
             task_status.store(StatusType::Offline.into());
             Ok(())

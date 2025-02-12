@@ -2,7 +2,7 @@
 
 use futures::StreamExt;
 use hex::FromHex;
-use std::{path::Path, time};
+use std::time;
 use tokio::{sync::mpsc, time::timeout};
 use tonic::async_trait;
 use tracing::{info, warn};
@@ -16,7 +16,7 @@ use zebra_rpc::methods::{
 
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpc::connector::{test_node_and_return_url, JsonRpcConnector, RpcError},
+    jsonrpc::connector::{JsonRpcConnector, RpcError},
 };
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
@@ -80,36 +80,14 @@ impl ZcashService for FetchService {
         let status = status.clone();
         status.store(StatusType::Spawning.into());
 
-        let fetcher = match config.validator_cookie_auth {
-            true => JsonRpcConnector::new_with_cookie_auth(
-                test_node_and_return_url(
-                    config.validator_rpc_address,
-                    config.validator_cookie_auth,
-                    config.validator_cookie_path.clone(),
-                    None,
-                    None,
-                )
-                .await?,
-                Path::new(
-                    &config
-                        .validator_cookie_path
-                        .clone()
-                        .expect("validator cookie authentication path missing"),
-                ),
-            )?,
-            false => JsonRpcConnector::new_with_basic_auth(
-                test_node_and_return_url(
-                    config.validator_rpc_address,
-                    false,
-                    None,
-                    Some(config.validator_rpc_user.clone()),
-                    Some(config.validator_rpc_password.clone()),
-                )
-                .await?,
-                config.validator_rpc_user.clone(),
-                config.validator_rpc_password.clone(),
-            )?,
-        };
+        let fetcher = JsonRpcConnector::new_from_config_parts(
+            config.validator_cookie_auth,
+            config.validator_rpc_address,
+            config.validator_rpc_user.clone(),
+            config.validator_rpc_password.clone(),
+            config.validator_cookie_path.clone(),
+        )
+        .await?;
 
         let zebra_build_data = fetcher.get_info().await?;
         let data = ServiceMetadata::new(
@@ -1723,6 +1701,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use zaino_fetch::jsonrpc::connector::test_node_and_return_url;
     use zaino_testutils::{TestManager, ZCASHD_CHAIN_CACHE_BIN, ZEBRAD_CHAIN_CACHE_BIN};
     use zebra_chain::parameters::Network;
     use zingo_infra_services::validator::Validator;
