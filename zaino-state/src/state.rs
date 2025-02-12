@@ -1300,8 +1300,10 @@ fn tx_to_compact(
 /// !!! NOTE / TODO: This code should be retested before continued development, once zebra regtest is fully operational.
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use futures::stream::StreamExt;
+    use zaino_fetch::jsonrpc::connector::test_node_and_return_url;
     use zaino_proto::proto::service::BlockId;
     use zaino_testutils::{TestManager, ZEBRAD_CHAIN_CACHE_BIN, ZEBRAD_TESTNET_CACHE_BIN};
     use zebra_chain::parameters::Network;
@@ -1332,10 +1334,9 @@ mod tests {
                 debug_stop_at_height: None,
                 debug_validity_check_interval: None,
             },
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
-            ),
+            test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
             None,
             None,
             None,
@@ -1661,17 +1662,18 @@ mod tests {
     async fn state_service_regtest_get_block_raw() {
         let (mut test_manager, state_service) =
             create_test_manager_and_state_service(false, true, true, false).await;
-        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
-            url::Url::parse(&format!(
-                "http://127.0.0.1:{}",
-                test_manager.zebrad_rpc_listen_port
-            ))
-            .expect("Failed to construct URL")
-            .as_str()
-            .try_into()
-            .expect("Failed to convert URL to URI"),
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new_with_basic_auth(
+            test_node_and_return_url(
+                test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await
+            .unwrap(),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
         .unwrap();
 
@@ -1683,7 +1685,7 @@ mod tests {
         let state_service_duration = state_start.elapsed();
 
         let fetch_start = tokio::time::Instant::now();
-        let fetch_service_get_block = json_service
+        let fetch_service_get_block = fetch_service
             .get_block("1".to_string(), Some(0))
             .await
             .unwrap();
@@ -1703,17 +1705,18 @@ mod tests {
     async fn state_service_regtest_get_block_object() {
         let (mut test_manager, state_service) =
             create_test_manager_and_state_service(false, true, true, false).await;
-        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
-            url::Url::parse(&format!(
-                "http://127.0.0.1:{}",
-                test_manager.zebrad_rpc_listen_port
-            ))
-            .expect("Failed to construct URL")
-            .as_str()
-            .try_into()
-            .expect("Failed to convert URL to URI"),
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new_with_basic_auth(
+            test_node_and_return_url(
+                test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await
+            .unwrap(),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
         .unwrap();
 
@@ -1725,7 +1728,7 @@ mod tests {
         let state_service_duration = state_start.elapsed();
 
         let fetch_start = tokio::time::Instant::now();
-        let fetch_service_get_block = json_service
+        let fetch_service_get_block = fetch_service
             .get_block("1".to_string(), Some(1))
             .await
             .unwrap();
@@ -1881,19 +1884,19 @@ mod tests {
         let (mut test_manager, state_service) =
             create_test_manager_and_state_service(false, true, true, false).await;
 
-        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
-            url::Url::parse(&format!(
-                "http://127.0.0.1:{}",
-                test_manager.zebrad_rpc_listen_port
-            ))
-            .expect("Failed to construct URL")
-            .as_str()
-            .try_into()
-            .expect("Failed to convert URL to URI"),
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new_with_basic_auth(
+            test_node_and_return_url(
+                test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await
+            .unwrap(),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
-        .await
         .unwrap();
         let state_service_bcinfo = state_service.get_blockchain_info().await.unwrap();
         let fetch_service_bcinfo = fetch_service.get_blockchain_info().await.unwrap();
