@@ -20,7 +20,7 @@ use tokio::time::timeout;
 use tonic::async_trait;
 use tower::Service;
 
-use zaino_fetch::jsonrpc::connector::{test_node_and_return_uri, JsonRpcConnector, RpcError};
+use zaino_fetch::jsonrpc::connector::{JsonRpcConnector, RpcError};
 use zaino_fetch::jsonrpc::response::TxidsResponse;
 use zaino_proto::proto::compact_formats::{
     ChainMetadata, CompactBlock, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
