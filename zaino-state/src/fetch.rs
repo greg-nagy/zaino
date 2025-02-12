@@ -16,7 +16,7 @@ use zebra_rpc::methods::{
 
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpc::connector::{test_node_and_return_uri, JsonRpcConnector, RpcError},
+    jsonrpc::connector::{JsonRpcConnector, RpcError},
 };
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
@@ -80,15 +80,12 @@ impl ZcashService for FetchService {
         let status = status.clone();
         status.store(StatusType::Spawning.into());
 
-        let fetcher = JsonRpcConnector::new(
-            test_node_and_return_uri(
-                &config.validator_rpc_address.port(),
-                Some(config.validator_rpc_user.clone()),
-                Some(config.validator_rpc_password.clone()),
-            )
-            .await?,
-            Some(config.validator_rpc_user.clone()),
-            Some(config.validator_rpc_password.clone()),
+        let fetcher = JsonRpcConnector::new_from_config_parts(
+            config.validator_cookie_auth,
+            config.validator_rpc_address,
+            config.validator_rpc_user.clone(),
+            config.validator_rpc_password.clone(),
+            config.validator_cookie_path.clone(),
         )
         .await?;
 
@@ -1702,9 +1699,8 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
 #[cfg(test)]
 mod tests {
-    use std::net::SocketAddr;
-
     use super::*;
+    use zaino_fetch::jsonrpc::connector::test_node_and_return_url;
     use zaino_testutils::{TestManager, ZCASHD_CHAIN_CACHE_BIN, ZEBRAD_CHAIN_CACHE_BIN};
     use zebra_chain::parameters::Network;
     use zingo_infra_services::validator::Validator;
@@ -1751,10 +1747,9 @@ mod tests {
 
         let fetch_service = FetchService::spawn(
             FetchServiceConfig::new(
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    test_manager.zebrad_rpc_listen_port,
-                ),
+                test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
                 None,
                 None,
                 None,
@@ -1887,16 +1882,20 @@ mod tests {
             .clients
             .as_ref()
             .expect("Clients are not initialized");
-        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
-            .parse::<http::Uri>()
-            .expect("Failed to convert URL to URI");
 
-        let json_service = JsonRpcConnector::new(
-            zebra_uri,
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+        let json_service = JsonRpcConnector::new_with_basic_auth(
+            test_node_and_return_url(
+                test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await
+            .unwrap(),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
-        .await
         .unwrap();
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
@@ -2140,16 +2139,19 @@ mod tests {
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-        let zebra_uri = format!("http://127.0.0.1:{}", test_manager.zebrad_rpc_listen_port)
-            .parse::<http::Uri>()
-            .expect("Failed to convert URL to URI");
-
-        let json_service = JsonRpcConnector::new(
-            zebra_uri,
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+        let json_service = JsonRpcConnector::new_with_basic_auth(
+            test_node_and_return_url(
+                test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await
+            .unwrap(),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
-        .await
         .unwrap();
 
         let fetch_service_get_latest_block =
