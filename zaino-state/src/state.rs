@@ -94,10 +94,12 @@ pub struct StateService {
 impl StateService {
     /// Initializes a new StateService instance and starts sync process.
     pub async fn spawn(config: StateServiceConfig) -> Result<Self, StateServiceError> {
-        let rpc_uri = test_node_and_return_uri(
-            &config.validator_rpc_address.port(),
-            Some(config.validator_rpc_user.clone()),
-            Some(config.validator_rpc_password.clone()),
+        let rpc_client = JsonRpcConnector::new_from_config_parts(
+            config.validator_cookie_auth,
+            config.validator_rpc_address,
+            config.validator_rpc_user.clone(),
+            config.validator_rpc_password.clone(),
+            config.validator_cookie_path.clone(),
         )
         .await?;
 
@@ -108,13 +110,6 @@ impl StateService {
                 config.validator_rpc_address,
             )
             .await??;
-
-        let rpc_client = JsonRpcConnector::new(
-            rpc_uri,
-            Some(config.validator_rpc_user.clone()),
-            Some(config.validator_rpc_password.clone()),
-        )
-        .await?;
 
         let zebra_build_data = rpc_client.get_info().await?;
 
@@ -1305,8 +1300,6 @@ fn tx_to_compact(
 /// !!! NOTE / TODO: This code should be retested before continued development, once zebra regtest is fully operational.
 #[cfg(test)]
 mod tests {
-    use std::net::SocketAddr;
-
     use super::*;
     use futures::stream::StreamExt;
     use zaino_proto::proto::service::BlockId;
@@ -1368,10 +1361,9 @@ mod tests {
                 debug_stop_at_height: None,
                 debug_validity_check_interval: None,
             },
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
-            ),
+            test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
             None,
             None,
             None,
@@ -1411,10 +1403,9 @@ mod tests {
                 debug_stop_at_height: None,
                 debug_validity_check_interval: None,
             },
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
-            ),
+            test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
             None,
             None,
             None,
@@ -1454,10 +1445,9 @@ mod tests {
                 debug_stop_at_height: None,
                 debug_validity_check_interval: None,
             },
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
-            ),
+            test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
             None,
             None,
             None,
@@ -1466,19 +1456,19 @@ mod tests {
         ))
         .await
         .unwrap();
-        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
-            url::Url::parse(&format!(
-                "http://127.0.0.1:{}",
-                test_manager.zebrad_rpc_listen_port
-            ))
-            .expect("Failed to construct URL")
-            .as_str()
-            .try_into()
-            .expect("Failed to convert URL to URI"),
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+        let json_service = JsonRpcConnector::new_with_basic_auth(
+            test_node_and_return_url(
+                test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await
+            .unwrap(),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
-        .await
         .unwrap();
 
         let state_start = tokio::time::Instant::now();
@@ -1486,7 +1476,7 @@ mod tests {
         let state_service_duration = state_start.elapsed();
 
         let fetch_start = tokio::time::Instant::now();
-        let fetch_service_get_info = fetch_service.get_info().await.unwrap();
+        let fetch_service_get_info = json_service.get_info().await.unwrap();
         let fetch_service_duration = fetch_start.elapsed();
 
         assert_eq!(state_service_get_info, fetch_service_get_info.into());
@@ -1518,10 +1508,9 @@ mod tests {
                 debug_stop_at_height: None,
                 debug_validity_check_interval: None,
             },
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
-            ),
+            test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
             None,
             None,
             None,
@@ -1530,19 +1519,19 @@ mod tests {
         ))
         .await
         .unwrap();
-        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
-            url::Url::parse(&format!(
-                "http://127.0.0.1:{}",
-                test_manager.zebrad_rpc_listen_port
-            ))
-            .expect("Failed to construct URL")
-            .as_str()
-            .try_into()
-            .expect("Failed to convert URL to URI"),
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+        let json_service = JsonRpcConnector::new_with_basic_auth(
+            test_node_and_return_url(
+                test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await
+            .unwrap(),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
-        .await
         .unwrap();
 
         let state_start = tokio::time::Instant::now();
@@ -1550,7 +1539,7 @@ mod tests {
         let state_service_duration = state_start.elapsed();
 
         let fetch_start = tokio::time::Instant::now();
-        let fetch_service_get_blockchain_info = fetch_service.get_blockchain_info().await.unwrap();
+        let fetch_service_get_blockchain_info = json_service.get_blockchain_info().await.unwrap();
         let fetch_service_duration = fetch_start.elapsed();
         let fetch_service_get_blockchain_info: GetBlockChainInfo =
             fetch_service_get_blockchain_info.into();
@@ -1596,10 +1585,9 @@ mod tests {
                 debug_stop_at_height: None,
                 debug_validity_check_interval: None,
             },
-            SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                test_manager.zebrad_rpc_listen_port,
-            ),
+            test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
             None,
             None,
             None,
@@ -1608,19 +1596,19 @@ mod tests {
         ))
         .await
         .unwrap();
-        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new(
-            url::Url::parse(&format!(
-                "http://127.0.0.1:{}",
-                test_manager.zebrad_rpc_listen_port
-            ))
-            .expect("Failed to construct URL")
-            .as_str()
-            .try_into()
-            .expect("Failed to convert URL to URI"),
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
+        let json_service = JsonRpcConnector::new_with_basic_auth(
+            test_node_and_return_url(
+                test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await
+            .unwrap(),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
         )
-        .await
         .unwrap();
 
         let state_start = tokio::time::Instant::now();
@@ -1628,7 +1616,7 @@ mod tests {
         let state_service_duration = state_start.elapsed();
 
         let fetch_start = tokio::time::Instant::now();
-        let fetch_service_get_blockchain_info = fetch_service.get_blockchain_info().await.unwrap();
+        let fetch_service_get_blockchain_info = json_service.get_blockchain_info().await.unwrap();
         let fetch_service_duration = fetch_start.elapsed();
         let fetch_service_get_blockchain_info: GetBlockChainInfo =
             fetch_service_get_blockchain_info.into();
@@ -1685,7 +1673,6 @@ mod tests {
             Some("xxxxxx".to_string()),
             Some("xxxxxx".to_string()),
         )
-        .await
         .unwrap();
 
         let state_start = tokio::time::Instant::now();
@@ -1696,7 +1683,7 @@ mod tests {
         let state_service_duration = state_start.elapsed();
 
         let fetch_start = tokio::time::Instant::now();
-        let fetch_service_get_block = fetch_service
+        let fetch_service_get_block = json_service
             .get_block("1".to_string(), Some(0))
             .await
             .unwrap();
@@ -1728,7 +1715,6 @@ mod tests {
             Some("xxxxxx".to_string()),
             Some("xxxxxx".to_string()),
         )
-        .await
         .unwrap();
 
         let state_start = tokio::time::Instant::now();
@@ -1739,7 +1725,7 @@ mod tests {
         let state_service_duration = state_start.elapsed();
 
         let fetch_start = tokio::time::Instant::now();
-        let fetch_service_get_block = fetch_service
+        let fetch_service_get_block = json_service
             .get_block("1".to_string(), Some(1))
             .await
             .unwrap();
