@@ -147,6 +147,46 @@ impl JsonRpcConnector {
         })
     }
 
+    /// Helper function to create from parts of a StateServiceConfig or
+    /// FetchServiceConfig
+    pub async fn new_from_config_parts(
+        validator_cookie_auth: bool,
+        validator_rpc_address: SocketAddr,
+        validator_rpc_user: String,
+        validator_rpc_password: String,
+        validator_cookie_path: Option<String>,
+    ) -> Result<Self, JsonRpcConnectorError> {
+        match validator_cookie_auth {
+            true => JsonRpcConnector::new_with_cookie_auth(
+                test_node_and_return_url(
+                    validator_rpc_address,
+                    validator_cookie_auth,
+                    validator_cookie_path.clone(),
+                    None,
+                    None,
+                )
+                .await?,
+                Path::new(
+                    &validator_cookie_path
+                        .clone()
+                        .expect("validator cookie authentication path missing"),
+                ),
+            ),
+            false => JsonRpcConnector::new_with_basic_auth(
+                test_node_and_return_url(
+                    validator_rpc_address,
+                    false,
+                    None,
+                    Some(validator_rpc_user.clone()),
+                    Some(validator_rpc_password.clone()),
+                )
+                .await?,
+                validator_rpc_user.clone(),
+                validator_rpc_password.clone(),
+            ),
+        }
+    }
+
     /// Returns the http::uri the JsonRpcConnector is configured to send requests to.
     pub fn uri(&self) -> Result<Uri, JsonRpcConnectorError> {
         Ok(self.url.as_str().parse()?)
