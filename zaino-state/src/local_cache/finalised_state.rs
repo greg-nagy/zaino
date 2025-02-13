@@ -125,7 +125,7 @@ impl FinalisedState {
     /// - db_path: File path of the db.
     /// - db_size: Max size of the db in gb.
     /// - block_reciever: Channel that recieves new blocks to add to the db.
-    /// - status_signal: Used to send error status signals th outer processes.
+    /// - status_signal: Used to send error status signals to outer processes.
     pub async fn spawn(
         fetcher: &JsonRpcConnector,
         block_receiver: tokio::sync::mpsc::Receiver<(Height, Hash, CompactBlock)>,
