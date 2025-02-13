@@ -33,8 +33,6 @@ pub struct NonFinalisedState {
     block_sender: tokio::sync::mpsc::Sender<(Height, Hash, CompactBlock)>,
     /// Non-finalised state status.
     status: AtomicStatus,
-    /// Used to send error status signals th outer processes.
-    error_status_signal: AtomicStatus,
     /// BlockCache config data.
     config: BlockCacheConfig,
 }
@@ -45,7 +43,6 @@ impl NonFinalisedState {
         fetcher: &JsonRpcConnector,
         block_sender: tokio::sync::mpsc::Sender<(Height, Hash, CompactBlock)>,
         config: BlockCacheConfig,
-        critical_status_signal: AtomicStatus,
     ) -> Result<Self, NonFinalisedStateError> {
         info!("Launching Non-Finalised State..");
         let mut non_finalised_state = NonFinalisedState {
@@ -55,7 +52,6 @@ impl NonFinalisedState {
             sync_task_handle: None,
             block_sender,
             status: AtomicStatus::new(StatusType::Spawning.into()),
-            error_status_signal: critical_status_signal,
             config,
         };
 
@@ -88,9 +84,6 @@ impl NonFinalisedState {
                         break;
                     }
                     Err(e) => {
-                        non_finalised_state
-                            .error_status_signal
-                            .store(StatusType::RecoverableError.into());
                         non_finalised_state.update_status_and_notify(StatusType::RecoverableError);
                         warn!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -98,9 +91,6 @@ impl NonFinalisedState {
                 }
             }
         }
-        non_finalised_state
-            .error_status_signal
-            .store(StatusType::Ready.into());
 
         non_finalised_state.sync_task_handle = Some(non_finalised_state.serve().await?);
 
@@ -115,7 +105,6 @@ impl NonFinalisedState {
             sync_task_handle: None,
             block_sender: self.block_sender.clone(),
             status: self.status.clone(),
-            error_status_signal: self.error_status_signal.clone(),
             config: self.config.clone(),
         };
 
@@ -127,16 +116,10 @@ impl NonFinalisedState {
                 match non_finalised_state.fetcher.get_blockchain_info().await {
                     Ok(chain_info) => {
                         best_block_hash = chain_info.best_block_hash;
-                        non_finalised_state
-                            .error_status_signal
-                            .store(StatusType::Ready.into());
                         non_finalised_state.status.store(StatusType::Ready.into());
                         break;
                     }
                     Err(e) => {
-                        non_finalised_state
-                            .error_status_signal
-                            .store(StatusType::RecoverableError.into());
                         non_finalised_state.update_status_and_notify(StatusType::RecoverableError);
                         warn!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -155,9 +138,6 @@ impl NonFinalisedState {
                         check_block_hash = chain_info.best_block_hash;
                     }
                     Err(e) => {
-                        non_finalised_state
-                            .error_status_signal
-                            .store(StatusType::RecoverableError.into());
                         non_finalised_state.update_status_and_notify(StatusType::RecoverableError);
                         warn!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -179,17 +159,11 @@ impl NonFinalisedState {
                             Ok(_) => break,
                             Err(NonFinalisedStateError::Critical(e)) => {
                                 non_finalised_state
-                                    .error_status_signal
-                                    .store(StatusType::CriticalError.into());
-                                non_finalised_state
                                     .update_status_and_notify(StatusType::CriticalError);
                                 error!("{e}");
                                 return;
                             }
                             Err(e) => {
-                                non_finalised_state
-                                    .error_status_signal
-                                    .store(StatusType::RecoverableError.into());
                                 non_finalised_state
                                     .update_status_and_notify(StatusType::RecoverableError);
                                 warn!("{e}");
@@ -198,9 +172,6 @@ impl NonFinalisedState {
                         }
                     }
                 }
-                non_finalised_state
-                    .error_status_signal
-                    .store(StatusType::Ready.into());
                 non_finalised_state.status.store(StatusType::Ready.into());
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
@@ -321,8 +292,6 @@ impl NonFinalisedState {
                                     .await
                                     .is_err()
                                 {
-                                    self.error_status_signal
-                                        .store(StatusType::CriticalError.into());
                                     self.status.store(StatusType::CriticalError.into());
                                     return Err(NonFinalisedStateError::Critical(
                                         "Critical error in database. Closing NonFinalisedState"
@@ -347,7 +316,6 @@ impl NonFinalisedState {
                         self.heights_to_hashes
                             .insert(Height(block_height), hash, None);
                         self.hashes_to_blocks.insert(hash, block, None);
-                        self.error_status_signal.store(StatusType::Ready.into());
                         info!(
                             "Block at height {} successfully inserted in non-finalised state.",
                             block_height
@@ -355,8 +323,6 @@ impl NonFinalisedState {
                         break;
                     }
                     Err(e) => {
-                        self.error_status_signal
-                            .store(StatusType::RecoverableError.into());
                         self.update_status_and_notify(StatusType::RecoverableError);
                         warn!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;

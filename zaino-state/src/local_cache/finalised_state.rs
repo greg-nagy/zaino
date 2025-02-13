@@ -113,8 +113,6 @@ pub struct FinalisedState {
     write_task_handle: Option<tokio::task::JoinHandle<()>>,
     /// Non-finalised state status.
     status: AtomicStatus,
-    /// Used to send error status signals th outer processes.
-    error_status_signal: AtomicStatus,
     /// BlockCache config data.
     config: BlockCacheConfig,
 }
@@ -132,7 +130,6 @@ impl FinalisedState {
         fetcher: &JsonRpcConnector,
         block_receiver: tokio::sync::mpsc::Receiver<(Height, Hash, CompactBlock)>,
         config: BlockCacheConfig,
-        critical_status_signal: AtomicStatus,
     ) -> Result<Self, FinalisedStateError> {
         info!("Launching Finalised State..");
         let db_size = config.db_size.unwrap_or(8);
@@ -178,7 +175,6 @@ impl FinalisedState {
             read_task_handle: None,
             write_task_handle: None,
             status: AtomicStatus::new(StatusType::Spawning.into()),
-            error_status_signal: critical_status_signal,
             config,
         };
 
@@ -204,7 +200,6 @@ impl FinalisedState {
             read_task_handle: None,
             write_task_handle: None,
             status: self.status.clone(),
-            error_status_signal: self.error_status_signal.clone(),
             config: self.config.clone(),
         };
 
@@ -227,9 +222,6 @@ impl FinalisedState {
                                     if db_hash != hash {
                                         if finalised_state.delete_block(height).is_err() {
                                             finalised_state
-                                                .error_status_signal
-                                                .store(StatusType::CriticalError.into());
-                                            finalised_state
                                                 .status
                                                 .store(StatusType::CriticalError.into());
                                             return;
@@ -245,9 +237,6 @@ impl FinalisedState {
                                 }
                                 Err(_) => {
                                     finalised_state
-                                        .error_status_signal
-                                        .store(StatusType::CriticalError.into());
-                                    finalised_state
                                         .status
                                         .store(StatusType::CriticalError.into());
                                     return;
@@ -256,9 +245,6 @@ impl FinalisedState {
                         }
                         Err(FinalisedStateError::LmdbError(db_err)) => {
                             error!("LMDB error inserting block {}: {:?}", height.0, db_err);
-                            finalised_state
-                                .error_status_signal
-                                .store(StatusType::CriticalError.into());
                             finalised_state
                                 .status
                                 .store(StatusType::CriticalError.into());
@@ -275,9 +261,6 @@ impl FinalisedState {
                                     "Failed to insert block {} after multiple retries.",
                                     height.0
                                 );
-                                finalised_state
-                                    .error_status_signal
-                                    .store(StatusType::CriticalError.into());
                                 finalised_state
                                     .status
                                     .store(StatusType::CriticalError.into());
@@ -305,9 +288,6 @@ impl FinalisedState {
                                         "Failed to fetch block {} from validator: {:?}",
                                         height.0, fetch_err
                                     );
-                                    finalised_state
-                                        .error_status_signal
-                                        .store(StatusType::CriticalError.into());
                                     finalised_state
                                         .status
                                         .store(StatusType::CriticalError.into());
@@ -339,7 +319,6 @@ impl FinalisedState {
             read_task_handle: None,
             write_task_handle: None,
             status: self.status.clone(),
-            error_status_signal: self.error_status_signal.clone(),
             config: self.config.clone(),
         };
 
@@ -475,8 +454,6 @@ impl FinalisedState {
                         break;
                     }
                     Err(e) => {
-                        self.error_status_signal
-                            .store(StatusType::RecoverableError.into());
                         self.status.store(StatusType::RecoverableError.into());
                         warn!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -511,8 +488,6 @@ impl FinalisedState {
                                 break;
                             }
                             Err(e) => {
-                                self.error_status_signal
-                                    .store(StatusType::RecoverableError.into());
                                 self.status.store(StatusType::RecoverableError.into());
                                 warn!("{e}");
                                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -538,7 +513,7 @@ impl FinalisedState {
             }
         }
 
-        self.error_status_signal.store(StatusType::Ready.into());
+        self.status.store(StatusType::Ready.into());
 
         Ok(())
     }

@@ -1,10 +1,6 @@
 //! Holds Zaino's local compact block cache implementation.
 
-use crate::{
-    config::BlockCacheConfig,
-    error::BlockCacheError,
-    status::{AtomicStatus, StatusType},
-};
+use crate::{config::BlockCacheConfig, error::BlockCacheError, status::StatusType};
 
 pub mod finalised_state;
 pub mod non_finalised_state;
@@ -30,6 +26,7 @@ pub struct BlockCache {
     fetcher: JsonRpcConnector,
     non_finalised_state: NonFinalisedState,
     finalised_state: Option<FinalisedState>,
+    config: BlockCacheConfig,
 }
 
 impl BlockCache {
@@ -37,24 +34,24 @@ impl BlockCache {
     pub async fn spawn(
         fetcher: &JsonRpcConnector,
         config: BlockCacheConfig,
-        status: AtomicStatus,
     ) -> Result<Self, BlockCacheError> {
         info!("Launching Local Block Cache..");
         let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(100);
 
         let finalised_state = if !config.no_db {
-            Some(FinalisedState::spawn(fetcher, channel_rx, config.clone(), status.clone()).await?)
+            Some(FinalisedState::spawn(fetcher, channel_rx, config.clone()).await?)
         } else {
             None
         };
 
         let non_finalised_state =
-            NonFinalisedState::spawn(fetcher, channel_tx, config.clone(), status.clone()).await?;
+            NonFinalisedState::spawn(fetcher, channel_tx, config.clone()).await?;
 
         Ok(BlockCache {
             fetcher: fetcher.clone(),
             non_finalised_state,
             finalised_state,
+            config,
         })
     }
 
@@ -68,25 +65,46 @@ impl BlockCache {
             fetcher: self.fetcher.clone(),
             non_finalised_state: self.non_finalised_state.subscriber(),
             finalised_state: finalised_state_subscriber,
+            config: self.config.clone(),
         }
     }
 
-    /// Returns the status of the block cache as:
-    /// (non_finalised_state_status, finalised_state_status).
-    pub fn status(&self) -> (StatusType, StatusType) {
-        let finalised_state_status = match &self.finalised_state {
-            Some(finalised_state) => finalised_state.status(),
-            None => StatusType::Offline,
+    /// Returns the status of the block cache.
+    pub fn status(&self) -> StatusType {
+        let non_finalised_state_status = self.non_finalised_state.status();
+        let finalised_state_status = match self.config.no_db {
+            true => StatusType::Ready,
+            false => match &self.finalised_state {
+                Some(finalised_state) => finalised_state.status(),
+                None => return StatusType::Offline,
+            },
         };
 
-        (self.non_finalised_state.status(), finalised_state_status)
+        match (non_finalised_state_status, finalised_state_status) {
+            // If either is Closing, return Closing.
+            (StatusType::Closing, _) | (_, StatusType::Closing) => StatusType::Closing,
+            // If either is Offline or CriticalError, return CriticalError.
+            (StatusType::Offline, _)
+            | (_, StatusType::Offline)
+            | (StatusType::CriticalError, _)
+            | (_, StatusType::CriticalError) => StatusType::CriticalError,
+            // If either is Spawning, return Spawning.
+            (StatusType::Spawning, _) | (_, StatusType::Spawning) => StatusType::Spawning,
+            // If either is Syncing, return Syncing.
+            (StatusType::Syncing, _) | (_, StatusType::Syncing) => StatusType::Syncing,
+            // Otherwise, return Ready.
+            _ => StatusType::Ready,
+        }
     }
 
     /// Sets the block cache to close gracefully.
     pub fn close(&mut self) {
         self.non_finalised_state.close();
         if self.finalised_state.is_some() {
-            self.finalised_state.take().unwrap().close();
+            self.finalised_state
+                .take()
+                .expect("error taking Option<(Some)finalised_state> in block_cache::close")
+                .close();
         }
     }
 }
@@ -97,6 +115,7 @@ pub struct BlockCacheSubscriber {
     fetcher: JsonRpcConnector,
     non_finalised_state: NonFinalisedStateSubscriber,
     finalised_state: Option<FinalisedStateSubscriber>,
+    config: BlockCacheConfig,
 }
 
 impl BlockCacheSubscriber {
@@ -187,12 +206,31 @@ impl BlockCacheSubscriber {
     }
 
     /// Returns the status of the [`BlockCache`]..
-    pub fn status(&self) -> (StatusType, StatusType) {
-        let finalised_state_status = match &self.finalised_state {
-            Some(finalised_state) => finalised_state.status(),
-            None => StatusType::Offline,
+    pub fn status(&self) -> StatusType {
+        let non_finalised_state_status = self.non_finalised_state.status();
+        let finalised_state_status = match self.config.no_db {
+            true => StatusType::Ready,
+            false => match &self.finalised_state {
+                Some(finalised_state) => finalised_state.status(),
+                None => return StatusType::Offline,
+            },
         };
-        (self.non_finalised_state.status(), finalised_state_status)
+
+        match (non_finalised_state_status, finalised_state_status) {
+            // If either is Closing, return Closing.
+            (StatusType::Closing, _) | (_, StatusType::Closing) => StatusType::Closing,
+            // If either is Offline or CriticalError, return CriticalError.
+            (StatusType::Offline, _)
+            | (_, StatusType::Offline)
+            | (StatusType::CriticalError, _)
+            | (_, StatusType::CriticalError) => StatusType::CriticalError,
+            // If either is Spawning, return Spawning.
+            (StatusType::Spawning, _) | (_, StatusType::Spawning) => StatusType::Spawning,
+            // If either is Syncing, return Syncing.
+            (StatusType::Syncing, _) | (_, StatusType::Syncing) => StatusType::Syncing,
+            // Otherwise, return Ready.
+            _ => StatusType::Ready,
+        }
     }
 }
 
@@ -317,13 +355,9 @@ mod tests {
             no_db: zaino_no_db,
         };
 
-        let block_cache = BlockCache::spawn(
-            &json_service,
-            block_cache_config,
-            AtomicStatus::new(StatusType::Spawning.into()),
-        )
-        .await
-        .unwrap();
+        let block_cache = BlockCache::spawn(&json_service, block_cache_config)
+            .await
+            .unwrap();
 
         let block_cache_subscriber = block_cache.subscriber();
 
