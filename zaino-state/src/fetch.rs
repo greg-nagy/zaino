@@ -94,13 +94,19 @@ impl ZcashService for FetchService {
 
         let mempool = Mempool::spawn(&fetcher, None).await?;
 
-        Ok(Self {
+        let fetch_service = Self {
             fetcher,
             block_cache,
             mempool,
             data,
             config,
-        })
+        };
+
+        while fetch_service.status() != StatusType::Ready {
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+
+        Ok(fetch_service)
     }
 
     /// Returns a [`FetchServiceSubscriber`].
