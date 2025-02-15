@@ -88,6 +88,10 @@ impl BlockCache {
             | (_, StatusType::Offline)
             | (StatusType::CriticalError, _)
             | (_, StatusType::CriticalError) => StatusType::CriticalError,
+            // If either is RecoverableError, return RecoverableError.
+            (StatusType::RecoverableError, _) | (_, StatusType::RecoverableError) => {
+                StatusType::RecoverableError
+            }
             // If either is Spawning, return Spawning.
             (StatusType::Spawning, _) | (_, StatusType::Spawning) => StatusType::Spawning,
             // If either is Syncing, return Syncing.
@@ -224,6 +228,10 @@ impl BlockCacheSubscriber {
             | (_, StatusType::Offline)
             | (StatusType::CriticalError, _)
             | (_, StatusType::CriticalError) => StatusType::CriticalError,
+            // If either is RecoverableError, return RecoverableError.
+            (StatusType::RecoverableError, _) | (_, StatusType::RecoverableError) => {
+                StatusType::RecoverableError
+            }
             // If either is Spawning, return Spawning.
             (StatusType::Spawning, _) | (_, StatusType::Spawning) => StatusType::Spawning,
             // If either is Syncing, return Syncing.
