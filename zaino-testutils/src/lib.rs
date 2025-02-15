@@ -682,6 +682,7 @@ mod tests {
             .expect("Clients are not initialized");
 
         test_manager.local_net.generate_blocks(100).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.do_sync(true).await.unwrap();
         dbg!(clients.faucet.do_balance().await);
 
@@ -705,6 +706,7 @@ mod tests {
         // *Send all transparent funds to own orchard address.
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.do_sync(true).await.unwrap();
         dbg!(clients.faucet.do_balance().await);
 
@@ -727,6 +729,7 @@ mod tests {
         .unwrap();
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.recipient.do_sync(true).await.unwrap();
         dbg!(clients.recipient.do_balance().await);
 
@@ -785,6 +788,7 @@ mod tests {
         .unwrap();
 
         test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.recipient.do_sync(true).await.unwrap();
         dbg!(clients.recipient.do_balance().await);
 
