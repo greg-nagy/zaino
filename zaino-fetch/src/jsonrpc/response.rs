@@ -1,6 +1,8 @@
 //! Response types for jsonRPC client.
 
 use hex::FromHex;
+use zebra_chain::block::Height;
+use zebra_rpc::methods::types::Balance;
 
 /// Response to a `getinfo` RPC request.
 ///
@@ -22,7 +24,7 @@ impl From<GetInfoResponse> for zebra_rpc::methods::GetInfo {
 /// Response to a `getblockchaininfo` RPC request.
 ///
 /// This is used for the output parameter of [`JsonRpcConnector::get_blockchain_info`].
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GetBlockchainInfoResponse {
     /// Current network name as defined in BIP70 (main, test, regtest)
     pub chain: String,
@@ -40,14 +42,46 @@ pub struct GetBlockchainInfoResponse {
     #[serde(rename = "estimatedheight")]
     pub estimated_height: zebra_chain::block::Height,
 
+    /// Chain supply balance
+    #[serde(rename = "chainSupply")]
+    chain_supply: Balance,
+
     /// Status of network upgrades
     pub upgrades: indexmap::IndexMap<
         zebra_rpc::methods::ConsensusBranchIdHex,
         zebra_rpc::methods::NetworkUpgradeInfo,
     >,
 
+    /// Value pool balances
+    #[serde(rename = "valuePools")]
+    value_pools: [Balance; 5],
+
     /// Branch IDs of the current and upcoming consensus rules
     pub consensus: zebra_rpc::methods::TipConsensusBranch,
+
+    /// The current number of headers we have validated in the best chain, that is,
+    /// the height of the best chain.
+    headers: Height,
+
+    /// The estimated network solution rate in Sol/s.
+    difficulty: f64,
+
+    /// The verification progress relative to the estimated network chain tip.
+    #[serde(rename = "verificationprogress")]
+    verification_progress: f64,
+
+    /// The total amount of work in the best chain, hex-encoded.
+    #[serde(rename = "chainwork")]
+    chain_work: u64,
+
+    /// Whether this node is pruned, currently always false in Zebra.
+    pruned: bool,
+
+    /// The estimated size of the block and undo files on disk
+    size_on_disk: u64,
+
+    /// The current number of note commitments in the commitment tree
+    commitments: u64,
 }
 
 impl From<GetBlockchainInfoResponse> for zebra_rpc::methods::GetBlockChainInfo {
@@ -57,9 +91,17 @@ impl From<GetBlockchainInfoResponse> for zebra_rpc::methods::GetBlockChainInfo {
             response.blocks,
             response.best_block_hash,
             response.estimated_height,
-            zebra_rpc::methods::types::ValuePoolBalance::zero_pools(),
+            response.chain_supply,
+            response.value_pools,
             response.upgrades,
             response.consensus,
+            response.headers,
+            response.difficulty,
+            response.verification_progress,
+            response.chain_work,
+            response.pruned,
+            response.size_on_disk,
+            response.commitments,
         )
     }
 }
@@ -277,6 +319,7 @@ impl TryFrom<GetBlockResponse> for zebra_rpc::methods::GetBlock {
 
                 Ok(zebra_rpc::methods::GetBlock::Object {
                     hash: zebra_rpc::methods::GetBlockHash(hash.0),
+                    block_commitments: None,
                     confirmations,
                     size: None,
                     height,
