@@ -559,7 +559,7 @@ dependencies = [
 [[package]]
 name = "build_utils"
 version = "0.1.0"
-source = "git+https://github.com/idky137/zingolib.git?branch=coinbase_spends#a586f6ae0defa0666f5823c58f55a9e1277bc00d"
+source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_005#965e81228d3a1d99b76c1e3c71202d8fdbbd41dc"
 
 [[package]]
 name = "bumpalo"
@@ -4289,7 +4289,7 @@ dependencies = [
 [[package]]
 name = "testvectors"
 version = "0.1.0"
-source = "git+https://github.com/idky137/zingolib.git?branch=coinbase_spends#a586f6ae0defa0666f5823c58f55a9e1277bc00d"
+source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_005#965e81228d3a1d99b76c1e3c71202d8fdbbd41dc"
 dependencies = [
  "bip0039",
  "zcash_primitives 0.19.0 (git+https://github.com/zingolabs/librustzcash.git?tag=zcash_client_sqlite-0.12.1_plus_zingolabs_changes-test_2)",
@@ -6404,9 +6404,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "zingo-infra-fetcher"
+version = "0.1.0"
+source = "git+https://github.com/idky137/infrastructure.git?branch=coinbase_spends_2#ff24a076c7bd415089f7981ee58ffcc99193a1f6"
+dependencies = [
+ "hex",
+ "reqwest",
+ "sha2",
+ "tokio",
+]
+
+[[package]]
 name = "zingo-infra-services"
 version = "0.1.0"
-source = "git+https://github.com/idky137/infrastructure.git?branch=coinbase_spends#4406df0ad97c81bde1ceb6030f870a54fbed082d"
+source = "git+https://github.com/idky137/infrastructure.git?branch=coinbase_spends_2#ff24a076c7bd415089f7981ee58ffcc99193a1f6"
 dependencies = [
  "getset",
  "hex",
@@ -6425,12 +6436,13 @@ dependencies = [
  "zebra-chain 1.0.0-beta.45",
  "zebra-node-services 1.0.0-beta.45",
  "zebra-rpc 1.0.0-beta.45",
+ "zingo-infra-fetcher",
 ]
 
 [[package]]
 name = "zingo-infra-testutils"
 version = "0.1.0"
-source = "git+https://github.com/idky137/infrastructure.git?branch=coinbase_spends#4406df0ad97c81bde1ceb6030f870a54fbed082d"
+source = "git+https://github.com/idky137/infrastructure.git?branch=coinbase_spends_2#ff24a076c7bd415089f7981ee58ffcc99193a1f6"
 dependencies = [
  "http",
  "portpicker",
@@ -6451,7 +6463,7 @@ dependencies = [
 [[package]]
 name = "zingo-memo"
 version = "0.1.0"
-source = "git+https://github.com/idky137/zingolib.git?branch=coinbase_spends#a586f6ae0defa0666f5823c58f55a9e1277bc00d"
+source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_005#965e81228d3a1d99b76c1e3c71202d8fdbbd41dc"
 dependencies = [
  "zcash_address 0.6.0",
  "zcash_client_backend",
@@ -6463,7 +6475,7 @@ dependencies = [
 [[package]]
 name = "zingo-netutils"
 version = "0.1.0"
-source = "git+https://github.com/idky137/zingolib.git?branch=coinbase_spends#a586f6ae0defa0666f5823c58f55a9e1277bc00d"
+source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_005#965e81228d3a1d99b76c1e3c71202d8fdbbd41dc"
 dependencies = [
  "http",
  "http-body",
@@ -6483,7 +6495,7 @@ dependencies = [
 [[package]]
 name = "zingo-status"
 version = "0.1.0"
-source = "git+https://github.com/idky137/zingolib.git?branch=coinbase_spends#a586f6ae0defa0666f5823c58f55a9e1277bc00d"
+source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_005#965e81228d3a1d99b76c1e3c71202d8fdbbd41dc"
 dependencies = [
  "zcash_primitives 0.19.0 (git+https://github.com/zingolabs/librustzcash.git?tag=zcash_client_sqlite-0.12.1_plus_zingolabs_changes-test_2)",
 ]
@@ -6491,7 +6503,7 @@ dependencies = [
 [[package]]
 name = "zingo-sync"
 version = "0.1.0"
-source = "git+https://github.com/idky137/zingolib.git?branch=coinbase_spends#a586f6ae0defa0666f5823c58f55a9e1277bc00d"
+source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_005#965e81228d3a1d99b76c1e3c71202d8fdbbd41dc"
 dependencies = [
  "base58",
  "crossbeam-channel",
@@ -6522,7 +6534,7 @@ dependencies = [
 [[package]]
 name = "zingolib"
 version = "0.2.0"
-source = "git+https://github.com/idky137/zingolib.git?branch=coinbase_spends#a586f6ae0defa0666f5823c58f55a9e1277bc00d"
+source = "git+https://github.com/zingolabs/zingolib.git?tag=zaino_dep_005#965e81228d3a1d99b76c1e3c71202d8fdbbd41dc"
 dependencies = [
  "append-only-vec",
  "base58",
