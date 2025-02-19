@@ -20,25 +20,21 @@ use tokio::time::timeout;
 use tonic::async_trait;
 use tower::Service;
 
+use zaino_fetch::jsonrpc::connector::{JsonRpcConnector, RpcError};
 use zaino_fetch::jsonrpc::response::TxidsResponse;
-use zaino_fetch::jsonrpc::{
-    connector::{JsonRpcConnector, RpcError},
-    error::JsonRpcConnectorError,
-};
+use zaino_proto::proto::compact_formats::ChainMetadata;
 use zaino_proto::proto::compact_formats::{
-    ChainMetadata, CompactBlock, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
-    CompactTx,
+    CompactBlock, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactTx,
 };
 use zaino_proto::proto::service::BlockRange;
 
 use zebra_chain::{
-    block::{Height, SerializedBlock},
+    block::{Header, Height, SerializedBlock},
     chain_tip::{ChainTip, NetworkChainTipHeightEstimator},
     parameters::{ConsensusBranchId, Network, NetworkUpgrade},
     serialization::{ZcashDeserialize, ZcashSerialize},
     subtree::NoteCommitmentSubtreeIndex,
     transaction::Transaction,
-    work::difficulty::{ParameterDifficulty as _, U256},
 };
 use zebra_rpc::{
     methods::{
@@ -223,10 +219,13 @@ impl ZcashIndexer for StateService {
     type Error = StateServiceError;
 
     async fn get_info(&self) -> Result<GetInfo, Self::Error> {
-        Ok(GetInfo::from_parts(
-            self.data.zebra_build(),
-            self.data.zebra_subversion(),
-        ))
+        // A number of these fields are difficult to access from the state service
+        // TODO: Fix this
+        self.rpc_client
+            .get_info()
+            .await
+            .map(GetInfo::from)
+            .map_err(Self::Error::from)
     }
 
     async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, Self::Error> {
@@ -884,6 +883,12 @@ impl StateService {
                 };
 
             let difficulty = header.difficulty_threshold.relative_to_network(&network);
+            let block_commitments = header_to_block_commitments(
+                &header,
+                &self.config.network,
+                height,
+                final_sapling_root,
+            )?;
 
             let block_header = GetBlockHeaderObject {
                 hash: GetBlockHash(hash),
@@ -900,6 +905,7 @@ impl StateService {
                 difficulty,
                 previous_block_hash: GetBlockHash(header.previous_block_hash),
                 next_block_hash: next_block_hash.map(GetBlockHash),
+                block_commitments,
             };
 
             GetBlockHeader::Object(Box::new(block_header))
@@ -1013,6 +1019,8 @@ impl StateService {
             let difficulty = header
                 .difficulty_threshold
                 .relative_to_network(&cloned_network);
+            let block_commitments =
+                header_to_block_commitments(&header, &cloned_network, height, final_sapling_root)?;
 
             Ok(GetBlockHeaderObject {
                 hash: GetBlockHash(hash),
@@ -1029,6 +1037,7 @@ impl StateService {
                 difficulty,
                 previous_block_hash: GetBlockHash(header.previous_block_hash),
                 next_block_hash: next_block_hash.map(GetBlockHash),
+                block_commitments,
             })
         });
 
@@ -1309,6 +1318,36 @@ fn tx_to_compact(
         outputs,
         actions,
     })
+}
+
+fn header_to_block_commitments(
+    header: &Header,
+    network: &Network,
+    height: Height,
+    final_sapling_root: [u8; 32],
+) -> Result<[u8; 32], StateServiceError> {
+    let hash = match header.commitment(&network, height).map_err(|e| {
+        StateServiceError::SerializationError(
+            zebra_chain::serialization::SerializationError::Parse(
+                // For some reason this error type takes a
+                // &'static str, and the the only way to create one
+                // dynamically is to leak a String. This shouldn't
+                // be a concern, as this error case should
+                // never occur when communing with a zebrad, which
+                // validates this field before serializing it
+                e.to_string().leak(),
+            ),
+        )
+    })? {
+        zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
+        zebra_chain::block::Commitment::FinalSaplingRoot(_root) => final_sapling_root,
+        zebra_chain::block::Commitment::ChainHistoryActivationReserved => [0; 32],
+        zebra_chain::block::Commitment::ChainHistoryRoot(root) => root.bytes_in_display_order(),
+        zebra_chain::block::Commitment::ChainHistoryBlockTxAuthCommitment(hash) => {
+            hash.bytes_in_display_order()
+        }
+    };
+    Ok(hash)
 }
 
 /// !!! NOTE / TODO: This code should be retested before continued development, once zebra regtest is fully operational.
