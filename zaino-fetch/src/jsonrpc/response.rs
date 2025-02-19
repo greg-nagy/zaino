@@ -7,17 +7,67 @@ use zebra_rpc::methods::types::Balance;
 /// Response to a `getinfo` RPC request.
 ///
 /// This is used for the output parameter of [`JsonRpcConnector::get_info`].
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GetInfoResponse {
+    /// The node version
+    version: u64,
     /// The node version build number
     pub build: String,
     /// The server sub-version identifier, used as the network protocol user-agent
     pub subversion: String,
+    /// The protocol version
+    #[serde(rename = "protocolversion")]
+    protocol_version: u32,
+
+    /// The current number of blocks processed in the server
+    blocks: u32,
+
+    /// The total (inbound and outbound) number of connections the node has
+    connections: usize,
+
+    /// The proxy (if any) used by the server. Currently always `None` in Zebra.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    proxy: Option<String>,
+
+    /// The current network difficulty
+    difficulty: f64,
+
+    /// True if the server is running in testnet mode, false otherwise
+    testnet: bool,
+
+    /// The minimum transaction fee in ZEC/kB
+    #[serde(rename = "paytxfee")]
+    pay_tx_fee: f64,
+
+    /// The minimum relay fee for non-free transactions in ZEC/kB
+    #[serde(rename = "relayfee")]
+    relay_fee: f64,
+
+    /// The last error or warning message, or "no errors" if there are no errors
+    errors: String,
+
+    /// The time of the last error or warning message, or "no errors timestamp" if there are no errors
+    #[serde(rename = "errorstimestamp")]
+    errors_timestamp: String,
 }
 
 impl From<GetInfoResponse> for zebra_rpc::methods::GetInfo {
     fn from(response: GetInfoResponse) -> Self {
-        zebra_rpc::methods::GetInfo::from_parts(response.build, response.subversion)
+        zebra_rpc::methods::GetInfo::from_parts(
+            response.version,
+            response.build,
+            response.subversion,
+            response.protocol_version,
+            response.blocks,
+            response.connections,
+            response.proxy,
+            response.difficulty,
+            response.testnet,
+            response.pay_tx_fee,
+            response.relay_fee,
+            response.errors,
+            response.errors_timestamp,
+        )
     }
 }
 

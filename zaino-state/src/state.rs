@@ -20,8 +20,11 @@ use tokio::time::timeout;
 use tonic::async_trait;
 use tower::Service;
 
-use zaino_fetch::jsonrpc::connector::{JsonRpcConnector, RpcError};
 use zaino_fetch::jsonrpc::response::TxidsResponse;
+use zaino_fetch::jsonrpc::{
+    connector::{JsonRpcConnector, RpcError},
+    error::JsonRpcConnectorError,
+};
 use zaino_proto::proto::compact_formats::{
     ChainMetadata, CompactBlock, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
     CompactTx,
@@ -35,12 +38,14 @@ use zebra_chain::{
     serialization::{ZcashDeserialize, ZcashSerialize},
     subtree::NoteCommitmentSubtreeIndex,
     transaction::Transaction,
+    work::difficulty::{ParameterDifficulty as _, U256},
 };
 use zebra_rpc::{
     methods::{
+        chain_tip_difficulty,
         hex_data::HexData,
         trees::{GetSubtrees, GetTreestate, SubtreeRpcData},
-        types::ValuePoolBalance,
+        types::Balance,
         AddressBalance, AddressStrings, ConsensusBranchIdHex, GetAddressTxIdsRequest,
         GetAddressUtxos, GetBlock, GetBlockChainInfo, GetBlockHash, GetBlockHeader,
         GetBlockHeaderObject, GetBlockTransaction, GetBlockTrees, GetInfo, GetRawTransaction,
@@ -300,15 +305,22 @@ impl ZcashIndexer for StateService {
             )
             .inner(),
         );
+        let difficulty =
+            chain_tip_difficulty(self.config.network.clone(), self.read_state_service.clone())
+                .await
+                .unwrap();
 
         Ok(GetBlockChainInfo::new(
             self.config.network.bip70_network_name(),
             height,
             hash,
             estimated_height,
-            ValuePoolBalance::from_value_balance(balance),
+            Balance::chain_supply(balance),
+            Balance::value_pools(balance),
             upgrades,
             consensus,
+            height,
+            difficulty,
         ))
     }
 
@@ -394,6 +406,7 @@ impl ZcashIndexer for StateService {
                     difficulty,
                     previous_block_hash,
                     next_block_hash,
+                    block_commitments,
                 } = *header_obj;
 
                 let transactions_response: Vec<GetBlockTransaction> = match txids_or_fullblock {
@@ -462,6 +475,7 @@ impl ZcashIndexer for StateService {
                     final_orchard_root,
                     previous_block_hash: Some(previous_block_hash),
                     next_block_hash,
+                    block_commitments: Some(block_commitments),
                 })
             }
             more_than_two => Err(StateServiceError::RpcError(RpcError::new_from_legacycode(
