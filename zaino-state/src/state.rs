@@ -240,6 +240,8 @@ impl ZcashIndexer for StateService {
                 unreachable!("Unexpected response from state service: {unexpected:?}")
             }
         };
+        let usage_response = self.checked_call(ReadRequest::UsageInfo).await?;
+        let size_on_disk = expected_read_response!(usage_response, UsageInfo);
         let request = zebra_state::ReadRequest::BlockHeader(hash.into());
         let response = self.checked_call(request).await?;
         let header = match response {
@@ -309,6 +311,8 @@ impl ZcashIndexer for StateService {
                 .await
                 .unwrap();
 
+        let verification_progress = f64::from(height.0) / f64::from(zebra_estimated_height.0);
+
         Ok(GetBlockChainInfo::new(
             self.config.network.bip70_network_name(),
             height,
@@ -320,6 +324,15 @@ impl ZcashIndexer for StateService {
             consensus,
             height,
             difficulty,
+            verification_progress,
+            // TODO: store work in the finalized state for each height
+            // see https://github.com/ZcashFoundation/zebra/issues/7109
+            0,
+            false,
+            size_on_disk,
+            // TODO (copied from zebra): Investigate whether this needs to
+            // be implemented (it's sprout-only in zcashd)
+            0,
         ))
     }
 
