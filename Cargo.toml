@@ -97,6 +97,12 @@ toml = "0.5"
 # Test
 portpicker = "0.1"
 tempfile = "3.2"
+zaino-fetch = { path = "zaino-fetch" }
+zaino-proto = { path = "zaino-proto" }
+zaino-serve = { path = "zaino-serve" }
+zaino-state = { path = "zaino-state" }
+zaino-testutils = { path = "zaino-testutils" }
+zainod = { path = "zainod" }
 
 [profile.test]
 opt-level = 3
