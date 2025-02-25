@@ -1,5 +1,7 @@
 //! Response types for jsonRPC client.
 
+use std::num::ParseIntError;
+
 use hex::FromHex;
 use zebra_chain::block::Height;
 use zebra_rpc::methods::types::Balance;
@@ -48,7 +50,7 @@ pub struct GetInfoResponse {
 
     /// The time of the last error or warning message, or "no errors timestamp" if there are no errors
     #[serde(rename = "errorstimestamp")]
-    errors_timestamp: String,
+    errors_timestamp: usize,
 }
 
 impl From<GetInfoResponse> for zebra_rpc::methods::GetInfo {
@@ -66,7 +68,7 @@ impl From<GetInfoResponse> for zebra_rpc::methods::GetInfo {
             response.pay_tx_fee,
             response.relay_fee,
             response.errors,
-            response.errors_timestamp,
+            response.errors_timestamp.to_string(),
         )
     }
 }
@@ -122,7 +124,7 @@ pub struct GetBlockchainInfoResponse {
 
     /// The total amount of work in the best chain, hex-encoded.
     #[serde(rename = "chainwork")]
-    chain_work: u64,
+    chain_work: String,
 
     /// Whether this node is pruned, currently always false in Zebra.
     pruned: bool,
@@ -134,9 +136,9 @@ pub struct GetBlockchainInfoResponse {
     commitments: u64,
 }
 
-impl From<GetBlockchainInfoResponse> for zebra_rpc::methods::GetBlockChainInfo {
-    fn from(response: GetBlockchainInfoResponse) -> Self {
-        zebra_rpc::methods::GetBlockChainInfo::new(
+impl TryFrom<GetBlockchainInfoResponse> for zebra_rpc::methods::GetBlockChainInfo {
+    fn try_from(response: GetBlockchainInfoResponse) -> Result<Self, ParseIntError> {
+        Ok(zebra_rpc::methods::GetBlockChainInfo::new(
             response.chain,
             response.blocks,
             response.best_block_hash,
@@ -148,12 +150,14 @@ impl From<GetBlockchainInfoResponse> for zebra_rpc::methods::GetBlockChainInfo {
             response.headers,
             response.difficulty,
             response.verification_progress,
-            response.chain_work,
+            u64::from_str_radix(&response.chain_work, 16)?,
             response.pruned,
             response.size_on_disk,
             response.commitments,
-        )
+        ))
     }
+
+    type Error = ParseIntError;
 }
 
 /// The transparent balance of a set of addresses.

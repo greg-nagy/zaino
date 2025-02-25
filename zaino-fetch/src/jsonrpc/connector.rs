@@ -212,7 +212,7 @@ impl JsonRpcConnector {
     ///
     /// NOTE: This function currently resends the call up to 5 times on a server response of "Work queue depth exceeded".
     ///       This is because the node's queue can become overloaded and stop servicing RPCs.
-    async fn send_request<T: Serialize, R: for<'de> Deserialize<'de>>(
+    async fn send_request<T: Serialize, R: std::fmt::Debug + for<'de> Deserialize<'de>>(
         &self,
         method: &str,
         params: T,
@@ -249,13 +249,13 @@ impl JsonRpcConnector {
             }
 
             let request_body =
-                serde_json::to_string(&req).map_err(JsonRpcConnectorError::SerdeJsonError)?;
+                dbg!(serde_json::to_string(&req).map_err(JsonRpcConnectorError::SerdeJsonError)?);
 
-            let response = request_builder
+            let response = dbg!(request_builder
                 .body(request_body)
                 .send()
                 .await
-                .map_err(JsonRpcConnectorError::ReqwestError)?;
+                .map_err(JsonRpcConnectorError::ReqwestError)?);
 
             let status = response.status();
 
@@ -263,7 +263,7 @@ impl JsonRpcConnector {
                 .bytes()
                 .await
                 .map_err(JsonRpcConnectorError::ReqwestError)?;
-            let body_str = String::from_utf8_lossy(&body_bytes);
+            let body_str = dbg!(String::from_utf8_lossy(&body_bytes));
 
             if body_str.contains("Work queue depth exceeded") {
                 if attempts >= max_attempts {
@@ -282,15 +282,18 @@ impl JsonRpcConnector {
                 )));
             }
 
-            let response: RpcResponse<R> = serde_json::from_slice(&body_bytes)
-                .map_err(JsonRpcConnectorError::SerdeJsonError)?;
+            dbg!(std::any::type_name::<R>());
+
+            let response: RpcResponse<R> =
+                dbg!(serde_json::from_slice(&body_bytes)
+                    .map_err(JsonRpcConnectorError::SerdeJsonError))?;
 
             return match response.error {
                 Some(error) => Err(JsonRpcConnectorError::new(format!(
                     "Error: Error from node's rpc server: {} - {}",
                     error.code, error.message
                 ))),
-                None => Ok(response.result),
+                None => Ok(dbg!(response.result)),
             };
         }
     }

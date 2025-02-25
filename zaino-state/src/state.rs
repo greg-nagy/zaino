@@ -1609,7 +1609,7 @@ mod tests {
         let fetch_service_get_blockchain_info = json_service.get_blockchain_info().await.unwrap();
         let fetch_service_duration = fetch_start.elapsed();
         let fetch_service_get_blockchain_info: GetBlockChainInfo =
-            fetch_service_get_blockchain_info.into();
+            fetch_service_get_blockchain_info.try_into().unwrap();
 
         // Zaino-Fetch does not return value_pools, ignore this field.
         assert_eq!(
@@ -1686,7 +1686,7 @@ mod tests {
         let fetch_service_get_blockchain_info = json_service.get_blockchain_info().await.unwrap();
         let fetch_service_duration = fetch_start.elapsed();
         let fetch_service_get_blockchain_info: GetBlockChainInfo =
-            fetch_service_get_blockchain_info.into();
+            fetch_service_get_blockchain_info.try_into().unwrap();
 
         println!(
             "Fetch Service Chain Height: {}",
