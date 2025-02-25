@@ -263,7 +263,7 @@ impl JsonRpcConnector {
                 .bytes()
                 .await
                 .map_err(JsonRpcConnectorError::ReqwestError)?;
-            let body_str = String::from_utf8_lossy(&body_bytes);
+            let body_str = dbg!(String::from_utf8_lossy(&body_bytes));
 
             if body_str.contains("Work queue depth exceeded") {
                 if attempts >= max_attempts {

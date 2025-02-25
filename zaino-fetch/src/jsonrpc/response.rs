@@ -50,7 +50,26 @@ pub struct GetInfoResponse {
 
     /// The time of the last error or warning message, or "no errors timestamp" if there are no errors
     #[serde(rename = "errorstimestamp")]
-    errors_timestamp: usize,
+    errors_timestamp: ErrorsTimestamp,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(untagged)]
+/// A wrapper to allow both types of error timestamp
+pub enum ErrorsTimestamp {
+    /// Returned from zcashd, the timestamp is an integer unix timstamp
+    Num(usize),
+    /// Returned from zebrad, the timestamp is a string representing a timestamp
+    Str(String),
+}
+
+impl ToString for ErrorsTimestamp {
+    fn to_string(&self) -> String {
+        match self {
+            ErrorsTimestamp::Num(n) => n.to_string(),
+            ErrorsTimestamp::Str(s) => s.clone(),
+        }
+    }
 }
 
 impl From<GetInfoResponse> for zebra_rpc::methods::GetInfo {
@@ -124,7 +143,7 @@ pub struct GetBlockchainInfoResponse {
 
     /// The total amount of work in the best chain, hex-encoded.
     #[serde(rename = "chainwork")]
-    chain_work: String,
+    chain_work: ChainWork,
 
     /// Whether this node is pruned, currently always false in Zebra.
     pruned: bool,
@@ -134,6 +153,28 @@ pub struct GetBlockchainInfoResponse {
 
     /// The current number of note commitments in the commitment tree
     commitments: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(untagged)]
+/// A wrapper type to allow both kinds of ChainWork
+pub enum ChainWork {
+    /// Returned from zcashd, a chainwork is a String representing a
+    /// base-16 integer
+    Str(String),
+    /// Returned from zebrad, a chainwork is an integer
+    Num(u64),
+}
+
+impl TryFrom<ChainWork> for u64 {
+    type Error = ParseIntError;
+
+    fn try_from(value: ChainWork) -> Result<Self, Self::Error> {
+        match value {
+            ChainWork::Str(s) => u64::from_str_radix(&s, 16),
+            ChainWork::Num(u) => Ok(u),
+        }
+    }
 }
 
 impl TryFrom<GetBlockchainInfoResponse> for zebra_rpc::methods::GetBlockChainInfo {
@@ -150,7 +191,7 @@ impl TryFrom<GetBlockchainInfoResponse> for zebra_rpc::methods::GetBlockChainInf
             response.headers,
             response.difficulty,
             response.verification_progress,
-            u64::from_str_radix(&response.chain_work, 16)?,
+            response.chain_work.try_into()?,
             response.pruned,
             response.size_on_disk,
             response.commitments,
