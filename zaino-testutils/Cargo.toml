@@ -26,6 +26,7 @@ zebra-chain = { workspace = true }
 
 # ZingoLib
 zingolib = { workspace = true }
+testvectors = { workspace = true }
 
 # Test Utilities
 zingo-infra-testutils = { workspace = true }
