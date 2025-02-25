@@ -4617,7 +4617,7 @@ dependencies = [
 [[package]]
 name = "tower-batch-control"
 version = "0.2.41-beta.21"
-source = "git+https://github.com/ZcashFoundation/zebra.git?branch=main#361fa65039cfea344136e3d7152d1d918e37f4e1"
+source = "git+https://github.com/AloeareV/zebra.git?branch=patch-2#318579295d991cf9caf73b9eb32e61f6ab03e97c"
 dependencies = [
  "futures",
  "futures-core",
@@ -4644,7 +4644,7 @@ dependencies = [
 [[package]]
 name = "tower-fallback"
 version = "0.2.41-beta.21"
-source = "git+https://github.com/ZcashFoundation/zebra.git?branch=main#361fa65039cfea344136e3d7152d1d918e37f4e1"
+source = "git+https://github.com/AloeareV/zebra.git?branch=patch-2#318579295d991cf9caf73b9eb32e61f6ab03e97c"
 dependencies = [
  "futures-core",
  "pin-project",
@@ -5944,7 +5944,7 @@ dependencies = [
 [[package]]
 name = "zebra-chain"
 version = "1.0.0-beta.45"
-source = "git+https://github.com/ZcashFoundation/zebra.git?branch=main#361fa65039cfea344136e3d7152d1d918e37f4e1"
+source = "git+https://github.com/AloeareV/zebra.git?branch=patch-2#318579295d991cf9caf73b9eb32e61f6ab03e97c"
 dependencies = [
  "bitflags 2.8.0",
  "bitflags-serde-legacy",
@@ -6036,7 +6036,7 @@ dependencies = [
 [[package]]
 name = "zebra-consensus"
 version = "1.0.0-beta.45"
-source = "git+https://github.com/ZcashFoundation/zebra.git?branch=main#361fa65039cfea344136e3d7152d1d918e37f4e1"
+source = "git+https://github.com/AloeareV/zebra.git?branch=patch-2#318579295d991cf9caf73b9eb32e61f6ab03e97c"
 dependencies = [
  "bellman",
  "blake2b_simd",
@@ -6108,7 +6108,7 @@ dependencies = [
 [[package]]
 name = "zebra-network"
 version = "1.0.0-beta.45"
-source = "git+https://github.com/ZcashFoundation/zebra.git?branch=main#361fa65039cfea344136e3d7152d1d918e37f4e1"
+source = "git+https://github.com/AloeareV/zebra.git?branch=patch-2#318579295d991cf9caf73b9eb32e61f6ab03e97c"
 dependencies = [
  "bitflags 2.8.0",
  "byteorder",
@@ -6158,7 +6158,7 @@ dependencies = [
 [[package]]
 name = "zebra-node-services"
 version = "1.0.0-beta.45"
-source = "git+https://github.com/ZcashFoundation/zebra.git?branch=main#361fa65039cfea344136e3d7152d1d918e37f4e1"
+source = "git+https://github.com/AloeareV/zebra.git?branch=patch-2#318579295d991cf9caf73b9eb32e61f6ab03e97c"
 dependencies = [
  "color-eyre",
  "jsonrpsee-types",
@@ -6205,7 +6205,7 @@ dependencies = [
 [[package]]
 name = "zebra-rpc"
 version = "1.0.0-beta.45"
-source = "git+https://github.com/ZcashFoundation/zebra.git?branch=main#361fa65039cfea344136e3d7152d1d918e37f4e1"
+source = "git+https://github.com/AloeareV/zebra.git?branch=patch-2#318579295d991cf9caf73b9eb32e61f6ab03e97c"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -6248,7 +6248,7 @@ dependencies = [
 [[package]]
 name = "zebra-script"
 version = "1.0.0-beta.45"
-source = "git+https://github.com/ZcashFoundation/zebra.git?branch=main#361fa65039cfea344136e3d7152d1d918e37f4e1"
+source = "git+https://github.com/AloeareV/zebra.git?branch=patch-2#318579295d991cf9caf73b9eb32e61f6ab03e97c"
 dependencies = [
  "thiserror 2.0.11",
  "zcash_script",
@@ -6291,7 +6291,7 @@ dependencies = [
 [[package]]
 name = "zebra-state"
 version = "1.0.0-beta.45"
-source = "git+https://github.com/ZcashFoundation/zebra.git?branch=main#361fa65039cfea344136e3d7152d1d918e37f4e1"
+source = "git+https://github.com/AloeareV/zebra.git?branch=patch-2#318579295d991cf9caf73b9eb32e61f6ab03e97c"
 dependencies = [
  "bincode",
  "chrono",

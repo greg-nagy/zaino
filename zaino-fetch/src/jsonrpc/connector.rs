@@ -249,13 +249,13 @@ impl JsonRpcConnector {
             }
 
             let request_body =
-                dbg!(serde_json::to_string(&req).map_err(JsonRpcConnectorError::SerdeJsonError)?);
+                serde_json::to_string(&req).map_err(JsonRpcConnectorError::SerdeJsonError)?;
 
-            let response = dbg!(request_builder
+            let response = request_builder
                 .body(request_body)
                 .send()
                 .await
-                .map_err(JsonRpcConnectorError::ReqwestError)?);
+                .map_err(JsonRpcConnectorError::ReqwestError)?;
 
             let status = response.status();
 
@@ -263,7 +263,7 @@ impl JsonRpcConnector {
                 .bytes()
                 .await
                 .map_err(JsonRpcConnectorError::ReqwestError)?;
-            let body_str = dbg!(String::from_utf8_lossy(&body_bytes));
+            let body_str = String::from_utf8_lossy(&body_bytes);
 
             if body_str.contains("Work queue depth exceeded") {
                 if attempts >= max_attempts {
@@ -282,18 +282,15 @@ impl JsonRpcConnector {
                 )));
             }
 
-            dbg!(std::any::type_name::<R>());
-
-            let response: RpcResponse<R> =
-                dbg!(serde_json::from_slice(&body_bytes)
-                    .map_err(JsonRpcConnectorError::SerdeJsonError))?;
+            let response: RpcResponse<R> = serde_json::from_slice(&body_bytes)
+                .map_err(JsonRpcConnectorError::SerdeJsonError)?;
 
             return match response.error {
                 Some(error) => Err(JsonRpcConnectorError::new(format!(
                     "Error: Error from node's rpc server: {} - {}",
                     error.code, error.message
                 ))),
-                None => Ok(dbg!(response.result)),
+                None => Ok(response.result),
             };
         }
     }
