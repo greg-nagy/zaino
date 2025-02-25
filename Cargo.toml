@@ -40,8 +40,8 @@ zebra-rpc = { git = "https://github.com/ZcashFoundation/zebra.git", branch = "ma
 
 
 # Zingo-infra-testutils
-zingo-infra-testutils = { git = "https://github.com/idky137/infrastructure.git", branch = "coinbase_spends_2" }
-zingo-infra-services = { git = "https://github.com/idky137/infrastructure.git", branch = "coinbase_spends_2" }
+zingo-infra-testutils = { git = "https://github.com/zingolabs/infrastructure.git", rev = "f6db556d1a6d3efc59c7805446e9e230b2a688d6" }
+zingo-infra-services = { git = "https://github.com/zingolabs/infrastructure.git", rev = "f6db556d1a6d3efc59c7805446e9e230b2a688d6" }
 
 # Runtime
 tokio = { version = "1.38", features = ["full"] }

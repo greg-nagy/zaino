@@ -4615,7 +4615,7 @@ dependencies = [
 [[package]]
 name = "tower-batch-control"
 version = "0.2.41-beta.21"
-source = "git+https://github.com/ZcashFoundation/zebra.git#b4211aa1cf7756234a834809b68e1359b4d4b4d6"
+source = "git+https://github.com/ZcashFoundation/zebra.git#1e9f021784ea9e0f5df17b4e778b2df93fb5e68f"
 dependencies = [
  "futures",
  "futures-core",
@@ -4642,7 +4642,7 @@ dependencies = [
 [[package]]
 name = "tower-fallback"
 version = "0.2.41-beta.21"
-source = "git+https://github.com/ZcashFoundation/zebra.git#b4211aa1cf7756234a834809b68e1359b4d4b4d6"
+source = "git+https://github.com/ZcashFoundation/zebra.git#1e9f021784ea9e0f5df17b4e778b2df93fb5e68f"
 dependencies = [
  "futures-core",
  "pin-project",
@@ -5943,7 +5943,7 @@ dependencies = [
 [[package]]
 name = "zebra-chain"
 version = "1.0.0-beta.45"
-source = "git+https://github.com/ZcashFoundation/zebra.git#b4211aa1cf7756234a834809b68e1359b4d4b4d6"
+source = "git+https://github.com/ZcashFoundation/zebra.git#1e9f021784ea9e0f5df17b4e778b2df93fb5e68f"
 dependencies = [
  "bitflags 2.8.0",
  "bitflags-serde-legacy",
@@ -6035,7 +6035,7 @@ dependencies = [
 [[package]]
 name = "zebra-consensus"
 version = "1.0.0-beta.45"
-source = "git+https://github.com/ZcashFoundation/zebra.git#b4211aa1cf7756234a834809b68e1359b4d4b4d6"
+source = "git+https://github.com/ZcashFoundation/zebra.git#1e9f021784ea9e0f5df17b4e778b2df93fb5e68f"
 dependencies = [
  "bellman",
  "blake2b_simd",
@@ -6107,7 +6107,7 @@ dependencies = [
 [[package]]
 name = "zebra-network"
 version = "1.0.0-beta.45"
-source = "git+https://github.com/ZcashFoundation/zebra.git#b4211aa1cf7756234a834809b68e1359b4d4b4d6"
+source = "git+https://github.com/ZcashFoundation/zebra.git#1e9f021784ea9e0f5df17b4e778b2df93fb5e68f"
 dependencies = [
  "bitflags 2.8.0",
  "byteorder",
@@ -6157,7 +6157,7 @@ dependencies = [
 [[package]]
 name = "zebra-node-services"
 version = "1.0.0-beta.45"
-source = "git+https://github.com/ZcashFoundation/zebra.git#b4211aa1cf7756234a834809b68e1359b4d4b4d6"
+source = "git+https://github.com/ZcashFoundation/zebra.git#1e9f021784ea9e0f5df17b4e778b2df93fb5e68f"
 dependencies = [
  "color-eyre",
  "jsonrpsee-types",
@@ -6203,7 +6203,7 @@ dependencies = [
 [[package]]
 name = "zebra-rpc"
 version = "1.0.0-beta.45"
-source = "git+https://github.com/ZcashFoundation/zebra.git#b4211aa1cf7756234a834809b68e1359b4d4b4d6"
+source = "git+https://github.com/ZcashFoundation/zebra.git#1e9f021784ea9e0f5df17b4e778b2df93fb5e68f"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -6218,6 +6218,7 @@ dependencies = [
  "jsonrpsee-types",
  "nix",
  "rand 0.8.5",
+ "semver",
  "serde",
  "serde_json",
  "tokio",
@@ -6246,7 +6247,7 @@ dependencies = [
 [[package]]
 name = "zebra-script"
 version = "1.0.0-beta.45"
-source = "git+https://github.com/ZcashFoundation/zebra.git#b4211aa1cf7756234a834809b68e1359b4d4b4d6"
+source = "git+https://github.com/ZcashFoundation/zebra.git#1e9f021784ea9e0f5df17b4e778b2df93fb5e68f"
 dependencies = [
  "thiserror 2.0.11",
  "zcash_script",
@@ -6289,7 +6290,7 @@ dependencies = [
 [[package]]
 name = "zebra-state"
 version = "1.0.0-beta.45"
-source = "git+https://github.com/ZcashFoundation/zebra.git#b4211aa1cf7756234a834809b68e1359b4d4b4d6"
+source = "git+https://github.com/ZcashFoundation/zebra.git#1e9f021784ea9e0f5df17b4e778b2df93fb5e68f"
 dependencies = [
  "bincode",
  "chrono",
@@ -6406,7 +6407,7 @@ dependencies = [
 [[package]]
 name = "zingo-infra-fetcher"
 version = "0.1.0"
-source = "git+https://github.com/idky137/infrastructure.git?branch=coinbase_spends_2#ff24a076c7bd415089f7981ee58ffcc99193a1f6"
+source = "git+https://github.com/zingolabs/infrastructure.git?rev=f6db556d1a6d3efc59c7805446e9e230b2a688d6#f6db556d1a6d3efc59c7805446e9e230b2a688d6"
 dependencies = [
  "hex",
  "reqwest",
@@ -6417,7 +6418,7 @@ dependencies = [
 [[package]]
 name = "zingo-infra-services"
 version = "0.1.0"
-source = "git+https://github.com/idky137/infrastructure.git?branch=coinbase_spends_2#ff24a076c7bd415089f7981ee58ffcc99193a1f6"
+source = "git+https://github.com/zingolabs/infrastructure.git?rev=f6db556d1a6d3efc59c7805446e9e230b2a688d6#f6db556d1a6d3efc59c7805446e9e230b2a688d6"
 dependencies = [
  "getset",
  "hex",
@@ -6442,7 +6443,7 @@ dependencies = [
 [[package]]
 name = "zingo-infra-testutils"
 version = "0.1.0"
-source = "git+https://github.com/idky137/infrastructure.git?branch=coinbase_spends_2#ff24a076c7bd415089f7981ee58ffcc99193a1f6"
+source = "git+https://github.com/zingolabs/infrastructure.git?rev=f6db556d1a6d3efc59c7805446e9e230b2a688d6#f6db556d1a6d3efc59c7805446e9e230b2a688d6"
 dependencies = [
  "http",
  "portpicker",

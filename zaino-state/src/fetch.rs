@@ -432,12 +432,11 @@ impl ZcashIndexer for FetchServiceSubscriber {
         request: GetAddressTxIdsRequest,
     ) -> Result<Vec<String>, Self::Error> {
         let (addresses, start, end) = request.into_parts();
-        Ok(
-            self.fetcher
-                .get_address_txids(addresses, start, end)
-                .await?
-                .transactions
-        )
+        Ok(self
+            .fetcher
+            .get_address_txids(addresses, start, end)
+            .await?
+            .transactions)
     }
 
     /// Returns all unspent outputs for a list of addresses.
