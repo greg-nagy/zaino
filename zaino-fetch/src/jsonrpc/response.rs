@@ -3,7 +3,12 @@
 use std::num::ParseIntError;
 
 use hex::FromHex;
-use zebra_chain::block::Height;
+use serde::{de::Error, Deserialize, Deserializer, Serialize};
+
+use zebra_chain::{
+    amount::{Amount, NonNegative},
+    block::Height,
+};
 use zebra_rpc::methods::types::Balance;
 
 /// Response to a `getinfo` RPC request.
@@ -115,7 +120,7 @@ pub struct GetBlockchainInfoResponse {
 
     /// Chain supply balance
     #[serde(rename = "chainSupply")]
-    chain_supply: Balance,
+    chain_supply: ChainBalance,
 
     /// Status of network upgrades
     pub upgrades: indexmap::IndexMap<
@@ -125,7 +130,7 @@ pub struct GetBlockchainInfoResponse {
 
     /// Value pool balances
     #[serde(rename = "valuePools")]
-    value_pools: [Balance; 5],
+    value_pools: [ChainBalance; 5],
 
     /// Branch IDs of the current and upcoming consensus rules
     pub consensus: zebra_rpc::methods::TipConsensusBranch,
@@ -177,6 +182,41 @@ impl TryFrom<ChainWork> for u64 {
     }
 }
 
+/// Wrapper struct for a Zebra [`Balance`], enabling custom deserialisation logic to handle both zebrad and zcashd.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ChainBalance(Balance);
+
+impl<'de> Deserialize<'de> for ChainBalance {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize, Debug)]
+        struct TempBalance {
+            #[serde(default)]
+            id: String,
+            #[serde(rename = "chainValue")]
+            chain_value: f64,
+            #[serde(rename = "chainValueZat")]
+            chain_value_zat: u64,
+            #[allow(dead_code)]
+            monitored: bool,
+        }
+        let temp = TempBalance::deserialize(deserializer)?;
+        let computed_zat = (temp.chain_value * 100_000_000.0).round() as u64;
+        if computed_zat != temp.chain_value_zat {
+            return Err(D::Error::custom(format!(
+                "chainValue and chainValueZat mismatch: computed {} but got {}",
+                computed_zat, temp.chain_value_zat
+            )));
+        }
+        let amount = Amount::<NonNegative>::from_bytes(temp.chain_value_zat.to_le_bytes())
+            .map_err(|e| serde::de::Error::custom(e.to_string()))?;
+        let balance = Balance::new(temp.id, amount);
+        Ok(ChainBalance(balance))
+    }
+}
+
 impl TryFrom<GetBlockchainInfoResponse> for zebra_rpc::methods::GetBlockChainInfo {
     fn try_from(response: GetBlockchainInfoResponse) -> Result<Self, ParseIntError> {
         Ok(zebra_rpc::methods::GetBlockChainInfo::new(
@@ -184,8 +224,8 @@ impl TryFrom<GetBlockchainInfoResponse> for zebra_rpc::methods::GetBlockChainInf
             response.blocks,
             response.best_block_hash,
             response.estimated_height,
-            response.chain_supply,
-            response.value_pools,
+            response.chain_supply.0,
+            response.value_pools.map(|pool| pool.0),
             response.upgrades,
             response.consensus,
             response.headers,
