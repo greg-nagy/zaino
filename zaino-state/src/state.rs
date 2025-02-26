@@ -1339,7 +1339,7 @@ fn header_to_block_commitments(
     height: Height,
     final_sapling_root: [u8; 32],
 ) -> Result<[u8; 32], StateServiceError> {
-    let hash = match header.commitment(&network, height).map_err(|e| {
+    let hash = match header.commitment(network, height).map_err(|e| {
         StateServiceError::SerializationError(
             zebra_chain::serialization::SerializationError::Parse(
                 // For some reason this error type takes a
