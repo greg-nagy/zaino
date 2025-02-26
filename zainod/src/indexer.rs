@@ -189,7 +189,15 @@ impl Indexer {
 
 impl Drop for Indexer {
     fn drop(&mut self) {
-        let _ = self.close();
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                tokio::runtime::Runtime::new()
+                    .unwrap()
+                    .block_on(async { self.close().await })
+            })
+            .join()
+            .unwrap()
+        });
     }
 }
 

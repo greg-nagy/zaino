@@ -68,11 +68,11 @@ pub enum ErrorsTimestamp {
     Str(String),
 }
 
-impl ToString for ErrorsTimestamp {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for ErrorsTimestamp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ErrorsTimestamp::Num(n) => n.to_string(),
-            ErrorsTimestamp::Str(s) => s.clone(),
+            ErrorsTimestamp::Num(n) => f.write_str(&n.to_string()),
+            ErrorsTimestamp::Str(s) => f.write_str(s),
         }
     }
 }
