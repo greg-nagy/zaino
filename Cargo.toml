@@ -34,9 +34,9 @@ zcash_protocol = { git = "https://github.com/zingolabs/librustzcash.git", tag = 
 
 # Zebra
 # This should be changed to a specific release tag once Zebra regtest stabalizes, currently main is used to fetch most recent bug fixes from Zebra.
-zebra-chain = { git = "https://github.com/AloeareV/zebra.git", branch = "patch-2" }
-zebra-state = { git = "https://github.com/AloeareV/zebra.git", branch = "patch-2" }
-zebra-rpc = { git = "https://github.com/AloeareV/zebra.git", branch = "patch-2" }
+zebra-chain = { git = "https://github.com/ZcashFoundation/zebra.git", branch = "main" }
+zebra-state = { git = "https://github.com/ZcashFoundation/zebra.git", branch = "main" }
+zebra-rpc = { git = "https://github.com/ZcashFoundation/zebra.git", branch = "main" }
 
 
 # Zingo-infra-testutils
