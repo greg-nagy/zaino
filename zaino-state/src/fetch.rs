@@ -180,10 +180,10 @@ impl ZcashIndexer for FetchServiceSubscriber {
     ///
     /// # Notes
     ///
-    /// TODO: Eleven fields have been added to this type, since this comment
+    /// TODO: [Issue #221](https://github.com/zingolabs/zaino/issues/221)
+    /// Eleven fields have been added to this type, since this comment
     /// was written. Investigate whether there is field-parity between us and
     /// zcashd, or if fields are still missing from some implementations
-    ///
     /// [The zcashd reference](https://zcash.github.io/rpc/getinfo.html) might not show some fields
     /// in Zebra's [`GetInfo`]. Zebra uses the field names and formats from the
     /// [zcashd code](https://github.com/zcash/zcash/blob/v4.6.0-1/src/rpc/misc.cpp#L86-L87).
