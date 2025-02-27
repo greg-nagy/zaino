@@ -187,20 +187,6 @@ impl Indexer {
     }
 }
 
-impl Drop for Indexer {
-    fn drop(&mut self) {
-        std::thread::scope(|s| {
-            s.spawn(|| {
-                tokio::runtime::Runtime::new()
-                    .unwrap()
-                    .block_on(async { self.close().await })
-            })
-            .join()
-            .unwrap()
-        });
-    }
-}
-
 /// Prints Zaino's startup message.
 fn startup_message() {
     let welcome_message = r#"
