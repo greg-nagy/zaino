@@ -1,21 +1,91 @@
 # Zaino
 The Zaino repo consists of several crates that collectively provide an indexing service and APIs for the Zcash blockchain. The crates are modularized to separate concerns, enhance maintainability, and allow for flexible integration.
 
-The main crates are:
+### Crates
   - `Zainod`
   - `Zaino-Serve`
   - `Zaino-State`
   - `Zaino-Fetch`
   - `Zaino-Proto`
+  - `Zaino-Testutils`
+  - `Integration-tests`
 
 ### Workspace Dependencies
-  - `zcash_protocol`
-  - `zebra-chain`
-  - `zebra-rpc`
-  - `tokio`
-  - `tonic`
-  - `http`
-  - `thiserror`
+Zingolabs:
+zingolib
+testvectors
+
+Librustzcash:
+zcash_client_backend
+zcash_protocol
+
+
+Zebra
+zebra-chain
+zebra-state
+zebra-rpc
+
+
+Zingo-infra-testutils:
+zingo-infra-testutils
+zingo-infra-services
+
+Runtime:
+tokio
+tokio-stream 
+
+CLI:
+clap
+
+Tracing:
+tracing 
+tracing-subscriber
+tracing-futures
+
+Network / RPC:
+http
+url
+reqwest
+tower
+tonic
+tonic-build
+prost
+serde 
+serde_json
+jsonrpc-core 
+jsonrpsee-types
+
+Hashmaps, channels, DBs:
+indexmap 
+crossbeam-channel
+dashmap 
+lmdb 
+
+Async:
+async-stream 
+async-trait 
+futures 
+
+Utility:
+thiserror
+lazy-regex
+once_cell
+ctrlc =
+chrono
+which 
+whoami 
+
+Formats:
+base64 
+byteorder
+sha2
+hex
+toml
+
+Test:
+portpicker
+tempfile
+
 
 Below is a detailed specification for each crate.
 

@@ -36,7 +36,7 @@ Future Planned backend Services:
 - DarksideService: Local test backend replacing functionality in lightwalletd.
 - NymService: Nym powered backend enabling clients to obfuscate their identities from zcash servers.
 
-An example of how to spawn an `IndexerService<FetchService>`` and create a `Subscriber` can be seen in `zainod::indexer::Indexer::spawn()`.
+An example of how to spawn an `IndexerService<FetchService>` and create a `Subscriber` can be seen in `zainod::indexer::Indexer::spawn()`.
 
 A system architecture diagram for this service can be seen at [Library System Architecture](./zaino_lib_system_architecture.pdf).
 
