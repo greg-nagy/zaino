@@ -11,80 +11,80 @@ The Zaino repo consists of several crates that collectively provide an indexing 
   - `Integration-tests`
 
 ### Workspace Dependencies
-Zingolabs:
-zingolib
-testvectors
+**Zingo Labs:**
+- zingolib
+- testvectors
 
-Librustzcash:
-zcash_client_backend
-zcash_protocol
-
-
-Zebra
-zebra-chain
-zebra-state
-zebra-rpc
+**Librustzcash:**
+- zcash_client_backend
+- zcash_protocol
 
 
-Zingo-infra-testutils:
-zingo-infra-testutils
-zingo-infra-services
+**Zebra:**
+- zebra-chain
+- zebra-state
+- zebra-rpc
 
-Runtime:
-tokio
-tokio-stream 
 
-CLI:
-clap
+**Zingo-infra-testutils:**
+- zingo-infra-testutils
+- zingo-infra-services
 
-Tracing:
-tracing 
-tracing-subscriber
-tracing-futures
+**Runtime:**
+- tokio
+- tokio-stream 
 
-Network / RPC:
-http
-url
-reqwest
-tower
-tonic
-tonic-build
-prost
-serde 
-serde_json
-jsonrpc-core 
-jsonrpsee-types
+**CLI:**
+- clap
 
-Hashmaps, channels, DBs:
-indexmap 
-crossbeam-channel
-dashmap 
-lmdb 
+**Tracing:**
+- tracing 
+- tracing-subscriber
+- tracing-futures
 
-Async:
-async-stream 
-async-trait 
-futures 
+**Network / RPC:**
+- http
+- url
+- reqwest
+- tower
+- tonic
+- tonic-build
+- prost
+- serde 
+- serde_json
+- jsonrpc-core 
+- jsonrpsee-types
 
-Utility:
-thiserror
-lazy-regex
-once_cell
-ctrlc =
-chrono
-which 
-whoami 
+**Hashmaps, channels, DBs:**
+- indexmap 
+- crossbeam-channel
+- dashmap 
+- lmdb 
 
-Formats:
-base64 
-byteorder
-sha2
-hex
-toml
+**Async:**
+- async-stream 
+- async-trait 
+- futures 
 
-Test:
-portpicker
-tempfile
+**Utility:**
+- thiserror
+- lazy-regex
+- once_cell
+- ctrlc 
+- chrono
+- which 
+- whoami 
+
+**Formats:**
+- base64 
+- byteorder
+- sha2
+- hex
+- toml
+
+**Test:**
+- portpicker
+- tempfile
 
 
 Below is a detailed specification for each crate.
