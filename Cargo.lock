@@ -2066,7 +2066,7 @@ dependencies = [
 
 [[package]]
 name = "integration-tests"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "tokio",
  "tracing-subscriber",
@@ -5438,7 +5438,7 @@ dependencies = [
 
 [[package]]
 name = "zaino-fetch"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "base64 0.22.1",
  "byteorder",
@@ -5465,7 +5465,7 @@ dependencies = [
 
 [[package]]
 name = "zaino-proto"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "prost",
  "tonic",
@@ -5475,7 +5475,7 @@ dependencies = [
 
 [[package]]
 name = "zaino-serve"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-stream",
  "crossbeam-channel",
@@ -5499,7 +5499,7 @@ dependencies = [
 
 [[package]]
 name = "zaino-state"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -5534,7 +5534,7 @@ dependencies = [
 
 [[package]]
 name = "zaino-testutils"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ctrlc",
  "http",
@@ -5559,7 +5559,7 @@ dependencies = [
 
 [[package]]
 name = "zainod"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "clap",
  "ctrlc",
