@@ -147,11 +147,11 @@ impl Drop for FetchService {
 #[derive(Debug, Clone)]
 pub struct FetchServiceSubscriber {
     /// JsonRPC Client.
-    fetcher: JsonRpcConnector,
+    pub fetcher: JsonRpcConnector,
     /// Local compact block cache.
-    block_cache: BlockCacheSubscriber,
+    pub block_cache: BlockCacheSubscriber,
     /// Internal mempool.
-    mempool: MempoolSubscriber,
+    pub mempool: MempoolSubscriber,
     /// Service metadata.
     data: ServiceMetadata,
     /// StateService config data.
