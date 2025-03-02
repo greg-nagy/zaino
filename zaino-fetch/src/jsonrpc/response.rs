@@ -55,43 +55,54 @@ mod opthex {
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GetInfoResponse {
     /// The node version
+    #[serde(default)]
     version: u64,
     /// The node version build number
     pub build: String,
     /// The server sub-version identifier, used as the network protocol user-agent
     pub subversion: String,
     /// The protocol version
+    #[serde(default)]
     #[serde(rename = "protocolversion")]
     protocol_version: u32,
 
     /// The current number of blocks processed in the server
+    #[serde(default)]
     blocks: u32,
 
     /// The total (inbound and outbound) number of connections the node has
+    #[serde(default)]
     connections: usize,
 
     /// The proxy (if any) used by the server. Currently always `None` in Zebra.
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     proxy: Option<String>,
 
     /// The current network difficulty
+    #[serde(default)]
     difficulty: f64,
 
     /// True if the server is running in testnet mode, false otherwise
+    #[serde(default)]
     testnet: bool,
 
     /// The minimum transaction fee in ZEC/kB
+    #[serde(default)]
     #[serde(rename = "paytxfee")]
     pay_tx_fee: f64,
 
     /// The minimum relay fee for non-free transactions in ZEC/kB
+    #[serde(default)]
     #[serde(rename = "relayfee")]
     relay_fee: f64,
 
     /// The last error or warning message, or "no errors" if there are no errors
+    #[serde(default)]
     errors: String,
 
     /// The time of the last error or warning message, or "no errors timestamp" if there are no errors
+    #[serde(default)]
     #[serde(rename = "errorstimestamp")]
     errors_timestamp: ErrorsTimestamp,
 }
@@ -112,6 +123,12 @@ impl std::fmt::Display for ErrorsTimestamp {
             ErrorsTimestamp::Num(n) => f.write_str(&n.to_string()),
             ErrorsTimestamp::Str(s) => f.write_str(s),
         }
+    }
+}
+
+impl Default for ErrorsTimestamp {
+    fn default() -> Self {
+        ErrorsTimestamp::Str("Default".to_string())
     }
 }
 
@@ -157,6 +174,7 @@ pub struct GetBlockchainInfoResponse {
     pub estimated_height: zebra_chain::block::Height,
 
     /// Chain supply balance
+    #[serde(default)]
     #[serde(rename = "chainSupply")]
     chain_supply: ChainBalance,
 
@@ -175,27 +193,38 @@ pub struct GetBlockchainInfoResponse {
 
     /// The current number of headers we have validated in the best chain, that is,
     /// the height of the best chain.
+    #[serde(default = "default_header")]
     headers: Height,
 
     /// The estimated network solution rate in Sol/s.
+    #[serde(default)]
     difficulty: f64,
 
     /// The verification progress relative to the estimated network chain tip.
+    #[serde(default)]
     #[serde(rename = "verificationprogress")]
     verification_progress: f64,
 
     /// The total amount of work in the best chain, hex-encoded.
+    #[serde(default)]
     #[serde(rename = "chainwork")]
     chain_work: ChainWork,
 
     /// Whether this node is pruned, currently always false in Zebra.
+    #[serde(default)]
     pruned: bool,
 
     /// The estimated size of the block and undo files on disk
+    #[serde(default)]
     size_on_disk: u64,
 
     /// The current number of note commitments in the commitment tree
+    #[serde(default)]
     commitments: u64,
+}
+
+fn default_header() -> Height {
+    Height(0)
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -220,6 +249,12 @@ impl TryFrom<ChainWork> for u64 {
     }
 }
 
+impl Default for ChainWork {
+    fn default() -> Self {
+        ChainWork::Num(0)
+    }
+}
+
 /// Wrapper struct for a Zebra [`Balance`], enabling custom deserialisation logic to handle both zebrad and zcashd.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct ChainBalance(Balance);
@@ -238,6 +273,7 @@ impl<'de> Deserialize<'de> for ChainBalance {
             #[serde(rename = "chainValueZat")]
             chain_value_zat: u64,
             #[allow(dead_code)]
+            #[serde(default)]
             monitored: bool,
         }
         let temp = TempBalance::deserialize(deserializer)?;
@@ -252,6 +288,12 @@ impl<'de> Deserialize<'de> for ChainBalance {
             .map_err(|e| serde::de::Error::custom(e.to_string()))?;
         let balance = Balance::new(temp.id, amount);
         Ok(ChainBalance(balance))
+    }
+}
+
+impl Default for ChainBalance {
+    fn default() -> Self {
+        Self(Balance::new("default", Amount::zero()))
     }
 }
 
