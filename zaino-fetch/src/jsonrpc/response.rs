@@ -8,8 +8,46 @@ use serde::{de::Error, Deserialize, Deserializer, Serialize};
 use zebra_chain::{
     amount::{Amount, NonNegative},
     block::Height,
+    work::difficulty::CompactDifficulty,
 };
 use zebra_rpc::methods::types::Balance;
+
+/// A helper module to serialize `Option<T: ToHex>` as a hex string.
+///
+/// *** NOTE / TODO: This code has been from zebra to ensure valid serialisation / deserialisation. ***
+/// ***            - This code should be made pulic in zebra to avoid deviations in implementation. ***
+mod opthex {
+    use hex::{FromHex, ToHex};
+    use serde::{de, Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S, T>(data: &Option<T>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: ToHex,
+    {
+        match data {
+            Some(data) => {
+                let s = data.encode_hex::<String>();
+                serializer.serialize_str(&s)
+            }
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: FromHex,
+    {
+        let opt = Option::<String>::deserialize(deserializer)?;
+        match opt {
+            Some(s) => T::from_hex(&s)
+                .map(Some)
+                .map_err(|_e| de::Error::custom("failed to convert hex string")),
+            None => Ok(None),
+        }
+    }
+}
 
 /// Response to a `getinfo` RPC request.
 ///
@@ -285,6 +323,12 @@ impl Default for GetBlockHash {
     }
 }
 
+impl From<GetBlockHash> for zebra_rpc::methods::GetBlockHash {
+    fn from(value: GetBlockHash) -> Self {
+        zebra_rpc::methods::GetBlockHash(value.0)
+    }
+}
+
 /// A wrapper struct for a zebra serialized block.
 ///
 /// Stores bytes that are guaranteed to be deserializable into a [`Block`].
@@ -395,10 +439,54 @@ impl From<GetBlockTrees> for zebra_rpc::methods::GetBlockTrees {
     }
 }
 
+/// Wrapper struct for a zebra `Solution`.
+///
+/// *** NOTE / TODO: ToHex should be inmlemented in zebra to avoid the use of a wrapper struct. ***
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Solution(pub zebra_chain::work::equihash::Solution);
+
+impl std::ops::Deref for Solution {
+    type Target = zebra_chain::work::equihash::Solution;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl hex::ToHex for Solution {
+    fn encode_hex<T: std::iter::FromIterator<char>>(&self) -> T {
+        self.0.encode_hex()
+    }
+
+    fn encode_hex_upper<T: std::iter::FromIterator<char>>(&self) -> T {
+        self.0.encode_hex_upper()
+    }
+}
+
+impl hex::FromHex for Solution {
+    type Error = zebra_chain::serialization::SerializationError;
+
+    fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, Self::Error> {
+        let hex_str = std::str::from_utf8(hex.as_ref()).map_err(|_| {
+            zebra_chain::serialization::SerializationError::Parse("invalid UTF-8 in hex input")
+        })?;
+        let bytes = hex::decode(hex_str).map_err(|_| {
+            zebra_chain::serialization::SerializationError::Parse("failed to decode hex string")
+        })?;
+        zebra_chain::work::equihash::Solution::from_bytes(&bytes).map(Solution)
+    }
+}
+
+impl From<Solution> for zebra_chain::work::equihash::Solution {
+    fn from(value: Solution) -> Self {
+        value.0
+    }
+}
+
 /// Contains the hex-encoded hash of the sent transaction.
 ///
 /// This is used for the output parameter of [`JsonRpcConnector::get_block`].
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(untagged)]
 pub enum GetBlockResponse {
     /// The request block, hex-encoded.
@@ -412,19 +500,85 @@ pub enum GetBlockResponse {
         /// or -1 if it is not in the best chain.
         confirmations: i64,
 
-        /// The height of the requested block.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        height: Option<zebra_chain::block::Height>,
+        /// The block size. TODO: fill it
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        size: Option<i64>,
 
         /// The height of the requested block.
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        height: Option<zebra_chain::block::Height>,
+
+        /// The version field of the requested block.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        version: Option<u32>,
+
+        /// The merkle root of the requested block.
+        #[serde(with = "opthex", rename = "merkleroot")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        merkle_root: Option<zebra_chain::block::merkle::Root>,
+
+        /// The blockcommitments field of the requested block. Its interpretation changes
+        /// depending on the network and height.
+        #[serde(with = "opthex", rename = "blockcommitments")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        block_commitments: Option<[u8; 32]>,
+
+        /// The root of the Sapling commitment tree after applying this block.
+        #[serde(with = "opthex", rename = "finalsaplingroot")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        final_sapling_root: Option<[u8; 32]>,
+
+        /// The root of the Orchard commitment tree after applying this block.
+        #[serde(with = "opthex", rename = "finalorchardroot")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        final_orchard_root: Option<[u8; 32]>,
+
+        /// The height of the requested block.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         time: Option<i64>,
+
+        /// The nonce of the requested block header.
+        #[serde(with = "opthex")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        nonce: Option<[u8; 32]>,
+
+        /// The Equihash solution in the requested block header.
+        /// Note: presence of this field in getblock is not documented in zcashd.
+        #[serde(with = "opthex")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        solution: Option<Solution>,
+
+        /// The difficulty threshold of the requested block header displayed in compact form.
+        #[serde(with = "opthex")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        bits: Option<CompactDifficulty>,
+
+        /// Floating point number that represents the difficulty limit for this block as a multiple
+        /// of the minimum difficulty for the network.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        difficulty: Option<f64>,
 
         /// List of transaction IDs in block order, hex-encoded.
         tx: Vec<String>,
 
         /// Information about the note commitment trees.
         trees: GetBlockTrees,
+
+        /// The previous block hash of the requested block header.
+        #[serde(
+            rename = "previousblockhash",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        previous_block_hash: Option<GetBlockHash>,
+
+        /// The next block hash after the requested block header.
+        #[serde(
+            rename = "nextblockhash",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        next_block_hash: Option<GetBlockHash>,
     },
 }
 
@@ -438,11 +592,23 @@ impl TryFrom<GetBlockResponse> for zebra_rpc::methods::GetBlock {
             }
             GetBlockResponse::Object {
                 hash,
+                block_commitments,
                 confirmations,
+                size,
                 height,
-                time,
+                version,
+                merkle_root,
+                final_sapling_root,
+                final_orchard_root,
                 tx,
+                time,
+                nonce,
+                solution,
+                bits,
+                difficulty,
                 trees,
+                previous_block_hash,
+                next_block_hash,
             } => {
                 let tx_ids: Result<Vec<_>, _> = tx
                     .into_iter()
@@ -454,23 +620,23 @@ impl TryFrom<GetBlockResponse> for zebra_rpc::methods::GetBlock {
 
                 Ok(zebra_rpc::methods::GetBlock::Object {
                     hash: zebra_rpc::methods::GetBlockHash(hash.0),
-                    block_commitments: None,
+                    block_commitments,
                     confirmations,
-                    size: None,
+                    size,
                     height,
-                    version: None,
-                    merkle_root: None,
-                    final_sapling_root: None,
-                    final_orchard_root: None,
+                    version,
+                    merkle_root,
+                    final_sapling_root,
+                    final_orchard_root,
                     tx: tx_ids?,
                     time,
-                    nonce: None,
-                    solution: None,
-                    bits: None,
-                    difficulty: None,
+                    nonce,
+                    solution: solution.map(Into::into),
+                    bits,
+                    difficulty,
                     trees: trees.into(),
-                    previous_block_hash: None,
-                    next_block_hash: None,
+                    previous_block_hash: previous_block_hash.map(Into::into),
+                    next_block_hash: next_block_hash.map(Into::into),
                 })
             }
         }

@@ -132,7 +132,7 @@ impl FinalisedState {
         config: BlockCacheConfig,
     ) -> Result<Self, FinalisedStateError> {
         info!("Launching Finalised State..");
-        let db_size = config.db_size.unwrap_or(8);
+        let db_size = config.db_size.unwrap_or(64);
         let db_path_dir = match config.network.kind() {
             NetworkKind::Mainnet => "live",
             NetworkKind::Testnet => "test",
