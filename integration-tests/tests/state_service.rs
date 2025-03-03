@@ -4,7 +4,7 @@ use zaino_state::{
     indexer::{ZcashIndexer as _, ZcashService as _},
     state::StateService,
 };
-use zaino_testutils::{TestManager, ZEBRAD_CHAIN_CACHE_BIN};
+use zaino_testutils::{TestManager, ZEBRAD_CHAIN_CACHE_DIR};
 use zebra_chain::{parameters::Network, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetInfo};
 use zingo_infra_testutils::services::validator::Validator as _;
@@ -95,7 +95,7 @@ async fn state_service_check_info_no_cache_zebrad() {
 
 #[tokio::test]
 async fn state_service_check_info_with_cache_zebrad() {
-    state_service_check_info("zebrad", ZEBRAD_CHAIN_CACHE_BIN.clone()).await;
+    state_service_check_info("zebrad", ZEBRAD_CHAIN_CACHE_DIR.clone()).await;
 }
 
 async fn state_service_check_info(validator: &str, chain_cache: Option<std::path::PathBuf>) {
