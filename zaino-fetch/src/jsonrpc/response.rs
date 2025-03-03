@@ -14,7 +14,7 @@ use zebra_rpc::methods::types::Balance;
 
 /// A helper module to serialize `Option<T: ToHex>` as a hex string.
 ///
-/// *** NOTE / TODO: This code has been from zebra to ensure valid serialisation / deserialisation. ***
+/// *** NOTE / TODO: This code has been copied from zebra to ensure valid serialisation / deserialisation and extended. ***
 /// ***            - This code should be made pulic in zebra to avoid deviations in implementation. ***
 mod opthex {
     use hex::{FromHex, ToHex};
