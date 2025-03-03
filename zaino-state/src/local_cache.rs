@@ -25,6 +25,8 @@ use zebra_state::HashOrHeight;
 pub struct BlockCache {
     fetcher: JsonRpcConnector,
     non_finalised_state: NonFinalisedState,
+    /// The state below the last 100 blocks, determined
+    /// to be probabalistically nonreorgable
     pub finalised_state: Option<FinalisedState>,
     config: BlockCacheConfig,
 }
@@ -99,7 +101,11 @@ impl BlockCache {
 #[derive(Debug, Clone)]
 pub struct BlockCacheSubscriber {
     fetcher: JsonRpcConnector,
+    /// the last 100 blocks, stored separately as it could
+    /// be changed by reorgs
     pub non_finalised_state: NonFinalisedStateSubscriber,
+    /// The state below the last 100 blocks, determined
+    /// to be probabalistically nonreorgable
     pub finalised_state: Option<FinalisedStateSubscriber>,
     config: BlockCacheConfig,
 }
