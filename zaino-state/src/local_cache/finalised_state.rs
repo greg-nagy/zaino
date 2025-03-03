@@ -132,7 +132,7 @@ impl FinalisedState {
         config: BlockCacheConfig,
     ) -> Result<Self, FinalisedStateError> {
         info!("Launching Finalised State..");
-        let db_size = config.db_size.unwrap_or(8);
+        let db_size = config.db_size.unwrap_or(64);
         let db_path_dir = match config.network.kind() {
             NetworkKind::Mainnet => "live",
             NetworkKind::Testnet => "test",
@@ -211,8 +211,8 @@ impl FinalisedState {
                     match finalised_state.insert_block((height, hash, compact_block.clone())) {
                         Ok(_) => {
                             info!(
-                                "Block at height {} successfully inserted in finalised state.",
-                                height.0
+                                "Block at height [{}] with hash [{}] successfully committed to finalised state.",
+                                height.0, hash
                             );
                             break;
                         }
