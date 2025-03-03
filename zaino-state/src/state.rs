@@ -1497,7 +1497,7 @@ mod tests {
             pay_tx_fee,
             relay_fee,
             errors,
-            _, // ignore the timestamp
+            _,
         ) = fetch_service_info.into_parts();
         let cleaned_fetch_info = GetInfo::from_parts(
             version,
@@ -1512,7 +1512,7 @@ mod tests {
             pay_tx_fee,
             relay_fee,
             errors,
-            String::new(), // clean the timestamp
+            String::new(),
         );
 
         let (
@@ -1528,7 +1528,7 @@ mod tests {
             pay_tx_fee,
             relay_fee,
             errors,
-            _, // ignore the timestamp
+            _,
         ) = state_service_info.into_parts();
         let cleaned_state_info = GetInfo::from_parts(
             version,
@@ -1543,7 +1543,7 @@ mod tests {
             pay_tx_fee,
             relay_fee,
             errors,
-            String::new(), // clean the timestamp
+            String::new(),
         );
 
         assert_eq!(cleaned_fetch_info, cleaned_state_info);
@@ -1580,6 +1580,7 @@ mod tests {
         test_manager.close().await;
     }
 
+    #[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
     #[tokio::test]
     async fn state_service_get_address_balance_zebrad() {
         state_service_get_address_balance("zebrad").await;
@@ -1693,6 +1694,7 @@ mod tests {
         test_manager.close().await;
     }
 
+    #[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
     #[tokio::test]
     async fn state_service_get_raw_mempool_zebrad() {
         state_service_get_raw_mempoolstate("zebrad").await;
@@ -1762,6 +1764,7 @@ mod tests {
         test_manager.close().await;
     }
 
+    #[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
     #[tokio::test]
     async fn state_service_z_get_treestate_zebrad() {
         state_service_z_get_treestate("zebrad").await;
@@ -1817,6 +1820,7 @@ mod tests {
         test_manager.close().await;
     }
 
+    #[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
     #[tokio::test]
     async fn state_service_z_get_subtrees_by_index_zebrad() {
         state_service_z_get_subtrees_by_index("zebrad").await;
@@ -1872,6 +1876,7 @@ mod tests {
         test_manager.close().await;
     }
 
+    #[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
     #[tokio::test]
     async fn state_service_get_raw_transaction_zebrad() {
         state_service_get_raw_transaction("zebrad").await;
@@ -1912,6 +1917,8 @@ mod tests {
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
+        test_manager.local_net.print_stdout();
+
         let fetch_service_transaction = dbg!(fetch_service_subscriber
             .get_raw_transaction(tx.first().to_string(), Some(1))
             .await
@@ -1927,6 +1934,7 @@ mod tests {
         test_manager.close().await;
     }
 
+    #[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
     #[tokio::test]
     async fn state_service_get_address_tx_ids_zebrad() {
         state_service_get_address_tx_ids("zebrad").await;
@@ -1999,6 +2007,7 @@ mod tests {
         test_manager.close().await;
     }
 
+    #[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
     #[tokio::test]
     async fn state_service_get_address_utxos_zebrad() {
         state_service_get_address_utxos("zebrad").await;

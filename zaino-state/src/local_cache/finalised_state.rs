@@ -211,8 +211,8 @@ impl FinalisedState {
                     match finalised_state.insert_block((height, hash, compact_block.clone())) {
                         Ok(_) => {
                             info!(
-                                "Block at height {} successfully inserted in finalised state.",
-                                height.0
+                                "Block at height [{}] with hash [{}] successfully committed to finalised state.",
+                                height.0, hash
                             );
                             break;
                         }
