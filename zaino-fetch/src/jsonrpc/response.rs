@@ -530,6 +530,7 @@ impl From<Solution> for zebra_chain::work::equihash::Solution {
 /// This is used for the output parameter of [`JsonRpcConnector::get_block`].
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
 pub enum GetBlockResponse {
     /// The request block, hex-encoded.
     Raw(#[serde(with = "hex")] SerializedBlock),

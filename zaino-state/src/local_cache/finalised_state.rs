@@ -611,7 +611,7 @@ impl FinalisedState {
     }
 
     /// Fetches the highest stored height from LMDB.
-    pub(crate) fn get_db_height(&self) -> Result<Height, FinalisedStateError> {
+    pub fn get_db_height(&self) -> Result<Height, FinalisedStateError> {
         let txn = self.database.begin_ro_txn()?;
         let mut cursor = txn.open_ro_cursor(self.heights_to_hashes)?;
 
