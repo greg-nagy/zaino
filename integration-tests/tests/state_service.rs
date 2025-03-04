@@ -1,7 +1,7 @@
 use zaino_state::{
     config::{FetchServiceConfig, StateServiceConfig},
     fetch::{FetchService, FetchServiceSubscriber},
-    indexer::{ZcashIndexer as _, ZcashService as _},
+    indexer::{ZcashIndexer, ZcashService as _},
     state::StateService,
 };
 use zaino_testutils::{TestManager, ZEBRAD_CHAIN_CACHE_DIR, ZEBRAD_TESTNET_CACHE_DIR};
@@ -251,8 +251,13 @@ async fn state_service_check_info(
 
 #[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
 #[tokio::test]
-async fn state_service_get_address_balance_zebrad() {
+async fn state_service_get_address_balance_regtest_zebrad() {
     state_service_get_address_balance("zebrad").await;
+}
+
+#[tokio::test]
+async fn state_service_get_address_balance_testnet_zebrad() {
+    state_service_get_address_balance_testnet().await;
 }
 
 async fn state_service_get_address_balance(validator: &str) {
@@ -308,6 +313,36 @@ async fn state_service_get_address_balance(validator: &str) {
         recipient_balance.transparent_balance.unwrap(),
         fetch_service_balance.balance,
     );
+    assert_eq!(fetch_service_balance, state_service_balance);
+
+    test_manager.close().await;
+}
+
+async fn state_service_get_address_balance_testnet() {
+    let (mut test_manager, _fetch_service, fetch_service_subscriber, state_service) =
+        create_test_manager_and_services(
+            "zebrad",
+            ZEBRAD_TESTNET_CACHE_DIR.clone(),
+            false,
+            false,
+            Some(services::network::Network::Testnet),
+        )
+        .await;
+
+    let address = "tmAkxrvJCN75Ty9YkiHccqc1hJmGZpggo6i";
+
+    let address_request = AddressStrings::new_valid(vec![address.to_string()]).unwrap();
+
+    let fetch_service_balance = dbg!(
+        fetch_service_subscriber
+            .z_get_address_balance(address_request.clone())
+            .await
+    )
+    .unwrap();
+
+    let state_service_balance =
+        dbg!(state_service.z_get_address_balance(address_request).await).unwrap();
+
     assert_eq!(fetch_service_balance, state_service_balance);
 
     test_manager.close().await;
@@ -465,8 +500,13 @@ async fn state_service_get_raw_mempoolstate(validator: &str) {
 
 #[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
 #[tokio::test]
-async fn state_service_z_get_treestate_zebrad() {
+async fn state_service_z_get_treestate_regtest_zebrad() {
     state_service_z_get_treestate("zebrad").await;
+}
+
+#[tokio::test]
+async fn state_service_z_get_treestate_testnet_zebrad() {
+    state_service_z_get_treestate_testnet().await;
 }
 
 async fn state_service_z_get_treestate(validator: &str) {
@@ -519,10 +559,41 @@ async fn state_service_z_get_treestate(validator: &str) {
     test_manager.close().await;
 }
 
+async fn state_service_z_get_treestate_testnet() {
+    let (mut test_manager, _fetch_service, fetch_service_subscriber, state_service) =
+        create_test_manager_and_services(
+            "zebrad",
+            ZEBRAD_TESTNET_CACHE_DIR.clone(),
+            false,
+            false,
+            Some(services::network::Network::Testnet),
+        )
+        .await;
+
+    let fetch_service_treestate = dbg!(
+        fetch_service_subscriber
+            .z_get_treestate("3000000".to_string())
+            .await
+    )
+    .unwrap();
+
+    let state_service_tx_treestate =
+        dbg!(state_service.z_get_treestate("3000000".to_string()).await).unwrap();
+
+    assert_eq!(fetch_service_treestate, state_service_tx_treestate);
+
+    test_manager.close().await;
+}
+
 #[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
 #[tokio::test]
-async fn state_service_z_get_subtrees_by_index_zebrad() {
+async fn state_service_z_get_subtrees_by_index_regtest_zebrad() {
     state_service_z_get_subtrees_by_index("zebrad").await;
+}
+
+#[tokio::test]
+async fn state_service_z_get_subtrees_by_index_testnet_zebrad() {
+    state_service_z_get_subtrees_by_index_testnet().await;
 }
 
 async fn state_service_z_get_subtrees_by_index(validator: &str) {
@@ -571,6 +642,58 @@ async fn state_service_z_get_subtrees_by_index(validator: &str) {
         .unwrap());
 
     assert_eq!(fetch_service_subtrees, state_service_subtrees);
+
+    test_manager.close().await;
+}
+
+async fn state_service_z_get_subtrees_by_index_testnet() {
+    let (mut test_manager, _fetch_service, fetch_service_subscriber, state_service) =
+        create_test_manager_and_services(
+            "zebrad",
+            ZEBRAD_TESTNET_CACHE_DIR.clone(),
+            false,
+            false,
+            Some(services::network::Network::Testnet),
+        )
+        .await;
+
+    let fetch_service_sapling_subtrees = dbg!(
+        fetch_service_subscriber
+            .z_get_subtrees_by_index("sapling".to_string(), 0.into(), None)
+            .await
+    )
+    .unwrap();
+
+    let state_service_sapling_subtrees = dbg!(
+        state_service
+            .z_get_subtrees_by_index("sapling".to_string(), 0.into(), None)
+            .await
+    )
+    .unwrap();
+
+    assert_eq!(
+        fetch_service_sapling_subtrees,
+        state_service_sapling_subtrees
+    );
+
+    let fetch_service_orchard_subtrees = dbg!(
+        fetch_service_subscriber
+            .z_get_subtrees_by_index("orchard".to_string(), 0.into(), None)
+            .await
+    )
+    .unwrap();
+
+    let state_service_orchard_subtrees = dbg!(
+        state_service
+            .z_get_subtrees_by_index("orchard".to_string(), 0.into(), None)
+            .await
+    )
+    .unwrap();
+
+    assert_eq!(
+        fetch_service_orchard_subtrees,
+        state_service_orchard_subtrees
+    );
 
     test_manager.close().await;
 }
@@ -635,8 +758,13 @@ async fn state_service_get_raw_transaction(validator: &str) {
 
 #[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
 #[tokio::test]
-async fn state_service_get_address_tx_ids_zebrad() {
+async fn state_service_get_address_tx_ids_regtest_zebrad() {
     state_service_get_address_tx_ids("zebrad").await;
+}
+
+#[tokio::test]
+async fn state_service_get_address_tx_ids_testnet_zebrad() {
+    state_service_get_address_tx_ids_testnet().await;
 }
 
 async fn state_service_get_address_tx_ids(validator: &str) {
@@ -706,10 +834,46 @@ async fn state_service_get_address_tx_ids(validator: &str) {
     test_manager.close().await;
 }
 
+async fn state_service_get_address_tx_ids_testnet() {
+    let (mut test_manager, _fetch_service, fetch_service_subscriber, state_service) =
+        create_test_manager_and_services(
+            "zebrad",
+            ZEBRAD_TESTNET_CACHE_DIR.clone(),
+            false,
+            false,
+            Some(services::network::Network::Testnet),
+        )
+        .await;
+
+    let address = "tmAkxrvJCN75Ty9YkiHccqc1hJmGZpggo6i";
+
+    let address_request =
+        GetAddressTxIdsRequest::from_parts(vec![address.to_string()], 2000000, 3000000);
+
+    let fetch_service_tx_ids = dbg!(
+        fetch_service_subscriber
+            .get_address_tx_ids(address_request.clone())
+            .await
+    )
+    .unwrap();
+
+    let state_service_tx_ids =
+        dbg!(state_service.get_address_tx_ids(address_request).await).unwrap();
+
+    assert_eq!(fetch_service_tx_ids, state_service_tx_ids);
+
+    test_manager.close().await;
+}
+
 #[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
 #[tokio::test]
 async fn state_service_get_address_utxos_zebrad() {
     state_service_get_address_utxos("zebrad").await;
+}
+
+#[tokio::test]
+async fn state_service_get_address_utxos_testnet_zebrad() {
+    state_service_get_address_utxos_testnet().await;
 }
 
 async fn state_service_get_address_utxos(validator: &str) {
@@ -767,6 +931,36 @@ async fn state_service_get_address_utxos(validator: &str) {
         fetch_service_txid.to_string(),
         state_service_txid.to_string()
     );
+
+    test_manager.close().await;
+}
+
+async fn state_service_get_address_utxos_testnet() {
+    let (mut test_manager, _fetch_service, fetch_service_subscriber, state_service) =
+        create_test_manager_and_services(
+            "zebrad",
+            ZEBRAD_TESTNET_CACHE_DIR.clone(),
+            false,
+            false,
+            Some(services::network::Network::Testnet),
+        )
+        .await;
+
+    let address = "tmAkxrvJCN75Ty9YkiHccqc1hJmGZpggo6i";
+
+    let address_request = AddressStrings::new_valid(vec![address.to_string()]).unwrap();
+
+    let fetch_service_utxos = dbg!(
+        fetch_service_subscriber
+            .z_get_address_utxos(address_request.clone())
+            .await
+    )
+    .unwrap();
+
+    let state_service_tx_utxos =
+        dbg!(state_service.z_get_address_utxos(address_request).await).unwrap();
+
+    assert_eq!(fetch_service_utxos, state_service_tx_utxos);
 
     test_manager.close().await;
 }
