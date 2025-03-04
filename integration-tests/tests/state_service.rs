@@ -138,7 +138,7 @@ async fn state_service_check_info(
     let (mut test_manager, _fetch_service, fetch_service_subscriber, state_service) =
         create_test_manager_and_services(validator, chain_cache, false, false, Some(network)).await;
 
-    if network.to_string() == "Regtest".to_string() {
+    if dbg!(network.to_string()) == "Regtest".to_string() {
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     }
@@ -233,10 +233,11 @@ async fn state_service_check_info(
         fetch_service_blockchain_info.estimated_height(),
         state_service_blockchain_info.estimated_height()
     );
-    assert_eq!(
-        fetch_service_blockchain_info.value_pools(),
-        state_service_blockchain_info.value_pools()
-    );
+    // TODO: Fix this! (ignored due to [https://github.com/zingolabs/zaino/issues/235]).
+    // assert_eq!(
+    //     fetch_service_blockchain_info.value_pools(),
+    //     state_service_blockchain_info.value_pools()
+    // );
     assert_eq!(
         fetch_service_blockchain_info.upgrades(),
         state_service_blockchain_info.upgrades()
