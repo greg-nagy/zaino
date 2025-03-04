@@ -2068,11 +2068,17 @@ dependencies = [
 name = "integration-tests"
 version = "0.1.2"
 dependencies = [
+ "futures",
  "tokio",
  "tracing-subscriber",
  "url",
  "zaino-fetch",
+ "zaino-proto",
+ "zaino-state",
  "zaino-testutils",
+ "zebra-chain 1.0.0-beta.45 (git+https://github.com/ZcashFoundation/zebra.git?branch=main)",
+ "zebra-rpc 1.0.0-beta.45 (git+https://github.com/ZcashFoundation/zebra.git?branch=main)",
+ "zebra-state 1.0.0-beta.45 (git+https://github.com/ZcashFoundation/zebra.git?branch=main)",
  "zingo-infra-testutils",
  "zingolib",
 ]
@@ -5524,7 +5530,6 @@ dependencies = [
  "whoami",
  "zaino-fetch",
  "zaino-proto",
- "zaino-testutils",
  "zebra-chain 1.0.0-beta.45 (git+https://github.com/ZcashFoundation/zebra.git?branch=main)",
  "zebra-rpc 1.0.0-beta.45 (git+https://github.com/ZcashFoundation/zebra.git?branch=main)",
  "zebra-state 1.0.0-beta.45 (git+https://github.com/ZcashFoundation/zebra.git?branch=main)",
@@ -5547,8 +5552,6 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "tracing-subscriber",
- "zaino-fetch",
- "zaino-state",
  "zainod",
  "zcash_client_backend",
  "zcash_protocol 0.4.0",
