@@ -10,7 +10,7 @@ use zaino_state::{
     indexer::{LightWalletIndexer as _, ZcashIndexer as _, ZcashService as _},
     status::StatusType,
 };
-use zaino_testutils::{TestManager, ZCASHD_CHAIN_CACHE_BIN, ZEBRAD_CHAIN_CACHE_BIN};
+use zaino_testutils::{TestManager, ZCASHD_CHAIN_CACHE_DIR, ZEBRAD_CHAIN_CACHE_DIR};
 use zebra_chain::{parameters::Network, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest};
 use zingo_infra_testutils::services::validator::Validator as _;
@@ -22,7 +22,7 @@ async fn launch_fetch_service_zcashd_regtest_no_cache() {
 
 #[tokio::test]
 async fn launch_fetch_service_zcashd_regtest_with_cache() {
-    launch_fetch_service("zcashd", ZCASHD_CHAIN_CACHE_BIN.clone()).await;
+    launch_fetch_service("zcashd", ZCASHD_CHAIN_CACHE_DIR.clone()).await;
 }
 
 #[tokio::test]
@@ -32,7 +32,7 @@ async fn launch_fetch_service_zebrad_regtest_no_cache() {
 
 #[tokio::test]
 async fn launch_fetch_service_zebrad_regtest_with_cache() {
-    launch_fetch_service("zebrad", ZEBRAD_CHAIN_CACHE_BIN.clone()).await;
+    launch_fetch_service("zebrad", ZEBRAD_CHAIN_CACHE_DIR.clone()).await;
 }
 
 async fn create_test_manager_and_fetch_service(
