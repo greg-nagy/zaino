@@ -350,7 +350,7 @@ impl TestManager {
                     activation_heights: services::network::ActivationHeights::default(),
                     miner_address: services::validator::ZEBRAD_DEFAULT_MINER,
                     chain_cache,
-                    network: services::network::Network::Regtest,
+                    network,
                 };
                 ValidatorConfig::ZebradConfig(cfg)
             }
