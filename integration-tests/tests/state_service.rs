@@ -430,11 +430,16 @@ async fn state_service_get_block_object(
 
 #[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
 #[tokio::test]
-async fn state_service_get_raw_mempool_zebrad() {
-    state_service_get_raw_mempoolstate("zebrad").await;
+async fn state_service_get_raw_mempool_regtest_zebrad() {
+    state_service_get_raw_mempool("zebrad").await;
 }
 
-async fn state_service_get_raw_mempoolstate(validator: &str) {
+#[tokio::test]
+async fn state_service_get_raw_mempool_testnet_zebrad() {
+    state_service_get_raw_mempool_testnet().await;
+}
+
+async fn state_service_get_raw_mempool(validator: &str) {
     let (mut test_manager, _fetch_service, fetch_service_subscriber, state_service) =
         create_test_manager_and_services(validator, None, true, true, None).await;
     let clients = test_manager
@@ -483,6 +488,31 @@ async fn state_service_get_raw_mempoolstate(validator: &str) {
     .unwrap();
 
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+    let mut fetch_service_mempool = fetch_service_subscriber.get_raw_mempool().await.unwrap();
+    let mut state_service_mempool = state_service.get_raw_mempool().await.unwrap();
+
+    dbg!(&fetch_service_mempool);
+    fetch_service_mempool.sort();
+
+    dbg!(&state_service_mempool);
+    state_service_mempool.sort();
+
+    assert_eq!(fetch_service_mempool, state_service_mempool);
+
+    test_manager.close().await;
+}
+
+async fn state_service_get_raw_mempool_testnet() {
+    let (mut test_manager, _fetch_service, fetch_service_subscriber, state_service) =
+        create_test_manager_and_services(
+            "zebrad",
+            ZEBRAD_TESTNET_CACHE_DIR.clone(),
+            false,
+            false,
+            Some(services::network::Network::Testnet),
+        )
+        .await;
 
     let mut fetch_service_mempool = fetch_service_subscriber.get_raw_mempool().await.unwrap();
     let mut state_service_mempool = state_service.get_raw_mempool().await.unwrap();
@@ -700,8 +730,13 @@ async fn state_service_z_get_subtrees_by_index_testnet() {
 
 #[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
 #[tokio::test]
-async fn state_service_get_raw_transaction_zebrad() {
+async fn state_service_get_raw_transaction_regtest_zebrad() {
     state_service_get_raw_transaction("zebrad").await;
+}
+
+#[tokio::test]
+async fn state_service_get_raw_transaction_testnet_zebrad() {
+    state_service_get_raw_transaction_testnet().await;
 }
 
 async fn state_service_get_raw_transaction(validator: &str) {
@@ -752,6 +787,34 @@ async fn state_service_get_raw_transaction(validator: &str) {
         .unwrap());
 
     assert_eq!(fetch_service_transaction, state_service_transaction);
+
+    test_manager.close().await;
+}
+
+async fn state_service_get_raw_transaction_testnet() {
+    let (mut test_manager, _fetch_service, fetch_service_subscriber, state_service) =
+        create_test_manager_and_services(
+            "zebrad",
+            ZEBRAD_TESTNET_CACHE_DIR.clone(),
+            false,
+            false,
+            Some(services::network::Network::Testnet),
+        )
+        .await;
+
+    let txid = "abb0399df392130baa45644c421fab553670a2d0d399c4dd776a8f7862ec289d".to_string();
+
+    let fetch_service_transaction = dbg!(
+        fetch_service_subscriber
+            .get_raw_transaction(txid.clone(), None)
+            .await
+    )
+    .unwrap();
+
+    let state_service_tx_transaction =
+        dbg!(state_service.get_raw_transaction(txid, None).await).unwrap();
+
+    assert_eq!(fetch_service_transaction, state_service_tx_transaction);
 
     test_manager.close().await;
 }
