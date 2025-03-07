@@ -38,7 +38,9 @@ Zaino uses [`cargo nextest`](https://nexte.st/). On the linux command line, with
 After installing this crate, all tests can be run locally with `cargo nextest run`.
 
 ## Communication Channels
-In addition to GitHub, there is a ZingoLabs [Matrix](https://matrix.org/) channel that can be reached through this web link: https://matrix.to/#/!cVsptZxBgWgmxWlHYB:matrix.org
+In addition to GitHub, there is a ZingoLabs [Matrix](https://matrix.org/) channel that can be reached through [this web link](https://matrix.to/#/!cVsptZxBgWgmxWlHYB:matrix.org). Our primary languages are English and Spanish.
+
+Other channels where you may be able to reach Zingolabs developers that are less official include the [Zcash Community Forum](https://forum.zcashcommunity.com/) website, Bluesky, Telegram and X (in English and Spanish), Instagram (Spanish), and Zcash related Discord.
 
 ## Software Philosophy
 We believe in the power of Free and Open Source Software (FOSS) as the best path for individual and social freedom in computing.
@@ -58,4 +60,3 @@ Better quality control
 Reduced maintenance costs
  
 To read more see: https://en.wikibooks.org/wiki/FOSS_A_General_Introduction/Preface
-
