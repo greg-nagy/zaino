@@ -3,7 +3,6 @@
 Welcome to Zaino and thank you for your interest in contributing! We look forward to your contribution to this important part of the Zcash mainnet and testing ecosystem. This guide will help you get started.
 
 ## Table of Contents
-- [Software Philosophy](#software-philosophy)
 - [Getting Started](#getting-started)
 - [How to Contribute](#how-to-contribute)
 - [Bug Reports](#bug-reports)
@@ -11,6 +10,13 @@ Welcome to Zaino and thank you for your interest in contributing! We look forwar
 - [Development Workflow](#development-workflow)
 - [Local Testing](#local-testing)
 - [Communication Channels](#communication-channels)
+- [Software Philosophy](#software-philosophy)
+
+## Getting Started
+To get started, please see our dev/docs/use_cases.md
+
+## How to Contribute
+We welcome contributions in the form of code, bug reports, documentation, and feature requests.
 
 ## Software Philosophy
 We believe in the power of Free and Open Source Software (FOSS) as the best path for individual and social freedom in computing.
@@ -31,8 +37,3 @@ Reduced maintenance costs
  
 To read more see: https://en.wikibooks.org/wiki/FOSS_A_General_Introduction/Preface
 
-## Getting Started
-To get started, please see our dev/docs/use_cases.md
-
-## How to Contribute
-We welcome contributions in the form of code, bug reports, documentation, and feature requests.
