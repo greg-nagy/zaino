@@ -1,6 +1,6 @@
 # Contributing to Zaino
 
-Welcome to Zaino and thank you for your interest in contributing! We look forward to your contribution to this important part of the Zcash mainnet and testing ecosystem. This guide will help you get started.
+Welcome and thank you for your interest in Zaino! We look forward to your contribution to this important part of the Zcash mainnet and testing ecosystem.
 
 ## Table of Contents
 - [Getting Started](#getting-started)
@@ -8,10 +8,11 @@ Welcome to Zaino and thank you for your interest in contributing! We look forwar
 - [How to open Bug Reports and Feature Requests](#bug-reports-and-feature-requests)
 - [Local Testing](#local-testing)
 - [Communication Channels](#communication-channels)
+- [More Documentation](#more-documentation)
 - [Software Philosophy](#software-philosophy)
 
 ## Getting Started
-To get started using Zaino, please see our [use_cases.md document](./docs/use_cases.md) where you can find instructions for use and example use cases.
+To get started using Zaino, please see our [use cases document](./docs/use_cases.md) where you can find instructions for use and example use cases.
 
 We welcome and appreciate contributions in the form of code, documentation, bug reports and feature requests. We also generally enjoy feedback and outreach efforts.
 
@@ -25,9 +26,13 @@ Documentation should be clear and accurate to the latest commit on `dev`.
 These contributions must be [GitHub pull requests](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests) opened _from a personal fork_ of the project, _to this repo, zingolabs/zaino_. Generally pull requests will be against `dev`, the development branch.
 
 ## Bug Reports and Feature Requests
+
+If you believe you have discovered a security issue and wish to disclose it non-pubicly, please contact us at:
+zingodisclosure@proton.me
+
 Bug reports and feature requests can best be opened as [issues](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/creating-an-issue) on this GitHub repo. To do so you will need a [GitHub account](https://docs.github.com/en/account-and-profile). Especially for bug reports, any details you can offer will help us understand the issue better. Such details include versions or commits used in exposing the bug, what operating system is being used, and so on.
 
-Bug reports and feature requests can also be registered via other [communication channels](#communication-channels), but will be accepted in this way without any guarantees of visibility to project software developers.
+Bug reports and feature requests can also be registered via other [communication channels](#communication-channels), but will be accepted in this way without guarantees of visibility to project software developers.
 
 ## Local Testing
 Local testing requires a system with ample resources, particularly RAM.
@@ -36,11 +41,16 @@ Zaino uses [`cargo nextest`](https://nexte.st/). On the linux command line, with
 
 After installing this crate, all tests can be run locally with `cargo nextest run`.
 
+For more details see our [testing document](./dev/docs/testing.md).
+
 ## Communication Channels
 In addition to GitHub, there is a ZingoLabs [Matrix](https://matrix.org/) channel that can be reached through [this web link](https://matrix.to/#/!cVsptZxBgWgmxWlHYB:matrix.org). Our primary languages are English and Spanish.
 
 Other channels where you may be able to reach Zingolabs developers that include the [Zcash Community Forum](https://forum.zcashcommunity.com/) website, Bluesky, Telegram and X (English and Spanish), Instagram (Spanish), and Zcash related Discord.
 
+## More Documentation
+
+To see more included documentation, please see [our docs directory](./dev/docs/testing.md).
 ## Software Philosophy
 We believe in the power of Free and Open Source Software (FOSS) as the best path for individual and social freedom in computing.
 
