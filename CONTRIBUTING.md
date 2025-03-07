@@ -30,6 +30,13 @@ Bug reports and feature requests can best be opened as [issues](https://docs.git
 
 Bug reports and feature requests can also be registered via other [communication channels](#communication-channels), but will be accepted in this way without any guarantees of visibility to project software developers.
 
+## Local Testing
+Local testing requires a system with ample resources, particularly RAM.
+
+Zaino uses [`cargo nextest`](https://nexte.st/). On the linux command line, with a system already using Rust (and `cargo`), you can install this using `cargo install cargo-nextest --locked` or from GitHub with `cargo install --git https://github.com/nextest-rs/nextest --bin cargo-nextest`.
+
+After installing this crate, all tests can be run locally with `cargo nextest run`.
+
 ## Software Philosophy
 We believe in the power of Free and Open Source Software (FOSS) as the best path for individual and social freedom in computing.
 
