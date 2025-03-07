@@ -5,10 +5,9 @@ Welcome to Zaino and thank you for your interest in contributing! We look forwar
 ## Table of Contents
 - [Getting Started](#getting-started)
 - [How to Contribute Code and Documentation](#how-to-contribute)
-- [Bug Reports and Feature Requests](#bug-reports-and-feature-requests)
+- [How to open Bug Reports and Feature Requests](#bug-reports-and-feature-requests)
 - [Local Testing](#local-testing)
 - [Communication Channels](#communication-channels)
-- [Development Workflow](#development-workflow)
 - [Software Philosophy](#software-philosophy)
 
 ## Getting Started
@@ -40,7 +39,7 @@ After installing this crate, all tests can be run locally with `cargo nextest ru
 ## Communication Channels
 In addition to GitHub, there is a ZingoLabs [Matrix](https://matrix.org/) channel that can be reached through [this web link](https://matrix.to/#/!cVsptZxBgWgmxWlHYB:matrix.org). Our primary languages are English and Spanish.
 
-Other channels where you may be able to reach Zingolabs developers that are less official include the [Zcash Community Forum](https://forum.zcashcommunity.com/) website, Bluesky, Telegram and X (in English and Spanish), Instagram (Spanish), and Zcash related Discord.
+Other channels where you may be able to reach Zingolabs developers that include the [Zcash Community Forum](https://forum.zcashcommunity.com/) website, Bluesky, Telegram and X (English and Spanish), Instagram (Spanish), and Zcash related Discord.
 
 ## Software Philosophy
 We believe in the power of Free and Open Source Software (FOSS) as the best path for individual and social freedom in computing.
@@ -48,15 +47,15 @@ We believe in the power of Free and Open Source Software (FOSS) as the best path
 Very broadly, Free Software provides a clear path to make software benefit its users. That is, Free Software  has the possibility to be used it like a traditional tool, extending the user's capabilities, unlike closed source software which constrains usage, visability and adaptability of the user while providing some function.
 
 In more detail, the Free Software Foundation states FOSS allows:
-The freedom to run a program, for any purpose;
-The freedom to study how a program works and adapt it to a person’s needs. Access to the source code is a precondition for this;
-The freedom to redistribute copies so that you can help your neighbour; and
-The freedom to improve a program and release your improvements to the public, so that the whole community benefits. Access to the source code is a precondition for this.
+-The freedom to run a program, for any purpose;
+-The freedom to study how a program works and adapt it to a person’s needs. Access to the source code is a precondition for this;
+-The freedom to redistribute copies so that you can help your neighbour; and
+-The freedom to improve a program and release your improvements to the public, so that the whole community benefits. Access to the source code is a precondition for this.
 
 Developing from this philosophical perspective has several practical advantages:
-Reduced duplication of effort
-Building upon the work of others
-Better quality control
-Reduced maintenance costs
+-Reduced duplication of effort
+-Building upon the work of others
+-Better quality control
+-Reduced maintenance costs
  
-To read more see: https://en.wikibooks.org/wiki/FOSS_A_General_Introduction/Preface
+To read more, see [this document on wikibooks](https://en.wikibooks.org/wiki/FOSS_A_General_Introduction/Preface).
