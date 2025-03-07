@@ -23,13 +23,13 @@ The freedom to study how a program works and adapt it to a person’s needs. Acc
 The freedom to redistribute copies so that you can help your neighbour; and
 The freedom to improve a program and release your improvements to the public, so that the whole community benefits. Access to the source code is a precondition for this.
 
-Developing in this way has several advantages:
+Developing from this philosophical perspective has several practical advantages:
 Reduced duplication of effort
 Building upon the work of others
 Better quality control
 Reduced maintenance costs
  
-To read more see: https://en.wikibooks.org/wiki/FOSS_A_General_Introduction/Introduction
+To read more see: https://en.wikibooks.org/wiki/FOSS_A_General_Introduction/Preface
 
 ## Getting Started
 To get started, please see our dev/docs/use_cases.md
