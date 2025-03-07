@@ -41,7 +41,7 @@ Zaino uses [`cargo nextest`](https://nexte.st/). On the linux command line, with
 
 After installing this crate, all tests can be run locally with `cargo nextest run`.
 
-For more details see our [testing document](./dev/docs/testing.md).
+For more details see our [testing document](./docs/testing.md).
 
 ## Communication Channels
 In addition to GitHub, there is a ZingoLabs [Matrix](https://matrix.org/) channel that can be reached through [this web link](https://matrix.to/#/!cVsptZxBgWgmxWlHYB:matrix.org). Our primary languages are English and Spanish.
