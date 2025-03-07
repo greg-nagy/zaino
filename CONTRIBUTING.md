@@ -13,7 +13,8 @@ Welcome to Zaino and thank you for your interest in contributing! We look forwar
 - [Software Philosophy](#software-philosophy)
 
 ## Getting Started
-To get started, please see our dev/docs/use_cases.md
+To get started, please see our [use_cases.md document](./dev/docs/use_cases.md) where you can find instructions and example use cases.
+
 
 ## How to Contribute
 We welcome contributions in the form of code, bug reports, documentation, and feature requests.
