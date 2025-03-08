@@ -57,15 +57,15 @@ We believe in the power of Free and Open Source Software (FOSS) as the best path
 Very broadly, Free Software provides a clear path to make software benefit its users. That is, Free Software  has the possibility to be used it like a traditional tool, extending the user's capabilities, unlike closed source software which constrains usage, visability and adaptability of the user while providing some function.
 
 In more detail, the Free Software Foundation states FOSS allows:
--The freedom to run a program, for any purpose;
--The freedom to study how a program works and adapt it to a person’s needs. Access to the source code is a precondition for this;
--The freedom to redistribute copies so that you can help your neighbour; and
--The freedom to improve a program and release your improvements to the public, so that the whole community benefits. Access to the source code is a precondition for this.
+The freedom to run a program, for any purpose;
+The freedom to study how a program works and adapt it to a person’s needs. Access to the source code is a precondition for this;
+The freedom to redistribute copies so that you can help your neighbour; and
+The freedom to improve a program and release your improvements to the public, so that the whole community benefits. Access to the source code is a precondition for this.
 
 Developing from this philosophical perspective has several practical advantages:
--Reduced duplication of effort
--Building upon the work of others
--Better quality control
--Reduced maintenance costs
+Reduced duplication of effort
+Building upon the work of others
+Better quality control
+Reduced maintenance costs
  
 To read more, see [this document on wikibooks](https://en.wikibooks.org/wiki/FOSS_A_General_Introduction/Preface).
