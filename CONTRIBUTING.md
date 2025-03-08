@@ -50,7 +50,7 @@ Other channels where you may be able to reach Zingolabs developers that include 
 
 ## More Documentation
 
-To see more included documentation, please see [our docs directory](./docs/testing.md).
+To see more included documentation, please see [our docs directory](./docs/).
 ## Software Philosophy
 We believe in the power of Free and Open Source Software (FOSS) as the best path for individual and social freedom in computing.
 
