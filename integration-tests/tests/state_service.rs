@@ -138,7 +138,7 @@ async fn state_service_check_info(
     let (mut test_manager, _fetch_service, fetch_service_subscriber, state_service) =
         create_test_manager_and_services(validator, chain_cache, false, false, Some(network)).await;
 
-    if dbg!(network.to_string()) == "Regtest".to_string() {
+    if dbg!(network.to_string()) == *"Regtest" {
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     }

@@ -527,27 +527,24 @@ impl FinalisedState {
         let block_value = serde_json::to_vec(&DbCompactBlock(compact_block))?;
 
         let mut txn = self.database.begin_rw_txn()?;
-        if txn
+        if let Err(database_err) = txn
             .put(
                 self.heights_to_hashes,
                 &height_key,
                 &hash_key,
                 lmdb::WriteFlags::NO_OVERWRITE,
             )
-            .is_err()
-            || txn
-                .put(
+            .and_then(|()| {
+                txn.put(
                     self.hashes_to_blocks,
                     &hash_key,
                     &block_value,
                     lmdb::WriteFlags::NO_OVERWRITE,
                 )
-                .is_err()
+            })
         {
             txn.abort();
-            return Err(FinalisedStateError::Custom(
-                "Transaction failed.".to_string(),
-            ));
+            return Err(FinalisedStateError::LmdbError(database_err));
         }
         txn.commit()?;
         Ok(())
