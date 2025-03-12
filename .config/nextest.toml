@@ -2,3 +2,6 @@
 test-threads = 4
 fail-fast = false
 retries = 1
+
+[profile.ci]
+default-filter = "not test(testnet)"
