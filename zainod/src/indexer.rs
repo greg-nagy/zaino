@@ -9,6 +9,7 @@ use zaino_state::{
     config::FetchServiceConfig,
     fetch::FetchService,
     indexer::{IndexerService, ZcashService},
+    state::StateService,
     status::StatusType,
 };
 
@@ -19,7 +20,7 @@ pub struct Indexer {
     /// GRPC server.
     server: Option<TonicServer>,
     /// Chain fetch service state process handler..
-    service: Option<IndexerService<FetchService>>,
+    service: Option<IndexerService<StateService>>,
 }
 
 impl Indexer {

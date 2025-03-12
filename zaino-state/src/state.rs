@@ -3,9 +3,12 @@
 use crate::{
     config::StateServiceConfig,
     error::StateServiceError,
-    indexer::ZcashIndexer,
+    indexer::{IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService},
     status::{AtomicStatus, StatusType},
-    stream::CompactBlockStream,
+    stream::{
+        AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
+        SubtreeRootReplyStream, UtxoReplyStream,
+    },
     utils::{get_build_info, ServiceMetadata},
 };
 
@@ -13,20 +16,27 @@ use chrono::Utc;
 use futures::FutureExt as _;
 use hex::{FromHex as _, ToHex as _};
 use indexmap::IndexMap;
-use std::future::poll_fn;
 use std::io::Cursor;
 use std::str::FromStr as _;
+use std::{future::poll_fn, sync::Arc};
 use tokio::time::timeout;
 use tonic::async_trait;
 use tower::Service;
 
 use zaino_fetch::jsonrpc::connector::{JsonRpcConnector, RpcError};
 use zaino_fetch::jsonrpc::response::TxidsResponse;
-use zaino_proto::proto::compact_formats::ChainMetadata;
-use zaino_proto::proto::compact_formats::{
-    CompactBlock, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactTx,
+use zaino_proto::proto::service::{
+    AddressList, BlockRange, Duration, Exclude, GetAddressUtxosArg, GetAddressUtxosReplyList,
+    GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction, SendResponse,
+    TransparentAddressBlockFilter, TreeState,
 };
-use zaino_proto::proto::service::BlockRange;
+use zaino_proto::proto::{compact_formats::ChainMetadata, service::BlockId};
+use zaino_proto::proto::{
+    compact_formats::{
+        CompactBlock, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactTx,
+    },
+    service::TxFilter,
+};
 
 use zebra_chain::{
     block::{Header, Height, SerializedBlock},
@@ -41,7 +51,6 @@ use zebra_rpc::{
         chain_tip_difficulty,
         hex_data::HexData,
         trees::{GetSubtrees, GetTreestate, SubtreeRpcData},
-        types::Balance,
         AddressBalance, AddressStrings, ConsensusBranchIdHex, GetAddressTxIdsRequest,
         GetAddressUtxos, GetBlock, GetBlockChainInfo, GetBlockHash, GetBlockHeader,
         GetBlockHeaderObject, GetBlockTransaction, GetBlockTrees, GetInfo, GetRawTransaction,
@@ -72,7 +81,7 @@ macro_rules! expected_read_response {
 /// NOTE: We currently dop not implement clone for chain fetch services as this service is responsible for maintaining and closing its child processes.
 ///       ServiceSubscribers are used to create separate chain fetch processes while allowing central state processes to be managed in a single place.
 ///       If we want the ability to clone Service all JoinHandle's should be converted to Arc<JoinHandle>.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StateService {
     /// `ReadeStateService` from Zebra-State.
     read_state_service: ReadStateService,
@@ -81,7 +90,7 @@ pub struct StateService {
     /// Monitors changes in the chain tip.
     _chain_tip_change: ChainTipChange,
     /// Sync task handle.
-    sync_task_handle: Option<tokio::task::JoinHandle<()>>,
+    sync_task_handle: Option<Arc<tokio::task::JoinHandle<()>>>,
     /// JsonRPC Client.
     rpc_client: JsonRpcConnector,
     /// Service metadata.
@@ -90,6 +99,39 @@ pub struct StateService {
     config: StateServiceConfig,
     /// Thread-safe status indicator.
     status: AtomicStatus,
+}
+
+#[async_trait]
+impl ZcashService for StateService {
+    #[doc = " Uses underlying error type of implementer."]
+    type Error = StateServiceError;
+
+    #[doc = " A subscriber to the service, used to fetch chain data."]
+    // TODO: Make subscriber type
+    type Subscriber = Self;
+
+    #[doc = " Service Config."]
+    type Config = StateServiceConfig;
+
+    #[doc = " Spawns a [`Service`]."]
+    async fn spawn(config: Self::Config) -> Result<Self, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Returns a [`ServiceSubscriber`]."]
+    fn get_subscriber(&self) -> IndexerSubscriber<Self::Subscriber> {
+        todo!()
+    }
+
+    #[doc = " Fetches the current status"]
+    fn status(&self) -> StatusType {
+        todo!()
+    }
+
+    #[doc = " Shuts down the StateService."]
+    fn close(&mut self) {
+        todo!()
+    }
 }
 
 impl StateService {
@@ -125,7 +167,7 @@ impl StateService {
             read_state_service,
             latest_chain_tip,
             _chain_tip_change: chain_tip_change,
-            sync_task_handle: Some(sync_task_handle),
+            sync_task_handle: Some(Arc::new(sync_task_handle)),
             rpc_client,
             data,
             config,
@@ -318,8 +360,8 @@ impl ZcashIndexer for StateService {
             height,
             hash,
             estimated_height,
-            Balance::chain_supply(balance),
-            Balance::value_pools(balance),
+            zebra_rpc::methods::types::Balance::chain_supply(balance),
+            zebra_rpc::methods::types::Balance::value_pools(balance),
             upgrades,
             consensus,
             height,
@@ -777,8 +819,13 @@ impl ZcashIndexer for StateService {
 
 impl Drop for StateService {
     fn drop(&mut self) {
-        if let Some(handle) = self.sync_task_handle.take() {
-            handle.abort();
+        if let Some(ref mut arc_handle) = self.sync_task_handle.take() {
+            // If we are the only holder of the Arc, we're the
+            // last state service, so we abort the handle.
+            // Otherwise, we don't.
+            if let Some(handle) = Arc::get_mut(arc_handle) {
+                handle.abort();
+            }
         }
     }
 }
@@ -1257,6 +1304,273 @@ impl StateService {
         });
 
         Ok(CompactBlockStream::new(channel_rx))
+    }
+}
+
+#[async_trait]
+impl LightWalletIndexer for StateService {
+    #[doc = " Uses underlying error type of implementer."]
+    type Error = StateServiceError;
+
+    #[doc = " Return the height of the tip of the best chain"]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_latest_block(&self) -> Result<BlockId, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Return the compact block corresponding to the given block identifier"]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_block(&self, request: BlockId) -> Result<CompactBlock, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Same as GetBlock except actions contain only nullifiers"]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_block_nullifiers(&self, request: BlockId) -> Result<CompactBlock, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Return a list of consecutive compact blocks"]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_block_range(
+        &self,
+        request: BlockRange,
+    ) -> Result<CompactBlockStream, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Same as GetBlockRange except actions contain only nullifiers"]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_block_range_nullifiers(
+        &self,
+        request: BlockRange,
+    ) -> Result<CompactBlockStream, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Return the requested full (not compact) transaction (as from zcashd)"]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_transaction(&self, request: TxFilter) -> Result<RawTransaction, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Submit the given transaction to the Zcash network"]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn send_transaction(&self, request: RawTransaction) -> Result<SendResponse, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Return the txids corresponding to the given t-address within the given block range"]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_taddress_txids(
+        &self,
+        request: TransparentAddressBlockFilter,
+    ) -> Result<RawTransactionStream, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Returns the total balance for a list of taddrs"]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_taddress_balance(
+        &self,
+        request: AddressList,
+    ) -> Result<zaino_proto::proto::service::Balance, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Returns the total balance for a list of taddrs"]
+    #[doc = ""]
+    #[doc = " TODO: Update input type."]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_taddress_balance_stream(
+        &self,
+        request: AddressStream,
+    ) -> Result<zaino_proto::proto::service::Balance, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Return the compact transactions currently in the mempool; the results"]
+    #[doc = " can be a few seconds out of date. If the Exclude list is empty, return"]
+    #[doc = " all transactions; otherwise return all *except* those in the Exclude list"]
+    #[doc = " (if any); this allows the client to avoid receiving transactions that it"]
+    #[doc = " already has (from an earlier call to this rpc). The transaction IDs in the"]
+    #[doc = " Exclude list can be shortened to any number of bytes to make the request"]
+    #[doc = " more bandwidth-efficient; if two or more transactions in the mempool"]
+    #[doc = " match a shortened txid, they are all sent (none is excluded). Transactions"]
+    #[doc = " in the exclude list that don\'t exist in the mempool are ignored."]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_mempool_tx(
+        &self,
+        request: Exclude,
+    ) -> Result<CompactTransactionStream, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Return a stream of current Mempool transactions. This will keep the output stream open while"]
+    #[doc = " there are mempool transactions. It will close the returned stream when a new block is mined."]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_mempool_stream(&self) -> Result<RawTransactionStream, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " GetTreeState returns the note commitment tree state corresponding to the given block."]
+    #[doc = " See section 3.7 of the Zcash protocol specification. It returns several other useful"]
+    #[doc = " values also (even though they can be obtained using GetBlock)."]
+    #[doc = " The block can be specified by either height or hash."]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_tree_state(&self, request: BlockId) -> Result<TreeState, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " GetLatestTreeState returns the note commitment tree state corresponding to the chain tip."]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_latest_tree_state(&self) -> Result<TreeState, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Returns a stream of information about roots of subtrees of the Sapling and Orchard"]
+    #[doc = " note commitment trees."]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_subtree_roots(
+        &self,
+        request: GetSubtreeRootsArg,
+    ) -> Result<SubtreeRootReplyStream, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Returns all unspent outputs for a list of addresses."]
+    #[doc = ""]
+    #[doc = " Ignores all utxos below block height [GetAddressUtxosArg.start_height]."]
+    #[doc = " Returns max [GetAddressUtxosArg.max_entries] utxos, or unrestricted if [GetAddressUtxosArg.max_entries] = 0."]
+    #[doc = " Utxos are collected and returned as a single Vec."]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_address_utxos(
+        &self,
+        request: GetAddressUtxosArg,
+    ) -> Result<GetAddressUtxosReplyList, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Returns all unspent outputs for a list of addresses."]
+    #[doc = ""]
+    #[doc = " Ignores all utxos below block height [GetAddressUtxosArg.start_height]."]
+    #[doc = " Returns max [GetAddressUtxosArg.max_entries] utxos, or unrestricted if [GetAddressUtxosArg.max_entries] = 0."]
+    #[doc = " Utxos are returned in a stream."]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_address_utxos_stream(
+        &self,
+        request: GetAddressUtxosArg,
+    ) -> Result<UtxoReplyStream, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Return information about this lightwalletd instance and the blockchain"]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_lightd_info(&self) -> Result<LightdInfo, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Testing-only, requires lightwalletd --ping-very-insecure (do not enable in production)"]
+    #[doc = ""]
+    #[doc = " NOTE: Currently unimplemented in Zaino."]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn ping(&self, request: Duration) -> Result<PingResponse, Self::Error> {
+        todo!()
     }
 }
 
