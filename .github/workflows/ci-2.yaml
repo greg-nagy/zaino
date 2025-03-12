@@ -15,7 +15,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          sudo apt update && sudo apt install -y --no-install-recommends \
+          sudo apt update && sudo apt-get install -y --no-install-recommends \
             build-essential \
             pkg-config \
             libc6-dev \
@@ -32,7 +32,6 @@ jobs:
             curl \
             bsdmainutils \
             automake \
-            # libtinfo5 \
             golang \
             ca-certificates \
             && sudo update-ca-certificates
