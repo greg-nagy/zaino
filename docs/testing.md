@@ -20,18 +20,21 @@ WARNING: these tests do not use the binary built by cargo nextest._
 5) Run `cargo nextest run`
 
 NOTE: The client rpc get_subtree_roots tests are currently ignored, to run them testnet and mainnet chains must first be generated.
-- To run client rpc test `get_subtree_roots_sapling`:
+
+To run client rpc test `get_subtree_roots_sapling`:
 1) sync Zebrad testnet to at least 2 sapling shards
 2) copy the Zebrad testnet `state` cache to `zaino/integration-tests/chain_cache/get_subtree_roots_sapling` directory.
+
 See the `get_subtree_roots_sapling` test fixture doc comments in infrastructure for more details.
 
-- To run client rpc test `get_subtree_roots_orchard`:
+To run client rpc test `get_subtree_roots_orchard`:
 1) sync Zebrad mainnet to at least 2 orchard shards
 2) copy the Zebrad mainnet `state` cache to `zaino/integration-tests/chain_cache/get_subtree_roots_orchard` directory.
+
 See the `get_subtree_roots_orchard` test fixture doc comments in infrastructure for more details.
 
 - TESTNET TESTS:
-the testnet tests are temporary and will be replaced with regtest as soon as (https://github.com/zingolabs/zaino/issues/231) is resolved
+the testnet tests are temporary and will be replaced with regtest as soon as (https://github.com/zingolabs/zaino/issues/231) is resolved.
 In the mean time, these tests can be ran, but it is a fiddly process. First, it needs a zebrad fully synced to testnet (depending
 on internet speed, etc., this could take 10+ hours). Then, the tests must be run 1 at a time (passing `--no-capture` will enforce this).
 Furthermore, due to https://github.com/zingolabs/infrastructure/issues/43, sometimes a zebrad will persist past the end of the test and
