@@ -18,11 +18,17 @@ We welcome and appreciate contributions in the form of code, documentation, bug 
 
 ## How to Contribute
 Code and documentation are very helpful and the lifeblood of Free Software. To merge in code to this repo, one will have to have a [GitHub account](https://docs.github.com/en/account-and-profile), and the ability to cryptographically verify commits against this identity. 
+
 The best way to verify is using a GPG signature. See [this document about commit signature verification.](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification)
+
 Code, being Rust, should be formatted using `rustfmt` and applying the `clippy` suggestions.
+
 Code should be as complex as it needs to be, but no more.
-All code will be reviewed in public, as conversations on the pull request. It is very possible there will be requested changed or questions. This is not a sign of disrespect, but needed to keep code quality high in an important piece of software in the Zcash ecosystem.
+
+All code will be reviewed in public, as conversations on the pull request. It is very possible there will be requested changes or questions. This is not a sign of disrespect, but is necessary to keep code quality high in an important piece of software in the Zcash ecosystem.
+
 Documentation should be clear and accurate to the latest commit on `dev`.
+
 These contributions must be [GitHub pull requests](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests) opened _from a personal fork_ of the project, _to this repo, zingolabs/zaino_. Generally pull requests will be against `dev`, the development branch.
 
 ## Bug Reports and Feature Requests
