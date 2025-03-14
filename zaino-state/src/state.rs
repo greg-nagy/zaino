@@ -246,6 +246,11 @@ impl StateService {
         }
     }
 
+    /// What the currently known status is, without checking validator
+    /// Used when status is needed in a synchronous context
+    pub fn status_sync(&self) -> StatusType {
+        self.status.load().into()
+    }
     /// Shuts down the StateService.
     pub fn close(&mut self) {
         if self.sync_task_handle.is_some() {

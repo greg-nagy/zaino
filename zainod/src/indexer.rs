@@ -151,7 +151,7 @@ impl Indexer {
     /// Returns the indexers current status usize, caliculates from internal statuses.
     fn status_int(&self) -> u16 {
         let service_status = match &self.service {
-            Some(service) => service.inner_ref().status(),
+            Some(service) => service.inner_ref().status_sync(),
             None => return 7,
         };
         let server_status = match &self.server {
@@ -170,7 +170,7 @@ impl Indexer {
     /// Logs the indexers status.
     pub fn log_status(&self) {
         let service_status = match &self.service {
-            Some(service) => service.inner_ref().status(),
+            Some(service) => service.inner_ref().status_sync(),
             None => StatusType::Offline,
         };
         let grpc_server_status = match &self.server {
