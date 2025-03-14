@@ -6,7 +6,8 @@ use tracing::info;
 use zaino_fetch::jsonrpc::connector::test_node_and_return_url;
 use zaino_serve::server::{config::GrpcConfig, grpc::TonicServer};
 use zaino_state::{
-    config::FetchServiceConfig,
+    config::{FetchServiceConfig, StateServiceConfig},
+    error::StateServiceError,
     fetch::FetchService,
     indexer::{IndexerService, ZcashService},
     state::StateService,
@@ -73,6 +74,19 @@ impl Indexer {
         ))
         .await?;
 
+        let read_state_service = IndexerService::<StateService>::spawn(StateServiceConfig::new(
+            todo!("add zebra config to indexerconfig"),
+            config.validator_listen_address,
+            config.validator_cookie_auth,
+            config.validator_cookie_path,
+            config.validator_user,
+            config.validator_password,
+            None,
+            None,
+            config.get_network()?,
+        ))
+        .await?;
+
         let grpc_server = TonicServer::spawn(
             chain_state_service.inner_ref().get_subscriber(),
             GrpcConfig {
@@ -87,7 +101,7 @@ impl Indexer {
 
         let mut indexer = Indexer {
             server: Some(grpc_server),
-            service: Some(chain_state_service),
+            service: Some(read_state_service),
         };
 
         let mut server_interval = tokio::time::interval(tokio::time::Duration::from_millis(100));
