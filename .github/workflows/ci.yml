@@ -44,24 +44,45 @@ jobs:
   # test:
   #   needs: deps-cache
   #   name: Run Tests
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-      
-  #     - name: Restore cache
-  #       uses: actions/cache@v3
-  #       with:
-  #         path: |
-  #           ~/.cargo/registry
-  #           ~/.cargo/git
-  #           target
-  #         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-  #     - name: Run tests
-  #       run: cargo test --workspace --release
-        
-  #     - name: Run slow tests
-  #       run: cargo test --workspace --release -- --ignored
+    container:
+      image: zingodevops/zaino-ci:latest  # Your pre-built Docker image
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      # - name: Debug filetree
+      #   run: |
+      #     apt install tree
+      #     tree -L 5
+
+  #           ~/.cargo/git
+        if: ${{ !env.ACT }}
+  #         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build the zaino executable
+        run: |
+          cargo build  # Compile zaino
+
+      - name: Place zaino binary
+        run: |
+          cp ./target/debug/zainod /usr/local/bin/
+
+      - name: Copy bins into test_binries
+        run: |
+          mkdir -p ./test_binaries/bins
+          cp /usr/local/bin/* ./test_binaries/bins/
+
+      - name: Run Tests (Nextest)
+        run: cargo nextest run --profile ci
 
   clippy:
     needs: deps-cache
