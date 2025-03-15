@@ -40,10 +40,10 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: cargo build --all-targets
 
-  # Uncomment this when tests are passing
-  # test:
-  #   needs: deps-cache
-  #   name: Run Tests
+  test:
+    needs: deps-cache
+    name: Run Tests
+    runs-on: ubuntu-latest
 
     container:
       image: zingodevops/zaino-ci:latest  # Your pre-built Docker image
@@ -57,9 +57,8 @@ jobs:
       #     apt install tree
       #     tree -L 5
 
-  #           ~/.cargo/git
+      - name: Restore cache
         if: ${{ !env.ACT }}
-  #         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
         uses: actions/cache@v3
         with:
           path: |
