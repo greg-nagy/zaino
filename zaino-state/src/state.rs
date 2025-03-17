@@ -990,6 +990,8 @@ impl StateService {
     /// LightWalletD doesnt return a compact block header, however this could be used to return data if useful.
     ///
     /// This impl is still slow, either CompactBl,ocks should be returned directly from the [`ReadStateService`] or Zaino should hold an internal compact block cache.
+    ///
+    /// TODO: use checked_call(Block) to simplify
     async fn get_compact_block(
         read_state_service: &ReadStateService,
         hash_or_height: String,
@@ -1175,12 +1177,68 @@ impl StateService {
     }
 }
 
-/// This impl will hold the Lightwallet RPC method implementations for StateService.
-///
-/// TODO: Update this to be `impl LightWalletIndexer for StateService` once rpc methods are implemented and tested (or implement separately).
-impl StateService {
-    /// Return a list of consecutive compact blocks.
-    pub async fn get_block_range(
+#[async_trait]
+impl LightWalletIndexer for StateService {
+    #[doc = " Uses underlying error type of implementer."]
+    type Error = StateServiceError;
+
+    #[doc = " Return the height of the tip of the best chain"]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_latest_block(&self) -> Result<BlockId, Self::Error> {
+        let response = self.checked_call(ReadRequest::Tip).await?;
+        let tip = expected_read_response!(response, Tip);
+        match tip {
+            Some((height, hash)) => Ok(BlockId {
+                height: height.as_usize() as u64,
+                hash: hash.0.to_vec(),
+            }),
+            None => Err(StateServiceError::Custom(String::from(
+                "No known chain tip",
+            ))),
+        }
+    }
+
+    #[doc = " Return the compact block corresponding to the given block identifier"]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_block(&self, request: BlockId) -> Result<CompactBlock, Self::Error> {
+        let hash_or_height = request.height.to_string(); // TODO: Hash-based lookup
+        Self::get_compact_block(
+            &self.read_state_service,
+            hash_or_height,
+            &self.config.network,
+        )
+        .await
+    }
+
+    #[doc = " Same as GetBlock except actions contain only nullifiers"]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_block_nullifiers(&self, request: BlockId) -> Result<CompactBlock, Self::Error> {
+        todo!()
+    }
+
+    #[doc = " Return a list of consecutive compact blocks"]
+    #[must_use]
+    #[allow(
+        elided_named_lifetimes,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds
+    )]
+    async fn get_block_range(
         &self,
         blockrange: BlockRange,
     ) -> Result<CompactBlockStream, StateServiceError> {
@@ -1310,70 +1368,6 @@ impl StateService {
 
         Ok(CompactBlockStream::new(channel_rx))
     }
-}
-
-#[async_trait]
-impl LightWalletIndexer for StateService {
-    #[doc = " Uses underlying error type of implementer."]
-    type Error = StateServiceError;
-
-    #[doc = " Return the height of the tip of the best chain"]
-    #[must_use]
-    #[allow(
-        elided_named_lifetimes,
-        clippy::type_complexity,
-        clippy::type_repetition_in_bounds
-    )]
-    async fn get_latest_block(&self) -> Result<BlockId, Self::Error> {
-        let response = self.checked_call(ReadRequest::Tip).await?;
-        let tip = expected_read_response!(response, Tip);
-        match tip {
-            Some((height, hash)) => Ok(BlockId {
-                height: height.as_usize() as u64,
-                hash: hash.0.to_vec(),
-            }),
-            None => Err(StateServiceError::Custom(String::from(
-                "No known chain tip",
-            ))),
-        }
-    }
-
-    #[doc = " Return the compact block corresponding to the given block identifier"]
-    #[must_use]
-    #[allow(
-        elided_named_lifetimes,
-        clippy::type_complexity,
-        clippy::type_repetition_in_bounds
-    )]
-    async fn get_block(&self, request: BlockId) -> Result<CompactBlock, Self::Error> {
-        todo!()
-    }
-
-    #[doc = " Same as GetBlock except actions contain only nullifiers"]
-    #[must_use]
-    #[allow(
-        elided_named_lifetimes,
-        clippy::type_complexity,
-        clippy::type_repetition_in_bounds
-    )]
-    async fn get_block_nullifiers(&self, request: BlockId) -> Result<CompactBlock, Self::Error> {
-        todo!()
-    }
-
-    #[doc = " Return a list of consecutive compact blocks"]
-    #[must_use]
-    #[allow(
-        elided_named_lifetimes,
-        clippy::type_complexity,
-        clippy::type_repetition_in_bounds
-    )]
-    async fn get_block_range(
-        &self,
-        request: BlockRange,
-    ) -> Result<CompactBlockStream, Self::Error> {
-        todo!()
-    }
-
     #[doc = " Same as GetBlockRange except actions contain only nullifiers"]
     #[must_use]
     #[allow(
