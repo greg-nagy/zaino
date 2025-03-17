@@ -29,15 +29,6 @@ use crate::jsonrpsee::{
     },
 };
 
-use crate::jsonrpc::{
-    error::JsonRpcConnectorError,
-    response::{
-        GetBalanceResponse, GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse,
-        GetSubtreesResponse, GetTransactionResponse, GetTreestateResponse, GetUtxosResponse,
-        SendTransactionResponse, TxidsResponse,
-    },
-};
-
 #[derive(Serialize, Deserialize, Debug)]
 struct RpcRequest<T> {
     jsonrpc: String,
