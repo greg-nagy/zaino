@@ -64,6 +64,7 @@ RUN cargo install cargo-nextest --locked --verbose
 # Install libclang
 RUN apt update && apt-get install -y --no-install-recommends \
     libclang-dev \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*#
 
 # Copy binaries from all previous stages
