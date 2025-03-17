@@ -120,7 +120,7 @@ impl ZcashService for StateService {
 
     #[doc = " Returns a [`ServiceSubscriber`]."]
     fn get_subscriber(&self) -> IndexerSubscriber<Self::Subscriber> {
-        todo!()
+        IndexerSubscriber::new(self.clone())
     }
 
     #[doc = " Fetches the current status"]
@@ -1325,7 +1325,17 @@ impl LightWalletIndexer for StateService {
         clippy::type_repetition_in_bounds
     )]
     async fn get_latest_block(&self) -> Result<BlockId, Self::Error> {
-        todo!()
+        let response = self.checked_call(ReadRequest::Tip).await?;
+        let tip = expected_read_response!(response, Tip);
+        match tip {
+            Some((height, hash)) => Ok(BlockId {
+                height: height.as_usize() as u64,
+                hash: hash.0.to_vec(),
+            }),
+            None => Err(StateServiceError::Custom(String::from(
+                "No known chain tip",
+            ))),
+        }
     }
 
     #[doc = " Return the compact block corresponding to the given block identifier"]
