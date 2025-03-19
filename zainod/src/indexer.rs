@@ -6,11 +6,9 @@ use tracing::info;
 use zaino_fetch::jsonrpc::connector::test_node_and_return_url;
 use zaino_serve::server::{config::GrpcConfig, grpc::TonicServer};
 use zaino_state::{
-    config::{FetchServiceConfig, StateServiceConfig},
-    error::StateServiceError,
+    config::FetchServiceConfig,
     fetch::FetchService,
     indexer::{IndexerService, ZcashService},
-    state::StateService,
     status::StatusType,
 };
 
@@ -21,7 +19,7 @@ pub struct Indexer {
     /// GRPC server.
     server: Option<TonicServer>,
     /// Chain fetch service state process handler..
-    service: Option<IndexerService<StateService>>,
+    service: Option<IndexerService<FetchService>>,
 }
 
 impl Indexer {
@@ -74,18 +72,18 @@ impl Indexer {
         ))
         .await?;
 
-        let read_state_service = IndexerService::<StateService>::spawn(StateServiceConfig::new(
-            todo!("add zebra config to indexerconfig"),
-            config.validator_listen_address,
-            config.validator_cookie_auth,
-            config.validator_cookie_path,
-            config.validator_user,
-            config.validator_password,
-            None,
-            None,
-            config.get_network()?,
-        ))
-        .await?;
+        // let read_state_service = IndexerService::<StateService>::spawn(StateServiceConfig::new(
+        //     todo!("add zebra config to indexerconfig"),
+        //     config.validator_listen_address,
+        //     config.validator_cookie_auth,
+        //     config.validator_cookie_path,
+        //     config.validator_user,
+        //     config.validator_password,
+        //     None,
+        //     None,
+        //     config.get_network()?,
+        // ))
+        // .await?;
 
         let grpc_server = TonicServer::spawn(
             chain_state_service.inner_ref().get_subscriber(),
@@ -101,7 +99,7 @@ impl Indexer {
 
         let mut indexer = Indexer {
             server: Some(grpc_server),
-            service: Some(read_state_service),
+            service: Some(chain_state_service),
         };
 
         let mut server_interval = tokio::time::interval(tokio::time::Duration::from_millis(100));
@@ -165,7 +163,7 @@ impl Indexer {
     /// Returns the indexers current status usize, caliculates from internal statuses.
     fn status_int(&self) -> u16 {
         let service_status = match &self.service {
-            Some(service) => service.inner_ref().status_sync(),
+            Some(service) => service.inner_ref().status(),
             None => return 7,
         };
         let server_status = match &self.server {
@@ -184,7 +182,7 @@ impl Indexer {
     /// Logs the indexers status.
     pub fn log_status(&self) {
         let service_status = match &self.service {
-            Some(service) => service.inner_ref().status_sync(),
+            Some(service) => service.inner_ref().status(),
             None => StatusType::Offline,
         };
         let grpc_server_status = match &self.server {

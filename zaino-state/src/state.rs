@@ -115,29 +115,8 @@ impl ZcashService for StateService {
     type Config = StateServiceConfig;
 
     #[doc = " Spawns a [`Service`]."]
-    async fn spawn(config: Self::Config) -> Result<Self, Self::Error> {
-        todo!()
-    }
-
-    #[doc = " Returns a [`ServiceSubscriber`]."]
-    fn get_subscriber(&self) -> IndexerSubscriber<Self::Subscriber> {
-        IndexerSubscriber::new(self.clone())
-    }
-
-    #[doc = " Fetches the current status"]
-    fn status(&self) -> StatusType {
-        todo!()
-    }
-
-    #[doc = " Shuts down the StateService."]
-    fn close(&mut self) {
-        todo!()
-    }
-}
-
-impl StateService {
     /// Initializes a new StateService instance and starts sync process.
-    pub async fn spawn(config: StateServiceConfig) -> Result<Self, StateServiceError> {
+    async fn spawn(config: StateServiceConfig) -> Result<Self, StateServiceError> {
         let rpc_client = JsonRpcConnector::new_from_config_parts(
             config.validator_cookie_auth,
             config.validator_rpc_address,
@@ -185,6 +164,24 @@ impl StateService {
         Ok(state_service)
     }
 
+    #[doc = " Returns a [`ServiceSubscriber`]."]
+    /// TODO: Implement an actual subscriber type when needed
+    fn get_subscriber(&self) -> IndexerSubscriber<Self::Subscriber> {
+        IndexerSubscriber::new(self.clone())
+    }
+
+    #[doc = " Fetches the current status"]
+    fn status(&self) -> StatusType {
+        todo!()
+    }
+
+    #[doc = " Shuts down the StateService."]
+    fn close(&mut self) {
+        todo!()
+    }
+}
+
+impl StateService {
     /// A combined function that checks readiness using `poll_ready` and then performs the request.
     /// If the service is busy, it waits until ready. If there's an error, it returns the error.
     pub(crate) async fn checked_call(
