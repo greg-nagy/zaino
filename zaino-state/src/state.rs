@@ -4,6 +4,7 @@ use crate::{
     config::StateServiceConfig,
     error::StateServiceError,
     indexer::{IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService},
+    local_cache::compact_block_to_nullifiers,
     status::{AtomicStatus, StatusType},
     stream::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
@@ -1228,7 +1229,8 @@ impl LightWalletIndexer for StateService {
         clippy::type_repetition_in_bounds
     )]
     async fn get_block_nullifiers(&self, request: BlockId) -> Result<CompactBlock, Self::Error> {
-        todo!()
+        let block = self.get_block(request).await?;
+        Ok(compact_block_to_nullifiers(block))
     }
 
     #[doc = " Return a list of consecutive compact blocks"]
