@@ -61,10 +61,18 @@ LABEL maintainer="nachog00" \
 # Install Nextest
 RUN cargo install cargo-nextest --locked --verbose
 
-# Install libclang
+# Install
 RUN apt update && apt-get install -y --no-install-recommends \
     libclang-dev \
     build-essential \
+    musl-dev \
+    gcc \
+    clang \
+    llvm-dev \
+    libssl-dev \
+    cmake \
+    make \
+
     && rm -rf /var/lib/apt/lists/*#
 
 # Copy binaries from all previous stages
