@@ -121,7 +121,7 @@ jobs:
           name: nextest-archive
 
       - name: Run Tests (Nextest)
-        continue-on-error: true
+        # continue-on-error: true
         run: |
           cargo nextest run --verbose --profile ci --retries 2 --archive-file nextest-archive.tar.zst \
             --workspace-remap ./ --partition count:${{ matrix.partition }}/8 ${{ env.NEXTEST-FLAGS }}
