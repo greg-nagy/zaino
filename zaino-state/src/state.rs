@@ -1402,7 +1402,31 @@ impl LightWalletIndexer for StateService {
         clippy::type_repetition_in_bounds
     )]
     async fn get_transaction(&self, request: TxFilter) -> Result<RawTransaction, Self::Error> {
-        todo!()
+        let hash = zebra_chain::transaction::Hash::from_bytes_in_display_order(
+            &<[u8; 32]>::try_from(request.hash).map_err(|_| {
+                StateServiceError::TonicStatusError(tonic::Status::invalid_argument(
+                    "Error: Transaction hash incorrect",
+                ))
+            })?,
+        );
+        let response = self.checked_call(ReadRequest::Transaction(hash)).await?;
+        let transaction = expected_read_response!(response, Transaction);
+        transaction
+            .map(|MinedTx { tx, height, .. }| -> Result<_, std::io::Error> {
+                Ok(RawTransaction {
+                    data: tx.zcash_serialize_to_vec()?,
+                    height: height.as_usize() as u64,
+                })
+            })
+            .transpose()
+            .map_err(|_read_error| {
+                StateServiceError::TonicStatusError(tonic::Status::internal(
+                    "Error: transaction did not write to vec",
+                ))
+            })?
+            .ok_or(StateServiceError::TonicStatusError(
+                tonic::Status::invalid_argument("error: transaction not found"),
+            ))
     }
 
     #[doc = " Submit the given transaction to the Zcash network"]
