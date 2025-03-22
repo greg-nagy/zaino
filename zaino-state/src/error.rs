@@ -13,11 +13,11 @@ pub enum StateServiceError {
 
     /// Error from JsonRpcConnector.
     #[error("JsonRpcConnector error: {0}")]
-    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpc::error::JsonRpcConnectorError),
+    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError),
 
     /// RPC error in compatibility with zcashd.
     #[error("RPC error: {0:?}")]
-    RpcError(#[from] zaino_fetch::jsonrpc::connector::RpcError),
+    RpcError(#[from] zaino_fetch::jsonrpsee::connector::RpcError),
 
     /// Tonic gRPC error.
     #[error("Tonic status error: {0}")]
