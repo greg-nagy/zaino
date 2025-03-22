@@ -45,7 +45,7 @@ struct RpcResponse<T> {
     error: Option<RpcError>,
 }
 
-/// Json RPC Error type.
+/// Json RPSee Error type.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RpcError {
     /// Error Code.
@@ -102,7 +102,7 @@ enum AuthMethod {
     Cookie { cookie: String },
 }
 
-/// JsonRPSee Client config data.
+/// JsonRpSee Client config data.
 #[derive(Debug, Clone)]
 pub struct JsonRpSeeConnector {
     url: Url,

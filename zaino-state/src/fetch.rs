@@ -16,8 +16,9 @@ use zebra_rpc::methods::{
 
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpc::connector::{JsonRpcConnector, RpcError},
+    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
 };
+
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
     service::{
@@ -53,7 +54,7 @@ use crate::{
 #[derive(Debug)]
 pub struct FetchService {
     /// JsonRPC Client.
-    fetcher: JsonRpcConnector,
+    fetcher: JsonRpSeeConnector,
     /// Local compact block cache.
     block_cache: BlockCache,
     /// Internal mempool.
@@ -73,7 +74,7 @@ impl ZcashService for FetchService {
     async fn spawn(config: FetchServiceConfig) -> Result<Self, FetchServiceError> {
         info!("Launching Chain Fetch Service..");
 
-        let fetcher = JsonRpcConnector::new_from_config_parts(
+        let fetcher = JsonRpSeeConnector::new_from_config_parts(
             config.validator_cookie_auth,
             config.validator_rpc_address,
             config.validator_rpc_user.clone(),
@@ -147,7 +148,7 @@ impl Drop for FetchService {
 #[derive(Debug, Clone)]
 pub struct FetchServiceSubscriber {
     /// JsonRPC Client.
-    pub fetcher: JsonRpcConnector,
+    pub fetcher: JsonRpSeeConnector,
     /// Local compact block cache.
     pub block_cache: BlockCacheSubscriber,
     /// Internal mempool.
