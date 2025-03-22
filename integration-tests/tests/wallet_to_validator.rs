@@ -8,7 +8,7 @@ use zingo_infra_testutils::services::validator::Validator;
 use zingolib::testutils::lightclient::from_inputs;
 
 mod wallet_basic {
-    use zaino_fetch::jsonrpc::connector::test_node_and_return_url;
+    use zaino_fetch::jsonrpsee::connector::test_node_and_return_url;
 
     use super::*;
 
@@ -199,20 +199,21 @@ mod wallet_basic {
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new_with_basic_auth(
-            test_node_and_return_url(
-                test_manager.zebrad_rpc_listen_address,
-                false,
-                None,
-                Some("xxxxxx".to_string()),
-                Some("xxxxxx".to_string()),
+        let fetch_service =
+            zaino_fetch::jsonrpsee::connector::JsonRpSeeConnector::new_with_basic_auth(
+                test_node_and_return_url(
+                    test_manager.zebrad_rpc_listen_address,
+                    false,
+                    None,
+                    Some("xxxxxx".to_string()),
+                    Some("xxxxxx".to_string()),
+                )
+                .await
+                .unwrap(),
+                "xxxxxx".to_string(),
+                "xxxxxx".to_string(),
             )
-            .await
-            .unwrap(),
-            "xxxxxx".to_string(),
-            "xxxxxx".to_string(),
-        )
-        .unwrap();
+            .unwrap();
 
         println!("\n\nFetching Chain Height!\n");
 
@@ -543,20 +544,21 @@ mod wallet_basic {
 
         // test_manager.local_net.print_stdout();
 
-        let fetch_service = zaino_fetch::jsonrpc::connector::JsonRpcConnector::new_with_basic_auth(
-            test_node_and_return_url(
-                test_manager.zebrad_rpc_listen_address,
-                false,
-                None,
-                Some("xxxxxx".to_string()),
-                Some("xxxxxx".to_string()),
+        let fetch_service =
+            zaino_fetch::jsonrpsee::connector::JsonRpSeeConnector::new_with_basic_auth(
+                test_node_and_return_url(
+                    test_manager.zebrad_rpc_listen_address,
+                    false,
+                    None,
+                    Some("xxxxxx".to_string()),
+                    Some("xxxxxx".to_string()),
+                )
+                .await
+                .unwrap(),
+                "xxxxxx".to_string(),
+                "xxxxxx".to_string(),
             )
-            .await
-            .unwrap(),
-            "xxxxxx".to_string(),
-            "xxxxxx".to_string(),
-        )
-        .unwrap();
+            .unwrap();
 
         println!("\n\nFetching Raw Mempool!\n");
 
