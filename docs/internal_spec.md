@@ -52,7 +52,7 @@ The Zaino repo consists of several crates that collectively provide an indexing 
 - prost
 - serde 
 - serde_json
-- jsonrpc-core 
+- jsonrpsee-core 
 - jsonrpsee-types
 
 **Hashmaps, channels, DBs:**

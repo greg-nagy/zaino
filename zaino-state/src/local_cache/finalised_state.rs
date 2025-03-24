@@ -12,7 +12,7 @@ use zebra_chain::{
 };
 use zebra_state::HashOrHeight;
 
-use zaino_fetch::jsonrpc::connector::JsonRpcConnector;
+use zaino_fetch::jsonrpsee::connector::JsonRpSeeConnector;
 use zaino_proto::proto::compact_formats::CompactBlock;
 
 use crate::{
@@ -98,7 +98,7 @@ impl DbRequest {
 #[derive(Debug)]
 pub struct FinalisedState {
     /// Chain fetch service.
-    fetcher: JsonRpcConnector,
+    fetcher: JsonRpSeeConnector,
     /// LMDB Database Environmant.
     database: Arc<Environment>,
     /// LMDB Databas containing `<block_height, block_hash>`.
@@ -127,7 +127,7 @@ impl FinalisedState {
     /// - block_reciever: Channel that recieves new blocks to add to the db.
     /// - status_signal: Used to send error status signals to outer processes.
     pub async fn spawn(
-        fetcher: &JsonRpcConnector,
+        fetcher: &JsonRpSeeConnector,
         block_receiver: tokio::sync::mpsc::Receiver<(Height, Hash, CompactBlock)>,
         config: BlockCacheConfig,
     ) -> Result<Self, FinalisedStateError> {
@@ -380,7 +380,7 @@ impl FinalisedState {
             .get_block(reorg_height.0.to_string(), Some(1))
             .await?
         {
-            zaino_fetch::jsonrpc::response::GetBlockResponse::Object { hash, .. } => hash.0,
+            zaino_fetch::jsonrpsee::response::GetBlockResponse::Object { hash, .. } => hash.0,
             _ => {
                 return Err(FinalisedStateError::Custom(
                     "Unexpected block response type".to_string(),
@@ -414,7 +414,7 @@ impl FinalisedState {
                 .get_block(reorg_height.0.to_string(), Some(1))
                 .await?
             {
-                zaino_fetch::jsonrpc::response::GetBlockResponse::Object { hash, .. } => hash.0,
+                zaino_fetch::jsonrpsee::response::GetBlockResponse::Object { hash, .. } => hash.0,
                 _ => {
                     return Err(FinalisedStateError::Custom(
                         "Unexpected block response type".to_string(),
