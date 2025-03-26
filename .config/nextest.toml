@@ -5,3 +5,6 @@ retries = 1
 
 [profile.ci]
 default-filter = "not test(testnet)"
+
+[profile.ci.junit]  # this can be some other profile, too
+path = "junit.xml"

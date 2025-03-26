@@ -127,6 +127,12 @@ jobs:
           cargo nextest run --verbose --profile ci --retries 2 --archive-file nextest-archive.tar.zst \
             --workspace-remap ./ --partition count:${{ matrix.partition }}/8 ${{ env.NEXTEST-FLAGS }}
 
+      - name: Test Summary
+        uses: test-summary/action@v2
+        with:
+          paths: "target/nextest/ci/junit.xml"
+        if: always()
+
   clippy:
     needs: deps-cache
     name: Clippy
