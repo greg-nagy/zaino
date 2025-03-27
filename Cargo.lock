@@ -2154,21 +2154,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
 
 [[package]]
-name = "jsonrpc-core"
-version = "18.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14f7f76aef2d054868398427f6c54943cf3d1caa9a7ec7d0c38d69df97a965eb"
-dependencies = [
- "futures",
- "futures-executor",
- "futures-util",
- "log",
- "serde",
- "serde_derive",
- "serde_json",
-]
-
-[[package]]
 name = "jsonrpsee"
 version = "0.24.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5514,7 +5499,7 @@ dependencies = [
  "hex",
  "http",
  "indexmap 2.7.1",
- "jsonrpc-core",
+ "jsonrpsee-core",
  "lazy-regex",
  "lmdb",
  "prost",
