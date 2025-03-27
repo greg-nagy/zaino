@@ -7,7 +7,7 @@ on:
 jobs:
   deps-cache:
     name: Cache Dependencies
-    runs-on: ${{ vars.RUNNER_TYPE || 'ziserv-runners' }}
+    runs-on: ${{ vars.RUNNER_TYPE || 'self-hosted' }}
     steps:
       - uses: actions/checkout@v4
       
