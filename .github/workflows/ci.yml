@@ -80,6 +80,7 @@ jobs:
     container:
       image: zingodevops/zaino-ci:latest  # Your pre-built Docker image
     strategy:
+      fail-fast: false
       matrix:
         partition: [1, 2, 3, 4, 5, 6, 7, 8]
 
