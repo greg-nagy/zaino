@@ -3,7 +3,9 @@
 use crate::{
     config::StateServiceConfig,
     error::StateServiceError,
-    indexer::{IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService},
+    indexer::{
+        handle_raw_transaction, IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService,
+    },
     local_cache::compact_block_to_nullifiers,
     status::{AtomicStatus, StatusType},
     stream::{
@@ -14,13 +16,13 @@ use crate::{
 };
 
 use chrono::Utc;
-use futures::FutureExt as _;
+use futures::{FutureExt as _, StreamExt};
 use hex::{FromHex as _, ToHex as _};
 use indexmap::IndexMap;
 use std::io::Cursor;
 use std::str::FromStr as _;
 use std::{future::poll_fn, sync::Arc};
-use tokio::time::timeout;
+use tokio::{sync::mpsc, time::timeout};
 use tonic::async_trait;
 use tower::Service;
 
@@ -719,18 +721,24 @@ impl ZcashIndexer for StateService {
         }
     }
 
+    // Helper function, to get the chain height in rpc implementations
+    async fn chain_height(&self) -> Result<u32, Self::Error> {
+        Ok(self
+            .latest_chain_tip
+            .best_tip_height()
+            .ok_or(RpcError::new_from_legacycode(
+                LegacyCode::Misc,
+                "no blocks in chain",
+            ))?
+            .0)
+    }
+
     async fn get_address_tx_ids(
         &self,
         request: GetAddressTxIdsRequest,
     ) -> Result<Vec<String>, Self::Error> {
         let (addresses, start, end) = request.into_parts();
-        let chain_height =
-            self.latest_chain_tip
-                .best_tip_height()
-                .ok_or(RpcError::new_from_legacycode(
-                    LegacyCode::Misc,
-                    "no blocks in chain",
-                ))?;
+        let chain_height = self.chain_height().await?;
 
         let mut error_string = None;
         if start == 0 || end == 0 {
@@ -743,7 +751,7 @@ impl ZcashIndexer for StateService {
                 "start {start:?} must be less than or equal to end {end:?}"
             ));
         }
-        if Height(start) > chain_height || Height(end) > chain_height {
+        if start > chain_height || end > chain_height {
             error_string = Some(format!(
             "start {start:?} and end {end:?} must both be less than or equal to the chain tip {chain_height:?}")
             );
@@ -1421,7 +1429,19 @@ impl LightWalletIndexer for StateService {
         &self,
         request: TransparentAddressBlockFilter,
     ) -> Result<RawTransactionStream, Self::Error> {
-        todo!()
+        let txids = self.get_taddress_txids_helper(request).await?;
+        let chain_height = self.chain_height().await?;
+        let (transmitter, receiver) = mpsc::channel(self.config.service_channel_size as usize);
+        for txid in txids {
+            let transaction = self.get_raw_transaction(txid, Some(1)).await;
+            if handle_raw_transaction::<Self>(chain_height as u64, transaction, transmitter.clone())
+                .await
+                .is_err()
+            {
+                break;
+            }
+        }
+        Ok(RawTransactionStream::new(receiver))
     }
 
     /// Returns the total balance for a list of taddrs
