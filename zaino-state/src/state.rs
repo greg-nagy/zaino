@@ -24,8 +24,8 @@ use tokio::time::timeout;
 use tonic::async_trait;
 use tower::Service;
 
-use zaino_fetch::jsonrpc::connector::{JsonRpcConnector, RpcError};
-use zaino_fetch::jsonrpc::response::TxidsResponse;
+use zaino_fetch::jsonrpsee::connector::{JsonRpSeeConnector, RpcError};
+use zaino_fetch::jsonrpsee::response::TxidsResponse;
 use zaino_proto::proto::service::{
     AddressList, BlockRange, Duration, Exclude, GetAddressUtxosArg, GetAddressUtxosReplyList,
     GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction, SendResponse,
@@ -93,7 +93,7 @@ pub struct StateService {
     /// Sync task handle.
     sync_task_handle: Option<Arc<tokio::task::JoinHandle<()>>>,
     /// JsonRPC Client.
-    rpc_client: JsonRpcConnector,
+    rpc_client: JsonRpSeeConnector,
     /// Service metadata.
     data: ServiceMetadata,
     /// StateService config data.
@@ -117,7 +117,7 @@ impl ZcashService for StateService {
     /// Spawns a [`Service`].
     /// Initializes a new StateService instance and starts sync process.
     async fn spawn(config: StateServiceConfig) -> Result<Self, StateServiceError> {
-        let rpc_client = JsonRpcConnector::new_from_config_parts(
+        let rpc_client = JsonRpSeeConnector::new_from_config_parts(
             config.validator_cookie_auth,
             config.validator_rpc_address,
             config.validator_rpc_user.clone(),
@@ -876,7 +876,7 @@ impl StateService {
             .checked_call(zebra_state::ReadRequest::BlockHeader(hash_or_height))
             .await
             .map_err(|_| {
-                StateServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
+                StateServiceError::RpcError(zaino_fetch::jsonrpsee::connector::RpcError {
                     // Compatibility with zcashd. Note that since this function
                     // is reused by getblock(), we return the errors expected
                     // by it (they differ whether a hash or a height was passed)
@@ -905,7 +905,7 @@ impl StateService {
 
             // This could be `None` if there's a chain reorg between state queries.
             let sapling_tree = sapling_tree.ok_or_else(|| {
-                StateServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
+                StateServiceError::RpcError(zaino_fetch::jsonrpsee::connector::RpcError {
                     code: LegacyCode::InvalidParameter as i64,
                     message: "missing sapling tree for block".to_string(),
                     data: None,
@@ -1010,7 +1010,7 @@ impl StateService {
             )
             .await
             .map_err(|_| {
-                StateServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
+                StateServiceError::RpcError(zaino_fetch::jsonrpsee::connector::RpcError {
                     // Compatibility with zcashd. Note that since this function
                     // is reused by getblock(), we return the errors expected
                     // by it (they differ whether a hash or a height was passed)
@@ -1039,7 +1039,7 @@ impl StateService {
 
             // This could be `None` if there's a chain reorg between state queries.
             let sapling_tree = sapling_tree.ok_or_else(|| {
-                StateServiceError::RpcError(zaino_fetch::jsonrpc::connector::RpcError {
+                StateServiceError::RpcError(zaino_fetch::jsonrpsee::connector::RpcError {
                     code: LegacyCode::InvalidParameter as i64,
                     message: "missing sapling tree for block".to_string(),
                     data: None,
@@ -1119,7 +1119,7 @@ impl StateService {
             .await?
         else {
             return Err(StateServiceError::RpcError(
-                zaino_fetch::jsonrpc::connector::RpcError {
+                zaino_fetch::jsonrpsee::connector::RpcError {
                     code: LegacyCode::InvalidParameter as i64,
                     message: "Block not found".to_string(),
                     data: None,

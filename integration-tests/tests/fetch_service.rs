@@ -1,5 +1,5 @@
 use futures::StreamExt as _;
-use zaino_fetch::jsonrpc::connector::{test_node_and_return_url, JsonRpcConnector};
+use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
 use zaino_proto::proto::service::{
     AddressList, BlockId, BlockRange, Exclude, GetAddressUtxosArg, GetSubtreeRootsArg,
     TransparentAddressBlockFilter, TxFilter,
@@ -221,7 +221,7 @@ async fn fetch_service_get_raw_mempool(validator: &str) {
         .as_ref()
         .expect("Clients are not initialized");
 
-    let json_service = JsonRpcConnector::new_with_basic_auth(
+    let json_service = JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
             test_manager.zebrad_rpc_listen_address,
             false,
@@ -586,7 +586,7 @@ async fn fetch_service_get_latest_block(validator: &str) {
     test_manager.local_net.generate_blocks(1).await.unwrap();
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    let json_service = JsonRpcConnector::new_with_basic_auth(
+    let json_service = JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
             test_manager.zebrad_rpc_listen_address,
             false,

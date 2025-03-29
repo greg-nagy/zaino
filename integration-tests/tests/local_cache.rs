@@ -1,5 +1,5 @@
 use core::panic;
-use zaino_fetch::jsonrpc::connector::{test_node_and_return_url, JsonRpcConnector};
+use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
 use zaino_state::{
     config::BlockCacheConfig,
     local_cache::{BlockCache, BlockCacheSubscriber},
@@ -18,7 +18,7 @@ async fn create_test_manager_and_block_cache(
     enable_clients: bool,
 ) -> (
     TestManager,
-    JsonRpcConnector,
+    JsonRpSeeConnector,
     BlockCache,
     BlockCacheSubscriber,
 ) {
@@ -34,7 +34,7 @@ async fn create_test_manager_and_block_cache(
     .await
     .unwrap();
 
-    let json_service = JsonRpcConnector::new_with_basic_auth(
+    let json_service = JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
             test_manager.zebrad_rpc_listen_address,
             false,

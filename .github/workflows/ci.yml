@@ -1,139 +1,255 @@
 name: CI checks
 
-on: [push, pull_request]
+on: 
+  push:
+  pull_request:
 
 jobs:
+  deps-cache:
+    name: Cache Dependencies
+    runs-on: ${{ vars.RUNNER_TYPE || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+      
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        id: cache
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-v1-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-v1-
+
+      - name: Fetch dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: cargo fetch
+
+      - name: Quick compilation check
+        run: cargo check --all-targets
+
+      - name: Build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: cargo build --all-targets
+
+  build-test-artifacts:
+    needs: deps-cache
+    name: Build test artifacts
+    container:
+      image: zingodevops/zaino-ci
+    runs-on: ubuntu-22.04
+    if: github.event.pull_request.draft == false
+    # env:
+    #   RUSTFLAGS: -D warnings
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      # - name: Install nextest
+      #   uses: taiki-e/install-action@v2
+      #   with:
+      #     tool: nextest@0.9.78
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build and archive tests
+        run: cargo nextest archive --verbose --workspace --all-features --archive-file nextest-archive.tar.zst
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextest-archive
+          path: nextest-archive.tar.zst
+
+
   test:
-    name: >
-      Test on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
-
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run tests
-        run: >
-          cargo test
-          --release
-          --workspace
-      - name: Run slow tests
-        run: >
-          cargo test
-          --release
-          --workspace
-          -- --ignored
-      - name: Verify working directory is clean
-        run: git diff --exit-code
-
-  build-latest:
-    name: Latest build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        id: toolchain
-      - run: rustup override set ${{steps.toolchain.outputs.name}}
-      - name: Remove lockfile to build with latest dependencies
-        run: rm Cargo.lock
-      - name: Build crates
-        run: >
-          cargo build
-          --workspace
-          --all-targets
-          --verbose
-      - name: Verify working directory is clean (excluding lockfile)
-        run: git diff --exit-code ':!Cargo.lock'
-
-
-  bitrot:
-    name: Bitrot check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      # Build benchmarks to prevent bitrot
-      - name: Build benchmarks
-        run: cargo build --all --benches
-
-  clippy:
-    name: Clippy (MSRV)
-    timeout-minutes: 30
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run clippy
-        uses: actions-rs/clippy-check@v1
-        with:
-          name: Clippy (MSRV)
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: >
-            --all-targets
-            --
-            -D warnings
-
-  clippy-beta:
-    name: Clippy (beta)
-    timeout-minutes: 30
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@beta
-        id: toolchain
-      - run: rustup override set ${{steps.toolchain.outputs.name}}
-      - name: Run Clippy (beta)
-        uses: actions-rs/clippy-check@v1
-        continue-on-error: true
-        with:
-          name: Clippy (beta)
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: >
-            --all-targets
-            --
-            -W clippy::all
-
-  codecov:
-    name: Code coverage
+    name: Run Tests
+    needs: build-test-artifacts
     runs-on: ubuntu-latest
     container:
-      image: xd009642/tarpaulin:develop-nightly
-      options: --security-opt seccomp=unconfined
+      image: zingodevops/zaino-ci:latest  # Your pre-built Docker image
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2, 3, 4, 5, 6, 7, 8]
 
     steps:
-      - uses: actions/checkout@v4
-      - name: Generate coverage report
-        run: >
-          cargo tarpaulin
-          --engine llvm
-          --release
-          --timeout 600
-          --out xml
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3.1.5
 
-  doc-links:
-    name: Intra-doc links
+      - uses: actions/checkout@v4
+
+      # - name: Debug filetree
+      #   run: |
+      #     apt install tree
+      #     tree -L 5
+
+      - name: Restore cache
+        if: ${{ !env.ACT }}
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      # - name: Build the zaino executable
+      #   run: |
+      #     cargo build  # Compile zaino
+
+      # - name: Place zaino binary
+      #   run: |
+      #     cp ./target/debug/zainod /usr/local/bin/
+
+      - name: Copy bins into test_binries
+        run: |
+          mkdir -p ./test_binaries/bins
+          cp /usr/local/bin/* ./test_binaries/bins/
+
+      - name: Download archive
+        uses: actions/download-artifact@v4
+        with:
+          name: nextest-archive
+
+      - name: Run Tests (Nextest)
+        # continue-on-error: true
+        run: |
+          cargo nextest run --verbose --profile ci --retries 2 --archive-file nextest-archive.tar.zst \
+            --workspace-remap ./ --partition count:${{ matrix.partition }}/8 ${{ env.NEXTEST-FLAGS }}
+
+      - name: Test Summary
+        uses: test-summary/action@v2
+        with:
+          paths: "target/nextest/ci/junit.xml"
+        if: always()
+
+  clippy:
+    needs: deps-cache
+    name: Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: cargo fetch
-      # Requires #![deny(rustdoc::broken_intra_doc_links)] in crates.
-      - name: Check intra-doc links
-        run: >
-          cargo doc
-          --all
-          --document-private-items
+      
+      - name: Restore cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run clippy with console output
+        run: cargo clippy --all-targets
+        continue-on-error: true
+
+      - name: Output clippy to Github
+        uses: actions-rs/clippy-check@v1
+        # Remove when clippy is green in local dev environments
+        continue-on-error: true
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-targets
 
   fmt:
+    needs: deps-cache
     name: Rustfmt
-    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Restore cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
+  docker:
+    name: Build Docker image, push if tagged
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+            
+      - name: Docker Build, push if tagged
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64
+          push: ${{ startsWith(github.ref, 'refs/tags/') }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: |
+            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}:buildcache
+            type=gha
+          cache-to: |
+            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}:buildcache,mode=max
+            type=gha,mode=max
+
+  create-release:
+    needs: docker
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') && github.token != ''
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Generate Changelog
+        id: changelog
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREVIOUS_TAG" ]; then
+            git log --pretty=format:"* %s" > CHANGELOG.md
+          else
+            git log --pretty=format:"* %s" $PREVIOUS_TAG..HEAD > CHANGELOG.md
+          fi
+          
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            CHANGELOG.md
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}

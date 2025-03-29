@@ -10,7 +10,7 @@ use non_finalised_state::{NonFinalisedState, NonFinalisedStateSubscriber};
 use tracing::info;
 use zaino_fetch::{
     chain::block::FullBlock,
-    jsonrpc::{connector::JsonRpcConnector, response::GetBlockResponse},
+    jsonrpsee::{connector::JsonRpSeeConnector, response::GetBlockResponse},
 };
 use zaino_proto::proto::compact_formats::{ChainMetadata, CompactBlock, CompactOrchardAction};
 use zebra_chain::block::{Hash, Height};
@@ -21,7 +21,7 @@ use zebra_state::HashOrHeight;
 /// Used by the FetchService for efficiency.
 #[derive(Debug)]
 pub struct BlockCache {
-    fetcher: JsonRpcConnector,
+    fetcher: JsonRpSeeConnector,
     non_finalised_state: NonFinalisedState,
     /// The state below the last 100 blocks, determined
     /// to be probabalistically nonreorgable
@@ -32,7 +32,7 @@ pub struct BlockCache {
 impl BlockCache {
     /// Spawns a new [`BlockCache`].
     pub async fn spawn(
-        fetcher: &JsonRpcConnector,
+        fetcher: &JsonRpSeeConnector,
         config: BlockCacheConfig,
     ) -> Result<Self, BlockCacheError> {
         info!("Launching Local Block Cache..");
@@ -98,7 +98,7 @@ impl BlockCache {
 /// A subscriber to a [`BlockCache`].
 #[derive(Debug, Clone)]
 pub struct BlockCacheSubscriber {
-    fetcher: JsonRpcConnector,
+    fetcher: JsonRpSeeConnector,
     /// the last 100 blocks, stored separately as it could
     /// be changed by reorgs
     pub non_finalised_state: NonFinalisedStateSubscriber,
@@ -181,7 +181,7 @@ impl BlockCacheSubscriber {
 ///
 /// Uses 2 calls as z_get_block verbosity=1 is required to fetch txids from zcashd.
 pub(crate) async fn fetch_block_from_node(
-    fetcher: &JsonRpcConnector,
+    fetcher: &JsonRpSeeConnector,
     hash_or_height: HashOrHeight,
 ) -> Result<(Hash, CompactBlock), BlockCacheError> {
     let (hash, tx, trees) = fetcher
