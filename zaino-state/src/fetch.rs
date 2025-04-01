@@ -516,7 +516,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             })
             .map_err(|_| {
                 FetchServiceError::TonicStatusError(tonic::Status::invalid_argument(
-                    "Error: Height out of range. Failed to convert to u32.",
+                    "Error: Invalid hash and/or height out of range. Failed to convert to u32.",
                 ))
             })?;
         match self
@@ -535,6 +535,17 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                             hash_or_height, chain_height,
                         ))),
                     ),
+                    HashOrHeight::Height(height)
+                        if height > self.data.network().sapling_activation_height() =>
+                    {
+                        Err(FetchServiceError::TonicStatusError(
+                            tonic::Status::out_of_range(format!(
+                                "Error: Height out of range [{}]. Height requested \
+                                is below sapling activation height [{}].",
+                                hash_or_height, chain_height,
+                            )),
+                        ))
+                    }
                     _otherwise =>
                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                     {
