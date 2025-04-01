@@ -346,7 +346,10 @@ pub trait ZcashIndexer: Send + Sync + 'static {
         &self,
         address_strings: AddressStrings,
     ) -> Result<Vec<GetAddressUtxos>, Self::Error>;
+
+    /// Helper function to get the chain height
     async fn chain_height(&self) -> Result<u32, Self::Error>;
+
     async fn get_taddress_txids_helper(
         &self,
         request: TransparentAddressBlockFilter,

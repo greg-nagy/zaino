@@ -29,9 +29,9 @@ use tower::Service;
 use zaino_fetch::jsonrpsee::connector::{JsonRpSeeConnector, RpcError};
 use zaino_fetch::jsonrpsee::response::TxidsResponse;
 use zaino_proto::proto::service::{
-    AddressList, BlockRange, Duration, Exclude, GetAddressUtxosArg, GetAddressUtxosReplyList,
-    GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction, SendResponse,
-    TransparentAddressBlockFilter, TreeState,
+    AddressList, Balance, BlockRange, Duration, Exclude, GetAddressUtxosArg,
+    GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction,
+    SendResponse, TransparentAddressBlockFilter, TreeState,
 };
 use zaino_proto::proto::{compact_formats::ChainMetadata, service::BlockId};
 use zaino_proto::proto::{
@@ -1450,7 +1450,24 @@ impl LightWalletIndexer for StateService {
         &self,
         request: AddressList,
     ) -> Result<zaino_proto::proto::service::Balance, Self::Error> {
-        todo!()
+        let taddrs = AddressStrings::new_valid(request.addresses).map_err(|err_obj| {
+            Self::Error::RpcError(RpcError::new_from_errorobject(
+                err_obj,
+                "Error in Validator",
+            ))
+        })?;
+        let balance = self.z_get_address_balance(taddrs).await?;
+        let checked_balance: i64 = match i64::try_from(balance.balance) {
+            Ok(balance) => balance,
+            Err(_) => {
+                return Err(Self::Error::TonicStatusError(tonic::Status::unknown(
+                    "Error: Error converting balance from u64 to i64.",
+                )));
+            }
+        };
+        Ok(Balance {
+            value_zat: checked_balance,
+        })
     }
 
     /// Returns the total balance for a list of taddrs
@@ -1542,7 +1559,44 @@ impl LightWalletIndexer for StateService {
     /// Return information about this lightwalletd instance and the blockchain
 
     async fn get_lightd_info(&self) -> Result<LightdInfo, Self::Error> {
-        todo!()
+        let blockchain_info = self.get_blockchain_info().await?;
+        let sapling_id = zebra_rpc::methods::ConsensusBranchIdHex::new(
+            zebra_chain::parameters::ConsensusBranchId::from_hex("76b809bb")
+                .map_err(|_e| {
+                    tonic::Status::internal(
+                        "Internal Error - Consesnsus Branch ID hex conversion failed",
+                    )
+                })?
+                .into(),
+        );
+        let sapling_activation_height = blockchain_info
+            .upgrades()
+            .get(&sapling_id)
+            .map_or(zebra_chain::block::Height(1), |sapling_json| {
+                sapling_json.into_parts().1
+            });
+
+        let consensus_branch_id = zebra_chain::parameters::ConsensusBranchId::from(
+            blockchain_info.consensus().into_parts().0,
+        )
+        .to_string();
+
+        Ok(LightdInfo {
+            version: self.data.build_info().version(),
+            vendor: "ZingoLabs ZainoD".to_string(),
+            taddr_support: true,
+            chain_name: blockchain_info.chain(),
+            sapling_activation_height: sapling_activation_height.0 as u64,
+            consensus_branch_id,
+            block_height: blockchain_info.blocks().0 as u64,
+            git_commit: self.data.build_info().commit_hash(),
+            branch: self.data.build_info().branch(),
+            build_date: self.data.build_info().build_date(),
+            build_user: self.data.build_info().build_user(),
+            estimated_height: blockchain_info.estimated_height().0 as u64,
+            zcashd_build: self.data.zebra_build(),
+            zcashd_subversion: self.data.zebra_subversion(),
+        })
     }
 
     /// Testing-only, requires lightwalletd --ping-very-insecure (do not enable in production)
