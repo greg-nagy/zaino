@@ -10,7 +10,7 @@ jobs:
     name: Build test artifacts
     container:
       image: zingodevops/zaino-ci
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest-large
     if: github.event.pull_request.draft == false
     # env:
     #   RUSTFLAGS: -D warnings
