@@ -14,7 +14,6 @@ use crate::{
     utils::{get_build_info, ServiceMetadata},
 };
 
-use tracing::{info, warn};
 use zaino_fetch::{
     chain::utils::ParseFromSlice,
     jsonrpsee::{
@@ -73,6 +72,7 @@ use tokio::{
 };
 use tonic::async_trait;
 use tower::{Service, ServiceExt};
+use tracing::{info, warn};
 
 macro_rules! expected_read_response {
     ($response:ident, $expected_variant:ident) => {
@@ -94,10 +94,6 @@ macro_rules! expected_read_response {
 pub struct StateService {
     /// `ReadeStateService` from Zebra-State.
     read_state_service: ReadStateService,
-    /// Tracks the latest chain tip.
-    _latest_chain_tip: LatestChainTip,
-    /// Monitors changes in the chain tip.
-    _chain_tip_change: ChainTipChange,
     /// Sync task handle.
     sync_task_handle: Option<tokio::task::JoinHandle<()>>,
     /// JsonRPC Client.
@@ -168,14 +164,14 @@ impl ZcashService for StateService {
             zebra_build_data.build,
             zebra_build_data.subversion,
         );
-        info!("Using Zcash stack: {}", data);
+        info!("Using Zcash build: {}", data);
 
         let block_cache = BlockCache::spawn(&rpc_client, config.clone().into()).await?;
 
         let mempool = Mempool::spawn(&rpc_client, None).await?;
 
         info!("Launching Chain Syncer..");
-        let (read_state_service, latest_chain_tip, chain_tip_change, sync_task_handle) =
+        let (read_state_service, _latest_chain_tip, _chain_tip_change, sync_task_handle) =
             init_read_state_with_syncer(
                 config.validator_config.clone(),
                 &config.network,
@@ -185,8 +181,6 @@ impl ZcashService for StateService {
 
         let mut state_service = Self {
             read_state_service,
-            _latest_chain_tip: latest_chain_tip,
-            _chain_tip_change: chain_tip_change,
             sync_task_handle: Some(sync_task_handle),
             rpc_client,
             block_cache,
@@ -198,7 +192,6 @@ impl ZcashService for StateService {
 
         state_service.status.store(StatusType::Syncing.into());
 
-        // TODO: Update initial sync to use latest_chain_tip, this should be done once zebra regtest is running rug free.
         poll_fn(|cx| state_service.read_state_service.poll_ready(cx)).await?;
 
         state_service.status.store(StatusType::Ready.into());
