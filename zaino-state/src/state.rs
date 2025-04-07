@@ -4,33 +4,29 @@ use crate::{
     config::StateServiceConfig,
     error::StateServiceError,
     indexer::ZcashIndexer,
+    local_cache::{BlockCache, BlockCacheSubscriber},
+    mempool::{Mempool, MempoolSubscriber},
     status::{AtomicStatus, StatusType},
     stream::CompactBlockStream,
     utils::{get_build_info, ServiceMetadata},
 };
 
-use chrono::Utc;
-use futures::{FutureExt as _, TryFutureExt as _};
-use hex::{FromHex as _, ToHex as _};
-use indexmap::IndexMap;
-use std::future::poll_fn;
-use std::io::Cursor;
-use std::str::FromStr as _;
-use tokio::time::timeout;
-use tonic::async_trait;
-use tower::{Service, ServiceExt};
-
-use zaino_fetch::jsonrpsee::connector::{JsonRpSeeConnector, RpcError};
-use zaino_fetch::jsonrpsee::response::TxidsResponse;
-use zaino_proto::proto::compact_formats::ChainMetadata;
-use zaino_proto::proto::compact_formats::{
-    CompactBlock, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactTx,
+use tracing::info;
+use zaino_fetch::jsonrpsee::{
+    connector::{JsonRpSeeConnector, RpcError},
+    response::TxidsResponse,
 };
-use zaino_proto::proto::service::BlockRange;
+use zaino_proto::proto::{
+    compact_formats::{
+        ChainMetadata, CompactBlock, CompactOrchardAction, CompactSaplingOutput,
+        CompactSaplingSpend, CompactTx,
+    },
+    service::BlockRange,
+};
 
 use zebra_chain::{
     block::{Header, Height, SerializedBlock},
-    chain_tip::{ChainTip, NetworkChainTipHeightEstimator},
+    chain_tip::NetworkChainTipHeightEstimator,
     parameters::{ConsensusBranchId, Network, NetworkUpgrade},
     serialization::{ZcashDeserialize, ZcashSerialize},
     subtree::NoteCommitmentSubtreeIndex,
@@ -56,6 +52,15 @@ use zebra_state::{
     ReadResponse, ReadStateService, TransactionLocation,
 };
 
+use chrono::Utc;
+use futures::{FutureExt as _, TryFutureExt as _};
+use hex::{FromHex as _, ToHex as _};
+use indexmap::IndexMap;
+use std::{future::poll_fn, io::Cursor, str::FromStr as _};
+use tokio::time::timeout;
+use tonic::async_trait;
+use tower::{Service, ServiceExt};
+
 macro_rules! expected_read_response {
     ($response:ident, $expected_variant:ident) => {
         match $response {
@@ -77,13 +82,17 @@ pub struct StateService {
     /// `ReadeStateService` from Zebra-State.
     read_state_service: ReadStateService,
     /// Tracks the latest chain tip.
-    latest_chain_tip: LatestChainTip,
+    _latest_chain_tip: LatestChainTip,
     /// Monitors changes in the chain tip.
     _chain_tip_change: ChainTipChange,
     /// Sync task handle.
     sync_task_handle: Option<tokio::task::JoinHandle<()>>,
     /// JsonRPC Client.
     rpc_client: JsonRpSeeConnector,
+    /// Local compact block cache.
+    block_cache: BlockCache,
+    /// Internal mempool.
+    mempool: Mempool,
     /// Service metadata.
     data: ServiceMetadata,
     /// StateService config data.
@@ -95,6 +104,8 @@ pub struct StateService {
 impl StateService {
     /// Initializes a new StateService instance and starts sync process.
     pub async fn spawn(config: StateServiceConfig) -> Result<Self, StateServiceError> {
+        info!("Launching Chain Fetch Service..");
+
         let rpc_client = JsonRpSeeConnector::new_from_config_parts(
             config.validator_cookie_auth,
             config.validator_rpc_address,
@@ -104,6 +115,20 @@ impl StateService {
         )
         .await?;
 
+        let zebra_build_data = rpc_client.get_info().await?;
+        let data = ServiceMetadata::new(
+            get_build_info(),
+            config.network.clone(),
+            zebra_build_data.build,
+            zebra_build_data.subversion,
+        );
+        info!("Using Zcash stack: {}", data);
+
+        let block_cache = BlockCache::spawn(&rpc_client, config.clone().into()).await?;
+
+        let mempool = Mempool::spawn(&rpc_client, None).await?;
+
+        info!("Launching Chain Syncer..");
         let (read_state_service, latest_chain_tip, chain_tip_change, sync_task_handle) =
             init_read_state_with_syncer(
                 config.validator_config.clone(),
@@ -112,21 +137,14 @@ impl StateService {
             )
             .await??;
 
-        let zebra_build_data = rpc_client.get_info().await?;
-
-        let data = ServiceMetadata::new(
-            get_build_info(),
-            config.network.clone(),
-            zebra_build_data.build,
-            zebra_build_data.subversion,
-        );
-
         let mut state_service = Self {
             read_state_service,
-            latest_chain_tip,
+            _latest_chain_tip: latest_chain_tip,
             _chain_tip_change: chain_tip_change,
             sync_task_handle: Some(sync_task_handle),
             rpc_client,
+            block_cache,
+            mempool,
             data,
             config,
             status: AtomicStatus::new(StatusType::Spawning.into()),
@@ -141,6 +159,18 @@ impl StateService {
 
         Ok(state_service)
     }
+
+    // /// returns a [`fetchservicesubscriber`].
+    // fn get_subscriber(&self) -> indexersubscriber<stateservicesubscriber> {
+    //     indexersubscriber::new(stateservicesubscriber {
+    //         read_state_service: self.read_state_service.clone(),
+    //         rpc_client: self.rpc_client.clone(),
+    //         block_cache: self.block_cache.subscriber(),
+    //         mempool: self.mempool.subscriber(),
+    //         data: self.data.clone(),
+    //         config: self.config.clone(),
+    //     })
+    // }
 
     /// Uses poll_ready to update the status of the `ReadStateService`.
     async fn fetch_status_from_validator(&self) -> StatusType {
@@ -183,6 +213,31 @@ impl StateService {
             }
         }
     }
+}
+
+impl Drop for StateService {
+    fn drop(&mut self) {
+        self.close()
+    }
+}
+
+/// A fetch service subscriber.
+///
+/// Subscribers should be
+#[derive(Debug, Clone)]
+pub struct StateServiceSubscriber {
+    /// Remote wrappper functionality for zebra's [`ReadStateService`].
+    pub read_state_service: ReadStateService,
+    /// JsonRPC Client.
+    pub rpc_client: JsonRpSeeConnector,
+    /// Local compact block cache.
+    pub block_cache: BlockCacheSubscriber,
+    /// Internal mempool.
+    pub mempool: MempoolSubscriber,
+    /// Service metadata.
+    pub data: ServiceMetadata,
+    /// StateService config data.
+    config: StateServiceConfig,
 }
 
 #[async_trait]
@@ -812,14 +867,6 @@ impl ZcashIndexer for StateService {
     }
 }
 
-impl Drop for StateService {
-    fn drop(&mut self) {
-        if let Some(handle) = self.sync_task_handle.take() {
-            handle.abort();
-        }
-    }
-}
-
 /// Private RPC methods, which are used as helper methods by the public ones
 ///
 /// These would be simple to add to the public interface if
@@ -1174,6 +1221,9 @@ impl StateService {
         &self,
         blockrange: BlockRange,
     ) -> Result<CompactBlockStream, StateServiceError> {
+        let mut state = self.read_state_service.clone();
+        let network = self.config.network.clone();
+
         let mut start: u32 = match blockrange.start {
             Some(block_id) => match block_id.height.try_into() {
                 Ok(height) => height,
@@ -1215,11 +1265,8 @@ impl StateService {
             false
         };
 
-        let cloned_read_state_service = self.read_state_service.clone();
-        let network = self.config.network.clone();
         let service_channel_size = self.config.service_channel_size;
         let service_timeout = self.config.service_timeout;
-        let latest_chain_tip = self.latest_chain_tip.clone();
         let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(service_channel_size as usize);
         tokio::spawn(async move {
             let timeout = timeout(
@@ -1232,7 +1279,7 @@ impl StateService {
                             height
                         };
                         match StateService::get_compact_block(
-                            &cloned_read_state_service,
+                            &state,
                             height.to_string(),
                             &network,
                         ).await {
@@ -1242,18 +1289,37 @@ impl StateService {
                                 };
                             }
                             Err(e) => {
-                                let chain_height = match latest_chain_tip.best_tip_height() {
-                                    Some(ch) => ch.0,
-                                    None => {
-                                    if let Err(e) = channel_tx
-                                        .send(Err(tonic::Status::unknown("No best tip height found")))
-                                        .await
-                                        {
-                                            eprintln!("Error: channel closed unexpectedly: {e}");
+                                let chain_height = match state
+                                    .ready()
+                                    .and_then(|service| service.call(ReadRequest::Tip))
+                                    .await {
+                                        Ok(response) => {
+                                            match  expected_read_response!(response, Tip) {
+                                                Some((height, _hash)) => {
+                                                    height.0
+                                                }
+                                                None => {
+                                                    if let Err(e) = channel_tx
+                                                        .send(Err(tonic::Status::unknown("No best tip height found")))
+                                                        .await
+                                                        {
+                                                            eprintln!("Error: channel closed unexpectedly: {e}");
+                                                        }
+                                                    break;
+                                                }
+                                            }
                                         }
-                                    break;
-                                    }
-                                };
+                                        Err(_) => {
+                                            if let Err(e) = channel_tx
+                                                .send(Err(tonic::Status::unknown("No best tip height found")))
+                                                .await
+                                                {
+                                                    eprintln!("Error: channel closed unexpectedly: {e}");
+                                                }
+                                            break;
+                                        }
+                                    };
+
                                 if height >= chain_height {
                                     match channel_tx
                                         .send(Err(tonic::Status::out_of_range(format!(
