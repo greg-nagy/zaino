@@ -10,7 +10,7 @@ use crate::{
 };
 
 use chrono::Utc;
-use futures::FutureExt as _;
+use futures::{FutureExt as _, TryFutureExt as _};
 use hex::{FromHex as _, ToHex as _};
 use indexmap::IndexMap;
 use std::future::poll_fn;
@@ -18,7 +18,7 @@ use std::io::Cursor;
 use std::str::FromStr as _;
 use tokio::time::timeout;
 use tonic::async_trait;
-use tower::Service;
+use tower::{Service, ServiceExt};
 
 use zaino_fetch::jsonrpsee::connector::{JsonRpSeeConnector, RpcError};
 use zaino_fetch::jsonrpsee::response::TxidsResponse;
@@ -142,35 +142,6 @@ impl StateService {
         Ok(state_service)
     }
 
-    /// A combined function that checks readiness using `poll_ready` and then performs the request.
-    /// If the service is busy, it waits until ready. If there's an error, it returns the error.
-    pub(crate) async fn checked_call(
-        &self,
-        req: zebra_state::ReadRequest,
-    ) -> Result<zebra_state::ReadResponse, StateServiceError> {
-        let mut read_state_service = self.read_state_service.clone();
-        poll_fn(|cx| read_state_service.poll_ready(cx)).await?;
-        read_state_service
-            .call(req)
-            .await
-            .map_err(StateServiceError::from)
-    }
-
-    /// A combined function that checks readiness using `poll_ready` and then performs the request.
-    /// If the service is busy, it waits until ready. If there's an error, it returns the error.
-    ///
-    /// Avoides taking `Self`.
-    pub(crate) async fn checked_call_decoupled(
-        mut read_state_service: ReadStateService,
-        req: zebra_state::ReadRequest,
-    ) -> Result<zebra_state::ReadResponse, StateServiceError> {
-        poll_fn(|cx| read_state_service.poll_ready(cx)).await?;
-        read_state_service
-            .call(req)
-            .await
-            .map_err(StateServiceError::from)
-    }
-
     /// Uses poll_ready to update the status of the `ReadStateService`.
     async fn fetch_status_from_validator(&self) -> StatusType {
         let mut read_state_service = self.read_state_service.clone();
@@ -229,7 +200,12 @@ impl ZcashIndexer for StateService {
     }
 
     async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, Self::Error> {
-        let response = self.checked_call(ReadRequest::TipPoolValues).await?;
+        let mut state = self.read_state_service.clone();
+
+        let response = state
+            .ready()
+            .and_then(|service| service.call(ReadRequest::TipPoolValues))
+            .await?;
         let (height, hash, balance) = match response {
             ReadResponse::TipPoolValues {
                 tip_height,
@@ -240,16 +216,25 @@ impl ZcashIndexer for StateService {
                 unreachable!("Unexpected response from state service: {unexpected:?}")
             }
         };
-        let usage_response = self.checked_call(ReadRequest::UsageInfo).await?;
+
+        let usage_response = state
+            .ready()
+            .and_then(|service| service.call(ReadRequest::UsageInfo))
+            .await?;
         let size_on_disk = expected_read_response!(usage_response, UsageInfo);
+
         let request = zebra_state::ReadRequest::BlockHeader(hash.into());
-        let response = self.checked_call(request).await?;
+        let response = state
+            .ready()
+            .and_then(|service| service.call(request))
+            .await?;
         let header = match response {
             ReadResponse::BlockHeader { header, .. } => header,
             unexpected => {
                 unreachable!("Unexpected response from state service: {unexpected:?}")
             }
         };
+
         let now = Utc::now();
         let zebra_estimated_height =
             NetworkChainTipHeightEstimator::new(header.time, height, &self.config.network)
@@ -259,6 +244,7 @@ impl ZcashIndexer for StateService {
         } else {
             zebra_estimated_height
         };
+
         let upgrades = IndexMap::from_iter(
             self.config
                 .network
@@ -288,6 +274,7 @@ impl ZcashIndexer for StateService {
                     })
                 }),
         );
+
         let next_block_height =
             (height + 1).expect("valid chain tips are a lot less than Height::MAX");
         let consensus = TipConsensusBranch::from_parts(
@@ -306,6 +293,7 @@ impl ZcashIndexer for StateService {
             )
             .inner(),
         );
+
         let difficulty =
             chain_tip_difficulty(self.config.network.clone(), self.read_state_service.clone())
                 .await
@@ -340,13 +328,17 @@ impl ZcashIndexer for StateService {
         &self,
         address_strings: AddressStrings,
     ) -> Result<AddressBalance, Self::Error> {
+        let mut state = self.read_state_service.clone();
+
         let strings_set = address_strings
             .valid_addresses()
             .map_err(|e| RpcError::new_from_errorobject(e, "invalid taddrs provided"))?;
-        let response = self
-            .checked_call(ReadRequest::AddressBalance(strings_set))
+        let response = state
+            .ready()
+            .and_then(|service| service.call(ReadRequest::AddressBalance(strings_set)))
             .await?;
         let balance = expected_read_response!(response, AddressBalance);
+
         Ok(AddressBalance {
             balance: u64::from(balance),
         })
@@ -369,12 +361,17 @@ impl ZcashIndexer for StateService {
         hash_or_height_string: String,
         verbosity: Option<u8>,
     ) -> Result<GetBlock, Self::Error> {
+        let mut state_1 = self.read_state_service.clone();
+
         let verbosity = verbosity.unwrap_or(1);
         let hash_or_height = HashOrHeight::from_str(&hash_or_height_string);
         match verbosity {
             0 => {
                 let request = ReadRequest::Block(hash_or_height?);
-                let response = self.checked_call(request).await?;
+                let response = state_1
+                    .ready()
+                    .and_then(|service| service.call(request))
+                    .await?;
                 let block = expected_read_response!(response, Block);
                 block.map(SerializedBlock::from).map(GetBlock::Raw).ok_or(
                     StateServiceError::RpcError(RpcError::new_from_legacycode(
@@ -384,16 +381,25 @@ impl ZcashIndexer for StateService {
                 )
             }
             1 | 2 => {
+                let mut state_2 = self.read_state_service.clone();
+
                 let hash_or_height = hash_or_height?;
                 let txids_or_fullblock_request = match verbosity {
                     1 => ReadRequest::TransactionIdsForBlock(hash_or_height),
                     2 => ReadRequest::Block(hash_or_height),
                     _ => unreachable!("verbosity is known to be 1 or 2"),
                 };
-
+                let txids_future = {
+                    let req = txids_or_fullblock_request;
+                    async move { state_1.ready().and_then(|service| service.call(req)).await }
+                };
+                let orchard_future = {
+                    let req = ReadRequest::OrchardTree(hash_or_height);
+                    async move { state_2.ready().and_then(|service| service.call(req)).await }
+                };
                 let (txids_or_fullblock, orchard_tree_response, header) = futures::join!(
-                    self.checked_call(txids_or_fullblock_request),
-                    self.checked_call(ReadRequest::OrchardTree(hash_or_height)),
+                    txids_future,
+                    orchard_future,
                     self.get_block_header(hash_or_height_string, Some(true))
                 );
 
@@ -449,7 +455,7 @@ impl ZcashIndexer for StateService {
                     Ok(unexpected) => {
                         unreachable!("Unexpected response from state service: {unexpected:?}")
                     }
-                    Err(e) => Err(e),
+                    Err(e) => Err(e.into()),
                 }?;
 
                 let orchard_tree_response = orchard_tree_response?;
@@ -503,9 +509,12 @@ impl ZcashIndexer for StateService {
     }
 
     async fn z_get_treestate(&self, hash_or_height: String) -> Result<GetTreestate, Self::Error> {
+        let mut state = self.read_state_service.clone();
+
         let hash_or_height = HashOrHeight::from_str(&hash_or_height)?;
-        let block_header_response = self
-            .checked_call(ReadRequest::BlockHeader(hash_or_height))
+        let block_header_response = state
+            .ready()
+            .and_then(|service| service.call(ReadRequest::BlockHeader(hash_or_height)))
             .await?;
         let (header, hash, height) = match block_header_response {
             ReadResponse::BlockHeader {
@@ -521,7 +530,9 @@ impl ZcashIndexer for StateService {
 
         let sapling = match NetworkUpgrade::Sapling.activation_height(&self.config.network) {
             Some(activation_height) if height >= activation_height => Some(
-                self.checked_call(ReadRequest::SaplingTree(hash_or_height))
+                state
+                    .ready()
+                    .and_then(|service| service.call(ReadRequest::SaplingTree(hash_or_height)))
                     .await?,
             ),
             _ => None,
@@ -529,9 +540,12 @@ impl ZcashIndexer for StateService {
         .and_then(|sap_response| {
             expected_read_response!(sap_response, SaplingTree).map(|tree| tree.to_rpc_bytes())
         });
+
         let orchard = match NetworkUpgrade::Nu5.activation_height(&self.config.network) {
             Some(activation_height) if height >= activation_height => Some(
-                self.checked_call(ReadRequest::OrchardTree(hash_or_height))
+                state
+                    .ready()
+                    .and_then(|service| service.call(ReadRequest::OrchardTree(hash_or_height)))
                     .await?,
             ),
             _ => None,
@@ -539,6 +553,7 @@ impl ZcashIndexer for StateService {
         .and_then(|orch_response| {
             expected_read_response!(orch_response, OrchardTree).map(|tree| tree.to_rpc_bytes())
         });
+
         Ok(GetTreestate::from_parts(
             hash,
             height,
@@ -555,10 +570,15 @@ impl ZcashIndexer for StateService {
         start_index: NoteCommitmentSubtreeIndex,
         limit: Option<NoteCommitmentSubtreeIndex>,
     ) -> Result<GetSubtrees, Self::Error> {
+        let mut state = self.read_state_service.clone();
+
         match pool.as_str() {
             "sapling" => {
                 let request = zebra_state::ReadRequest::SaplingSubtrees { start_index, limit };
-                let response = self.checked_call(request).await?;
+                let response = state
+                    .ready()
+                    .and_then(|service| service.call(request))
+                    .await?;
                 let sapling_subtrees = expected_read_response!(response, SaplingSubtrees);
                 let subtrees = sapling_subtrees
                     .values()
@@ -567,6 +587,7 @@ impl ZcashIndexer for StateService {
                         end_height: subtree.end_height,
                     })
                     .collect();
+
                 Ok(GetSubtrees {
                     pool,
                     start_index,
@@ -575,7 +596,10 @@ impl ZcashIndexer for StateService {
             }
             "orchard" => {
                 let request = zebra_state::ReadRequest::OrchardSubtrees { start_index, limit };
-                let response = self.checked_call(request).await?;
+                let response = state
+                    .ready()
+                    .and_then(|service| service.call(request))
+                    .await?;
                 let orchard_subtrees = expected_read_response!(response, OrchardSubtrees);
                 let subtrees = orchard_subtrees
                     .values()
@@ -584,6 +608,7 @@ impl ZcashIndexer for StateService {
                         end_height: subtree.end_height,
                     })
                     .collect();
+
                 Ok(GetSubtrees {
                     pool,
                     start_index,
@@ -602,6 +627,8 @@ impl ZcashIndexer for StateService {
         txid_hex: String,
         verbose: Option<u8>,
     ) -> Result<GetRawTransaction, Self::Error> {
+        let mut state = self.read_state_service.clone();
+
         let txid = zebra_chain::transaction::Hash::from_hex(txid_hex).map_err(|e| {
             RpcError::new_from_legacycode(LegacyCode::InvalidAddressOrKey, e.to_string())
         })?;
@@ -614,7 +641,9 @@ impl ZcashIndexer for StateService {
                     .find(|mempool_txid| *mempool_txid == txid.to_string())
             })
         });
-        let onchain_transaction_future = self.checked_call(ReadRequest::Transaction(txid));
+        let onchain_transaction_future = state
+            .ready()
+            .and_then(|service| service.call(ReadRequest::Transaction(txid)));
 
         futures::pin_mut!(mempool_transaction_future);
         futures::pin_mut!(onchain_transaction_future);
@@ -678,14 +707,16 @@ impl ZcashIndexer for StateService {
         &self,
         request: GetAddressTxIdsRequest,
     ) -> Result<Vec<String>, Self::Error> {
+        let mut state = self.read_state_service.clone();
+
         let (addresses, start, end) = request.into_parts();
-        let chain_height =
-            self.latest_chain_tip
-                .best_tip_height()
-                .ok_or(RpcError::new_from_legacycode(
-                    LegacyCode::Misc,
-                    "no blocks in chain",
-                ))?;
+        let response = state
+            .ready()
+            .and_then(|service| service.call(ReadRequest::Tip))
+            .await?;
+        let (chain_height, _chain_hash) = expected_read_response!(response, Tip).ok_or(
+            RpcError::new_from_legacycode(LegacyCode::Misc, "no blocks in chain"),
+        )?;
 
         let mut error_string = None;
         if start == 0 || end == 0 {
@@ -703,7 +734,6 @@ impl ZcashIndexer for StateService {
             "start {start:?} and end {end:?} must both be less than or equal to the chain tip {chain_height:?}")
             );
         }
-
         if let Some(e) = error_string {
             return Err(StateServiceError::RpcError(RpcError::new_from_legacycode(
                 LegacyCode::InvalidParameter,
@@ -718,9 +748,10 @@ impl ZcashIndexer for StateService {
 
             height_range: Height(start)..=Height(end),
         };
-
-        let response = self.checked_call(request).await?;
-
+        let response = state
+            .ready()
+            .and_then(|service| service.call(request))
+            .await?;
         let hashes = expected_read_response!(response, AddressesTransactionIds);
 
         let mut last_tx_location = TransactionLocation::from_usize(Height(0), 0);
@@ -747,13 +778,19 @@ impl ZcashIndexer for StateService {
         &self,
         address_strings: AddressStrings,
     ) -> Result<Vec<GetAddressUtxos>, Self::Error> {
+        let mut state = self.read_state_service.clone();
+
         let valid_addresses = address_strings
             .valid_addresses()
             .map_err(|e| RpcError::new_from_errorobject(e, "invalid address"))?;
         let request = ReadRequest::UtxosByAddresses(valid_addresses);
-        let response = self.checked_call(request).await?;
+        let response = state
+            .ready()
+            .and_then(|service| service.call(request))
+            .await?;
         let utxos = expected_read_response!(response, AddressUtxos);
         let mut last_output_location = OutputLocation::from_usize(Height(0), 0, 0);
+
         Ok(utxos
             .utxos()
             .map(|utxo| {
@@ -812,6 +849,7 @@ impl StateService {
         hash_or_height: String,
         verbose: Option<bool>,
     ) -> Result<GetBlockHeader, StateServiceError> {
+        let mut state = self.read_state_service.clone();
         let verbose = verbose.unwrap_or(true);
         let network = self.data.network().clone();
 
@@ -822,11 +860,12 @@ impl StateService {
             hash,
             height,
             next_block_hash,
-        } = self
-            .checked_call(zebra_state::ReadRequest::BlockHeader(hash_or_height))
+        } = state
+            .ready()
+            .and_then(|service| service.call(zebra_state::ReadRequest::BlockHeader(hash_or_height)))
             .await
             .map_err(|_| {
-                StateServiceError::RpcError(zaino_fetch::jsonrpsee::connector::RpcError {
+                StateServiceError::RpcError(RpcError {
                     // Compatibility with zcashd. Note that since this function
                     // is reused by getblock(), we return the errors expected
                     // by it (they differ whether a hash or a height was passed)
@@ -844,15 +883,17 @@ impl StateService {
         let response = if !verbose {
             GetBlockHeader::Raw(HexData(header.zcash_serialize_to_vec()?))
         } else {
-            let zebra_state::ReadResponse::SaplingTree(sapling_tree) = self
-                .checked_call(zebra_state::ReadRequest::SaplingTree(hash_or_height))
+            let zebra_state::ReadResponse::SaplingTree(sapling_tree) = state
+                .ready()
+                .and_then(|service| {
+                    service.call(zebra_state::ReadRequest::SaplingTree(hash_or_height))
+                })
                 .await?
             else {
                 return Err(StateServiceError::Custom(
                     "Unexpected response to SaplingTree request".to_string(),
                 ));
             };
-
             // This could be `None` if there's a chain reorg between state queries.
             let sapling_tree = sapling_tree.ok_or_else(|| {
                 StateServiceError::RpcError(zaino_fetch::jsonrpsee::connector::RpcError {
@@ -862,8 +903,9 @@ impl StateService {
                 })
             })?;
 
-            let zebra_state::ReadResponse::Depth(depth) = self
-                .checked_call(zebra_state::ReadRequest::Depth(hash))
+            let zebra_state::ReadResponse::Depth(depth) = state
+                .ready()
+                .and_then(|service| service.call(zebra_state::ReadRequest::Depth(hash)))
                 .await?
             else {
                 return Err(StateServiceError::Custom(
@@ -943,48 +985,50 @@ impl StateService {
         hash_or_height: String,
         network: &Network,
     ) -> Result<CompactBlock, StateServiceError> {
+        let mut state = read_state_service.clone();
+        let mut state_1 = read_state_service.clone();
         let hash_or_height: HashOrHeight = hash_or_height.parse()?;
-        let cloned_read_state_service = read_state_service.clone();
         let cloned_network = network.clone();
+
         let get_block_header_future = tokio::spawn(async move {
             let zebra_state::ReadResponse::BlockHeader {
                 header,
                 hash,
                 height,
                 next_block_hash,
-            } = StateService::checked_call_decoupled(
-                cloned_read_state_service.clone(),
-                zebra_state::ReadRequest::BlockHeader(hash_or_height),
-            )
-            .await
-            .map_err(|_| {
-                StateServiceError::RpcError(zaino_fetch::jsonrpsee::connector::RpcError {
-                    // Compatibility with zcashd. Note that since this function
-                    // is reused by getblock(), we return the errors expected
-                    // by it (they differ whether a hash or a height was passed)
-                    code: LegacyCode::InvalidParameter as i64,
-                    message: "block height not in best chain".to_string(),
-                    data: None,
+            } = state_1
+                .ready()
+                .and_then(|service| {
+                    service.call(zebra_state::ReadRequest::BlockHeader(hash_or_height))
                 })
-            })?
+                .await
+                .map_err(|_| {
+                    StateServiceError::RpcError(RpcError {
+                        // Compatibility with zcashd. Note that since this function
+                        // is reused by getblock(), we return the errors expected
+                        // by it (they differ whether a hash or a height was passed)
+                        code: LegacyCode::InvalidParameter as i64,
+                        message: "block height not in best chain".to_string(),
+                        data: None,
+                    })
+                })?
             else {
                 return Err(StateServiceError::Custom(
                     "Unexpected response to BlockHeader request".to_string(),
                 ));
             };
 
-            let zebra_state::ReadResponse::SaplingTree(sapling_tree) =
-                StateService::checked_call_decoupled(
-                    cloned_read_state_service.clone(),
-                    zebra_state::ReadRequest::SaplingTree(hash_or_height),
-                )
+            let zebra_state::ReadResponse::SaplingTree(sapling_tree) = state_1
+                .ready()
+                .and_then(|service| {
+                    service.call(zebra_state::ReadRequest::SaplingTree(hash_or_height))
+                })
                 .await?
             else {
                 return Err(StateServiceError::Custom(
                     "Unexpected response to SaplingTree request".to_string(),
                 ));
             };
-
             // This could be `None` if there's a chain reorg between state queries.
             let sapling_tree = sapling_tree.ok_or_else(|| {
                 StateServiceError::RpcError(zaino_fetch::jsonrpsee::connector::RpcError {
@@ -994,11 +1038,10 @@ impl StateService {
                 })
             })?;
 
-            let zebra_state::ReadResponse::Depth(depth) = StateService::checked_call_decoupled(
-                cloned_read_state_service,
-                zebra_state::ReadRequest::Depth(hash),
-            )
-            .await?
+            let zebra_state::ReadResponse::Depth(depth) = state_1
+                .ready()
+                .and_then(|service| service.call(zebra_state::ReadRequest::Depth(hash)))
+                .await?
             else {
                 return Err(StateServiceError::Custom(
                     "Unexpected response to Depth request".to_string(),
@@ -1054,16 +1097,15 @@ impl StateService {
             })
         });
 
-        let get_orchard_trees_future = StateService::checked_call_decoupled(
-            read_state_service.clone(),
-            zebra_state::ReadRequest::OrchardTree(hash_or_height),
-        );
+        let get_orchard_trees_future = {
+            let mut state_2 = read_state_service.clone();
+            let req = ReadRequest::OrchardTree(hash_or_height);
+            async move { state_2.ready().and_then(|service| service.call(req)).await }
+        };
 
-        let zebra_state::ReadResponse::Block(Some(block_raw)) =
-            StateService::checked_call_decoupled(
-                read_state_service.clone(),
-                zebra_state::ReadRequest::Block(hash_or_height),
-            )
+        let zebra_state::ReadResponse::Block(Some(block_raw)) = state
+            .ready()
+            .and_then(|service| service.call(zebra_state::ReadRequest::Block(hash_or_height)))
             .await?
         else {
             return Err(StateServiceError::RpcError(
