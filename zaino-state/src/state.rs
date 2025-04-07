@@ -112,6 +112,8 @@ pub struct StateService {
 
 impl StateService {
     /// Uses poll_ready to update the status of the `ReadStateService`.
+    ///
+    /// TODO: Remove use of `tokio::task::block_in_place`.
     fn fetch_status_from_validator(&self) -> StatusType {
         tokio::task::block_in_place(|| {
             let future = async {
@@ -2010,7 +2012,6 @@ pub(crate) async fn get_compact_block(
 ///
 /// LightWalletD currently does not return a fee and is not currently priority here.
 /// Please open an Issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer) if you require this functionality.
-#[allow(dead_code)]
 fn tx_to_compact(
     transaction: std::sync::Arc<Transaction>,
     index: u64,
