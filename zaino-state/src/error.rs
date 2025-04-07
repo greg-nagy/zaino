@@ -19,7 +19,7 @@ pub enum StateServiceError {
     #[error("RPC error: {0:?}")]
     RpcError(#[from] zaino_fetch::jsonrpsee::connector::RpcError),
 
-    // Error from the block cache.
+    /// Error from the block cache.
     #[error("Mempool error: {0}")]
     BlockCacheError(#[from] BlockCacheError),
 
