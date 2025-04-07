@@ -94,8 +94,9 @@ impl ZcashService for FetchService {
             zebra_build_data.build,
             zebra_build_data.subversion,
         );
+        info!("Using Zcash build: {}", data);
 
-        let block_cache = BlockCache::spawn(&fetcher, config.clone().into()).await?;
+        let block_cache = BlockCache::spawn(&fetcher, None, config.clone().into()).await?;
 
         let mempool = Mempool::spawn(&fetcher, None).await?;
 
