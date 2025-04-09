@@ -7,7 +7,7 @@ use zaino_proto::proto::service::{
 use zaino_state::{
     config::FetchServiceConfig,
     fetch::{FetchService, FetchServiceSubscriber},
-    indexer::{LightWalletIndexer as _, ZcashIndexer as _, ZcashService as _},
+    indexer::{LightWalletIndexer, ZcashIndexer as _, ZcashService as _},
     status::StatusType,
 };
 use zaino_testutils::{TestManager, ZCASHD_CHAIN_CACHE_DIR, ZEBRAD_CHAIN_CACHE_DIR};
@@ -608,10 +608,7 @@ async fn fetch_service_get_latest_block(validator: &str) {
 
     let json_service_get_latest_block = dbg!(BlockId {
         height: json_service_blockchain_info.blocks.0 as u64,
-        hash: json_service_blockchain_info
-            .best_block_hash
-            .bytes_in_display_order()
-            .to_vec(),
+        hash: json_service_blockchain_info.best_block_hash.0.to_vec(),
     });
 
     assert_eq!(fetch_service_get_latest_block.height, 2);
@@ -648,6 +645,15 @@ async fn fetch_service_get_block(validator: &str) {
         .unwrap());
 
     assert_eq!(fetch_service_get_block.height, block_id.height);
+    let block_id_by_hash = BlockId {
+        height: 0,
+        hash: fetch_service_get_block.hash.clone(),
+    };
+    let fetch_service_get_block_by_hash = fetch_service_subscriber
+        .get_block(block_id_by_hash.clone())
+        .await
+        .unwrap();
+    assert_eq!(fetch_service_get_block_by_hash.hash, block_id_by_hash.hash);
 
     test_manager.close().await;
 }
