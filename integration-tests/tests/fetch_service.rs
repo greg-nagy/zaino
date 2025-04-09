@@ -105,7 +105,7 @@ async fn fetch_service_get_address_balance_zcashd() {
 
 #[tokio::test]
 async fn fetch_service_get_address_balance_zebrad() {
-    fetch_service_get_address_balance(&ValidatorKind::Zcashd).await;
+    fetch_service_get_address_balance(&ValidatorKind::Zebrad).await;
 }
 
 async fn fetch_service_get_address_balance(validator: &ValidatorKind) {

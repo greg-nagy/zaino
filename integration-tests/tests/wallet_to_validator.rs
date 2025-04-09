@@ -40,7 +40,7 @@ mod wallet_basic {
 
     #[tokio::test]
     async fn zcashd_send_to_orchard() {
-        send_to_orchard(&ValidatorKind::Zebrad).await;
+        send_to_orchard(&ValidatorKind::Zcashd).await;
     }
 
     #[tokio::test]
@@ -98,7 +98,7 @@ mod wallet_basic {
 
     #[tokio::test]
     async fn zcashd_send_to_sapling() {
-        send_to_sapling(&ValidatorKind::Zebrad).await;
+        send_to_sapling(&ValidatorKind::Zcashd).await;
     }
 
     #[tokio::test]
@@ -156,7 +156,7 @@ mod wallet_basic {
 
     #[tokio::test]
     async fn zcashd_send_to_transparent() {
-        send_to_transparent(&ValidatorKind::Zebrad).await;
+        send_to_transparent(&ValidatorKind::Zcashd).await;
     }
 
     /// Bug documented in https://github.com/zingolabs/zaino/issues/145.
@@ -278,7 +278,7 @@ mod wallet_basic {
 
     #[tokio::test]
     async fn zcashd_send_to_all() {
-        send_to_all(&ValidatorKind::Zebrad).await;
+        send_to_all(&ValidatorKind::Zcashd).await;
     }
 
     #[tokio::test]
@@ -395,7 +395,7 @@ mod wallet_basic {
 
     #[tokio::test]
     async fn zcashd_shield() {
-        shield(&ValidatorKind::Zebrad).await;
+        shield(&ValidatorKind::Zcashd).await;
     }
 
     #[tokio::test]
@@ -478,7 +478,7 @@ mod wallet_basic {
 
     #[tokio::test]
     async fn zcashd_monitor_unverified_mempool() {
-        monitor_unverified_mempool(&ValidatorKind::Zebrad).await;
+        monitor_unverified_mempool(&ValidatorKind::Zcashd).await;
     }
 
     /// Bug documented in https://github.com/zingolabs/zaino/issues/144.

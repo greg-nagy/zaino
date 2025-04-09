@@ -434,7 +434,7 @@ mod tests {
     #[tokio::test]
     async fn launch_testmanager_zebrad() {
         let mut test_manager =
-            TestManager::launch(&ValidatorKind::Zcashd, None, None, false, true, true, false)
+            TestManager::launch(&ValidatorKind::Zebrad, None, None, false, true, true, false)
                 .await
                 .unwrap();
         assert_eq!(
