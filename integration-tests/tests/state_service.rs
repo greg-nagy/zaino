@@ -127,6 +127,7 @@ async fn state_service_check_info_regtest_with_cache_zebrad() {
     .await;
 }
 
+#[ignore = "requires fully synced testnet."]
 #[tokio::test]
 async fn state_service_check_info_testnet_zebrad() {
     state_service_check_info(
@@ -257,12 +258,12 @@ async fn state_service_check_info(
     test_manager.close().await;
 }
 
-#[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
 #[tokio::test]
 async fn state_service_get_address_balance_regtest_zebrad() {
     state_service_get_address_balance(&ValidatorKind::Zebrad).await;
 }
 
+#[ignore = "requires fully synced testnet."]
 #[tokio::test]
 async fn state_service_get_address_balance_testnet_zebrad() {
     state_service_get_address_balance_testnet().await;
@@ -366,6 +367,7 @@ async fn state_service_get_block_raw_regtest_zebrad() {
     .await;
 }
 
+#[ignore = "requires fully synced testnet."]
 #[tokio::test]
 async fn state_service_get_block_raw_testnet_zebrad() {
     state_service_get_block_raw(
@@ -411,6 +413,7 @@ async fn state_service_get_block_object_regtest_zebrad() {
     .await;
 }
 
+#[ignore = "requires fully synced testnet."]
 #[tokio::test]
 async fn state_service_get_block_object_testnet_zebrad() {
     state_service_get_block_object(
@@ -456,12 +459,12 @@ async fn state_service_get_block_object(
     test_manager.close().await;
 }
 
-#[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
 #[tokio::test]
 async fn state_service_get_raw_mempool_regtest_zebrad() {
     state_service_get_raw_mempool(&ValidatorKind::Zebrad).await;
 }
 
+#[ignore = "requires fully synced testnet."]
 #[tokio::test]
 async fn state_service_get_raw_mempool_testnet_zebrad() {
     state_service_get_raw_mempool_testnet().await;
@@ -556,12 +559,12 @@ async fn state_service_get_raw_mempool_testnet() {
     test_manager.close().await;
 }
 
-#[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
 #[tokio::test]
 async fn state_service_z_get_treestate_regtest_zebrad() {
     state_service_z_get_treestate(&ValidatorKind::Zebrad).await;
 }
 
+#[ignore = "requires fully synced testnet."]
 #[tokio::test]
 async fn state_service_z_get_treestate_testnet_zebrad() {
     state_service_z_get_treestate_testnet().await;
@@ -643,12 +646,12 @@ async fn state_service_z_get_treestate_testnet() {
     test_manager.close().await;
 }
 
-#[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
 #[tokio::test]
 async fn state_service_z_get_subtrees_by_index_regtest_zebrad() {
     state_service_z_get_subtrees_by_index(&ValidatorKind::Zebrad).await;
 }
 
+#[ignore = "requires fully synced testnet."]
 #[tokio::test]
 async fn state_service_z_get_subtrees_by_index_testnet_zebrad() {
     state_service_z_get_subtrees_by_index_testnet().await;
@@ -756,12 +759,12 @@ async fn state_service_z_get_subtrees_by_index_testnet() {
     test_manager.close().await;
 }
 
-#[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
 #[tokio::test]
 async fn state_service_get_raw_transaction_regtest_zebrad() {
     state_service_get_raw_transaction(&ValidatorKind::Zebrad).await;
 }
 
+#[ignore = "requires fully synced testnet."]
 #[tokio::test]
 async fn state_service_get_raw_transaction_testnet_zebrad() {
     state_service_get_raw_transaction_testnet().await;
@@ -847,12 +850,12 @@ async fn state_service_get_raw_transaction_testnet() {
     test_manager.close().await;
 }
 
-#[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
 #[tokio::test]
 async fn state_service_get_address_tx_ids_regtest_zebrad() {
     state_service_get_address_tx_ids(&ValidatorKind::Zebrad).await;
 }
 
+#[ignore = "requires fully synced testnet."]
 #[tokio::test]
 async fn state_service_get_address_tx_ids_testnet_zebrad() {
     state_service_get_address_tx_ids_testnet().await;
@@ -956,12 +959,12 @@ async fn state_service_get_address_tx_ids_testnet() {
     test_manager.close().await;
 }
 
-#[ignore = "currently fails due to error in TrustedChainSync [https://github.com/zingolabs/zaino/issues/231]."]
 #[tokio::test]
 async fn state_service_get_address_utxos_zebrad() {
     state_service_get_address_utxos(&ValidatorKind::Zebrad).await;
 }
 
+#[ignore = "requires fully synced testnet."]
 #[tokio::test]
 async fn state_service_get_address_utxos_testnet_zebrad() {
     state_service_get_address_utxos_testnet().await;
