@@ -26,9 +26,6 @@ zebra-chain = { workspace = true }
 zingolib = { workspace = true }
 testvectors = { workspace = true }
 
-# Test Utilities
-zingo-infra-testutils = { workspace = true }
-
 # Tracing
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["fmt", "env-filter", "time"] }

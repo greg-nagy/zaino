@@ -277,7 +277,30 @@ pub struct TestManager {
     pub clients: Option<Clients>,
 }
 
-use zingo_infra_testutils::services;
+// NOTE: this should be migrated to zingolib when LocalNet replaces regtest manager in zingoilb::testutils
+/// Builds faucet (miner) and recipient lightclients for local network integration testing
+pub async fn build_lightclients(
+    lightclient_dir: PathBuf,
+    indexer_port: portpicker::Port,
+) -> (LightClient, LightClient) {
+    let uri = format!("http://127.0.0.1:{}", indexer_port)
+        .try_into()
+        .unwrap();
+    let mut client_builder = ClientBuilder::new(uri, lightclient_dir);
+    let faucet = client_builder
+        .build_faucet(true, RegtestNetwork::all_upgrades_active())
+        .await;
+    let recipient = client_builder
+        .build_client(
+            seeds::HOSPITAL_MUSEUM_SEED.to_string(),
+            1,
+            true,
+            RegtestNetwork::all_upgrades_active(),
+        )
+        .await;
+
+    (faucet, recipient)
+}
 impl TestManager {
     /// Launches zcash-local-net<Empty, Validator>.
     ///
