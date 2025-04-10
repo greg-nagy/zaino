@@ -13,7 +13,6 @@ use zaino_state::{
 use zaino_testutils::{TestManager, ValidatorKind, ZCASHD_CHAIN_CACHE_DIR, ZEBRAD_CHAIN_CACHE_DIR};
 use zebra_chain::{parameters::Network, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest};
-use zingo_infra_testutils::services::validator::Validator as _;
 
 #[tokio::test]
 async fn launch_fetch_service_zcashd_regtest_no_cache() {

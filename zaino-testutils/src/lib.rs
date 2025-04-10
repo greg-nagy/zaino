@@ -9,9 +9,15 @@ use std::{
     path::PathBuf,
 };
 use tempfile::TempDir;
-use testvectors::REG_O_ADDR_FROM_ABANDONART;
+use testvectors::{seeds, REG_O_ADDR_FROM_ABANDONART};
 use tracing_subscriber::EnvFilter;
-use zingo_infra_services::validator::Validator;
+use zcash_client_backend::proto::service::compact_tx_streamer_client::CompactTxStreamerClient;
+pub use zingo_infra_services as services;
+pub use zingo_infra_services::network::Network;
+use zingo_netutils::{GetClientError, GrpcConnector, UnderlyingService};
+use zingolib::{
+    config::RegtestNetwork, lightclient::LightClient, testutils::scenarios::setup::ClientBuilder,
+};
 
 /// Path for zcashd binary.
 pub static ZCASHD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
@@ -208,7 +214,7 @@ impl zingo_infra_services::validator::Validator for LocalNet {
         }
     }
 
-    fn network(&self) -> zingo_infra_services::network::Network {
+    fn network(&self) -> Network {
         match self {
             LocalNet::Zcashd(net) => net.validator().network(),
             LocalNet::Zebrad(net) => *net.validator().network(),
@@ -227,7 +233,7 @@ impl zingo_infra_services::validator::Validator for LocalNet {
     fn load_chain(
         chain_cache: PathBuf,
         validator_data_dir: PathBuf,
-        validator_network: zingo_infra_services::network::Network,
+        validator_network: Network,
     ) -> PathBuf {
         if chain_cache.to_string_lossy().contains("zcashd") {
             zingo_infra_services::validator::Zcashd::load_chain(
@@ -281,7 +287,7 @@ pub struct TestManager {
     /// Data directory for the validator.
     pub data_dir: PathBuf,
     /// Network (chain) type:
-    pub network: zingo_infra_services::network::Network,
+    pub network: Network,
     /// Zebrad/Zcashd JsonRpc listen address.
     pub zebrad_rpc_listen_address: SocketAddr,
     /// Zaino Indexer JoinHandle.
@@ -292,16 +298,18 @@ pub struct TestManager {
     pub clients: Option<Clients>,
 }
 
+fn make_uri(indexer_port: portpicker::Port) -> http::Uri {
+    format!("http://127.0.0.1:{}", indexer_port)
+        .try_into()
+        .unwrap()
+}
 // NOTE: this should be migrated to zingolib when LocalNet replaces regtest manager in zingoilb::testutils
 /// Builds faucet (miner) and recipient lightclients for local network integration testing
-pub async fn build_lightclients(
+async fn build_lightclients(
     lightclient_dir: PathBuf,
     indexer_port: portpicker::Port,
 ) -> (LightClient, LightClient) {
-    let uri = format!("http://127.0.0.1:{}", indexer_port)
-        .try_into()
-        .unwrap();
-    let mut client_builder = ClientBuilder::new(uri, lightclient_dir);
+    let mut client_builder = ClientBuilder::new(make_uri(indexer_port), lightclient_dir);
     let faucet = client_builder
         .build_faucet(true, RegtestNetwork::all_upgrades_active())
         .await;
@@ -422,7 +430,7 @@ impl TestManager {
         // Launch Zingolib Lightclients:
         let clients = if enable_clients {
             let lightclient_dir = tempfile::tempdir().unwrap();
-            let lightclients = zingo_infra_testutils::client::build_lightclients(
+            let lightclients = build_lightclients(
                 lightclient_dir.path().to_path_buf(),
                 zaino_grpc_listen_address
                     .expect("Error launching zingo lightclients. `enable_zaino` is None.")
@@ -465,6 +473,13 @@ impl Drop for TestManager {
     }
 }
 
+/// Builds a client for creating RPC requests to the indexer/light-node
+pub fn build_client(
+    uri: http::Uri,
+) -> impl std::future::Future<Output = Result<CompactTxStreamerClient<UnderlyingService>, GetClientError>>
+{
+    GrpcConnector::new(uri).get_client()
+}
 #[cfg(test)]
 mod tests {
     use super::*;
