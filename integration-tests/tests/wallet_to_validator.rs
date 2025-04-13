@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 use zaino_testutils::TestManager;
-use zingo_infra_testutils::services::validator::Validator;
+use zaino_testutils::Validator as _;
 use zingolib::testutils::lightclient::from_inputs;
 
 mod wallet_basic {

@@ -4,12 +4,13 @@ use zaino_state::{
     indexer::{ZcashIndexer, ZcashService as _},
     state::StateService,
 };
+use zaino_testutils::services;
+use zaino_testutils::Validator as _;
 use zaino_testutils::{
     TestManager, ValidatorKind, ZEBRAD_CHAIN_CACHE_DIR, ZEBRAD_TESTNET_CACHE_DIR,
 };
 use zebra_chain::{parameters::Network, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetInfo};
-use zingo_infra_testutils::services::{self, validator::Validator as _};
 
 async fn create_test_manager_and_services(
     validator: &ValidatorKind,

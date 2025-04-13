@@ -14,6 +14,7 @@ use tracing_subscriber::EnvFilter;
 use zcash_client_backend::proto::service::compact_tx_streamer_client::CompactTxStreamerClient;
 pub use zingo_infra_services as services;
 pub use zingo_infra_services::network::Network;
+pub use zingo_infra_services::validator::Validator;
 use zingo_netutils::{GetClientError, GrpcConnector, UnderlyingService};
 use zingolib::{
     config::RegtestNetwork, lightclient::LightClient, testutils::scenarios::setup::ClientBuilder,
@@ -598,10 +599,9 @@ mod tests {
                     .zaino_grpc_listen_address
                     .expect("Zaino listen port not available but zaino is active.")
                     .port(),
-            ),
-        )
-        .await
-        .unwrap();
+            ))
+            .await
+            .unwrap();
         dbg!(grpc_client
             .get_lightd_info(tonic::Request::new(
                 zcash_client_backend::proto::service::Empty {},
@@ -623,10 +623,9 @@ mod tests {
                     .zaino_grpc_listen_address
                     .expect("Zaino listen port is not available but zaino is active.")
                     .port(),
-            ),
-        )
-        .await
-        .unwrap();
+            ))
+            .await
+            .unwrap();
         dbg!(grpc_client
             .get_lightd_info(tonic::Request::new(
                 zcash_client_backend::proto::service::Empty {},

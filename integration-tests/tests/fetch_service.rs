@@ -10,6 +10,7 @@ use zaino_state::{
     indexer::{LightWalletIndexer, ZcashIndexer as _, ZcashService as _},
     status::StatusType,
 };
+use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind, ZCASHD_CHAIN_CACHE_DIR, ZEBRAD_CHAIN_CACHE_DIR};
 use zebra_chain::{parameters::Network, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest};
