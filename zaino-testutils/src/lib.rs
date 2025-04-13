@@ -593,15 +593,14 @@ mod tests {
             TestManager::launch(&ValidatorKind::Zebrad, None, None, true, true, true, false)
                 .await
                 .unwrap();
-        let mut grpc_client =
-            zingo_infra_testutils::client::build_client(services::network::localhost_uri(
-                test_manager
-                    .zaino_grpc_listen_address
-                    .expect("Zaino listen port not available but zaino is active.")
-                    .port(),
-            ))
-            .await
-            .unwrap();
+        let mut grpc_client = build_client(services::network::localhost_uri(
+            test_manager
+                .zaino_grpc_listen_address
+                .expect("Zaino listen port not available but zaino is active.")
+                .port(),
+        ))
+        .await
+        .unwrap();
         dbg!(grpc_client
             .get_lightd_info(tonic::Request::new(
                 zcash_client_backend::proto::service::Empty {},
@@ -617,15 +616,14 @@ mod tests {
             TestManager::launch(&ValidatorKind::Zcashd, None, None, true, true, true, false)
                 .await
                 .unwrap();
-        let mut grpc_client =
-            zingo_infra_testutils::client::build_client(services::network::localhost_uri(
-                test_manager
-                    .zaino_grpc_listen_address
-                    .expect("Zaino listen port is not available but zaino is active.")
-                    .port(),
-            ))
-            .await
-            .unwrap();
+        let mut grpc_client = build_client(services::network::localhost_uri(
+            test_manager
+                .zaino_grpc_listen_address
+                .expect("Zaino listen port is not available but zaino is active.")
+                .port(),
+        ))
+        .await
+        .unwrap();
         dbg!(grpc_client
             .get_lightd_info(tonic::Request::new(
                 zcash_client_backend::proto::service::Empty {},
