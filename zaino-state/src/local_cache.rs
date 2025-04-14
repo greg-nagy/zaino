@@ -58,7 +58,7 @@ impl BlockCache {
 
         Ok(BlockCache {
             fetcher: fetcher.clone(),
-            state: state.map(|state| state.clone()),
+            state: state.cloned(),
             non_finalised_state,
             finalised_state,
             config,

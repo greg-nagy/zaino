@@ -171,7 +171,7 @@ impl FinalisedState {
 
         let mut finalised_state = FinalisedState {
             fetcher: fetcher.clone(),
-            state: state.map(|state| state.clone()),
+            state: state.cloned(),
             database,
             heights_to_hashes,
             hashes_to_blocks,

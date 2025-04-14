@@ -1400,8 +1400,6 @@ impl LightWalletIndexer for StateServiceSubscriber {
     }
 
     /// Same as GetBlockRange except actions contain only nullifiers
-    ///
-    /// NOTE: Currently this only returns Orchard nullifiers to follow Lightwalletd functionality but Sapling could be added if required by wallets.
     async fn get_block_range_nullifiers(
         &self,
         request: BlockRange,
