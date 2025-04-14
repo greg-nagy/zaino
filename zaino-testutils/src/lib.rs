@@ -16,8 +16,9 @@ pub use zingo_infra_services as services;
 pub use zingo_infra_services::network::Network;
 pub use zingo_infra_services::validator::Validator;
 use zingo_netutils::{GetClientError, GrpcConnector, UnderlyingService};
-use zingolib::{
-    config::RegtestNetwork, lightclient::LightClient, testutils::scenarios::setup::ClientBuilder,
+use zingolib::{config::RegtestNetwork, testutils::scenarios::setup::ClientBuilder};
+pub use zingolib::{
+    get_base_address_macro, lightclient::LightClient, testutils::lightclient::from_inputs,
 };
 
 /// Path for zcashd binary.

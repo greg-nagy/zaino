@@ -2157,7 +2157,6 @@ dependencies = [
  "zebra-chain 1.0.0-beta.45 (git+https://github.com/ZcashFoundation/zebra.git?rev=0d201a59f812d7312239f488f9c8beea73cd64d4)",
  "zebra-rpc 1.0.0-beta.45 (git+https://github.com/ZcashFoundation/zebra.git?rev=0d201a59f812d7312239f488f9c8beea73cd64d4)",
  "zebra-state 1.0.0-beta.45 (git+https://github.com/ZcashFoundation/zebra.git?rev=0d201a59f812d7312239f488f9c8beea73cd64d4)",
- "zingolib",
 ]
 
 [[package]]
