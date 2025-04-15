@@ -8,7 +8,7 @@ use zaino_testutils::from_inputs;
 use zaino_testutils::TestManager;
 use zaino_testutils::{Validator as _, ValidatorKind};
 
-async fn connect_to_node_get_info(validator: &ValidatorKind) {
+async fn connect_to_node_get_info_for_validator(validator: &ValidatorKind) {
     let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
         .await
         .unwrap();
@@ -336,7 +336,7 @@ async fn send_to_all(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-async fn shield(validator: &ValidatorKind) {
+async fn shield_for_validator(validator: &ValidatorKind) {
     let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
         .await
         .unwrap();
@@ -409,7 +409,7 @@ async fn shield(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-async fn monitor_unverified_mempool(validator: &ValidatorKind) {
+async fn monitor_unverified_mempool_for_validator(validator: &ValidatorKind) {
     let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
         .await
         .unwrap();
@@ -563,42 +563,42 @@ mod zcashd {
     use super::*;
 
     #[tokio::test]
-    async fn zcashd_connect_to_node_get_info() {
-        connect_to_node_get_info(&ValidatorKind::Zcashd).await;
+    async fn connect_to_node_get_info() {
+        connect_to_node_get_info_for_validator(&ValidatorKind::Zcashd).await;
     }
 
     mod sent_to {
         use super::*;
 
         #[tokio::test]
-        pub(crate) async fn zcashd_send_to_orchard() {
+        pub(crate) async fn orchard() {
             send_to_orchard(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test]
-        pub(crate) async fn zcashd_send_to_sapling() {
+        pub(crate) async fn sapling() {
             send_to_sapling(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test]
-        pub(crate) async fn zcashd_send_to_transparent() {
+        pub(crate) async fn transparent() {
             send_to_transparent(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test]
-        pub(crate) async fn zcashd_send_to_all() {
+        pub(crate) async fn all() {
             send_to_all(&ValidatorKind::Zcashd).await;
         }
     }
 
     #[tokio::test]
-    async fn zcashd_shield() {
-        shield(&ValidatorKind::Zcashd).await;
+    async fn shield() {
+        shield_for_validator(&ValidatorKind::Zcashd).await;
     }
 
     #[tokio::test]
-    async fn zcashd_monitor_unverified_mempool() {
-        monitor_unverified_mempool(&ValidatorKind::Zcashd).await;
+    async fn monitor_unverified_mempool() {
+        monitor_unverified_mempool_for_validator(&ValidatorKind::Zcashd).await;
     }
 }
 
@@ -607,40 +607,40 @@ mod zebrad {
     use super::*;
 
     #[tokio::test]
-    async fn zebrad_connect_to_node_get_info() {
-        connect_to_node_get_info(&ValidatorKind::Zebrad).await;
+    async fn connect_to_node_get_info() {
+        connect_to_node_get_info_for_validator(&ValidatorKind::Zebrad).await;
     }
     mod send_to {
         use super::*;
 
         #[tokio::test]
-        pub(crate) async fn zebrad_send_to_sapling() {
+        pub(crate) async fn sapling() {
             send_to_sapling(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test]
-        pub(crate) async fn zebrad_send_to_orchard() {
+        pub(crate) async fn orchard() {
             send_to_orchard(&ValidatorKind::Zebrad).await;
         }
 
         /// Bug documented in https://github.com/zingolabs/zaino/issues/145.
         #[tokio::test]
-        pub(crate) async fn zebrad_send_to_transparent() {
+        pub(crate) async fn transparent() {
             send_to_transparent(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test]
-        pub(crate) async fn zebrad_send_to_all() {
+        pub(crate) async fn all() {
             send_to_all(&ValidatorKind::Zebrad).await;
         }
     }
     #[tokio::test]
-    async fn zebrad_shield() {
-        shield(&ValidatorKind::Zebrad).await;
+    async fn shield() {
+        shield_for_validator(&ValidatorKind::Zebrad).await;
     }
     /// Bug documented in https://github.com/zingolabs/zaino/issues/144.
     #[tokio::test]
-    async fn zebrad_monitor_unverified_mempool() {
-        monitor_unverified_mempool(&ValidatorKind::Zebrad).await;
+    async fn monitor_unverified_mempool() {
+        monitor_unverified_mempool_for_validator(&ValidatorKind::Zebrad).await;
     }
 }
