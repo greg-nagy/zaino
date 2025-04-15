@@ -108,7 +108,7 @@ impl ZcashService for FetchService {
             config,
         };
 
-        while fetch_service.status() != StatusType::Ready {
+        while fetch_service.status().await != StatusType::Ready {
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
 
@@ -127,7 +127,7 @@ impl ZcashService for FetchService {
     }
 
     /// Fetches the current status
-    fn status(&self) -> StatusType {
+    async fn status(&self) -> StatusType {
         let mempool_status = self.mempool.status();
         let block_cache_status = self.block_cache.status();
 
