@@ -567,24 +567,28 @@ mod zcashd {
         connect_to_node_get_info(&ValidatorKind::Zcashd).await;
     }
 
-    #[tokio::test]
-    async fn zcashd_send_to_orchard() {
-        send_to_orchard(&ValidatorKind::Zcashd).await;
-    }
+    mod sent_to {
+        use super::*;
 
-    #[tokio::test]
-    async fn zcashd_send_to_sapling() {
-        send_to_sapling(&ValidatorKind::Zcashd).await;
-    }
+        #[tokio::test]
+        pub(crate) async fn zcashd_send_to_orchard() {
+            send_to_orchard(&ValidatorKind::Zcashd).await;
+        }
 
-    #[tokio::test]
-    async fn zcashd_send_to_transparent() {
-        send_to_transparent(&ValidatorKind::Zcashd).await;
-    }
+        #[tokio::test]
+        pub(crate) async fn zcashd_send_to_sapling() {
+            send_to_sapling(&ValidatorKind::Zcashd).await;
+        }
 
-    #[tokio::test]
-    async fn zcashd_send_to_all() {
-        send_to_all(&ValidatorKind::Zcashd).await;
+        #[tokio::test]
+        pub(crate) async fn zcashd_send_to_transparent() {
+            send_to_transparent(&ValidatorKind::Zcashd).await;
+        }
+
+        #[tokio::test]
+        pub(crate) async fn zcashd_send_to_all() {
+            send_to_all(&ValidatorKind::Zcashd).await;
+        }
     }
 
     #[tokio::test]
@@ -606,22 +610,29 @@ mod zebrad {
     async fn zebrad_connect_to_node_get_info() {
         connect_to_node_get_info(&ValidatorKind::Zebrad).await;
     }
-    #[tokio::test]
-    async fn zebrad_send_to_sapling() {
-        send_to_sapling(&ValidatorKind::Zebrad).await;
-    }
-    #[tokio::test]
-    async fn zebrad_send_to_orchard() {
-        send_to_orchard(&ValidatorKind::Zebrad).await;
-    }
-    /// Bug documented in https://github.com/zingolabs/zaino/issues/145.
-    #[tokio::test]
-    async fn zebrad_send_to_transparent() {
-        send_to_transparent(&ValidatorKind::Zebrad).await;
-    }
-    #[tokio::test]
-    async fn zebrad_send_to_all() {
-        send_to_all(&ValidatorKind::Zebrad).await;
+    mod send_to {
+        use super::*;
+
+        #[tokio::test]
+        pub(crate) async fn zebrad_send_to_sapling() {
+            send_to_sapling(&ValidatorKind::Zebrad).await;
+        }
+
+        #[tokio::test]
+        pub(crate) async fn zebrad_send_to_orchard() {
+            send_to_orchard(&ValidatorKind::Zebrad).await;
+        }
+
+        /// Bug documented in https://github.com/zingolabs/zaino/issues/145.
+        #[tokio::test]
+        pub(crate) async fn zebrad_send_to_transparent() {
+            send_to_transparent(&ValidatorKind::Zebrad).await;
+        }
+
+        #[tokio::test]
+        pub(crate) async fn zebrad_send_to_all() {
+            send_to_all(&ValidatorKind::Zebrad).await;
+        }
     }
     #[tokio::test]
     async fn zebrad_shield() {
