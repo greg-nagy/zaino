@@ -155,22 +155,22 @@ mod zcashd {
     use crate::{launch_local_cache, launch_local_cache_process_n_block_batches};
 
     #[tokio::test]
-    async fn zcashd_local_cache_launch_no_db() {
+    async fn launch_no_db() {
         launch_local_cache(&ValidatorKind::Zcashd, true).await;
     }
 
     #[tokio::test]
-    async fn zcashd_local_cache_launch_with_db() {
+    async fn launch_with_db() {
         launch_local_cache(&ValidatorKind::Zcashd, false).await;
     }
 
     #[tokio::test]
-    async fn zcashd_local_cache_process_100_blocks() {
+    async fn process_100_blocks() {
         launch_local_cache_process_n_block_batches(&ValidatorKind::Zcashd, 1).await;
     }
 
     #[tokio::test]
-    async fn zcashd_local_cache_process_200_blocks() {
+    async fn process_200_blocks() {
         launch_local_cache_process_n_block_batches(&ValidatorKind::Zcashd, 2).await;
     }
 }
@@ -181,22 +181,22 @@ mod zebrad {
     use crate::{launch_local_cache, launch_local_cache_process_n_block_batches};
 
     #[tokio::test]
-    async fn zebrad_local_cache_launch_no_db() {
+    async fn launch_no_db() {
         launch_local_cache(&ValidatorKind::Zebrad, true).await;
     }
 
     #[tokio::test]
-    async fn zebrad_local_cache_launch_with_db() {
+    async fn launch_with_db() {
         launch_local_cache(&ValidatorKind::Zebrad, false).await;
     }
 
     #[tokio::test]
-    async fn zebrad_local_cache_process_100_blocks() {
+    async fn process_100_blocks() {
         launch_local_cache_process_n_block_batches(&ValidatorKind::Zebrad, 1).await;
     }
 
     #[tokio::test]
-    async fn zebrad_local_cache_process_200_blocks() {
+    async fn process_200_blocks() {
         launch_local_cache_process_n_block_batches(&ValidatorKind::Zebrad, 2).await;
     }
 }
