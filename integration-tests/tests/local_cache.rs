@@ -86,18 +86,8 @@ async fn zcashd_local_cache_launch_no_db() {
 }
 
 #[tokio::test]
-async fn zebrad_local_cache_launch_no_db() {
-    launch_local_cache(&ValidatorKind::Zebrad, true).await;
-}
-
-#[tokio::test]
 async fn zcashd_local_cache_launch_with_db() {
     launch_local_cache(&ValidatorKind::Zcashd, false).await;
-}
-
-#[tokio::test]
-async fn zebrad_local_cache_launch_with_db() {
-    launch_local_cache(&ValidatorKind::Zebrad, false).await;
 }
 
 async fn launch_local_cache(validator: &ValidatorKind, no_db: bool) {
@@ -108,18 +98,8 @@ async fn launch_local_cache(validator: &ValidatorKind, no_db: bool) {
 }
 
 #[tokio::test]
-async fn zebrad_local_cache_process_100_blocks() {
-    launch_local_cache_process_n_block_batches(&ValidatorKind::Zebrad, 1).await;
-}
-
-#[tokio::test]
 async fn zcashd_local_cache_process_100_blocks() {
     launch_local_cache_process_n_block_batches(&ValidatorKind::Zcashd, 1).await;
-}
-
-#[tokio::test]
-async fn zebrad_local_cache_process_200_blocks() {
-    launch_local_cache_process_n_block_batches(&ValidatorKind::Zebrad, 2).await;
 }
 
 #[tokio::test]
@@ -186,5 +166,33 @@ async fn launch_local_cache_process_n_block_batches(validator: &ValidatorKind, b
         dbg!(non_finalised_state_blocks.last());
         dbg!(finalised_state_blocks.first());
         dbg!(finalised_state_blocks.last());
+    }
+}
+
+mod zcashd {}
+
+mod zebrad {
+    use zaino_testutils::ValidatorKind;
+
+    use crate::{launch_local_cache, launch_local_cache_process_n_block_batches};
+
+    #[tokio::test]
+    async fn zebrad_local_cache_launch_no_db() {
+        launch_local_cache(&ValidatorKind::Zebrad, true).await;
+    }
+
+    #[tokio::test]
+    async fn zebrad_local_cache_launch_with_db() {
+        launch_local_cache(&ValidatorKind::Zebrad, false).await;
+    }
+
+    #[tokio::test]
+    async fn zebrad_local_cache_process_100_blocks() {
+        launch_local_cache_process_n_block_batches(&ValidatorKind::Zebrad, 1).await;
+    }
+
+    #[tokio::test]
+    async fn zebrad_local_cache_process_200_blocks() {
+        launch_local_cache_process_n_block_batches(&ValidatorKind::Zebrad, 2).await;
     }
 }
