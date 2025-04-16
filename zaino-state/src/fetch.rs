@@ -94,8 +94,9 @@ impl ZcashService for FetchService {
             zebra_build_data.build,
             zebra_build_data.subversion,
         );
+        info!("Using Zcash build: {}", data);
 
-        let block_cache = BlockCache::spawn(&fetcher, config.clone().into()).await?;
+        let block_cache = BlockCache::spawn(&fetcher, None, config.clone().into()).await?;
 
         let mempool = Mempool::spawn(&fetcher, None).await?;
 
@@ -107,7 +108,7 @@ impl ZcashService for FetchService {
             config,
         };
 
-        while fetch_service.status() != StatusType::Ready {
+        while fetch_service.status().await != StatusType::Ready {
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
 
@@ -126,7 +127,7 @@ impl ZcashService for FetchService {
     }
 
     /// Fetches the current status
-    fn status(&self) -> StatusType {
+    async fn status(&self) -> StatusType {
         let mempool_status = self.mempool.status();
         let block_cache_status = self.block_cache.status();
 
