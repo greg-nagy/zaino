@@ -7,9 +7,7 @@ use zaino_state::{
 use zaino_testutils::from_inputs;
 use zaino_testutils::services;
 use zaino_testutils::Validator as _;
-use zaino_testutils::{
-    TestManager, ValidatorKind, ZEBRAD_CHAIN_CACHE_DIR, ZEBRAD_TESTNET_CACHE_DIR,
-};
+use zaino_testutils::{TestManager, ValidatorKind, ZEBRAD_TESTNET_CACHE_DIR};
 use zebra_chain::{parameters::Network, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetInfo};
 
@@ -1046,162 +1044,172 @@ async fn state_service_get_address_utxos_testnet() {
     test_manager.close().await;
 }
 
-mod check_info {
+mod zebrad {
 
     use super::*;
 
-    #[tokio::test]
-    async fn state_service_check_info_regtest_no_cache_zebrad() {
-        state_service_check_info(
-            &ValidatorKind::Zebrad,
-            None,
-            services::network::Network::Regtest,
-        )
-        .await;
+    pub(crate) mod check_info {
+
+        use super::*;
+        use zaino_testutils::ZEBRAD_CHAIN_CACHE_DIR;
+
+        #[tokio::test]
+        async fn regtest_no_cache() {
+            state_service_check_info(
+                &ValidatorKind::Zebrad,
+                None,
+                services::network::Network::Regtest,
+            )
+            .await;
+        }
+
+        #[tokio::test]
+        async fn regtest_with_cache() {
+            state_service_check_info(
+                &ValidatorKind::Zebrad,
+                ZEBRAD_CHAIN_CACHE_DIR.clone(),
+                services::network::Network::Regtest,
+            )
+            .await;
+        }
+
+        #[ignore = "requires fully synced testnet."]
+        #[tokio::test]
+        async fn testnet() {
+            state_service_check_info(
+                &ValidatorKind::Zebrad,
+                ZEBRAD_TESTNET_CACHE_DIR.clone(),
+                services::network::Network::Testnet,
+            )
+            .await;
+        }
     }
 
-    #[tokio::test]
-    async fn state_service_check_info_regtest_with_cache_zebrad() {
-        state_service_check_info(
-            &ValidatorKind::Zebrad,
-            ZEBRAD_CHAIN_CACHE_DIR.clone(),
-            services::network::Network::Regtest,
-        )
-        .await;
-    }
+    pub(crate) mod get {
 
-    #[ignore = "requires fully synced testnet."]
-    #[tokio::test]
-    async fn state_service_check_info_testnet_zebrad() {
-        state_service_check_info(
-            &ValidatorKind::Zebrad,
-            ZEBRAD_TESTNET_CACHE_DIR.clone(),
-            services::network::Network::Testnet,
-        )
-        .await;
-    }
-}
+        use super::*;
 
-mod get {
+        #[tokio::test]
+        async fn address_utxos() {
+            state_service_get_address_utxos(&ValidatorKind::Zebrad).await;
+        }
 
-    use super::*;
+        #[ignore = "requires fully synced testnet."]
+        #[tokio::test]
+        async fn address_utxos_testnet() {
+            state_service_get_address_utxos_testnet().await;
+        }
 
-    #[tokio::test]
-    async fn state_service_get_address_utxos_zebrad() {
-        state_service_get_address_utxos(&ValidatorKind::Zebrad).await;
-    }
+        #[tokio::test]
+        async fn address_tx_ids_regtest() {
+            state_service_get_address_tx_ids(&ValidatorKind::Zebrad).await;
+        }
 
-    #[ignore = "requires fully synced testnet."]
-    #[tokio::test]
-    async fn state_service_get_address_utxos_testnet_zebrad() {
-        state_service_get_address_utxos_testnet().await;
-    }
+        #[ignore = "requires fully synced testnet."]
+        #[tokio::test]
+        async fn address_tx_ids_testnet() {
+            state_service_get_address_tx_ids_testnet().await;
+        }
 
-    #[tokio::test]
-    async fn state_service_get_address_tx_ids_regtest_zebrad() {
-        state_service_get_address_tx_ids(&ValidatorKind::Zebrad).await;
-    }
+        #[tokio::test]
+        async fn raw_transaction_regtest() {
+            state_service_get_raw_transaction(&ValidatorKind::Zebrad).await;
+        }
 
-    #[ignore = "requires fully synced testnet."]
-    #[tokio::test]
-    async fn state_service_get_address_tx_ids_testnet_zebrad() {
-        state_service_get_address_tx_ids_testnet().await;
-    }
+        #[ignore = "requires fully synced testnet."]
+        #[tokio::test]
+        async fn raw_transaction_testnet() {
+            state_service_get_raw_transaction_testnet().await;
+        }
 
-    #[tokio::test]
-    async fn state_service_get_raw_transaction_regtest_zebrad() {
-        state_service_get_raw_transaction(&ValidatorKind::Zebrad).await;
-    }
+        mod z {
+            use super::*;
 
-    #[ignore = "requires fully synced testnet."]
-    #[tokio::test]
-    async fn state_service_get_raw_transaction_testnet_zebrad() {
-        state_service_get_raw_transaction_testnet().await;
-    }
+            #[tokio::test]
+            pub(crate) async fn subtrees_by_index_regtest() {
+                state_service_z_get_subtrees_by_index(&ValidatorKind::Zebrad).await;
+            }
 
-    #[tokio::test]
-    async fn state_service_z_get_subtrees_by_index_regtest_zebrad() {
-        state_service_z_get_subtrees_by_index(&ValidatorKind::Zebrad).await;
-    }
+            #[ignore = "requires fully synced testnet."]
+            #[tokio::test]
+            pub(crate) async fn subtrees_by_index_testnet() {
+                state_service_z_get_subtrees_by_index_testnet().await;
+            }
 
-    #[ignore = "requires fully synced testnet."]
-    #[tokio::test]
-    async fn state_service_z_get_subtrees_by_index_testnet_zebrad() {
-        state_service_z_get_subtrees_by_index_testnet().await;
-    }
+            #[tokio::test]
+            pub(crate) async fn treestate_regtest() {
+                state_service_z_get_treestate(&ValidatorKind::Zebrad).await;
+            }
 
-    #[tokio::test]
-    async fn state_service_z_get_treestate_regtest_zebrad() {
-        state_service_z_get_treestate(&ValidatorKind::Zebrad).await;
-    }
+            #[ignore = "requires fully synced testnet."]
+            #[tokio::test]
+            pub(crate) async fn treestate_testnet() {
+                state_service_z_get_treestate_testnet().await;
+            }
+        }
 
-    #[ignore = "requires fully synced testnet."]
-    #[tokio::test]
-    async fn state_service_z_get_treestate_testnet_zebrad() {
-        state_service_z_get_treestate_testnet().await;
-    }
+        #[tokio::test]
+        async fn raw_mempool_regtest() {
+            state_service_get_raw_mempool(&ValidatorKind::Zebrad).await;
+        }
 
-    #[tokio::test]
-    async fn state_service_get_raw_mempool_regtest_zebrad() {
-        state_service_get_raw_mempool(&ValidatorKind::Zebrad).await;
-    }
+        #[ignore = "requires fully synced testnet."]
+        #[tokio::test]
+        async fn raw_mempool_testnet() {
+            state_service_get_raw_mempool_testnet().await;
+        }
 
-    #[ignore = "requires fully synced testnet."]
-    #[tokio::test]
-    async fn state_service_get_raw_mempool_testnet_zebrad() {
-        state_service_get_raw_mempool_testnet().await;
-    }
+        #[tokio::test]
+        async fn block_object_regtest() {
+            state_service_get_block_object(
+                &ValidatorKind::Zebrad,
+                None,
+                services::network::Network::Regtest,
+            )
+            .await;
+        }
 
-    #[tokio::test]
-    async fn state_service_get_block_object_regtest_zebrad() {
-        state_service_get_block_object(
-            &ValidatorKind::Zebrad,
-            None,
-            services::network::Network::Regtest,
-        )
-        .await;
-    }
+        #[ignore = "requires fully synced testnet."]
+        #[tokio::test]
+        async fn block_object_testnet() {
+            state_service_get_block_object(
+                &ValidatorKind::Zebrad,
+                ZEBRAD_TESTNET_CACHE_DIR.clone(),
+                services::network::Network::Testnet,
+            )
+            .await;
+        }
 
-    #[ignore = "requires fully synced testnet."]
-    #[tokio::test]
-    async fn state_service_get_block_object_testnet_zebrad() {
-        state_service_get_block_object(
-            &ValidatorKind::Zebrad,
-            ZEBRAD_TESTNET_CACHE_DIR.clone(),
-            services::network::Network::Testnet,
-        )
-        .await;
-    }
+        #[tokio::test]
+        async fn block_raw_regtest() {
+            state_service_get_block_raw(
+                &ValidatorKind::Zebrad,
+                None,
+                services::network::Network::Regtest,
+            )
+            .await;
+        }
 
-    #[tokio::test]
-    async fn state_service_get_block_raw_regtest_zebrad() {
-        state_service_get_block_raw(
-            &ValidatorKind::Zebrad,
-            None,
-            services::network::Network::Regtest,
-        )
-        .await;
-    }
+        #[ignore = "requires fully synced testnet."]
+        #[tokio::test]
+        async fn block_raw_testnet() {
+            state_service_get_block_raw(
+                &ValidatorKind::Zebrad,
+                ZEBRAD_TESTNET_CACHE_DIR.clone(),
+                services::network::Network::Testnet,
+            )
+            .await;
+        }
 
-    #[ignore = "requires fully synced testnet."]
-    #[tokio::test]
-    async fn state_service_get_block_raw_testnet_zebrad() {
-        state_service_get_block_raw(
-            &ValidatorKind::Zebrad,
-            ZEBRAD_TESTNET_CACHE_DIR.clone(),
-            services::network::Network::Testnet,
-        )
-        .await;
-    }
+        #[tokio::test]
+        async fn address_balance_regtest() {
+            state_service_get_address_balance(&ValidatorKind::Zebrad).await;
+        }
 
-    #[tokio::test]
-    async fn state_service_get_address_balance_regtest_zebrad() {
-        state_service_get_address_balance(&ValidatorKind::Zebrad).await;
-    }
-
-    #[ignore = "requires fully synced testnet."]
-    #[tokio::test]
-    async fn state_service_get_address_balance_testnet_zebrad() {
-        state_service_get_address_balance_testnet().await;
+        #[ignore = "requires fully synced testnet."]
+        #[tokio::test]
+        async fn address_balance_testnet() {
+            state_service_get_address_balance_testnet().await;
+        }
     }
 }
