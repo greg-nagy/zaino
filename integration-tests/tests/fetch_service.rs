@@ -1223,14 +1223,19 @@ mod zcashd {
             fetch_service_get_raw_mempool(&ValidatorKind::Zcashd).await;
         }
 
-        #[tokio::test]
-        pub(crate) async fn fetch_service_z_get_treestate_zcashd() {
-            fetch_service_z_get_treestate(&ValidatorKind::Zcashd).await;
-        }
+        mod z {
 
-        #[tokio::test]
-        pub(crate) async fn fetch_service_z_get_subtrees_by_index_zcashd() {
-            fetch_service_z_get_subtrees_by_index(&ValidatorKind::Zcashd).await;
+            use super::*;
+
+            #[tokio::test]
+            pub(crate) async fn fetch_service_z_get_treestate_zcashd() {
+                fetch_service_z_get_treestate(&ValidatorKind::Zcashd).await;
+            }
+
+            #[tokio::test]
+            pub(crate) async fn fetch_service_z_get_subtrees_by_index_zcashd() {
+                fetch_service_z_get_subtrees_by_index(&ValidatorKind::Zcashd).await;
+            }
         }
 
         #[tokio::test]
@@ -1382,14 +1387,19 @@ mod zebrad {
             fetch_service_get_raw_mempool(&ValidatorKind::Zebrad).await;
         }
 
-        #[tokio::test]
-        pub(crate) async fn fetch_service_z_get_treestate_zebrad() {
-            fetch_service_z_get_treestate(&ValidatorKind::Zebrad).await;
-        }
+        mod z {
 
-        #[tokio::test]
-        pub(crate) async fn fetch_service_z_get_subtrees_by_index_zebrad() {
-            fetch_service_z_get_subtrees_by_index(&ValidatorKind::Zebrad).await;
+            use super::*;
+
+            #[tokio::test]
+            pub(crate) async fn fetch_service_z_get_treestate_zebrad() {
+                fetch_service_z_get_treestate(&ValidatorKind::Zebrad).await;
+            }
+
+            #[tokio::test]
+            pub(crate) async fn fetch_service_z_get_subtrees_by_index_zebrad() {
+                fetch_service_z_get_subtrees_by_index(&ValidatorKind::Zebrad).await;
+            }
         }
 
         #[tokio::test]
