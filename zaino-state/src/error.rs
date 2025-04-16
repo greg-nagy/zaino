@@ -19,6 +19,14 @@ pub enum StateServiceError {
     #[error("RPC error: {0:?}")]
     RpcError(#[from] zaino_fetch::jsonrpsee::connector::RpcError),
 
+    /// Error from the block cache.
+    #[error("Mempool error: {0}")]
+    BlockCacheError(#[from] BlockCacheError),
+
+    /// Error from the mempool.
+    #[error("Mempool error: {0}")]
+    MempoolError(#[from] MempoolError),
+
     /// Tonic gRPC error.
     #[error("Tonic status error: {0}")]
     TonicStatusError(#[from] tonic::Status),
@@ -52,6 +60,12 @@ impl From<StateServiceError> for tonic::Status {
             }
             StateServiceError::RpcError(err) => {
                 tonic::Status::internal(format!("RPC error: {:?}", err))
+            }
+            StateServiceError::BlockCacheError(err) => {
+                tonic::Status::internal(format!("BlockCache error: {:?}", err))
+            }
+            StateServiceError::MempoolError(err) => {
+                tonic::Status::internal(format!("Mempool error: {:?}", err))
             }
             StateServiceError::TonicStatusError(err) => err,
             StateServiceError::SerializationError(err) => {

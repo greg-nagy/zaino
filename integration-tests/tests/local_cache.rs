@@ -66,7 +66,7 @@ async fn create_test_manager_and_block_cache(
         no_db: zaino_no_db,
     };
 
-    let block_cache = BlockCache::spawn(&json_service, block_cache_config)
+    let block_cache = BlockCache::spawn(&json_service, None, block_cache_config)
         .await
         .unwrap();
 
