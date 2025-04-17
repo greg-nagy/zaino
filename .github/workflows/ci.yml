@@ -62,10 +62,10 @@ jobs:
 
       - name: Cargo cache
         uses: Swatinem/rust-cache@v2
-        with: 
+        with:
           cache-provider: buildjet
 
-      - name: Copy bins into test_binries
+      - name: Copy bins into test_binaries
         run: |
           mkdir -p ./test_binaries/bins
           cp /usr/local/bin/* ./test_binaries/bins/
@@ -74,6 +74,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: nextest-archive
+
+      - name: Cargo Checks and Whitespace Check
+        run: |
+          cargo check --all-features
+          cargo check --tests --all-features
+          #./utils/trailing-whitespace.sh reject
 
       - name: Run Tests (Nextest)
         # continue-on-error: true
