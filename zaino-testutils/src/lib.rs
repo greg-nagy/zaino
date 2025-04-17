@@ -483,7 +483,7 @@ pub fn build_client(
     GrpcConnector::new(uri).get_client()
 }
 #[cfg(test)]
-mod tests {
+mod launch_testmanager {
     use super::*;
 
     #[tokio::test]
