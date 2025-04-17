@@ -84,7 +84,7 @@ jobs:
         # continue-on-error: true
         run: |
           cargo nextest run --verbose --profile ci --retries 2 --archive-file nextest-archive.tar.zst \
-            --workspace-remap ./ --filterset "binary_id(${[ matrix.partition }})" ${{ env.NEXTEST-FLAGS }}
+            --workspace-remap ./ --filterset "binary_id(${{ matrix.partition }})" ${{ env.NEXTEST-FLAGS }}
 
       - name: Test Summary
         uses: test-summary/action@v2
