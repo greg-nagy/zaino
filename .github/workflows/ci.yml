@@ -57,7 +57,7 @@ jobs:
           - "integration-tests::state_service"
           - "integration-tests::local_cache"
           - "integration-tests::wallet_to_validator"
-          - "zaino-testutils::launch_testmanager"
+          - "zaino-testutils"
 
     steps:
 
