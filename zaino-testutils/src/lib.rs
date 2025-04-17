@@ -492,7 +492,7 @@ mod launch_testmanager {
         use super::*;
 
         #[tokio::test]
-        pub(crate) async fn zcashd() {
+        pub(crate) async fn basic() {
             let mut test_manager =
                 TestManager::launch(&ValidatorKind::Zcashd, None, None, false, true, true, false)
                     .await
@@ -505,7 +505,7 @@ mod launch_testmanager {
         }
 
         #[tokio::test]
-        pub(crate) async fn zcashd_generate_blocks() {
+        pub(crate) async fn generate_blocks() {
             let mut test_manager =
                 TestManager::launch(&ValidatorKind::Zcashd, None, None, false, true, true, false)
                     .await
@@ -523,7 +523,7 @@ mod launch_testmanager {
         }
 
         #[tokio::test]
-        pub(crate) async fn zcashd_with_chain() {
+        pub(crate) async fn with_chain() {
             let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zcashd,
                 None,
@@ -543,7 +543,7 @@ mod launch_testmanager {
         }
 
         #[tokio::test]
-        pub(crate) async fn zcashd_zaino() {
+        pub(crate) async fn zaino() {
             let mut test_manager =
                 TestManager::launch(&ValidatorKind::Zcashd, None, None, true, true, true, false)
                     .await
@@ -566,7 +566,7 @@ mod launch_testmanager {
         }
 
         #[tokio::test]
-        pub(crate) async fn zcashd_zaino_clients() {
+        pub(crate) async fn zaino_clients() {
             let mut test_manager =
                 TestManager::launch(&ValidatorKind::Zcashd, None, None, true, true, true, true)
                     .await
@@ -584,7 +584,7 @@ mod launch_testmanager {
         /// This is not the case with Zcashd and should not be the case here.
         /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
         #[tokio::test]
-        pub(crate) async fn zcashd_zaino_clients_receive_mining_reward() {
+        pub(crate) async fn zaino_clients_receive_mining_reward() {
             let mut test_manager =
                 TestManager::launch(&ValidatorKind::Zcashd, None, None, true, true, true, true)
                     .await
@@ -613,7 +613,7 @@ mod launch_testmanager {
         use super::*;
 
         #[tokio::test]
-        pub(crate) async fn zebrad() {
+        pub(crate) async fn basic() {
             let mut test_manager =
                 TestManager::launch(&ValidatorKind::Zebrad, None, None, false, true, true, false)
                     .await
@@ -626,7 +626,7 @@ mod launch_testmanager {
         }
 
         #[tokio::test]
-        pub(crate) async fn zebrad_generate_blocks() {
+        pub(crate) async fn generate_blocks() {
             let mut test_manager =
                 TestManager::launch(&ValidatorKind::Zebrad, None, None, false, true, true, false)
                     .await
@@ -644,7 +644,7 @@ mod launch_testmanager {
         }
 
         #[tokio::test]
-        pub(crate) async fn zebrad_with_chain() {
+        pub(crate) async fn with_chain() {
             let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zebrad,
                 None,
@@ -664,7 +664,7 @@ mod launch_testmanager {
         }
 
         #[tokio::test]
-        pub(crate) async fn zebrad_zaino() {
+        pub(crate) async fn zaino() {
             let mut test_manager =
                 TestManager::launch(&ValidatorKind::Zebrad, None, None, true, true, true, false)
                     .await
@@ -687,7 +687,7 @@ mod launch_testmanager {
         }
 
         #[tokio::test]
-        pub(crate) async fn zebrad_zaino_clients() {
+        pub(crate) async fn zaino_clients() {
             let mut test_manager =
                 TestManager::launch(&ValidatorKind::Zebrad, None, None, true, true, true, true)
                     .await
@@ -705,7 +705,7 @@ mod launch_testmanager {
         /// This is not the case with Zcashd and should not be the case here.
         /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
         #[tokio::test]
-        pub(crate) async fn zebrad_zaino_clients_receive_mining_reward() {
+        pub(crate) async fn zaino_clients_receive_mining_reward() {
             let mut test_manager =
                 TestManager::launch(&ValidatorKind::Zebrad, None, None, true, true, true, true)
                     .await
@@ -734,7 +734,7 @@ mod launch_testmanager {
         }
 
         #[tokio::test]
-        pub(crate) async fn zebrad_zaino_clients_receive_mining_reward_and_send() {
+        pub(crate) async fn zaino_clients_receive_mining_reward_and_send() {
             let mut test_manager =
                 TestManager::launch(&ValidatorKind::Zebrad, None, None, true, true, true, true)
                     .await
@@ -811,7 +811,7 @@ mod launch_testmanager {
 
         #[ignore = "requires fully synced testnet."]
         #[tokio::test]
-        pub(crate) async fn zebrad_zaino_testnet() {
+        pub(crate) async fn zaino_testnet() {
             let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zebrad,
                 Some(services::network::Network::Testnet),
