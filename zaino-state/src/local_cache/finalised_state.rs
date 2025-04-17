@@ -10,7 +10,7 @@ use zebra_chain::{
     block::{Hash, Height},
     parameters::NetworkKind,
 };
-use zebra_state::HashOrHeight;
+use zebra_state::{HashOrHeight, ReadStateService};
 
 use zaino_fetch::jsonrpsee::connector::JsonRpSeeConnector;
 use zaino_proto::proto::compact_formats::CompactBlock;
@@ -97,8 +97,10 @@ impl DbRequest {
 /// Fanalised part of the chain, held in an LMDB database.
 #[derive(Debug)]
 pub struct FinalisedState {
-    /// Chain fetch service.
+    /// JsonRPC client based chain fetch service.
     fetcher: JsonRpSeeConnector,
+    /// Optional ReadStateService based chain fetch service.
+    state: Option<ReadStateService>,
     /// LMDB Database Environmant.
     database: Arc<Environment>,
     /// LMDB Databas containing `<block_height, block_hash>`.
@@ -128,6 +130,7 @@ impl FinalisedState {
     /// - status_signal: Used to send error status signals to outer processes.
     pub async fn spawn(
         fetcher: &JsonRpSeeConnector,
+        state: Option<&ReadStateService>,
         block_receiver: tokio::sync::mpsc::Receiver<(Height, Hash, CompactBlock)>,
         config: BlockCacheConfig,
     ) -> Result<Self, FinalisedStateError> {
@@ -168,6 +171,7 @@ impl FinalisedState {
 
         let mut finalised_state = FinalisedState {
             fetcher: fetcher.clone(),
+            state: state.cloned(),
             database,
             heights_to_hashes,
             hashes_to_blocks,
@@ -193,6 +197,7 @@ impl FinalisedState {
     ) -> Result<(), FinalisedStateError> {
         let finalised_state = Self {
             fetcher: self.fetcher.clone(),
+            state: self.state.clone(),
             database: Arc::clone(&self.database),
             heights_to_hashes: self.heights_to_hashes,
             hashes_to_blocks: self.hashes_to_blocks,
@@ -312,6 +317,7 @@ impl FinalisedState {
     ) -> Result<(), FinalisedStateError> {
         let finalised_state = Self {
             fetcher: self.fetcher.clone(),
+            state: self.state.clone(),
             database: Arc::clone(&self.database),
             heights_to_hashes: self.heights_to_hashes,
             hashes_to_blocks: self.hashes_to_blocks,
@@ -439,24 +445,75 @@ impl FinalisedState {
                 self.delete_block(Height(block_height))?;
             }
             loop {
-                match fetch_block_from_node(
-                    &self.fetcher,
-                    HashOrHeight::Height(Height(block_height)),
-                )
-                .await
-                {
-                    Ok((hash, block)) => {
-                        self.insert_block((Height(block_height), hash, block))?;
-                        info!(
-                            "Block at height {} successfully inserted in finalised state.",
-                            block_height
-                        );
-                        break;
+                match self.state.clone() {
+                    Some(state) => {
+                        match crate::state::get_compact_block(
+                            &state,
+                            HashOrHeight::Height(Height(block_height)),
+                            &self.config.network,
+                        )
+                        .await
+                        {
+                            Ok(block) => {
+                                let hash_bytes: [u8; 32] = block
+                                    .hash
+                                    .clone()
+                                    .try_into()
+                                    .expect("Expected Vec<u8> with exactly 32 bytes");
+                                let hash = Hash(hash_bytes);
+                                self.insert_block((Height(block_height), hash, block))?;
+                                info!(
+                                    "Block at height {} successfully inserted in finalised state.",
+                                    block_height
+                                );
+                                break;
+                            }
+                            Err(_) => {
+                                match fetch_block_from_node(
+                                    &self.fetcher,
+                                    HashOrHeight::Height(Height(block_height)),
+                                )
+                                .await
+                                {
+                                    Ok((hash, block)) => {
+                                        self.insert_block((Height(block_height), hash, block))?;
+                                        info!(
+                                    "Block at height {} successfully inserted in finalised state.",
+                                    block_height
+                                );
+                                        break;
+                                    }
+                                    Err(e) => {
+                                        self.status.store(StatusType::RecoverableError.into());
+                                        warn!("{e}");
+                                        tokio::time::sleep(std::time::Duration::from_millis(500))
+                                            .await;
+                                    }
+                                }
+                            }
+                        }
                     }
-                    Err(e) => {
-                        self.status.store(StatusType::RecoverableError.into());
-                        warn!("{e}");
-                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    None => {
+                        match fetch_block_from_node(
+                            &self.fetcher,
+                            HashOrHeight::Height(Height(block_height)),
+                        )
+                        .await
+                        {
+                            Ok((hash, block)) => {
+                                self.insert_block((Height(block_height), hash, block))?;
+                                info!(
+                                    "Block at height {} successfully inserted in finalised state.",
+                                    block_height
+                                );
+                                break;
+                            }
+                            Err(e) => {
+                                self.status.store(StatusType::RecoverableError.into());
+                                warn!("{e}");
+                                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                            }
+                        }
                     }
                 }
             }

@@ -19,6 +19,7 @@ use crate::{
 /// Non-finalised part of the chain (last 100 blocks), held in memory to ease the handling of reorgs.
 ///
 /// NOTE: We hold the last 102 blocks to ensure there are no gaps in the block cache.
+/// TODO: Use ReadStateService when available (implemented in FinalisedState).
 #[derive(Debug)]
 pub struct NonFinalisedState {
     /// Chain fetch service.
