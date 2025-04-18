@@ -164,7 +164,6 @@ jobs:
           tags: |
             type=ref,event=pr, suffix=sha-
             type=semver,pattern={{version}}, prefix=v
-            type=semver,pattern={{major}}.{{minor}}, prefix=v
             type=sha
 
       - name: Build and Push Default Image
@@ -193,7 +192,6 @@ jobs:
           tags: |
             type=ref,event=pr, suffix=sha-
             type=semver,pattern={{version}}, prefix=v
-            type=semver,pattern={{major}}.{{minor}}, prefix=v
             type=sha
 
       - name: Build and Push No-TLS Image
