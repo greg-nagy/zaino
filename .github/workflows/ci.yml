@@ -166,8 +166,8 @@ jobs:
           context: .
           platforms: linux/amd64
           push: ${{ env.PUSH_IMAGES }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta-default.outputs.tags }}
+          labels: ${{ steps.meta-default.outputs.labels }}
           cache-from: |
             type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}:buildcache
             type=gha
