@@ -182,7 +182,7 @@ jobs:
           context: .
           platforms: linux/amd64
           push: ${{ env.PUSH_IMAGES }}
-          tags: "${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}:no-tls"
+          tags: "${{ steps.meta.outputs.tags }}-no-tls"
           build-args: NO_TLS=true
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: |
