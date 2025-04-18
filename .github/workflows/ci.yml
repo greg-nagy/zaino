@@ -149,14 +149,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract metadata for Docker
-        id: meta
+      - name: Extract metadata for Docker (default image)
+        id: meta-default
         uses: docker/metadata-action@v5
         with:
           images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
+            type=ref,event=pr, suffix=sha-
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha
@@ -176,20 +175,34 @@ jobs:
             type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}:buildcache,mode=max
             type=gha,mode=max
 
+
+      - name: Extract metadata for Docker (no-tls image)
+        id: meta-no-tls
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}
+          flavor: |
+            suffix=-no-tls
+          tags: |
+            type=ref,event=pr, suffix=sha-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
       - name: Build and Push No-TLS Image
         uses: docker/build-push-action@v5
         with:
+          build-args: NO_TLS=true
           context: .
           platforms: linux/amd64
           push: ${{ env.PUSH_IMAGES }}
-          tags: "${{ steps.meta.outputs.tags }}-no-tls"
-          build-args: NO_TLS=true
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: "${{ steps.meta-no-tls.outputs.tags }}"
+          labels: ${{ steps.meta-no-tls.outputs.labels }}
           cache-from: |
-            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}:buildcache
+            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}:buildcache-no-tls
             type=gha
           cache-to: |
-            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}:buildcache,mode=max
+            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}:buildcache-no-tls,mode=max
             type=gha,mode=max
 
   create-release:
