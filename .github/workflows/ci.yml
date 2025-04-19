@@ -44,7 +44,7 @@ jobs:
 
 
   test:
-    name: Run Tests
+    name: Tests
     needs: build-test-artifacts
     runs-on: ziserv-2
     container:
@@ -52,7 +52,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        partition: [1, 2, 3, 4, 5, 6, 7, 8]
+        partition: 
+          - "integration-tests::fetch_service"
+          - "integration-tests::state_service"
+          - "integration-tests::local_cache"
+          - "integration-tests::wallet_to_validator"
+          - "zaino-testutils"
 
     steps:
 
@@ -85,7 +90,7 @@ jobs:
         # continue-on-error: true
         run: |
           cargo nextest run --verbose --profile ci --retries 2 --archive-file nextest-archive.tar.zst \
-            --workspace-remap ./ --partition count:${{ matrix.partition }}/8 ${{ env.NEXTEST-FLAGS }}
+            --workspace-remap ./ --filterset "binary_id(${{ matrix.partition }})" ${{ env.NEXTEST-FLAGS }}
 
       - name: Test Summary
         uses: test-summary/action@v2
