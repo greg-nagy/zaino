@@ -45,6 +45,8 @@ jobs:
   check:
     name: Cargo Check
     runs-on: ziserv-2
+    container:
+      image: zingodevops/zaino-ci:latest  # Your pre-built Docker image
     steps:
       - uses: actions/checkout@v4
 
