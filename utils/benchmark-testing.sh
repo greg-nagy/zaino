@@ -10,7 +10,7 @@ do
     echo "-----------" >> benchmark_for_tests.txt
     echo "try:" >> benchmark_for_tests.txt
     echo $x >> benchmark_for_tests.txt
-        cargo nextest run --test-threads=$i --failure-output final --status-level none --final-status-level retry --hide-progress-bar &>> benchmark_for_tests.txt
+        cargo nextest run --test-threads=$i --cargo-quiet --cargo-quiet --failure-output final --status-level none --final-status-level slow --hide-progress-bar &>> benchmark_for_tests.txt
     echo "-----------" >> benchmark_for_tests.txt
     done
     echo "-----------" >> benchmark_for_tests.txt
