@@ -180,7 +180,7 @@ impl BlockCacheSubscriber {
     ) -> Result<CompactBlock, BlockCacheError> {
         self.get_compact_block(hash_or_height)
             .await
-            .map(|block| compact_block_to_nullifiers(block))
+            .map(compact_block_to_nullifiers)
     }
 
     /// Returns the height of the latest block in the [`BlockCache`].

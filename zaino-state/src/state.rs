@@ -2,8 +2,10 @@
 
 use crate::{
     config::StateServiceConfig,
-    error::StateServiceError,
-    indexer::{IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService},
+    error::{BlockCacheError, StateServiceError},
+    indexer::{
+        handle_raw_transaction, IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService,
+    },
     local_cache::{compact_block_to_nullifiers, BlockCache, BlockCacheSubscriber},
     mempool::{Mempool, MempoolSubscriber},
     status::{AtomicStatus, StatusType},
@@ -408,15 +410,12 @@ impl StateServiceSubscriber {
 
     /// Return a list of consecutive compact blocks.
     #[allow(dead_code)]
-    async fn get_block_range(
+    async fn get_block_range_inner(
         &self,
-        blockrange: BlockRange,
+        request: BlockRange,
         trim_non_nullifier: bool,
     ) -> Result<CompactBlockStream, StateServiceError> {
-        let mut state = self.read_state_service.clone();
-        let network = self.config.network.clone();
-
-        let mut start: u32 = match blockrange.start {
+        let mut start: u32 = match request.start {
             Some(block_id) => match block_id.height.try_into() {
                 Ok(height) => height,
                 Err(_) => {
@@ -433,7 +432,7 @@ impl StateServiceSubscriber {
                 ));
             }
         };
-        let mut end: u32 = match blockrange.end {
+        let mut end: u32 = match request.end {
             Some(block_id) => match block_id.height.try_into() {
                 Ok(height) => height,
                 Err(_) => {
@@ -456,24 +455,20 @@ impl StateServiceSubscriber {
         } else {
             false
         };
-
-        let service_channel_size = self.config.service_channel_size;
+        let chain_height = self.block_cache.get_chain_height().await?.0;
+        let fetch_service_clone = self.clone();
         let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(service_channel_size as usize);
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
-            let timeout = timeout(
-                std::time::Duration::from_secs(service_timeout as u64),
-                async {
+            let timeout = timeout(time::Duration::from_secs((service_timeout*4) as u64), async {
                     for height in start..=end {
                         let height = if rev_order {
                             end - (height - start)
                         } else {
                             height
                         };
-                        match get_compact_block(
-                            &state,
-                            HashOrHeight::Height(Height(height)),
-                            &network,
+                        match fetch_service_clone.block_cache.get_compact_block(
+                            height.to_string(),
                         ).await {
                             Ok(mut block) => {
                                 if trim_non_nullifier {
@@ -481,40 +476,9 @@ impl StateServiceSubscriber {
                                 }
                                 if channel_tx.send(Ok(block)).await.is_err() {
                                     break;
-                                };
+                                }
                             }
                             Err(e) => {
-                                let chain_height = match state
-                                    .ready()
-                                    .and_then(|service| service.call(ReadRequest::Tip))
-                                    .await {
-                                        Ok(response) => {
-                                            match  expected_read_response!(response, Tip) {
-                                                Some((height, _hash)) => {
-                                                    height.0
-                                                }
-                                                None => {
-                                                    if let Err(e) = channel_tx
-                                                        .send(Err(tonic::Status::unknown("No best tip height found")))
-                                                        .await
-                                                        {
-                                                            eprintln!("Error: channel closed unexpectedly: {e}");
-                                                        }
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                        Err(_) => {
-                                            if let Err(e) = channel_tx
-                                                .send(Err(tonic::Status::unknown("No best tip height found")))
-                                                .await
-                                                {
-                                                    eprintln!("Error: channel closed unexpectedly: {e}");
-                                                }
-                                            break;
-                                        }
-                                    };
-
                                 if height >= chain_height {
                                     match channel_tx
                                         .send(Err(tonic::Status::out_of_range(format!(
@@ -526,7 +490,7 @@ impl StateServiceSubscriber {
                                     {
                                         Ok(_) => break,
                                         Err(e) => {
-                                            eprintln!("Error: Channel closed unexpectedly: {}", e);
+                                            warn!("GetBlockRange channel closed unexpectedly: {}", e);
                                             break;
                                         }
                                     }
@@ -543,9 +507,8 @@ impl StateServiceSubscriber {
                             }
                         }
                     }
-                },
-            )
-            .await;
+                })
+                .await;
             match timeout {
                 Ok(_) => {}
                 Err(_) => {
@@ -558,8 +521,28 @@ impl StateServiceSubscriber {
                 }
             }
         });
-
         Ok(CompactBlockStream::new(channel_rx))
+    }
+    async fn error_get_block(
+        &self,
+        e: BlockCacheError,
+        height: u32,
+    ) -> Result<CompactBlock, StateServiceError> {
+        let chain_height = self.block_cache.get_chain_height().await?.0;
+        Err(if height >= chain_height {
+            StateServiceError::TonicStatusError(tonic::Status::out_of_range(
+                            format!(
+                                "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
+                                height, chain_height,
+                            )
+                        ))
+        } else {
+            // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+            StateServiceError::TonicStatusError(tonic::Status::unknown(format!(
+                "Error: Failed to retrieve block from node. Server Error: {}",
+                e,
+            )))
+        })
     }
 }
 
@@ -1242,25 +1225,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
         };
         match self.block_cache.get_compact_block(height.to_string()).await {
             Ok(block) => Ok(block),
-            Err(e) => {
-                let chain_height = self.block_cache.get_chain_height().await?.0;
-                if height >= chain_height {
-                    Err(StateServiceError::TonicStatusError(tonic::Status::out_of_range(
-                            format!(
-                                "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
-                                height, chain_height,
-                            )
-                        )))
-                } else {
-                    // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                    Err(StateServiceError::TonicStatusError(tonic::Status::unknown(
-                        format!(
-                            "Error: Failed to retrieve block from node. Server Error: {}",
-                            e,
-                        ),
-                    )))
-                }
-            }
+            Err(e) => self.error_get_block(e, height).await,
         }
     }
 
@@ -1284,227 +1249,57 @@ impl LightWalletIndexer for StateServiceSubscriber {
             .await
         {
             Ok(block) => Ok(block),
-            Err(e) => {
-                let chain_height = self.block_cache.get_chain_height().await?.0;
-                if height >= chain_height {
-                    Err(StateServiceError::TonicStatusError(tonic::Status::out_of_range(
-                            format!(
-                                "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
-                                height, chain_height,
-                            )
-                        )))
-                } else {
-                    // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                    Err(StateServiceError::TonicStatusError(tonic::Status::unknown(
-                        format!(
-                            "Error: Failed to retrieve block from node. Server Error: {}",
-                            e,
-                        ),
-                    )))
-                }
-            }
+            Err(e) => self.error_get_block(e, height).await,
         }
     }
 
     /// Return a list of consecutive compact blocks
     async fn get_block_range(
         &self,
-        request: BlockRange,
-    ) -> Result<CompactBlockStream, Self::Error> {
-        let mut start: u32 = match request.start {
-            Some(block_id) => match block_id.height.try_into() {
-                Ok(height) => height,
-                Err(_) => {
-                    return Err(StateServiceError::TonicStatusError(
-                        tonic::Status::invalid_argument(
-                            "Error: Start height out of range. Failed to convert to u32.",
-                        ),
-                    ));
-                }
-            },
-            None => {
-                return Err(StateServiceError::TonicStatusError(
-                    tonic::Status::invalid_argument("Error: No start height given."),
-                ));
-            }
-        };
-        let mut end: u32 = match request.end {
-            Some(block_id) => match block_id.height.try_into() {
-                Ok(height) => height,
-                Err(_) => {
-                    return Err(StateServiceError::TonicStatusError(
-                        tonic::Status::invalid_argument(
-                            "Error: End height out of range. Failed to convert to u32.",
-                        ),
-                    ));
-                }
-            },
-            None => {
-                return Err(StateServiceError::TonicStatusError(
-                    tonic::Status::invalid_argument("Error: No start height given."),
-                ));
-            }
-        };
-        let rev_order = if start > end {
-            (start, end) = (end, start);
-            true
-        } else {
-            false
-        };
-        let chain_height = self.block_cache.get_chain_height().await?.0;
-        let fetch_service_clone = self.clone();
-        let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
-        tokio::spawn(async move {
-            let timeout = timeout(time::Duration::from_secs((service_timeout*4) as u64), async {
-                    for height in start..=end {
-                        let height = if rev_order {
-                            end - (height - start)
-                        } else {
-                            height
-                        };
-                        match fetch_service_clone.block_cache.get_compact_block(
-                            height.to_string(),
-                        ).await {
-                            Ok(block) => {
-                                if channel_tx.send(Ok(block)).await.is_err() {
-                                    break;
-                                }
-                            }
-                            Err(e) => {
-                                if height >= chain_height {
-                                    match channel_tx
-                                        .send(Err(tonic::Status::out_of_range(format!(
-                                            "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
-                                            height, chain_height,
-                                        ))))
-                                        .await
-
-                                    {
-                                        Ok(_) => break,
-                                        Err(e) => {
-                                            warn!("GetBlockRange channel closed unexpectedly: {}", e);
-                                            break;
-                                        }
-                                    }
-                                } else {
-                                    // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                                    if channel_tx
-                                        .send(Err(tonic::Status::unknown(e.to_string())))
-                                        .await
-                                        .is_err()
-                                    {
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                })
-                .await;
-            match timeout {
-                Ok(_) => {}
-                Err(_) => {
-                    channel_tx
-                        .send(Err(tonic::Status::deadline_exceeded(
-                            "Error: get_block_range gRPC request timed out.",
-                        )))
-                        .await
-                        .ok();
-                }
-            }
-        });
-        Ok(CompactBlockStream::new(channel_rx))
+        blockrange: BlockRange,
+    ) -> Result<CompactBlockStream, StateServiceError> {
+        self.get_block_range_inner(blockrange, false).await
     }
-
     /// Same as GetBlockRange except actions contain only nullifiers
     async fn get_block_range_nullifiers(
         &self,
         request: BlockRange,
     ) -> Result<CompactBlockStream, Self::Error> {
-        let tonic_status_error =
-            |err| StateServiceError::TonicStatusError(tonic::Status::invalid_argument(err));
-        let mut start = match request.start {
-            Some(block_id) => match u32::try_from(block_id.height) {
-                Ok(height) => Ok(height),
-                Err(_) => Err("Error: Start height out of range. Failed to convert to u32."),
-            },
-            None => Err("Error: No start height given."),
-        }
-        .map_err(tonic_status_error)?;
-        let mut end = match request.end {
-            Some(block_id) => match u32::try_from(block_id.height) {
-                Ok(height) => Ok(height),
-                Err(_) => Err("Error: End height out of range. Failed to convert to u32."),
-            },
-            None => Err("Error: No start height given."),
-        }
-        .map_err(tonic_status_error)?;
-        let rev_order = if start > end {
-            (start, end) = (end, start);
-            true
-        } else {
-            false
-        };
-        let chain_height = self.block_cache.get_chain_height().await?.0;
-        let fetch_service_clone = self.clone();
-        let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
-        tokio::spawn(async move {
-            let timeout = timeout(
-                time::Duration::from_secs((service_timeout * 4) as u64),
-                async {
-                    for height in start..=end {
-                        let height = if rev_order {
-                            end - (height - start)
-                        } else {
-                            height
-                        };
-                        if let Err(e) = channel_tx
-                            .send(
-                                fetch_service_clone
-                                    .block_cache
-                                    .get_compact_block_nullifiers(height.to_string())
-                                    .await
-                                    .map_err(|e| {
-                                        if height >= chain_height {
-                                            tonic::Status::out_of_range(format!(
-                                            "Error: Height out of range [{}]. Height requested \
-                                            is greater than the best chain tip [{}].",
-                                            height, chain_height,
-                                        ))
-                                        } else {
-                                            // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                                            tonic::Status::unknown(e.to_string())
-                                        }
-                                    }),
-                            )
-                            .await
-                        {
-                            warn!("GetBlockRangeNullifiers channel closed unexpectedly: {}", e);
-                            break;
-                        }
-                    }
-                },
-            )
-            .await;
-            if timeout.is_err() {
-                channel_tx
-                    .send(Err(tonic::Status::deadline_exceeded(
-                        "Error: get_block_range_nullifiers gRPC request timed out.",
-                    )))
-                    .await
-                    .ok();
-            }
-        });
-        Ok(CompactBlockStream::new(channel_rx))
+        self.get_block_range_inner(request, true).await
     }
 
     /// Return the requested full (not compact) transaction (as from zcashd)
-    async fn get_transaction(&self, _request: TxFilter) -> Result<RawTransaction, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(tonic::Status::unimplemented(
-            "Not yet implemented. If you require this RPC please open an issue or PR at the Zaino github (https://github.com/zingolabs/zaino.git)."
-        )))
+    async fn get_transaction(&self, request: TxFilter) -> Result<RawTransaction, Self::Error> {
+        let hash = zebra_chain::transaction::Hash::from_bytes_in_display_order(
+            &<[u8; 32]>::try_from(request.hash).map_err(|_| {
+                StateServiceError::TonicStatusError(tonic::Status::invalid_argument(
+                    "Error: Transaction hash incorrect",
+                ))
+            })?,
+        );
+        let mut state = self.read_state_service.clone();
+        let response = state
+            .ready()
+            .await?
+            .call(ReadRequest::Transaction(hash))
+            .await?;
+        let transaction = expected_read_response!(response, Transaction);
+        transaction
+            .map(|MinedTx { tx, height, .. }| -> Result<_, std::io::Error> {
+                Ok(RawTransaction {
+                    data: tx.zcash_serialize_to_vec()?,
+                    height: height.as_usize() as u64,
+                })
+            })
+            .transpose()
+            .map_err(|_read_error| {
+                StateServiceError::TonicStatusError(tonic::Status::internal(
+                    "Error: transaction did not write to vec",
+                ))
+            })?
+            .ok_or(StateServiceError::TonicStatusError(
+                tonic::Status::invalid_argument("error: transaction not found"),
+            ))
     }
 
     /// Submit the given transaction to the Zcash network
@@ -1521,23 +1316,51 @@ impl LightWalletIndexer for StateServiceSubscriber {
     /// Return the txids corresponding to the given t-address within the given block range
     async fn get_taddress_txids(
         &self,
-        _request: TransparentAddressBlockFilter,
+        request: TransparentAddressBlockFilter,
     ) -> Result<RawTransactionStream, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(tonic::Status::unimplemented(
-            "Not yet implemented. If you require this RPC please open an issue or PR at the Zaino github (https://github.com/zingolabs/zaino.git)."
-        )))
+        let txids = self.get_taddress_txids_helper(request).await?;
+        let chain_height = self.chain_height().await?;
+        let (transmitter, receiver) = mpsc::channel(self.config.service_channel_size as usize);
+        for txid in txids {
+            let transaction = self.get_raw_transaction(txid, Some(1)).await;
+            if handle_raw_transaction::<Self>(
+                chain_height.0 as u64,
+                transaction,
+                transmitter.clone(),
+            )
+            .await
+            .is_err()
+            {
+                break;
+            }
+        }
+        Ok(RawTransactionStream::new(receiver))
     }
 
     /// Returns the total balance for a list of taddrs
     async fn get_taddress_balance(
         &self,
-        _request: AddressList,
+        request: AddressList,
     ) -> Result<zaino_proto::proto::service::Balance, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(tonic::Status::unimplemented(
-            "Not yet implemented. If you require this RPC please open an issue or PR at the Zaino github (https://github.com/zingolabs/zaino.git)."
-        )))
+        let taddrs = AddressStrings::new_valid(request.addresses).map_err(|err_obj| {
+            Self::Error::RpcError(RpcError::new_from_errorobject(
+                err_obj,
+                "Error in Validator",
+            ))
+        })?;
+        let balance = self.z_get_address_balance(taddrs).await?;
+        let checked_balance: i64 = match i64::try_from(balance.balance) {
+            Ok(balance) => balance,
+            Err(_) => {
+                return Err(Self::Error::TonicStatusError(tonic::Status::unknown(
+                    "Error: Error converting balance from u64 to i64.",
+                )));
+            }
+        };
+        Ok(zaino_proto::proto::service::Balance {
+            value_zat: checked_balance,
+        })
     }
-
     /// Returns the total balance for a list of taddrs
     async fn get_taddress_balance_stream(
         &self,
