@@ -110,18 +110,18 @@ impl Indexer {
             loop {
                 // Log the servers status.
                 if last_log_time.elapsed() >= log_interval {
-                    indexer.log_status();
+                    indexer.log_status().await;
                     last_log_time = Instant::now();
                 }
 
                 // Check for restart signals.
-                if indexer.check_for_critical_errors() {
+                if indexer.check_for_critical_errors().await {
                     indexer.close().await;
                     return Err(IndexerError::Restart);
                 }
 
                 // Check for shutdown signals.
-                if indexer.check_for_shutdown() {
+                if indexer.check_for_shutdown().await {
                     indexer.close().await;
                     return Ok(());
                 }
@@ -134,14 +134,14 @@ impl Indexer {
     }
 
     /// Checks indexers status and servers internal statuses for either offline of critical error signals.
-    fn check_for_critical_errors(&self) -> bool {
-        let status = self.status_int();
+    async fn check_for_critical_errors(&self) -> bool {
+        let status = self.status_int().await;
         status == 5 || status >= 7
     }
 
     /// Checks indexers status and servers internal status for closure signal.
-    fn check_for_shutdown(&self) -> bool {
-        if self.status_int() == 4 {
+    async fn check_for_shutdown(&self) -> bool {
+        if self.status_int().await == 4 {
             return true;
         }
         false
@@ -161,9 +161,9 @@ impl Indexer {
     }
 
     /// Returns the indexers current status usize, caliculates from internal statuses.
-    fn status_int(&self) -> u16 {
+    async fn status_int(&self) -> u16 {
         let service_status = match &self.service {
-            Some(service) => service.inner_ref().status(),
+            Some(service) => service.inner_ref().status().await,
             None => return 7,
         };
         let server_status = match &self.server {
@@ -175,14 +175,14 @@ impl Indexer {
     }
 
     /// Returns the current StatusType of the indexer.
-    pub fn status(&self) -> StatusType {
-        StatusType::from(self.status_int() as usize)
+    pub async fn status(&self) -> StatusType {
+        StatusType::from(self.status_int().await as usize)
     }
 
     /// Logs the indexers status.
-    pub fn log_status(&self) {
+    pub async fn log_status(&self) {
         let service_status = match &self.service {
-            Some(service) => service.inner_ref().status(),
+            Some(service) => service.inner_ref().status().await,
             None => StatusType::Offline,
         };
         let grpc_server_status = match &self.server {

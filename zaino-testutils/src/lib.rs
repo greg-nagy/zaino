@@ -4,15 +4,22 @@
 #![forbid(unsafe_code)]
 
 use once_cell::sync::Lazy;
-use services::validator::Validator;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
-    str::FromStr,
 };
 use tempfile::TempDir;
-use testvectors::REG_O_ADDR_FROM_ABANDONART;
+use testvectors::{seeds, REG_O_ADDR_FROM_ABANDONART};
 use tracing_subscriber::EnvFilter;
+use zcash_client_backend::proto::service::compact_tx_streamer_client::CompactTxStreamerClient;
+pub use zingo_infra_services as services;
+pub use zingo_infra_services::network::Network;
+pub use zingo_infra_services::validator::Validator;
+use zingo_netutils::{GetClientError, GrpcConnector, UnderlyingService};
+use zingolib::{config::RegtestNetwork, testutils::scenarios::setup::ClientBuilder};
+pub use zingolib::{
+    get_base_address_macro, lightclient::LightClient, testutils::lightclient::from_inputs,
+};
 
 /// Path for zcashd binary.
 pub static ZCASHD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| {
@@ -77,24 +84,12 @@ pub enum ValidatorKind {
     Zebrad,
 }
 
-impl std::str::FromStr for ValidatorKind {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "zcashd" => Ok(ValidatorKind::Zcashd),
-            "zebrad" => Ok(ValidatorKind::Zebrad),
-            _ => Err(format!("Invalid validator kind: {}", s)),
-        }
-    }
-}
-
 /// Config for validators.
 pub enum ValidatorConfig {
     /// Zcashd Config.
-    ZcashdConfig(services::validator::ZcashdConfig),
+    ZcashdConfig(zingo_infra_services::validator::ZcashdConfig),
     /// Zebrad Config.
-    ZebradConfig(services::validator::ZebradConfig),
+    ZebradConfig(zingo_infra_services::validator::ZebradConfig),
 }
 
 /// Available zcash-local-net configurations.
@@ -104,12 +99,22 @@ pub enum ValidatorConfig {
 )]
 pub enum LocalNet {
     /// Zcash-local-net backed by Zcashd.
-    Zcashd(services::LocalNet<services::indexer::Empty, services::validator::Zcashd>),
+    Zcashd(
+        zingo_infra_services::LocalNet<
+            zingo_infra_services::indexer::Empty,
+            zingo_infra_services::validator::Zcashd,
+        >,
+    ),
     /// Zcash-local-net backed by Zebrad.
-    Zebrad(services::LocalNet<services::indexer::Empty, services::validator::Zebrad>),
+    Zebrad(
+        zingo_infra_services::LocalNet<
+            zingo_infra_services::indexer::Empty,
+            zingo_infra_services::validator::Zebrad,
+        >,
+    ),
 }
 
-impl services::validator::Validator for LocalNet {
+impl zingo_infra_services::validator::Validator for LocalNet {
     const CONFIG_FILENAME: &str = "";
 
     type Config = ValidatorConfig;
@@ -117,22 +122,27 @@ impl services::validator::Validator for LocalNet {
     #[allow(clippy::manual_async_fn)]
     fn launch(
         config: Self::Config,
-    ) -> impl std::future::Future<Output = Result<Self, services::error::LaunchError>> + Send {
+    ) -> impl std::future::Future<Output = Result<Self, zingo_infra_services::error::LaunchError>> + Send
+    {
         async move {
             match config {
                 ValidatorConfig::ZcashdConfig(cfg) => {
-                    let net = services::LocalNet::<
-                        services::indexer::Empty,
-                        services::validator::Zcashd,
-                    >::launch(services::indexer::EmptyConfig {}, cfg)
+                    let net = zingo_infra_services::LocalNet::<
+                        zingo_infra_services::indexer::Empty,
+                        zingo_infra_services::validator::Zcashd,
+                    >::launch(
+                        zingo_infra_services::indexer::EmptyConfig {}, cfg
+                    )
                     .await;
                     Ok(LocalNet::Zcashd(net))
                 }
                 ValidatorConfig::ZebradConfig(cfg) => {
-                    let net = services::LocalNet::<
-                        services::indexer::Empty,
-                        services::validator::Zebrad,
-                    >::launch(services::indexer::EmptyConfig {}, cfg)
+                    let net = zingo_infra_services::LocalNet::<
+                        zingo_infra_services::indexer::Empty,
+                        zingo_infra_services::validator::Zebrad,
+                    >::launch(
+                        zingo_infra_services::indexer::EmptyConfig {}, cfg
+                    )
                     .await;
                     Ok(LocalNet::Zebrad(net))
                 }
@@ -206,7 +216,7 @@ impl services::validator::Validator for LocalNet {
         }
     }
 
-    fn network(&self) -> services::network::Network {
+    fn network(&self) -> Network {
         match self {
             LocalNet::Zcashd(net) => net.validator().network(),
             LocalNet::Zebrad(net) => *net.validator().network(),
@@ -225,16 +235,16 @@ impl services::validator::Validator for LocalNet {
     fn load_chain(
         chain_cache: PathBuf,
         validator_data_dir: PathBuf,
-        validator_network: services::network::Network,
+        validator_network: Network,
     ) -> PathBuf {
         if chain_cache.to_string_lossy().contains("zcashd") {
-            services::validator::Zcashd::load_chain(
+            zingo_infra_services::validator::Zcashd::load_chain(
                 chain_cache,
                 validator_data_dir,
                 validator_network,
             )
         } else if chain_cache.to_string_lossy().contains("zebrad") {
-            services::validator::Zebrad::load_chain(
+            zingo_infra_services::validator::Zebrad::load_chain(
                 chain_cache,
                 validator_data_dir,
                 validator_network,
@@ -279,7 +289,7 @@ pub struct TestManager {
     /// Data directory for the validator.
     pub data_dir: PathBuf,
     /// Network (chain) type:
-    pub network: services::network::Network,
+    pub network: Network,
     /// Zebrad/Zcashd JsonRpc listen address.
     pub zebrad_rpc_listen_address: SocketAddr,
     /// Zaino Indexer JoinHandle.
@@ -290,7 +300,32 @@ pub struct TestManager {
     pub clients: Option<Clients>,
 }
 
-use zingo_infra_testutils::services;
+fn make_uri(indexer_port: portpicker::Port) -> http::Uri {
+    format!("http://127.0.0.1:{}", indexer_port)
+        .try_into()
+        .unwrap()
+}
+// NOTE: this should be migrated to zingolib when LocalNet replaces regtest manager in zingoilb::testutils
+/// Builds faucet (miner) and recipient lightclients for local network integration testing
+async fn build_lightclients(
+    lightclient_dir: PathBuf,
+    indexer_port: portpicker::Port,
+) -> (LightClient, LightClient) {
+    let mut client_builder = ClientBuilder::new(make_uri(indexer_port), lightclient_dir);
+    let faucet = client_builder
+        .build_faucet(true, RegtestNetwork::all_upgrades_active())
+        .await;
+    let recipient = client_builder
+        .build_client(
+            seeds::HOSPITAL_MUSEUM_SEED.to_string(),
+            1,
+            true,
+            RegtestNetwork::all_upgrades_active(),
+        )
+        .await;
+
+    (faucet, recipient)
+}
 impl TestManager {
     /// Launches zcash-local-net<Empty, Validator>.
     ///
@@ -300,7 +335,7 @@ impl TestManager {
     ///
     /// If clients is set to active zingolib lightclients will be created for test use.
     pub async fn launch(
-        validator: &str,
+        validator: &ValidatorKind,
         network: Option<services::network::Network>,
         chain_cache: Option<PathBuf>,
         enable_zaino: bool,
@@ -316,7 +351,6 @@ impl TestManager {
             .with_target(true)
             .try_init();
 
-        let validator_kind = ValidatorKind::from_str(validator).unwrap();
         let network = network.unwrap_or(services::network::Network::Regtest);
         if enable_clients && !enable_zaino {
             return Err(std::io::Error::new(
@@ -330,25 +364,25 @@ impl TestManager {
         let zebrad_rpc_listen_address =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), zebrad_rpc_listen_port);
 
-        let validator_config = match validator_kind {
+        let validator_config = match validator {
             ValidatorKind::Zcashd => {
-                let cfg = services::validator::ZcashdConfig {
+                let cfg = zingo_infra_services::validator::ZcashdConfig {
                     zcashd_bin: ZCASHD_BIN.clone(),
                     zcash_cli_bin: ZCASH_CLI_BIN.clone(),
                     rpc_listen_port: Some(zebrad_rpc_listen_port),
-                    activation_heights: services::network::ActivationHeights::default(),
+                    activation_heights: zingo_infra_services::network::ActivationHeights::default(),
                     miner_address: Some(REG_O_ADDR_FROM_ABANDONART),
                     chain_cache,
                 };
                 ValidatorConfig::ZcashdConfig(cfg)
             }
             ValidatorKind::Zebrad => {
-                let cfg = services::validator::ZebradConfig {
+                let cfg = zingo_infra_services::validator::ZebradConfig {
                     zebrad_bin: ZEBRAD_BIN.clone(),
                     network_listen_port: None,
                     rpc_listen_port: Some(zebrad_rpc_listen_port),
-                    activation_heights: services::network::ActivationHeights::default(),
-                    miner_address: services::validator::ZEBRAD_DEFAULT_MINER,
+                    activation_heights: zingo_infra_services::network::ActivationHeights::default(),
+                    miner_address: zingo_infra_services::validator::ZEBRAD_DEFAULT_MINER,
                     chain_cache,
                     network,
                 };
@@ -398,7 +432,7 @@ impl TestManager {
         // Launch Zingolib Lightclients:
         let clients = if enable_clients {
             let lightclient_dir = tempfile::tempdir().unwrap();
-            let lightclients = zingo_infra_testutils::client::build_lightclients(
+            let lightclients = build_lightclients(
                 lightclient_dir.path().to_path_buf(),
                 zaino_grpc_listen_address
                     .expect("Error launching zingo lightclients. `enable_zaino` is None.")
@@ -441,138 +475,80 @@ impl Drop for TestManager {
     }
 }
 
+/// Builds a client for creating RPC requests to the indexer/light-node
+pub fn build_client(
+    uri: http::Uri,
+) -> impl std::future::Future<Output = Result<CompactTxStreamerClient<UnderlyingService>, GetClientError>>
+{
+    GrpcConnector::new(uri).get_client()
+}
 #[cfg(test)]
-mod tests {
+mod launch_testmanager {
+
     use super::*;
 
-    #[tokio::test]
-    async fn launch_testmanager_zebrad() {
-        let mut test_manager = TestManager::launch("zebrad", None, None, false, true, true, false)
+    mod zcashd {
+
+        use super::*;
+
+        #[tokio::test]
+        pub(crate) async fn basic() {
+            let mut test_manager =
+                TestManager::launch(&ValidatorKind::Zcashd, None, None, false, true, true, false)
+                    .await
+                    .unwrap();
+            assert_eq!(
+                1,
+                u32::from(test_manager.local_net.get_chain_height().await)
+            );
+            test_manager.close().await;
+        }
+
+        #[tokio::test]
+        pub(crate) async fn generate_blocks() {
+            let mut test_manager =
+                TestManager::launch(&ValidatorKind::Zcashd, None, None, false, true, true, false)
+                    .await
+                    .unwrap();
+            assert_eq!(
+                1,
+                u32::from(test_manager.local_net.get_chain_height().await)
+            );
+            test_manager.local_net.generate_blocks(1).await.unwrap();
+            assert_eq!(
+                2,
+                u32::from(test_manager.local_net.get_chain_height().await)
+            );
+            test_manager.close().await;
+        }
+
+        #[tokio::test]
+        pub(crate) async fn with_chain() {
+            let mut test_manager = TestManager::launch(
+                &ValidatorKind::Zcashd,
+                None,
+                ZCASHD_CHAIN_CACHE_DIR.clone(),
+                false,
+                true,
+                true,
+                false,
+            )
             .await
             .unwrap();
-        assert_eq!(
-            1,
-            u32::from(test_manager.local_net.get_chain_height().await)
-        );
-        test_manager.close().await;
-    }
+            assert_eq!(
+                10,
+                u32::from(test_manager.local_net.get_chain_height().await)
+            );
+            test_manager.close().await;
+        }
 
-    #[tokio::test]
-    async fn launch_testmanager_zcashd() {
-        let mut test_manager = TestManager::launch("zcashd", None, None, false, true, true, false)
-            .await
-            .unwrap();
-        assert_eq!(
-            1,
-            u32::from(test_manager.local_net.get_chain_height().await)
-        );
-        test_manager.close().await;
-    }
-
-    #[tokio::test]
-    async fn launch_testmanager_zebrad_generate_blocks() {
-        let mut test_manager = TestManager::launch("zebrad", None, None, false, true, true, false)
-            .await
-            .unwrap();
-        assert_eq!(
-            1,
-            u32::from(test_manager.local_net.get_chain_height().await)
-        );
-        test_manager.local_net.generate_blocks(1).await.unwrap();
-        assert_eq!(
-            2,
-            u32::from(test_manager.local_net.get_chain_height().await)
-        );
-        test_manager.close().await;
-    }
-
-    #[tokio::test]
-    async fn launch_testmanager_zcashd_generate_blocks() {
-        let mut test_manager = TestManager::launch("zcashd", None, None, false, true, true, false)
-            .await
-            .unwrap();
-        assert_eq!(
-            1,
-            u32::from(test_manager.local_net.get_chain_height().await)
-        );
-        test_manager.local_net.generate_blocks(1).await.unwrap();
-        assert_eq!(
-            2,
-            u32::from(test_manager.local_net.get_chain_height().await)
-        );
-        test_manager.close().await;
-    }
-
-    #[tokio::test]
-    async fn launch_testmanager_zebrad_with_chain() {
-        let mut test_manager = TestManager::launch(
-            "zebrad",
-            None,
-            ZEBRAD_CHAIN_CACHE_DIR.clone(),
-            false,
-            true,
-            true,
-            false,
-        )
-        .await
-        .unwrap();
-        assert_eq!(
-            52,
-            u32::from(test_manager.local_net.get_chain_height().await)
-        );
-        test_manager.close().await;
-    }
-
-    #[tokio::test]
-    async fn launch_testmanager_zcashd_with_chain() {
-        let mut test_manager = TestManager::launch(
-            "zcashd",
-            None,
-            ZCASHD_CHAIN_CACHE_DIR.clone(),
-            false,
-            true,
-            true,
-            false,
-        )
-        .await
-        .unwrap();
-        assert_eq!(
-            10,
-            u32::from(test_manager.local_net.get_chain_height().await)
-        );
-        test_manager.close().await;
-    }
-
-    #[tokio::test]
-    async fn launch_testmanager_zebrad_zaino() {
-        let mut test_manager = TestManager::launch("zebrad", None, None, true, true, true, false)
-            .await
-            .unwrap();
-        let mut grpc_client =
-            zingo_infra_testutils::client::build_client(services::network::localhost_uri(
-                test_manager
-                    .zaino_grpc_listen_address
-                    .expect("Zaino listen port not available but zaino is active.")
-                    .port(),
-            ))
-            .await
-            .unwrap();
-        dbg!(grpc_client
-            .get_lightd_info(tonic::Request::new(
-                zcash_client_backend::proto::service::Empty {},
-            ))
-            .await
-            .unwrap());
-        test_manager.close().await;
-    }
-
-    #[tokio::test]
-    async fn launch_testmanager_zcashd_zaino() {
-        let mut test_manager = TestManager::launch("zcashd", None, None, true, true, true, false)
-            .await
-            .unwrap();
-        let mut grpc_client =
-            zingo_infra_testutils::client::build_client(services::network::localhost_uri(
+        #[tokio::test]
+        pub(crate) async fn zaino() {
+            let mut test_manager =
+                TestManager::launch(&ValidatorKind::Zcashd, None, None, true, true, true, false)
+                    .await
+                    .unwrap();
+            let mut grpc_client = build_client(services::network::localhost_uri(
                 test_manager
                     .zaino_grpc_listen_address
                     .expect("Zaino listen port is not available but zaino is active.")
@@ -580,251 +556,280 @@ mod tests {
             ))
             .await
             .unwrap();
-        dbg!(grpc_client
-            .get_lightd_info(tonic::Request::new(
-                zcash_client_backend::proto::service::Empty {},
+            dbg!(grpc_client
+                .get_lightd_info(tonic::Request::new(
+                    zcash_client_backend::proto::service::Empty {},
+                ))
+                .await
+                .unwrap());
+            test_manager.close().await;
+        }
+
+        #[tokio::test]
+        pub(crate) async fn zaino_clients() {
+            let mut test_manager =
+                TestManager::launch(&ValidatorKind::Zcashd, None, None, true, true, true, true)
+                    .await
+                    .unwrap();
+            let clients = test_manager
+                .clients
+                .as_ref()
+                .expect("Clients are not initialized");
+            dbg!(clients.faucet.do_info().await);
+            dbg!(clients.recipient.do_info().await);
+            test_manager.close().await;
+        }
+
+        /// This test shows currently we do not receive mining rewards from Zebra unless we mine 100 blocks at a time.
+        /// This is not the case with Zcashd and should not be the case here.
+        /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
+        #[tokio::test]
+        pub(crate) async fn zaino_clients_receive_mining_reward() {
+            let mut test_manager =
+                TestManager::launch(&ValidatorKind::Zcashd, None, None, true, true, true, true)
+                    .await
+                    .unwrap();
+            let clients = test_manager
+                .clients
+                .as_ref()
+                .expect("Clients are not initialized");
+
+            clients.faucet.do_sync(true).await.unwrap();
+            dbg!(clients.faucet.do_balance().await);
+
+            assert!(
+                    clients.faucet.do_balance().await.orchard_balance.unwrap() > 0
+                        || clients.faucet.do_balance().await.transparent_balance.unwrap() > 0,
+                    "No mining reward received from Zcashd. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
+                    clients.faucet.do_balance().await.orchard_balance.unwrap(),
+                    clients.faucet.do_balance().await.transparent_balance.unwrap()
+                );
+
+            test_manager.close().await;
+        }
+    }
+
+    mod zebrad {
+        use super::*;
+
+        #[tokio::test]
+        pub(crate) async fn basic() {
+            let mut test_manager =
+                TestManager::launch(&ValidatorKind::Zebrad, None, None, false, true, true, false)
+                    .await
+                    .unwrap();
+            assert_eq!(
+                1,
+                u32::from(test_manager.local_net.get_chain_height().await)
+            );
+            test_manager.close().await;
+        }
+
+        #[tokio::test]
+        pub(crate) async fn generate_blocks() {
+            let mut test_manager =
+                TestManager::launch(&ValidatorKind::Zebrad, None, None, false, true, true, false)
+                    .await
+                    .unwrap();
+            assert_eq!(
+                1,
+                u32::from(test_manager.local_net.get_chain_height().await)
+            );
+            test_manager.local_net.generate_blocks(1).await.unwrap();
+            assert_eq!(
+                2,
+                u32::from(test_manager.local_net.get_chain_height().await)
+            );
+            test_manager.close().await;
+        }
+
+        #[tokio::test]
+        pub(crate) async fn with_chain() {
+            let mut test_manager = TestManager::launch(
+                &ValidatorKind::Zebrad,
+                None,
+                ZEBRAD_CHAIN_CACHE_DIR.clone(),
+                false,
+                true,
+                true,
+                false,
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                52,
+                u32::from(test_manager.local_net.get_chain_height().await)
+            );
+            test_manager.close().await;
+        }
+
+        #[tokio::test]
+        pub(crate) async fn zaino() {
+            let mut test_manager =
+                TestManager::launch(&ValidatorKind::Zebrad, None, None, true, true, true, false)
+                    .await
+                    .unwrap();
+            let mut grpc_client = build_client(services::network::localhost_uri(
+                test_manager
+                    .zaino_grpc_listen_address
+                    .expect("Zaino listen port not available but zaino is active.")
+                    .port(),
             ))
             .await
-            .unwrap());
-        test_manager.close().await;
-    }
-
-    #[tokio::test]
-    async fn launch_testmanager_zebrad_zaino_clients() {
-        let mut test_manager = TestManager::launch("zebrad", None, None, true, true, true, true)
-            .await
             .unwrap();
-        let clients = test_manager
-            .clients
-            .as_ref()
-            .expect("Clients are not initialized");
-        dbg!(clients.faucet.do_info().await);
-        dbg!(clients.recipient.do_info().await);
-        test_manager.close().await;
-    }
+            dbg!(grpc_client
+                .get_lightd_info(tonic::Request::new(
+                    zcash_client_backend::proto::service::Empty {},
+                ))
+                .await
+                .unwrap());
+            test_manager.close().await;
+        }
 
-    #[tokio::test]
-    async fn launch_testmanager_zcashd_zaino_clients() {
-        let mut test_manager = TestManager::launch("zcashd", None, None, true, true, true, true)
-            .await
-            .unwrap();
-        let clients = test_manager
-            .clients
-            .as_ref()
-            .expect("Clients are not initialized");
-        dbg!(clients.faucet.do_info().await);
-        dbg!(clients.recipient.do_info().await);
-        test_manager.close().await;
-    }
+        #[tokio::test]
+        pub(crate) async fn zaino_clients() {
+            let mut test_manager =
+                TestManager::launch(&ValidatorKind::Zebrad, None, None, true, true, true, true)
+                    .await
+                    .unwrap();
+            let clients = test_manager
+                .clients
+                .as_ref()
+                .expect("Clients are not initialized");
+            dbg!(clients.faucet.do_info().await);
+            dbg!(clients.recipient.do_info().await);
+            test_manager.close().await;
+        }
 
-    /// This test shows currently we do not receive mining rewards from Zebra unless we mine 100 blocks at a time.
-    /// This is not the case with Zcashd and should not be the case here.
-    /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
-    #[tokio::test]
-    async fn launch_testmanager_zebrad_zaino_clients_receive_mining_reward() {
-        let mut test_manager = TestManager::launch("zebrad", None, None, true, true, true, true)
-            .await
-            .unwrap();
-        let clients = test_manager
-            .clients
-            .as_ref()
-            .expect("Clients are not initialized");
+        /// This test shows currently we do not receive mining rewards from Zebra unless we mine 100 blocks at a time.
+        /// This is not the case with Zcashd and should not be the case here.
+        /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
+        #[tokio::test]
+        pub(crate) async fn zaino_clients_receive_mining_reward() {
+            let mut test_manager =
+                TestManager::launch(&ValidatorKind::Zebrad, None, None, true, true, true, true)
+                    .await
+                    .unwrap();
+            let clients = test_manager
+                .clients
+                .as_ref()
+                .expect("Clients are not initialized");
 
-        clients.faucet.do_sync(true).await.unwrap();
-        dbg!(clients.faucet.do_balance().await);
+            clients.faucet.do_sync(true).await.unwrap();
+            dbg!(clients.faucet.do_balance().await);
 
-        test_manager.local_net.generate_blocks(100).await.unwrap();
-        clients.faucet.do_sync(true).await.unwrap();
-        dbg!(clients.faucet.do_balance().await);
+            test_manager.local_net.generate_blocks(100).await.unwrap();
+            clients.faucet.do_sync(true).await.unwrap();
+            dbg!(clients.faucet.do_balance().await);
 
-        assert!(
-                clients.faucet.do_balance().await.orchard_balance.unwrap() > 0
-                    || clients.faucet.do_balance().await.transparent_balance.unwrap() > 0,
-                "No mining reward received from Zebrad. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
-                clients.faucet.do_balance().await.orchard_balance.unwrap(),
-                clients.faucet.do_balance().await.transparent_balance.unwrap()
-        );
+            assert!(
+                    clients.faucet.do_balance().await.orchard_balance.unwrap() > 0
+                        || clients.faucet.do_balance().await.transparent_balance.unwrap() > 0,
+                    "No mining reward received from Zebrad. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
+                    clients.faucet.do_balance().await.orchard_balance.unwrap(),
+                    clients.faucet.do_balance().await.transparent_balance.unwrap()
+            );
 
-        test_manager.close().await;
-    }
+            test_manager.close().await;
+        }
 
-    #[tokio::test]
-    async fn launch_testmanager_zcashd_zaino_clients_receive_mining_reward() {
-        let mut test_manager = TestManager::launch("zcashd", None, None, true, true, true, true)
-            .await
-            .unwrap();
-        let clients = test_manager
-            .clients
-            .as_ref()
-            .expect("Clients are not initialized");
+        #[tokio::test]
+        pub(crate) async fn zaino_clients_receive_mining_reward_and_send() {
+            let mut test_manager =
+                TestManager::launch(&ValidatorKind::Zebrad, None, None, true, true, true, true)
+                    .await
+                    .unwrap();
+            let clients = test_manager
+                .clients
+                .as_ref()
+                .expect("Clients are not initialized");
 
-        clients.faucet.do_sync(true).await.unwrap();
-        dbg!(clients.faucet.do_balance().await);
+            test_manager.local_net.generate_blocks(100).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            clients.faucet.do_sync(true).await.unwrap();
+            dbg!(clients.faucet.do_balance().await);
 
-        assert!(
-                clients.faucet.do_balance().await.orchard_balance.unwrap() > 0
-                    || clients.faucet.do_balance().await.transparent_balance.unwrap() > 0,
-                "No mining reward received from Zcashd. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
+            assert!(
+                clients
+                    .faucet
+                    .do_balance()
+                    .await
+                    .transparent_balance
+                    .unwrap()
+                    > 0,
+                "No mining reward received from Zebrad. Faucet Transparent Balance: {:}.",
+                clients
+                    .faucet
+                    .do_balance()
+                    .await
+                    .transparent_balance
+                    .unwrap()
+            );
+
+            // *Send all transparent funds to own orchard address.
+            clients.faucet.quick_shield().await.unwrap();
+            test_manager.local_net.generate_blocks(1).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            clients.faucet.do_sync(true).await.unwrap();
+            dbg!(clients.faucet.do_balance().await);
+
+            assert!(
+                clients.faucet.do_balance().await.orchard_balance.unwrap() > 0,
+                "No funds received from shield. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
                 clients.faucet.do_balance().await.orchard_balance.unwrap(),
                 clients.faucet.do_balance().await.transparent_balance.unwrap()
             );
 
-        test_manager.close().await;
-    }
-
-    #[tokio::test]
-    async fn launch_testmanager_zebrad_zaino_clients_receive_mining_reward_and_send() {
-        let mut test_manager = TestManager::launch("zebrad", None, None, true, true, true, true)
+            zingolib::testutils::lightclient::from_inputs::quick_send(
+                &clients.faucet,
+                vec![(
+                    &clients.get_recipient_address("sapling").await,
+                    250_000,
+                    None,
+                )],
+            )
             .await
             .unwrap();
-        let clients = test_manager
-            .clients
-            .as_ref()
-            .expect("Clients are not initialized");
 
-        test_manager.local_net.generate_blocks(100).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
-        dbg!(clients.faucet.do_balance().await);
+            test_manager.local_net.generate_blocks(1).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            clients.recipient.do_sync(true).await.unwrap();
+            dbg!(clients.recipient.do_balance().await);
 
-        assert!(
-            clients
-                .faucet
-                .do_balance()
-                .await
-                .transparent_balance
-                .unwrap()
-                > 0,
-            "No mining reward received from Zebrad. Faucet Transparent Balance: {:}.",
-            clients
-                .faucet
-                .do_balance()
-                .await
-                .transparent_balance
-                .unwrap()
-        );
+            assert_eq!(
+                clients
+                    .recipient
+                    .do_balance()
+                    .await
+                    .verified_sapling_balance
+                    .unwrap(),
+                250_000
+            );
 
-        // *Send all transparent funds to own orchard address.
-        clients.faucet.quick_shield().await.unwrap();
-        test_manager.local_net.generate_blocks(1).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
-        dbg!(clients.faucet.do_balance().await);
+            test_manager.close().await;
+        }
 
-        assert!(
-            clients.faucet.do_balance().await.orchard_balance.unwrap() > 0,
-            "No funds received from shield. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
-            clients.faucet.do_balance().await.orchard_balance.unwrap(),
-            clients.faucet.do_balance().await.transparent_balance.unwrap()
-        );
-
-        zingolib::testutils::lightclient::from_inputs::quick_send(
-            &clients.faucet,
-            vec![(
-                &clients.get_recipient_address("sapling").await,
-                250_000,
-                None,
-            )],
-        )
-        .await
-        .unwrap();
-
-        test_manager.local_net.generate_blocks(1).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.recipient.do_sync(true).await.unwrap();
-        dbg!(clients.recipient.do_balance().await);
-
-        assert_eq!(
-            clients
-                .recipient
-                .do_balance()
-                .await
-                .verified_sapling_balance
-                .unwrap(),
-            250_000
-        );
-
-        test_manager.close().await;
-    }
-
-    #[tokio::test]
-    async fn launch_testmanager_zcashd_zaino_clients_receive_mining_reward_and_send() {
-        let mut test_manager = TestManager::launch("zcashd", None, None, true, true, true, true)
+        #[ignore = "requires fully synced testnet."]
+        #[tokio::test]
+        pub(crate) async fn zaino_testnet() {
+            let mut test_manager = TestManager::launch(
+                &ValidatorKind::Zebrad,
+                Some(services::network::Network::Testnet),
+                ZEBRAD_TESTNET_CACHE_DIR.clone(),
+                true,
+                true,
+                true,
+                true,
+            )
             .await
             .unwrap();
-        let clients = test_manager
-            .clients
-            .as_ref()
-            .expect("Clients are not initialized");
-
-        clients.faucet.do_sync(true).await.unwrap();
-        dbg!(clients.faucet.do_balance().await);
-
-        assert!(
-            clients
-                .faucet
-                .do_balance()
-                .await
-                .verified_orchard_balance
-                .unwrap()
-                > 0,
-            "No mining reward received from Zcashd. Faucet Orchard Balance: {:}.",
-            clients
-                .faucet
-                .do_balance()
-                .await
-                .verified_orchard_balance
-                .unwrap()
-        );
-
-        zingolib::testutils::lightclient::from_inputs::quick_send(
-            &clients.faucet,
-            vec![(
-                &clients.get_recipient_address("sapling").await,
-                250_000,
-                None,
-            )],
-        )
-        .await
-        .unwrap();
-
-        test_manager.local_net.generate_blocks(1).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.recipient.do_sync(true).await.unwrap();
-        dbg!(clients.recipient.do_balance().await);
-
-        assert_eq!(
-            clients
-                .recipient
-                .do_balance()
-                .await
-                .verified_sapling_balance
-                .unwrap(),
-            250_000
-        );
-
-        test_manager.close().await;
-    }
-
-    #[tokio::test]
-    async fn launch_testmanager_zebrad_zaino_testnet() {
-        let mut test_manager = TestManager::launch(
-            "zebrad",
-            Some(services::network::Network::Testnet),
-            ZEBRAD_TESTNET_CACHE_DIR.clone(),
-            true,
-            true,
-            true,
-            true,
-        )
-        .await
-        .unwrap();
-        let clients = test_manager
-            .clients
-            .as_ref()
-            .expect("Clients are not initialized");
-        dbg!(clients.faucet.do_info().await);
-        dbg!(clients.recipient.do_info().await);
-        test_manager.close().await;
+            let clients = test_manager
+                .clients
+                .as_ref()
+                .expect("Clients are not initialized");
+            dbg!(clients.faucet.do_info().await);
+            dbg!(clients.recipient.do_info().await);
+            test_manager.close().await;
+        }
     }
 }

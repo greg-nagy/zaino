@@ -14,7 +14,7 @@ use zaino_fetch::{
 };
 use zaino_proto::proto::compact_formats::{ChainMetadata, CompactBlock, CompactOrchardAction};
 use zebra_chain::block::{Hash, Height};
-use zebra_state::HashOrHeight;
+use zebra_state::{HashOrHeight, ReadStateService};
 
 /// Zaino's internal compact block cache.
 ///
@@ -22,6 +22,7 @@ use zebra_state::HashOrHeight;
 #[derive(Debug)]
 pub struct BlockCache {
     fetcher: JsonRpSeeConnector,
+    state: Option<ReadStateService>,
     non_finalised_state: NonFinalisedState,
     /// The state below the last 100 blocks, determined
     /// to be probabalistically nonreorgable
@@ -31,15 +32,21 @@ pub struct BlockCache {
 
 impl BlockCache {
     /// Spawns a new [`BlockCache`].
+    ///
+    /// Inputs:
+    /// - fetcher: JsonRPC client.
+    /// - state: Zebra ReadStateService.
+    /// - config: Block cache configuration data.
     pub async fn spawn(
         fetcher: &JsonRpSeeConnector,
+        state: Option<&ReadStateService>,
         config: BlockCacheConfig,
     ) -> Result<Self, BlockCacheError> {
         info!("Launching Local Block Cache..");
         let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(100);
 
         let finalised_state = if !config.no_db {
-            Some(FinalisedState::spawn(fetcher, channel_rx, config.clone()).await?)
+            Some(FinalisedState::spawn(fetcher, state, channel_rx, config.clone()).await?)
         } else {
             None
         };
@@ -49,6 +56,7 @@ impl BlockCache {
 
         Ok(BlockCache {
             fetcher: fetcher.clone(),
+            state: state.cloned(),
             non_finalised_state,
             finalised_state,
             config,
@@ -63,6 +71,7 @@ impl BlockCache {
             .map(FinalisedState::subscriber);
         BlockCacheSubscriber {
             fetcher: self.fetcher.clone(),
+            state: self.state.clone(),
             non_finalised_state: self.non_finalised_state.subscriber(),
             finalised_state: finalised_state_subscriber,
             config: self.config.clone(),
@@ -99,6 +108,7 @@ impl BlockCache {
 #[derive(Debug, Clone)]
 pub struct BlockCacheSubscriber {
     fetcher: JsonRpSeeConnector,
+    state: Option<ReadStateService>,
     /// the last 100 blocks, stored separately as it could
     /// be changed by reorgs
     pub non_finalised_state: NonFinalisedStateSubscriber,
@@ -134,10 +144,29 @@ impl BlockCacheSubscriber {
                     .await
                     .map_err(BlockCacheError::FinalisedStateError),
                 // Fetch from Validator.
-                None => {
-                    let (_, block) = fetch_block_from_node(&self.fetcher, hash_or_height).await?;
-                    Ok(block)
-                }
+                None => match self.state.clone() {
+                    Some(state) => {
+                        match crate::state::get_compact_block(
+                            &state,
+                            hash_or_height,
+                            &self.config.network,
+                        )
+                        .await
+                        {
+                            Ok(block) => Ok(block),
+                            Err(_) => {
+                                let (_, block) =
+                                    fetch_block_from_node(&self.fetcher, hash_or_height).await?;
+                                Ok(block)
+                            }
+                        }
+                    }
+                    None => {
+                        let (_, block) =
+                            fetch_block_from_node(&self.fetcher, hash_or_height).await?;
+                        Ok(block)
+                    }
+                },
             }
         }
     }

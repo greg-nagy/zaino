@@ -6,8 +6,12 @@ use std::time;
 use tokio::{sync::mpsc, time::timeout};
 use tonic::async_trait;
 use tracing::{info, warn};
+use zebra_state::HashOrHeight;
 
-use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
+use zebra_chain::{
+    block::{Hash, Height},
+    subtree::NoteCommitmentSubtreeIndex,
+};
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
@@ -92,8 +96,9 @@ impl ZcashService for FetchService {
             zebra_build_data.build,
             zebra_build_data.subversion,
         );
+        info!("Using Zcash build: {}", data);
 
-        let block_cache = BlockCache::spawn(&fetcher, config.clone().into()).await?;
+        let block_cache = BlockCache::spawn(&fetcher, None, config.clone().into()).await?;
 
         let mempool = Mempool::spawn(&fetcher, None).await?;
 
@@ -105,7 +110,7 @@ impl ZcashService for FetchService {
             config,
         };
 
-        while fetch_service.status() != StatusType::Ready {
+        while fetch_service.status().await != StatusType::Ready {
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
 
@@ -124,7 +129,7 @@ impl ZcashService for FetchService {
     }
 
     /// Fetches the current status
-    fn status(&self) -> StatusType {
+    async fn status(&self) -> StatusType {
         let mempool_status = self.mempool.status();
         let block_cache_status = self.block_cache.status();
 
@@ -418,8 +423,8 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .into())
     }
 
-    async fn chain_height(&self) -> Result<u32, Self::Error> {
-        Ok(self.block_cache.get_chain_height().await?.0)
+    async fn chain_height(&self) -> Result<Height, Self::Error> {
+        Ok(self.block_cache.get_chain_height().await?)
     }
     /// Returns the transaction ids made by the provided transparent addresses.
     ///
@@ -491,12 +496,11 @@ impl LightWalletIndexer for FetchServiceSubscriber {
     /// Return the height of the tip of the best chain
     async fn get_latest_block(&self) -> Result<BlockId, Self::Error> {
         let latest_height = self.block_cache.get_chain_height().await?;
-        let mut latest_hash = self
+        let latest_hash = self
             .block_cache
             .get_compact_block(latest_height.0.to_string())
             .await?
             .hash;
-        latest_hash.reverse();
 
         Ok(BlockId {
             height: latest_height.0 as u64,
@@ -506,35 +510,57 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
     /// Return the compact block corresponding to the given block identifier
     async fn get_block(&self, request: BlockId) -> Result<CompactBlock, Self::Error> {
-        let height: u32 = match request.height.try_into() {
-            Ok(height) => height,
-            Err(_) => {
-                return Err(FetchServiceError::TonicStatusError(
-                    tonic::Status::invalid_argument(
-                        "Error: Height out of range. Failed to convert to u32.",
-                    ),
-                ));
-            }
-        };
-        match self.block_cache.get_compact_block(height.to_string()).await {
+        let hash_or_height: HashOrHeight = <[u8; 32]>::try_from(request.hash)
+            .map(Hash)
+            .map(HashOrHeight::from)
+            .or_else(|_| {
+                request
+                    .height
+                    .try_into()
+                    .map(|height| HashOrHeight::Height(Height(height)))
+            })
+            .map_err(|_| {
+                FetchServiceError::TonicStatusError(tonic::Status::invalid_argument(
+                    "Error: Invalid hash and/or height out of range. Failed to convert to u32.",
+                ))
+            })?;
+        match self
+            .block_cache
+            .get_compact_block(hash_or_height.to_string())
+            .await
+        {
             Ok(block) => Ok(block),
             Err(e) => {
                 let chain_height = self.block_cache.get_chain_height().await?.0;
-                if height >= chain_height {
-                    Err(FetchServiceError::TonicStatusError(tonic::Status::out_of_range(
-                            format!(
-                                "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
-                                height, chain_height,
-                            )
-                        )))
-                } else {
+                match hash_or_height {
+                    HashOrHeight::Height(Height(height)) if height >= chain_height => Err(
+                        FetchServiceError::TonicStatusError(tonic::Status::out_of_range(format!(
+                            "Error: Height out of range [{}]. Height requested \
+                                is greater than the best chain tip [{}].",
+                            hash_or_height, chain_height,
+                        ))),
+                    ),
+                    HashOrHeight::Height(height)
+                        if height > self.data.network().sapling_activation_height() =>
+                    {
+                        Err(FetchServiceError::TonicStatusError(
+                            tonic::Status::out_of_range(format!(
+                                "Error: Height out of range [{}]. Height requested \
+                                is below sapling activation height [{}].",
+                                hash_or_height, chain_height,
+                            )),
+                        ))
+                    }
+                    _otherwise =>
                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                    Err(FetchServiceError::TonicStatusError(tonic::Status::unknown(
-                        format!(
-                            "Error: Failed to retrieve block from node. Server Error: {}",
-                            e,
-                        ),
-                    )))
+                    {
+                        Err(FetchServiceError::TonicStatusError(tonic::Status::unknown(
+                            format!(
+                                "Error: Failed to retrieve block from node. Server Error: {}",
+                                e,
+                            ),
+                        )))
+                    }
                 }
             }
         }
@@ -839,7 +865,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                         let transaction =
                             fetch_service_clone.get_raw_transaction(txid, Some(1)).await;
                         if handle_raw_transaction::<Self>(
-                            chain_height as u64,
+                            chain_height.0 as u64,
                             transaction,
                             transmitter.clone(),
                         )
@@ -1596,9 +1622,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         let sapling_activation_height = blockchain_info
             .upgrades()
             .get(&sapling_id)
-            .map_or(zebra_chain::block::Height(1), |sapling_json| {
-                sapling_json.into_parts().1
-            });
+            .map_or(Height(1), |sapling_json| sapling_json.into_parts().1);
 
         let consensus_branch_id = zebra_chain::parameters::ConsensusBranchId::from(
             blockchain_info.consensus().into_parts().0,

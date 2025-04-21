@@ -1,5 +1,7 @@
 //! Contains utility funcitonality for Zaino-State.
 
+use std::fmt;
+
 use zebra_chain::parameters::Network;
 
 /// Zaino build info.
@@ -37,6 +39,16 @@ impl BuildInfo {
 
     pub(crate) fn version(&self) -> String {
         self.version.clone()
+    }
+}
+
+impl fmt::Display for BuildInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Version: {}", self.version)?;
+        writeln!(f, "Commit Hash: {}", self.commit_hash)?;
+        writeln!(f, "Branch: {}", self.branch)?;
+        writeln!(f, "Build Date: {}", self.build_date)?;
+        writeln!(f, "Build User: {}", self.build_user)
     }
 }
 
@@ -88,5 +100,16 @@ impl ServiceMetadata {
 
     pub(crate) fn zebra_subversion(&self) -> String {
         self.zebra_subversion.clone()
+    }
+}
+
+impl fmt::Display for ServiceMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Zaino Service Metadata")?;
+        writeln!(f, "-----------------------")?;
+        writeln!(f, "Build Info:\n{}", self.build_info)?;
+        writeln!(f, "Network: {}", self.network)?;
+        writeln!(f, "Zebra Build: {}", self.zebra_build)?;
+        writeln!(f, "Zebra Subversion: {}", self.zebra_subversion)
     }
 }

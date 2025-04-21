@@ -11,7 +11,7 @@ use zaino_proto::proto::{
         SendResponse, TransparentAddressBlockFilter, TreeState, TxFilter,
     },
 };
-use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
+use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
@@ -78,7 +78,7 @@ pub trait ZcashService: Sized {
     fn get_subscriber(&self) -> IndexerSubscriber<Self::Subscriber>;
 
     /// Fetches the current status
-    fn status(&self) -> StatusType;
+    async fn status(&self) -> StatusType;
 
     /// Shuts down the StateService.
     fn close(&mut self);
@@ -348,8 +348,10 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     ) -> Result<Vec<GetAddressUtxos>, Self::Error>;
 
     /// Helper function to get the chain height
-    async fn chain_height(&self) -> Result<u32, Self::Error>;
+    async fn chain_height(&self) -> Result<Height, Self::Error>;
 
+    /// Helper function, to get the list of taddresses that have sends or reciepts
+    /// within a given block range
     async fn get_taddress_txids_helper(
         &self,
         request: TransparentAddressBlockFilter,
@@ -359,7 +361,7 @@ pub trait ZcashIndexer: Send + Sync + 'static {
             Some(range) => match (range.start, range.end) {
                 (Some(start), Some(end)) => {
                     let start = match u32::try_from(start.height) {
-                        Ok(height) => height.min(chain_height),
+                        Ok(height) => height.min(chain_height.0),
                         Err(_) => {
                             return Err(Self::Error::from(tonic::Status::invalid_argument(
                                 "Error: Start height out of range. Failed to convert to u32.",
@@ -367,7 +369,7 @@ pub trait ZcashIndexer: Send + Sync + 'static {
                         }
                     };
                     let end = match u32::try_from(end.height) {
-                        Ok(height) => height.min(chain_height),
+                        Ok(height) => height.min(chain_height.0),
                         Err(_) => {
                             return Err(Self::Error::from(tonic::Status::invalid_argument(
                                 "Error: End height out of range. Failed to convert to u32.",
