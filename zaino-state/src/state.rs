@@ -17,7 +17,7 @@ use crate::{
 };
 
 use zaino_fetch::{
-    chain::utils::ParseFromSlice,
+    chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
         response::TxidsResponse,
@@ -88,9 +88,12 @@ macro_rules! expected_read_response {
 
 /// Chain fetch service backed by Zebra's `ReadStateService` and `TrustedChainSync`.
 ///
-/// NOTE: We currently dop not implement clone for chain fetch services as this service is responsible for maintaining and closing its child processes.
-///       ServiceSubscribers are used to create separate chain fetch processes while allowing central state processes to be managed in a single place.
-///       If we want the ability to clone Service all JoinHandle's should be converted to Arc<JoinHandle>.
+/// NOTE: We currently dop not implement clone for chain fetch services
+/// as this service is responsible for maintaining and closing its child processes.
+///       ServiceSubscribers are used to create separate chain fetch processes
+/// while allowing central state processes to be managed in a single place.
+///       If we want the ability to clone Service all JoinHandle's should be
+/// converted to Arc<JoinHandle>.
 #[derive(Debug)]
 pub struct StateService {
     /// `ReadeStateService` from Zebra-State.
@@ -214,7 +217,8 @@ impl ZcashService for StateService {
 
     /// Returns the StateService's Status.
     ///
-    /// We first check for `status = StatusType::Closing` as this signifies a shutdown order from an external process.
+    /// We first check for `status = StatusType::Closing` as this signifies a shutdown order
+    /// from an external process.
     async fn status(&self) -> StatusType {
         let current_status = self.status.load().into();
         if current_status == StatusType::Closing {
@@ -275,14 +279,17 @@ impl StateServiceSubscriber {
     ///
     /// # Parameters
     ///
-    /// - `hash_or_height`: (string, required, example="1") The hash or height for the block to be returned.
-    /// - `verbose`: (bool, optional, default=false, example=true) false for hex encoded data, true for a json object
+    /// - `hash_or_height`: (string, required, example="1") The hash or height
+    /// for the block to be returned.
+    /// - `verbose`: (bool, optional, default=false, example=true) false for hex encoded data,
+    /// true for a json object
     ///
     /// # Notes
     ///
     /// The undocumented `chainwork` field is not returned.
     ///
-    /// This rpc is used by get_block(verbose), there is currently no plan to offer this RPC publicly.
+    /// This rpc is used by get_block(verbose), there is currently no
+    /// plan to offer this RPC publicly.
     async fn get_block_header(
         &self,
         hash_or_height: String,
@@ -353,7 +360,8 @@ impl StateServiceSubscriber {
             };
 
             // From <https://zcash.github.io/rpc/getblock.html>
-            // TODO: Deduplicate const definition, consider refactoring this to avoid duplicate logic
+            // TODO: Deduplicate const definition, consider
+            // refactoring this to avoid duplicate logic
             const NOT_IN_BEST_CHAIN_CONFIRMATIONS: i64 = -1;
 
             // Confirmations are one more than the depth.
@@ -460,16 +468,62 @@ impl StateServiceSubscriber {
         let service_timeout = self.config.service_timeout;
         let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
-            let timeout = timeout(time::Duration::from_secs((service_timeout*4) as u64), async {
-                    for height in start..=end {
+            let timeout = timeout(
+                time::Duration::from_secs((service_timeout * 4) as u64),
+                async {
+                    let mut blocks = Vec::new();
+
+                    match fetch_service_clone
+                        .block_cache
+                        .get_compact_block(end.to_string())
+                        .await
+                    {
+                        Ok(mut block) => {
+                            if trim_non_nullifier {
+                                block = compact_block_to_nullifiers(block);
+                            }
+                            blocks.push(block);
+                        }
+                        Err(e) => {
+                            if end >= chain_height {
+                                match channel_tx
+                                    .send(Err(tonic::Status::out_of_range(format!(
+                                        "Error: Height out of range [{}]. Height \
+                                            requested is greater than the best \
+                                            chain tip [{}].",
+                                        end, chain_height,
+                                    ))))
+                                    .await
+                                {
+                                    Ok(_) => (),
+                                    Err(e) => {
+                                        warn!(
+                                            "GetBlockRange channel closed \
+                                                unexpectedly: {}",
+                                            e
+                                        );
+                                    }
+                                }
+                            } else {
+                                // TODO: Hide server error from clients before
+                                // release. Currently useful for dev purposes.
+                                channel_tx
+                                    .send(Err(tonic::Status::unknown(e.to_string())))
+                                    .await;
+                            }
+                        }
+                    }
+                    for height in start..end {
                         let height = if rev_order {
                             end - (height - start)
                         } else {
                             height
                         };
-                        match fetch_service_clone.block_cache.get_compact_block(
-                            height.to_string(),
-                        ).await {
+                        match fetch_service_clone
+                            .block_cache
+                            .get_compact_block(height.to_string())
+                            .await
+                        {
                             Ok(mut block) => {
                                 if trim_non_nullifier {
                                     block = compact_block_to_nullifiers(block);
@@ -482,20 +536,21 @@ impl StateServiceSubscriber {
                                 if height >= chain_height {
                                     match channel_tx
                                         .send(Err(tonic::Status::out_of_range(format!(
-                                            "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
+                                            "Error: Height out of range [{}]. Height requested \
+                                            is greater than the best chain tip [{}].",
                                             height, chain_height,
                                         ))))
                                         .await
-
                                     {
                                         Ok(_) => break,
                                         Err(e) => {
-                                            warn!("GetBlockRange channel closed unexpectedly: {}", e);
+                                            warn!("GetBlockRange channel closed unexpectedly: {e}");
                                             break;
                                         }
                                     }
                                 } else {
-                                    // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                    // TODO: Hide server error from clients before release.
+                                    // Currently useful for dev purposes.
                                     if channel_tx
                                         .send(Err(tonic::Status::unknown(e.to_string())))
                                         .await
@@ -507,8 +562,9 @@ impl StateServiceSubscriber {
                             }
                         }
                     }
-                })
-                .await;
+                },
+            )
+            .await;
             match timeout {
                 Ok(_) => {}
                 Err(_) => {
@@ -530,14 +586,14 @@ impl StateServiceSubscriber {
     ) -> Result<CompactBlock, StateServiceError> {
         let chain_height = self.block_cache.get_chain_height().await?.0;
         Err(if height >= chain_height {
-            StateServiceError::TonicStatusError(tonic::Status::out_of_range(
-                            format!(
-                                "Error: Height out of range [{}]. Height requested is greater than the best chain tip [{}].",
-                                height, chain_height,
-                            )
-                        ))
+            StateServiceError::TonicStatusError(tonic::Status::out_of_range(format!(
+                "Error: Height out of range [{}]. Height requested \
+                                is greater than the best chain tip [{}].",
+                height, chain_height,
+            )))
         } else {
-            // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+            // TODO: Hide server error from clients before release.
+            // Currently useful for dev purposes.
             StateServiceError::TonicStatusError(tonic::Status::unknown(format!(
                 "Error: Failed to retrieve block from node. Server Error: {}",
                 e,
@@ -615,9 +671,11 @@ impl ZcashIndexer for StateServiceSubscriber {
                     // Zebra defines network upgrades based on incompatible consensus rule changes,
                     // but zcashd defines them based on ZIPs.
                     //
-                    // All the network upgrades with a consensus branch ID are the same in Zebra and zcashd.
+                    // All the network upgrades with a consensus branch ID
+                    // are the same in Zebra and zcashd.
                     network_upgrade.branch_id().map(|branch_id| {
-                        // zcashd's RPC seems to ignore Disabled network upgrades, so Zebra does too.
+                        // zcashd's RPC seems to ignore Disabled network upgrades,
+                        // so Zebra does too.
                         let status = if height >= activation_height {
                             NetworkUpgradeStatus::Active
                         } else {
@@ -709,7 +767,8 @@ impl ZcashIndexer for StateServiceSubscriber {
         &self,
         raw_transaction_hex: String,
     ) -> Result<SentTransactionHash, Self::Error> {
-        // Offload to the json rpc connector, as ReadStateService doesn't yet interface with the mempool
+        // Offload to the json rpc connector, as ReadStateService
+        // doesn't yet interface with the mempool
         self.rpc_client
             .send_raw_transaction(raw_transaction_hex)
             .await
@@ -801,7 +860,8 @@ impl ZcashIndexer for StateServiceSubscriber {
                             GetBlockTransaction::Object(TransactionObject {
                                 hex: transaction.as_ref().into(),
                                 height: Some(height.0),
-                                // Confirmations should never be greater than the current block height
+                                // Confirmations should never be greater than
+                                // the current block height
                                 confirmations: Some(confirmations as u32),
                             })
                         })
@@ -1097,8 +1157,9 @@ impl ZcashIndexer for StateServiceSubscriber {
         }
         if Height(start) > chain_height || Height(end) > chain_height {
             error_string = Some(format!(
-            "start {start:?} and end {end:?} must both be less than or equal to the chain tip {chain_height:?}")
-            );
+                "start {start:?} and end {end:?} must both be less than or \
+            equal to the chain tip {chain_height:?}"
+            ));
         }
         if let Some(e) = error_string {
             return Err(StateServiceError::RpcError(RpcError::new_from_legacycode(
@@ -1229,9 +1290,8 @@ impl LightWalletIndexer for StateServiceSubscriber {
         }
     }
 
-    /// Same as GetBlock except actions contain only nullifiers
-    ///
-    /// NOTE: Currently this only returns Orchard nullifiers to follow Lightwalletd functionality but Sapling could be added if required by wallets.
+    /// Same as GetBlock except actions contain only nullifiers,
+    /// and saling outputs are not returned (Sapling spends still are)
     async fn get_block_nullifiers(&self, request: BlockId) -> Result<CompactBlock, Self::Error> {
         let height: u32 = match request.height.try_into() {
             Ok(height) => height,
@@ -1366,9 +1426,12 @@ impl LightWalletIndexer for StateServiceSubscriber {
         &self,
         _request: AddressStream,
     ) -> Result<zaino_proto::proto::service::Balance, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(tonic::Status::unimplemented(
-            "Not yet implemented. If you require this RPC please open an issue or PR at the Zaino github (https://github.com/zingolabs/zaino.git)."
-        )))
+        Err(crate::error::StateServiceError::TonicStatusError(
+            tonic::Status::unimplemented(
+                "Not yet implemented. If you require this RPC please \
+            open an issue or PR at the Zaino github (https://github.com/zingolabs/zaino.git).",
+            ),
+        ))
     }
 
     /// Return the compact transactions currently in the mempool; the results
@@ -1398,7 +1461,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
         let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
         tokio::spawn(async move {
             let timeout = timeout(
-                time::Duration::from_secs((service_timeout*4) as u64),
+                time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
                     for (txid, transaction) in mempool.get_filtered_mempool(exclude_txids).await {
                         match transaction.0 {
@@ -1417,28 +1480,28 @@ impl LightWalletIndexer for StateServiceSubscriber {
                                         }
                                     }
                                 };
-                                match <zaino_fetch::chain::transaction::FullTransaction as ParseFromSlice>::parse_from_slice(
+                                match <FullTransaction as ParseFromSlice>::parse_from_slice(
                                     transaction_object.hex.as_ref(),
-                                    Some(vec!(txid_bytes)), None)
-                                {
+                                    Some(vec![txid_bytes]),
+                                    None,
+                                ) {
                                     Ok(transaction) => {
-                                        // ParseFromSlice returns any data left after the conversion to a
-                                        // FullTransaction, If the conversion has succeeded this should be empty.
+                                        // ParseFromSlice returns any data left after
+                                        // the conversion to a FullTransaction, If the
+                                        // conversion has succeeded this should be empty.
                                         if transaction.0.is_empty() {
-                                            if channel_tx.send(
-                                                transaction
-                                                .1
-                                                .to_compact(0)
-                                                .map_err(|e| {
-                                                    tonic::Status::unknown(
-                                                        e.to_string()
-                                                    )
-                                                })
-                                            ).await.is_err() {
-                                                break
+                                            if channel_tx
+                                                .send(transaction.1.to_compact(0).map_err(|e| {
+                                                    tonic::Status::unknown(e.to_string())
+                                                }))
+                                                .await
+                                                .is_err()
+                                            {
+                                                break;
                                             }
                                         } else {
-                                            // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                            // TODO: Hide server error from clients before
+                                            // release. Currently useful for dev purposes.
                                             if channel_tx
                                                 .send(Err(tonic::Status::unknown("Error: ")))
                                                 .await
@@ -1447,9 +1510,10 @@ impl LightWalletIndexer for StateServiceSubscriber {
                                                 break;
                                             }
                                         }
-                                            }
+                                    }
                                     Err(e) => {
-                                        // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                        // TODO: Hide server error from clients
+                                        // before release. Currently useful for dev purposes.
                                         if channel_tx
                                             .send(Err(tonic::Status::unknown(e.to_string())))
                                             .await
@@ -1463,7 +1527,8 @@ impl LightWalletIndexer for StateServiceSubscriber {
                             GetRawTransaction::Raw(_) => {
                                 if channel_tx
                                     .send(Err(tonic::Status::internal(
-                                        "Error: Received raw transaction type, this should not be impossible.",
+                                        "Error: Received raw transaction type, \
+                                        this should not be possible.",
                                     )))
                                     .await
                                     .is_err()
@@ -1501,51 +1566,50 @@ impl LightWalletIndexer for StateServiceSubscriber {
         let mempool_height = self.block_cache.get_chain_height().await?.0;
         tokio::spawn(async move {
             let timeout = timeout(
-                time::Duration::from_secs((service_timeout*6) as u64),
+                time::Duration::from_secs((service_timeout * 6) as u64),
                 async {
-                    let (mut mempool_stream, _mempool_handle) =
-                        match mempool.get_mempool_stream().await {
-                            Ok(stream) => stream,
-                            Err(e) => {
-                                warn!("Error fetching stream from mempool: {:?}", e);
-                                channel_tx
-                                    .send(Err(tonic::Status::internal(
-                                        "Error getting mempool stream",
-                                    )))
-                                    .await
-                                    .ok();
-                                return;
-                            }
-                        };
+                    let (mut mempool_stream, _mempool_handle) = match mempool
+                        .get_mempool_stream()
+                        .await
+                    {
+                        Ok(stream) => stream,
+                        Err(e) => {
+                            warn!("Error fetching stream from mempool: {:?}", e);
+                            channel_tx
+                                .send(Err(tonic::Status::internal("Error getting mempool stream")))
+                                .await
+                                .ok();
+                            return;
+                        }
+                    };
                     while let Some(result) = mempool_stream.recv().await {
                         match result {
-                            Ok((_mempool_key, mempool_value)) => {
-                                match mempool_value.0 {
-                                    GetRawTransaction::Object(transaction_object) => {
-                                        if channel_tx
-                                            .send(Ok(RawTransaction {
-                                                data: transaction_object.hex.as_ref().to_vec(),
-                                                height: mempool_height as u64,
-                                            }))
-                                            .await
-                                            .is_err()
-                                        {
-                                            break;
-                                        }
-                                    }
-                                    GetRawTransaction::Raw(_) => {
-                                        if channel_tx
-                                            .send(Err(tonic::Status::internal(
-                                                "Error: Received raw transaction type, this should not be impossible.",
-                                            )))
-                                            .await
-                                            .is_err()
-                                        {
-                                            break;
-                                        }
+                            Ok((_mempool_key, mempool_value)) => match mempool_value.0 {
+                                GetRawTransaction::Object(transaction_object) => {
+                                    if channel_tx
+                                        .send(Ok(RawTransaction {
+                                            data: transaction_object.hex.as_ref().to_vec(),
+                                            height: mempool_height as u64,
+                                        }))
+                                        .await
+                                        .is_err()
+                                    {
+                                        break;
                                     }
                                 }
-                            }
+                                GetRawTransaction::Raw(_) => {
+                                    if channel_tx
+                                        .send(Err(tonic::Status::internal(
+                                            "Error: Received raw transaction type, \
+                                                this should not be possible.",
+                                        )))
+                                        .await
+                                        .is_err()
+                                    {
+                                        break;
+                                    }
+                                }
+                            },
                             Err(e) => {
                                 channel_tx
                                     .send(Err(tonic::Status::internal(format!(
@@ -1582,16 +1646,22 @@ impl LightWalletIndexer for StateServiceSubscriber {
     /// values also (even though they can be obtained using GetBlock).
     /// The block can be specified by either height or hash.
     async fn get_tree_state(&self, _request: BlockId) -> Result<TreeState, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(tonic::Status::unimplemented(
-            "Not yet implemented. If you require this RPC please open an issue or PR at the Zaino github (https://github.com/zingolabs/zaino.git)."
-        )))
+        Err(crate::error::StateServiceError::TonicStatusError(
+            tonic::Status::unimplemented(
+                "Not yet implemented. If you require this RPC please open an issue or \
+            PR at the Zaino github (https://github.com/zingolabs/zaino.git).",
+            ),
+        ))
     }
 
     /// GetLatestTreeState returns the note commitment tree state corresponding to the chain tip.
     async fn get_latest_tree_state(&self) -> Result<TreeState, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(tonic::Status::unimplemented(
-            "Not yet implemented. If you require this RPC please open an issue or PR at the Zaino github (https://github.com/zingolabs/zaino.git)."
-        )))
+        Err(crate::error::StateServiceError::TonicStatusError(
+            tonic::Status::unimplemented(
+                "Not yet implemented. If you require this RPC please open an issue or PR at \
+            the Zaino github (https://github.com/zingolabs/zaino.git).",
+            ),
+        ))
     }
 
     /// Returns a stream of information about roots of subtrees of the Sapling and Orchard
@@ -1600,44 +1670,58 @@ impl LightWalletIndexer for StateServiceSubscriber {
         &self,
         _request: GetSubtreeRootsArg,
     ) -> Result<SubtreeRootReplyStream, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(tonic::Status::unimplemented(
-            "Not yet implemented. If you require this RPC please open an issue or PR at the Zaino github (https://github.com/zingolabs/zaino.git)."
-        )))
+        Err(crate::error::StateServiceError::TonicStatusError(
+            tonic::Status::unimplemented(
+                "Not yet implemented. If you require this RPC please open an issue or PR \
+            at the Zaino github (https://github.com/zingolabs/zaino.git).",
+            ),
+        ))
     }
 
     /// Returns all unspent outputs for a list of addresses.
     ///
     /// Ignores all utxos below block height [GetAddressUtxosArg.start_height].
-    /// Returns max [GetAddressUtxosArg.max_entries] utxos, or unrestricted if [GetAddressUtxosArg.max_entries] = 0.
+    /// Returns max [GetAddressUtxosArg.max_entries] utxos, or unrestricted if
+    /// [GetAddressUtxosArg.max_entries] = 0.
     /// Utxos are collected and returned as a single Vec.
     async fn get_address_utxos(
         &self,
         _request: GetAddressUtxosArg,
     ) -> Result<GetAddressUtxosReplyList, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(tonic::Status::unimplemented(
-            "Not yet implemented. If you require this RPC please open an issue or PR at the Zaino github (https://github.com/zingolabs/zaino.git)."
-        )))
+        Err(crate::error::StateServiceError::TonicStatusError(
+            tonic::Status::unimplemented(
+                "Not yet implemented. If you require this RPC please open an issue or \
+            PR at the Zaino github (https://github.com/zingolabs/zaino.git).",
+            ),
+        ))
     }
 
     /// Returns all unspent outputs for a list of addresses.
     ///
     /// Ignores all utxos below block height [GetAddressUtxosArg.start_height].
-    /// Returns max [GetAddressUtxosArg.max_entries] utxos, or unrestricted if [GetAddressUtxosArg.max_entries] = 0.
+    /// Returns max [GetAddressUtxosArg.max_entries] utxos, or unrestricted if
+    /// [GetAddressUtxosArg.max_entries] = 0.
     /// Utxos are returned in a stream.
     async fn get_address_utxos_stream(
         &self,
         _request: GetAddressUtxosArg,
     ) -> Result<UtxoReplyStream, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(tonic::Status::unimplemented(
-            "Not yet implemented. If you require this RPC please open an issue or PR at the Zaino github (https://github.com/zingolabs/zaino.git)."
-        )))
+        Err(crate::error::StateServiceError::TonicStatusError(
+            tonic::Status::unimplemented(
+                "Not yet implemented. If you require this RPC please open an issue or PR at \
+            the Zaino github (https://github.com/zingolabs/zaino.git).",
+            ),
+        ))
     }
 
     /// Return information about this lightwalletd instance and the blockchain
     async fn get_lightd_info(&self) -> Result<LightdInfo, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(tonic::Status::unimplemented(
-            "Not yet implemented. If you require this RPC please open an issue or PR at the Zaino github (https://github.com/zingolabs/zaino.git)."
-        )))
+        Err(crate::error::StateServiceError::TonicStatusError(
+            tonic::Status::unimplemented(
+                "Not yet implemented. If you require this RPC please open an issue or PR \
+            at the Zaino github (https://github.com/zingolabs/zaino.git).",
+            ),
+        ))
     }
 
     /// Testing-only, requires lightwalletd --ping-very-insecure (do not enable in production)
@@ -1647,9 +1731,12 @@ impl LightWalletIndexer for StateServiceSubscriber {
         &self,
         _request: zaino_proto::proto::service::Duration,
     ) -> Result<PingResponse, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(tonic::Status::unimplemented(
-            "Ping not yet implemented. If you require this RPC please open an issue or PR at the Zaino github (https://github.com/zingolabs/zaino.git)."
-        )))
+        Err(crate::error::StateServiceError::TonicStatusError(
+            tonic::Status::unimplemented(
+                "Ping not yet implemented. If you require this RPC please open an \
+            issue or PR at the Zaino github (https://github.com/zingolabs/zaino.git).",
+            ),
+        ))
     }
 }
 
@@ -1661,9 +1748,11 @@ impl LightWalletIndexer for StateServiceSubscriber {
 ///
 /// This function is used by get_block_range, there is currently no plan to offer this RPC publicly.
 ///
-/// LightWalletD doesnt return a compact block header, however this could be used to return data if useful.
+/// LightWalletD doesnt return a compact block header, however this could be used to return
+/// data if useful.
 ///
-/// This impl is still slow, either CompactBl,ocks should be returned directly from the [`ReadStateService`] or Zaino should hold an internal compact block cache.
+/// This impl is still slow, either CompactBl,ocks should be returned directly from
+/// the [`ReadStateService`] or Zaino should hold an internal compact block cache.
 pub(crate) async fn get_compact_block(
     read_state_service: &ReadStateService,
     hash_or_height: HashOrHeight,
@@ -1843,14 +1932,16 @@ pub(crate) async fn get_compact_block(
     Ok(compact_block)
 }
 
-/// Converts a [`zebra_chain::transaction::Transaction`] into a [`zaino_proto::proto::compact_formats::CompactTx`].
+/// Converts a [`zebra_chain::transaction::Transaction`] into a
+/// [`zaino_proto::proto::compact_formats::CompactTx`].
 ///
 /// Notes:
 ///
 /// Currently only supports V4 and V5 transactions.
 ///
 /// LightWalletD currently does not return a fee and is not currently priority here.
-/// Please open an Issue or PR at the Zingo-Indexer github (https://github.com/zingolabs/zingo-indexer) if you require this functionality.
+/// Please open an Issue or PR at the Zingo-Indexer github
+/// (https://github.com/zingolabs/zingo-indexer) if you require this functionality.
 fn tx_to_compact(
     transaction: std::sync::Arc<Transaction>,
     index: u64,
