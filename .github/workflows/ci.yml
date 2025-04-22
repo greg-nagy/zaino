@@ -204,7 +204,6 @@ jobs:
         with:
           images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}
           tags: |
-            type=ref,event=pr, suffix=sha-
             type=semver,pattern={{version}}, prefix=v
 
       - name: Build and Push Default Image
@@ -231,7 +230,6 @@ jobs:
           flavor: |
             suffix=-no-tls
           tags: |
-            type=ref,event=pr, suffix=sha-
             type=semver,pattern={{version}}, prefix=v
 
       - name: Build and Push No-TLS Image
