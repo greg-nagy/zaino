@@ -16,6 +16,7 @@ use crate::{
     utils::{get_build_info, ServiceMetadata},
 };
 
+use nonempty::NonEmpty;
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
@@ -471,53 +472,78 @@ impl StateServiceSubscriber {
             let timeout = timeout(
                 time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
-                    for height in start..=end {
-                        let height = if rev_order {
-                            end - (height - start)
-                        } else {
-                            height
-                        };
+                    let mut blocks = NonEmpty::new(
                         match fetch_service_clone
                             .block_cache
-                            .get_compact_block(height.to_string())
+                            .get_compact_block(end.to_string())
                             .await
                         {
                             Ok(mut block) => {
                                 if trim_non_nullifier {
                                     block = compact_block_to_nullifiers(block);
                                 }
-                                if channel_tx.send(Ok(block)).await.is_err() {
-                                    break;
-                                }
+                                Ok(block)
                             }
                             Err(e) => {
-                                if height >= chain_height {
-                                    match channel_tx
-                                        .send(Err(tonic::Status::out_of_range(format!(
+                                if end >= chain_height {
+                                    Err(tonic::Status::out_of_range(format!(
+                                        "Error: Height out of range [{}]. Height \
+                                            requested is greater than the best \
+                                            chain tip [{}].",
+                                        end, chain_height,
+                                    )))
+                                } else {
+                                    Err(tonic::Status::unknown(e.to_string()))
+                                }
+                            }
+                        },
+                    );
+                    for i in start..end {
+                        let Ok(child_block) = blocks.last() else {
+                            break;
+                        };
+                        let Ok(hash_or_height) =
+                            <[u8; 32]>::try_from(child_block.prev_hash.as_slice())
+                                .map(zebra_chain::block::Hash)
+                                .map(HashOrHeight::from)
+                        else {
+                            break;
+                        };
+                        blocks.push(
+                            match fetch_service_clone
+                                .block_cache
+                                .get_compact_block(hash_or_height.to_string())
+                                .await
+                            {
+                                Ok(mut block) => {
+                                    if trim_non_nullifier {
+                                        block = compact_block_to_nullifiers(block);
+                                    }
+                                    Ok(block)
+                                }
+                                Err(e) => {
+                                    let height = end - (i - start);
+                                    if height >= chain_height {
+                                        Err(tonic::Status::out_of_range(format!(
                                             "Error: Height out of range [{}]. Height requested \
                                             is greater than the best chain tip [{}].",
                                             height, chain_height,
-                                        ))))
-                                        .await
-                                    {
-                                        Ok(_) => break,
-                                        Err(e) => {
-                                            warn!("GetBlockRange channel closed unexpectedly: {e}");
-                                            break;
-                                        }
-                                    }
-                                } else {
-                                    // TODO: Hide server error from clients before release.
-                                    // Currently useful for dev purposes.
-                                    if channel_tx
-                                        .send(Err(tonic::Status::unknown(e.to_string())))
-                                        .await
-                                        .is_err()
-                                    {
-                                        break;
+                                        )))
+                                    } else {
+                                        Err(tonic::Status::unknown(e.to_string()))
                                     }
                                 }
-                            }
+                            },
+                        );
+                    }
+                    if rev_order {
+                        blocks = NonEmpty::from_vec(blocks.into_iter().rev().collect::<Vec<_>>())
+                            .expect("known to be non-empty")
+                    }
+                    for block in blocks {
+                        if let Err(e) = channel_tx.send(block).await {
+                            warn!("GetBlockRange channel closed unexpectedly: {e}");
+                            break;
                         }
                     }
                 },
