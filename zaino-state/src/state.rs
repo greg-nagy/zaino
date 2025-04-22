@@ -471,49 +471,7 @@ impl StateServiceSubscriber {
             let timeout = timeout(
                 time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
-                    let mut blocks = Vec::new();
-
-                    match fetch_service_clone
-                        .block_cache
-                        .get_compact_block(end.to_string())
-                        .await
-                    {
-                        Ok(mut block) => {
-                            if trim_non_nullifier {
-                                block = compact_block_to_nullifiers(block);
-                            }
-                            blocks.push(block);
-                        }
-                        Err(e) => {
-                            if end >= chain_height {
-                                match channel_tx
-                                    .send(Err(tonic::Status::out_of_range(format!(
-                                        "Error: Height out of range [{}]. Height \
-                                            requested is greater than the best \
-                                            chain tip [{}].",
-                                        end, chain_height,
-                                    ))))
-                                    .await
-                                {
-                                    Ok(_) => (),
-                                    Err(e) => {
-                                        warn!(
-                                            "GetBlockRange channel closed \
-                                                unexpectedly: {}",
-                                            e
-                                        );
-                                    }
-                                }
-                            } else {
-                                // TODO: Hide server error from clients before
-                                // release. Currently useful for dev purposes.
-                                channel_tx
-                                    .send(Err(tonic::Status::unknown(e.to_string())))
-                                    .await;
-                            }
-                        }
-                    }
-                    for height in start..end {
+                    for height in start..=end {
                         let height = if rev_order {
                             end - (height - start)
                         } else {
