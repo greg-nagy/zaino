@@ -44,6 +44,31 @@ jobs:
           name: nextest-archive
           path: nextest-archive.tar.zst
 
+  check:
+    name: Cargo Check
+    runs-on: ziserv-2
+    container:
+      image: zingodevops/zaino-ci:latest  # Your pre-built Docker image
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+        with: 
+          cache-provider: buildjet
+
+      - name: Cargo Check
+        run: |
+          cargo check --all-features
+          cargo check --tests --all-features
+
+      - name: Output clippy to Github
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-targets
 
   test:
     name: Tests
@@ -69,10 +94,10 @@ jobs:
 
       - name: Cargo cache
         uses: Swatinem/rust-cache@v2
-        with: 
+        with:
           cache-provider: buildjet
 
-      - name: Copy bins into test_binries
+      - name: Copy bins into test_binaries
         run: |
           mkdir -p ./test_binaries/bins
           cp /usr/local/bin/* ./test_binaries/bins/
@@ -93,6 +118,24 @@ jobs:
         with:
           paths: "target/nextest/ci/junit.xml"
         if: always()
+
+  fmt:
+    name: Rustfmt
+    runs-on: ziserv-2
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: clippy
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+        with: 
+          cache-provider: buildjet
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
   clippy:
     name: Clippy
@@ -121,23 +164,22 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --all-targets
 
-  fmt:
-    name: Rustfmt
+  whitespace:
+    name: Whitespace check
     runs-on: ziserv-2
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          components: clippy
-     
+
       - name: Cargo cache
         uses: Swatinem/rust-cache@v2
         with: 
           cache-provider: buildjet
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      - name: Check trailing whitespace
+        run: ./utils/trailing-whitespace.sh reject
+        working-directory: .
 
   docker:
     name: Build Docker images
@@ -213,12 +255,12 @@ jobs:
     name: Create GitHub Release
     runs-on: ziserv-2
     if: startsWith(github.ref, 'refs/tags/') && github.token != ''
-    
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          
+
       - name: Generate Changelog
         id: changelog
         run: |
@@ -228,7 +270,7 @@ jobs:
           else
             git log --pretty=format:"* %s" $PREVIOUS_TAG..HEAD > CHANGELOG.md
           fi
-          
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
