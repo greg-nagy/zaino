@@ -46,3 +46,13 @@ impl GrpcConfig {
         }
     }
 }
+
+/// Configuration data for Zaino's gRPC server.
+pub struct JsonRpcConfig {
+    /// Server bind addr.
+    pub json_rpc_listen_address: SocketAddr,
+    /// Server Username.
+    pub user: Option<String>,
+    /// Server Password.
+    pub password: Option<String>,
+}

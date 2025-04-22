@@ -2237,9 +2237,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37b26c20e2178756451cfeb0661fb74c47dd5988cb7e3939de7e9241fd604d42"
 dependencies = [
  "jsonrpsee-core",
+ "jsonrpsee-proc-macros",
  "jsonrpsee-server",
  "jsonrpsee-types",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5829,6 +5831,7 @@ dependencies = [
  "futures",
  "hex",
  "http",
+ "jsonrpsee",
  "lazy-regex",
  "prost",
  "thiserror 1.0.69",
