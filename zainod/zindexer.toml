@@ -18,8 +18,6 @@ tls_cert_path = "None"
 # Required if `tls` is true.
 tls_key_path = "None"
 
-
-
 # JsonRPC client config:
 
 # Full node / validator listen address.
@@ -40,8 +38,6 @@ validator_user = "xxxxxx"
 
 # Optional full node / validator Password.
 validator_password = "xxxxxx"
-
-
 
 # Mempool, Non-Finalised State and Finalised State config:
 
@@ -74,14 +70,10 @@ db_path = "None"
 # None by default
 db_size = "None"
 
-
-
 # Network:
 
 # Network chain type (Mainnet, Testnet, Regtest).
 network = "Testnet"
-
-
 
 # Options:
 
@@ -99,5 +91,5 @@ no_db = false
 #
 # For use by lightweight wallets that do not want to run any extra processes.
 #
- no_state = false
+no_state = false
 
