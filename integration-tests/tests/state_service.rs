@@ -1212,4 +1212,34 @@ mod zebrad {
             state_service_get_address_balance_testnet().await;
         }
     }
+
+    pub(crate) mod lightwallet_indexer {
+        use zaino_state::indexer::LightWalletIndexer as _;
+
+        use super::*;
+        #[tokio::test]
+        async fn get_latest_block() {
+            let (
+                mut test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+            test_manager.local_net.generate_blocks(1).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let fetch_service_block = fetch_service_subscriber.get_latest_block().await.unwrap();
+            let state_service_block =
+                dbg!(state_service_subscriber.get_latest_block().await.unwrap());
+            assert_eq!(fetch_service_block, state_service_block);
+        }
+    }
 }
