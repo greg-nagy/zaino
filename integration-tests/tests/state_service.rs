@@ -1216,7 +1216,7 @@ mod zebrad {
     pub(crate) mod lightwallet_indexer {
         use futures::StreamExt as _;
         use zaino_proto::proto::service::{BlockId, BlockRange};
-        use zaino_state::indexer::LightWalletIndexer as _;
+        use zaino_state::indexer::LightWalletIndexer;
 
         use super::*;
         #[tokio::test]
@@ -1291,8 +1291,7 @@ mod zebrad {
             assert_eq!(state_service_block_by_hash, state_service_block_by_height)
         }
 
-        #[tokio::test]
-        async fn get_block_range() {
+        async fn get_block_range_helper(nullifiers_only: bool) {
             let (
                 test_manager,
                 _fetch_service,
@@ -1319,21 +1318,48 @@ mod zebrad {
                 hash: vec![],
             });
             let request = BlockRange { start, end };
-            let fetch_service_get_block_range = fetch_service_subscriber
-                .get_block_range(request.clone())
-                .await
-                .unwrap()
-                .map(Result::unwrap)
-                .collect::<Vec<_>>()
-                .await;
-            let state_service_get_block_range = state_service_subscriber
-                .get_block_range(request)
-                .await
-                .unwrap()
-                .map(Result::unwrap)
-                .collect::<Vec<_>>()
-                .await;
-            assert_eq!(fetch_service_get_block_range, state_service_get_block_range);
+            if nullifiers_only {
+                let fetch_service_get_block_range = fetch_service_subscriber
+                    .get_block_range_nullifiers(request.clone())
+                    .await
+                    .unwrap()
+                    .map(Result::unwrap)
+                    .collect::<Vec<_>>()
+                    .await;
+                let state_service_get_block_range = state_service_subscriber
+                    .get_block_range_nullifiers(request)
+                    .await
+                    .unwrap()
+                    .map(Result::unwrap)
+                    .collect::<Vec<_>>()
+                    .await;
+                assert_eq!(fetch_service_get_block_range, state_service_get_block_range);
+            } else {
+                let fetch_service_get_block_range = fetch_service_subscriber
+                    .get_block_range(request.clone())
+                    .await
+                    .unwrap()
+                    .map(Result::unwrap)
+                    .collect::<Vec<_>>()
+                    .await;
+                let state_service_get_block_range = state_service_subscriber
+                    .get_block_range(request)
+                    .await
+                    .unwrap()
+                    .map(Result::unwrap)
+                    .collect::<Vec<_>>()
+                    .await;
+                assert_eq!(fetch_service_get_block_range, state_service_get_block_range);
+            }
+        }
+
+        #[tokio::test]
+        async fn get_block_range_full() {
+            get_block_range_helper(false).await;
+        }
+        #[tokio::test]
+        async fn get_block_range_nullifiers() {
+            get_block_range_helper(true).await;
         }
     }
 }
