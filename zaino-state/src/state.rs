@@ -458,11 +458,11 @@ impl StateServiceSubscriber {
                 ));
             }
         };
-        let rev_order = if start > end {
+        let lowest_to_highest = if start > end {
             (start, end) = (end, start);
-            true
-        } else {
             false
+        } else {
+            true
         };
         let chain_height = self.block_cache.get_chain_height().await?.0;
         let fetch_service_clone = self.clone();
@@ -536,7 +536,7 @@ impl StateServiceSubscriber {
                             },
                         );
                     }
-                    if rev_order {
+                    if lowest_to_highest {
                         blocks = NonEmpty::from_vec(blocks.into_iter().rev().collect::<Vec<_>>())
                             .expect("known to be non-empty")
                     }

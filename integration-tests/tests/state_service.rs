@@ -1214,7 +1214,8 @@ mod zebrad {
     }
 
     pub(crate) mod lightwallet_indexer {
-        use zaino_proto::proto::service::BlockId;
+        use futures::StreamExt as _;
+        use zaino_proto::proto::service::{BlockId, BlockRange};
         use zaino_state::indexer::LightWalletIndexer as _;
 
         use super::*;
@@ -1288,6 +1289,51 @@ mod zebrad {
                 .unwrap());
             assert_eq!(fetch_service_block_by_hash, state_service_block_by_hash);
             assert_eq!(state_service_block_by_hash, state_service_block_by_height)
+        }
+
+        #[tokio::test]
+        async fn get_block_range() {
+            let (
+                test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+            test_manager.local_net.generate_blocks(6).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let start = Some(BlockId {
+                height: 2,
+                hash: vec![],
+            });
+            let end = Some(BlockId {
+                height: 5,
+                hash: vec![],
+            });
+            let request = BlockRange { start, end };
+            let fetch_service_get_block_range = fetch_service_subscriber
+                .get_block_range(request.clone())
+                .await
+                .unwrap()
+                .map(Result::unwrap)
+                .collect::<Vec<_>>()
+                .await;
+            let state_service_get_block_range = state_service_subscriber
+                .get_block_range(request)
+                .await
+                .unwrap()
+                .map(Result::unwrap)
+                .collect::<Vec<_>>()
+                .await;
+            assert_eq!(fetch_service_get_block_range, state_service_get_block_range);
         }
     }
 }
