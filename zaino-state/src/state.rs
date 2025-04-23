@@ -13,7 +13,7 @@ use crate::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
         SubtreeRootReplyStream, UtxoReplyStream,
     },
-    utils::{get_build_info, ServiceMetadata},
+    utils::{blockid_to_hashorheight, get_build_info, ServiceMetadata},
 };
 
 use nonempty::NonEmpty;
@@ -1258,19 +1258,19 @@ impl LightWalletIndexer for StateServiceSubscriber {
 
     /// Return the compact block corresponding to the given block identifier
     async fn get_block(&self, request: BlockId) -> Result<CompactBlock, Self::Error> {
-        let height: u32 = match request.height.try_into() {
-            Ok(height) => height,
-            Err(_) => {
-                return Err(StateServiceError::TonicStatusError(
-                    tonic::Status::invalid_argument(
-                        "Error: Height out of range. Failed to convert to u32.",
-                    ),
-                ));
-            }
-        };
-        match self.block_cache.get_compact_block(height.to_string()).await {
+        let height = request.height;
+        let hash_or_height = blockid_to_hashorheight(request).ok_or(
+            StateServiceError::TonicStatusError(tonic::Status::invalid_argument(
+                "Error: Invalid hash and/or height out of range. Failed to convert to u32.",
+            )),
+        )?;
+        match self
+            .block_cache
+            .get_compact_block(hash_or_height.to_string())
+            .await
+        {
             Ok(block) => Ok(block),
-            Err(e) => self.error_get_block(e, height).await,
+            Err(e) => self.error_get_block(e, height as u32).await,
         }
     }
 

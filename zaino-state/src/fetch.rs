@@ -46,7 +46,7 @@ use crate::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
         SubtreeRootReplyStream, UtxoReplyStream,
     },
-    utils::{get_build_info, ServiceMetadata},
+    utils::{blockid_to_hashorheight, get_build_info, ServiceMetadata},
 };
 
 /// Chain fetch service backed by Zcashd's JsonRPC engine.
@@ -510,20 +510,11 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
     /// Return the compact block corresponding to the given block identifier
     async fn get_block(&self, request: BlockId) -> Result<CompactBlock, Self::Error> {
-        let hash_or_height: HashOrHeight = <[u8; 32]>::try_from(request.hash)
-            .map(Hash)
-            .map(HashOrHeight::from)
-            .or_else(|_| {
-                request
-                    .height
-                    .try_into()
-                    .map(|height| HashOrHeight::Height(Height(height)))
-            })
-            .map_err(|_| {
-                FetchServiceError::TonicStatusError(tonic::Status::invalid_argument(
-                    "Error: Invalid hash and/or height out of range. Failed to convert to u32.",
-                ))
-            })?;
+        let hash_or_height = blockid_to_hashorheight(request).ok_or(
+            FetchServiceError::TonicStatusError(tonic::Status::invalid_argument(
+                "Error: Invalid hash and/or height out of range. Failed to convert to u32.",
+            )),
+        )?;
         match self
             .block_cache
             .get_compact_block(hash_or_height.to_string())

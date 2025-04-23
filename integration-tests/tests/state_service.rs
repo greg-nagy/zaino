@@ -1214,13 +1214,14 @@ mod zebrad {
     }
 
     pub(crate) mod lightwallet_indexer {
+        use zaino_proto::proto::service::BlockId;
         use zaino_state::indexer::LightWalletIndexer as _;
 
         use super::*;
         #[tokio::test]
         async fn get_latest_block() {
             let (
-                mut test_manager,
+                test_manager,
                 _fetch_service,
                 fetch_service_subscriber,
                 _state_service,
@@ -1240,6 +1241,53 @@ mod zebrad {
             let state_service_block =
                 dbg!(state_service_subscriber.get_latest_block().await.unwrap());
             assert_eq!(fetch_service_block, state_service_block);
+        }
+
+        #[tokio::test]
+        async fn get_block() {
+            let (
+                test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+            test_manager.local_net.generate_blocks(2).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let second_block_by_height = BlockId {
+                height: 2,
+                hash: vec![],
+            };
+            let fetch_service_block_by_height = fetch_service_subscriber
+                .get_block(second_block_by_height.clone())
+                .await
+                .unwrap();
+            let state_service_block_by_height = dbg!(state_service_subscriber
+                .get_block(second_block_by_height)
+                .await
+                .unwrap());
+            assert_eq!(fetch_service_block_by_height, state_service_block_by_height);
+
+            let hash = fetch_service_block_by_height.hash;
+            let second_block_by_hash = BlockId { height: 0, hash };
+            let fetch_service_block_by_hash = fetch_service_subscriber
+                .get_block(second_block_by_hash.clone())
+                .await
+                .unwrap();
+            let state_service_block_by_hash = dbg!(state_service_subscriber
+                .get_block(second_block_by_hash)
+                .await
+                .unwrap());
+            assert_eq!(fetch_service_block_by_hash, state_service_block_by_hash);
+            assert_eq!(state_service_block_by_hash, state_service_block_by_height)
         }
     }
 }
