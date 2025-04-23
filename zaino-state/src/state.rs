@@ -281,9 +281,9 @@ impl StateServiceSubscriber {
     /// # Parameters
     ///
     /// - `hash_or_height`: (string, required, example="1") The hash or height
-    /// for the block to be returned.
+    ///   for the block to be returned.
     /// - `verbose`: (bool, optional, default=false, example=true) false for hex encoded data,
-    /// true for a json object
+    ///   true for a json object
     ///
     /// # Notes
     ///
