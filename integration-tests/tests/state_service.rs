@@ -1215,8 +1215,9 @@ mod zebrad {
 
     pub(crate) mod lightwallet_indexer {
         use futures::StreamExt as _;
-        use zaino_proto::proto::service::{BlockId, BlockRange, TxFilter};
+        use zaino_proto::proto::service::{AddressList, BlockId, BlockRange, TxFilter};
         use zaino_state::indexer::LightWalletIndexer;
+        use zebra_rpc::methods::GetAddressTxIdsRequest;
 
         use super::*;
         #[tokio::test]
@@ -1411,6 +1412,82 @@ mod zebrad {
                 .await
                 .unwrap();
             assert_eq!(fetch_service_raw_transaction, state_service_raw_transaction);
+        }
+
+        #[tokio::test]
+        async fn get_taddress_txids() {
+            let (
+                mut test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                true,
+                true,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+
+            let clients = test_manager.clients.take().unwrap();
+            let taddr = clients.get_faucet_address("transparent").await;
+            test_manager.local_net.generate_blocks(5).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let state_service_taddress_txids = state_service_subscriber
+                .get_address_tx_ids(GetAddressTxIdsRequest::from_parts(
+                    vec![taddr.clone()],
+                    2,
+                    5,
+                ))
+                .await
+                .unwrap();
+            let fetch_service_taddress_txids = fetch_service_subscriber
+                .get_address_tx_ids(GetAddressTxIdsRequest::from_parts(vec![taddr], 2, 5))
+                .await
+                .unwrap();
+            assert_eq!(fetch_service_taddress_txids, state_service_taddress_txids);
+        }
+        #[tokio::test]
+        async fn get_taddress_balance() {
+            let (
+                mut test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                true,
+                true,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+
+            let clients = test_manager.clients.take().unwrap();
+            let taddr = clients.get_faucet_address("transparent").await;
+            test_manager.local_net.generate_blocks(5).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let state_service_taddress_balance = state_service_subscriber
+                .get_taddress_balance(AddressList {
+                    addresses: vec![taddr.clone()],
+                })
+                .await
+                .unwrap();
+            let fetch_service_taddress_balance = fetch_service_subscriber
+                .get_taddress_balance(AddressList {
+                    addresses: vec![taddr],
+                })
+                .await
+                .unwrap();
+            assert_eq!(
+                fetch_service_taddress_balance,
+                state_service_taddress_balance
+            );
         }
     }
 }
