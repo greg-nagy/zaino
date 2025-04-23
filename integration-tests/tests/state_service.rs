@@ -1215,7 +1215,7 @@ mod zebrad {
 
     pub(crate) mod lightwallet_indexer {
         use futures::StreamExt as _;
-        use zaino_proto::proto::service::{BlockId, BlockRange};
+        use zaino_proto::proto::service::{BlockId, BlockRange, TxFilter};
         use zaino_state::indexer::LightWalletIndexer;
 
         use super::*;
@@ -1360,6 +1360,57 @@ mod zebrad {
         #[tokio::test]
         async fn get_block_range_nullifiers() {
             get_block_range_helper(true).await;
+        }
+        #[tokio::test]
+        async fn get_transaction() {
+            let (
+                mut test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                true,
+                true,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+            test_manager.local_net.generate_blocks(100).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let clients = test_manager.clients.take().unwrap();
+            clients.faucet.do_sync(true).await.unwrap();
+            clients.faucet.quick_shield().await.unwrap();
+
+            test_manager.local_net.generate_blocks(2).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let block = BlockId {
+                height: 102,
+                hash: vec![],
+            };
+            let state_service_block_by_height = state_service_subscriber
+                .get_block(block.clone())
+                .await
+                .unwrap();
+            let coinbase_tx = state_service_block_by_height.vtx.first().unwrap();
+            let hash = coinbase_tx.hash.clone();
+            let request = TxFilter {
+                block: None,
+                index: 0,
+                hash,
+            };
+            let fetch_service_raw_transaction = fetch_service_subscriber
+                .get_transaction(request.clone())
+                .await
+                .unwrap();
+            let state_service_raw_transaction = state_service_subscriber
+                .get_transaction(request)
+                .await
+                .unwrap();
+            assert_eq!(fetch_service_raw_transaction, state_service_raw_transaction);
         }
     }
 }

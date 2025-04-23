@@ -1314,8 +1314,8 @@ impl LightWalletIndexer for StateServiceSubscriber {
 
     /// Return the requested full (not compact) transaction (as from zcashd)
     async fn get_transaction(&self, request: TxFilter) -> Result<RawTransaction, Self::Error> {
-        let hash = zebra_chain::transaction::Hash::from_bytes_in_display_order(
-            &<[u8; 32]>::try_from(request.hash).map_err(|_| {
+        let hash = zebra_chain::transaction::Hash::from(
+            <[u8; 32]>::try_from(request.hash).map_err(|_| {
                 StateServiceError::TonicStatusError(tonic::Status::invalid_argument(
                     "Error: Transaction hash incorrect",
                 ))
