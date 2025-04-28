@@ -1212,4 +1212,282 @@ mod zebrad {
             state_service_get_address_balance_testnet().await;
         }
     }
+
+    pub(crate) mod lightwallet_indexer {
+        use futures::StreamExt as _;
+        use zaino_proto::proto::service::{AddressList, BlockId, BlockRange, TxFilter};
+        use zaino_state::indexer::LightWalletIndexer;
+        use zebra_rpc::methods::GetAddressTxIdsRequest;
+
+        use super::*;
+        #[tokio::test]
+        async fn get_latest_block() {
+            let (
+                test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+            test_manager.local_net.generate_blocks(1).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let fetch_service_block = fetch_service_subscriber.get_latest_block().await.unwrap();
+            let state_service_block =
+                dbg!(state_service_subscriber.get_latest_block().await.unwrap());
+            assert_eq!(fetch_service_block, state_service_block);
+        }
+
+        #[tokio::test]
+        async fn get_block() {
+            let (
+                test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+            test_manager.local_net.generate_blocks(2).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let second_block_by_height = BlockId {
+                height: 2,
+                hash: vec![],
+            };
+            let fetch_service_block_by_height = fetch_service_subscriber
+                .get_block(second_block_by_height.clone())
+                .await
+                .unwrap();
+            let state_service_block_by_height = dbg!(state_service_subscriber
+                .get_block(second_block_by_height)
+                .await
+                .unwrap());
+            assert_eq!(fetch_service_block_by_height, state_service_block_by_height);
+
+            let hash = fetch_service_block_by_height.hash;
+            let second_block_by_hash = BlockId { height: 0, hash };
+            let fetch_service_block_by_hash = fetch_service_subscriber
+                .get_block(second_block_by_hash.clone())
+                .await
+                .unwrap();
+            let state_service_block_by_hash = dbg!(state_service_subscriber
+                .get_block(second_block_by_hash)
+                .await
+                .unwrap());
+            assert_eq!(fetch_service_block_by_hash, state_service_block_by_hash);
+            assert_eq!(state_service_block_by_hash, state_service_block_by_height)
+        }
+
+        async fn get_block_range_helper(nullifiers_only: bool) {
+            let (
+                test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+            test_manager.local_net.generate_blocks(6).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let start = Some(BlockId {
+                height: 2,
+                hash: vec![],
+            });
+            let end = Some(BlockId {
+                height: 5,
+                hash: vec![],
+            });
+            let request = BlockRange { start, end };
+            if nullifiers_only {
+                let fetch_service_get_block_range = fetch_service_subscriber
+                    .get_block_range_nullifiers(request.clone())
+                    .await
+                    .unwrap()
+                    .map(Result::unwrap)
+                    .collect::<Vec<_>>()
+                    .await;
+                let state_service_get_block_range = state_service_subscriber
+                    .get_block_range_nullifiers(request)
+                    .await
+                    .unwrap()
+                    .map(Result::unwrap)
+                    .collect::<Vec<_>>()
+                    .await;
+                assert_eq!(fetch_service_get_block_range, state_service_get_block_range);
+            } else {
+                let fetch_service_get_block_range = fetch_service_subscriber
+                    .get_block_range(request.clone())
+                    .await
+                    .unwrap()
+                    .map(Result::unwrap)
+                    .collect::<Vec<_>>()
+                    .await;
+                let state_service_get_block_range = state_service_subscriber
+                    .get_block_range(request)
+                    .await
+                    .unwrap()
+                    .map(Result::unwrap)
+                    .collect::<Vec<_>>()
+                    .await;
+                assert_eq!(fetch_service_get_block_range, state_service_get_block_range);
+            }
+        }
+
+        #[tokio::test]
+        async fn get_block_range_full() {
+            get_block_range_helper(false).await;
+        }
+        #[tokio::test]
+        async fn get_block_range_nullifiers() {
+            get_block_range_helper(true).await;
+        }
+        #[tokio::test]
+        async fn get_transaction() {
+            let (
+                mut test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                true,
+                true,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+            test_manager.local_net.generate_blocks(100).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let clients = test_manager.clients.take().unwrap();
+            clients.faucet.do_sync(true).await.unwrap();
+            clients.faucet.quick_shield().await.unwrap();
+
+            test_manager.local_net.generate_blocks(2).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let block = BlockId {
+                height: 102,
+                hash: vec![],
+            };
+            let state_service_block_by_height = state_service_subscriber
+                .get_block(block.clone())
+                .await
+                .unwrap();
+            let coinbase_tx = state_service_block_by_height.vtx.first().unwrap();
+            let hash = coinbase_tx.hash.clone();
+            let request = TxFilter {
+                block: None,
+                index: 0,
+                hash,
+            };
+            let fetch_service_raw_transaction = fetch_service_subscriber
+                .get_transaction(request.clone())
+                .await
+                .unwrap();
+            let state_service_raw_transaction = state_service_subscriber
+                .get_transaction(request)
+                .await
+                .unwrap();
+            assert_eq!(fetch_service_raw_transaction, state_service_raw_transaction);
+        }
+
+        #[tokio::test]
+        async fn get_taddress_txids() {
+            let (
+                mut test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                true,
+                true,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+
+            let clients = test_manager.clients.take().unwrap();
+            let taddr = clients.get_faucet_address("transparent").await;
+            test_manager.local_net.generate_blocks(5).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let state_service_taddress_txids = state_service_subscriber
+                .get_address_tx_ids(GetAddressTxIdsRequest::from_parts(
+                    vec![taddr.clone()],
+                    2,
+                    5,
+                ))
+                .await
+                .unwrap();
+            let fetch_service_taddress_txids = fetch_service_subscriber
+                .get_address_tx_ids(GetAddressTxIdsRequest::from_parts(vec![taddr], 2, 5))
+                .await
+                .unwrap();
+            assert_eq!(fetch_service_taddress_txids, state_service_taddress_txids);
+        }
+        #[tokio::test]
+        async fn get_taddress_balance() {
+            let (
+                mut test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                true,
+                true,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+
+            let clients = test_manager.clients.take().unwrap();
+            let taddr = clients.get_faucet_address("transparent").await;
+            test_manager.local_net.generate_blocks(5).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let state_service_taddress_balance = state_service_subscriber
+                .get_taddress_balance(AddressList {
+                    addresses: vec![taddr.clone()],
+                })
+                .await
+                .unwrap();
+            let fetch_service_taddress_balance = fetch_service_subscriber
+                .get_taddress_balance(AddressList {
+                    addresses: vec![taddr],
+                })
+                .await
+                .unwrap();
+            assert_eq!(
+                fetch_service_taddress_balance,
+                state_service_taddress_balance
+            );
+        }
+    }
 }

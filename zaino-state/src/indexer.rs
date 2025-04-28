@@ -2,6 +2,7 @@
 
 use async_trait::async_trait;
 
+use tokio::sync::mpsc;
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
     service::{
@@ -10,7 +11,7 @@ use zaino_proto::proto::{
         SendResponse, TransparentAddressBlockFilter, TreeState, TxFilter,
     },
 };
-use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
+use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
@@ -123,7 +124,7 @@ where
 #[async_trait]
 pub trait ZcashIndexer: Send + Sync + 'static {
     /// Uses underlying error type of implementer.
-    type Error: std::error::Error + Send + Sync + 'static;
+    type Error: std::error::Error + From<tonic::Status> + Send + Sync + 'static;
 
     /// Returns software information from the RPC server, as a [`GetInfo`] JSON struct.
     ///
@@ -345,6 +346,61 @@ pub trait ZcashIndexer: Send + Sync + 'static {
         &self,
         address_strings: AddressStrings,
     ) -> Result<Vec<GetAddressUtxos>, Self::Error>;
+
+    /// Helper function to get the chain height
+    async fn chain_height(&self) -> Result<Height, Self::Error>;
+
+    /// Helper function, to get the list of taddresses that have sends or reciepts
+    /// within a given block range
+    async fn get_taddress_txids_helper(
+        &self,
+        request: TransparentAddressBlockFilter,
+    ) -> Result<Vec<String>, Self::Error> {
+        let chain_height = self.chain_height().await?;
+        let (start, end) = match request.range {
+            Some(range) => match (range.start, range.end) {
+                (Some(start), Some(end)) => {
+                    let start = match u32::try_from(start.height) {
+                        Ok(height) => height.min(chain_height.0),
+                        Err(_) => {
+                            return Err(Self::Error::from(tonic::Status::invalid_argument(
+                                "Error: Start height out of range. Failed to convert to u32.",
+                            )))
+                        }
+                    };
+                    let end = match u32::try_from(end.height) {
+                        Ok(height) => height.min(chain_height.0),
+                        Err(_) => {
+                            return Err(Self::Error::from(tonic::Status::invalid_argument(
+                                "Error: End height out of range. Failed to convert to u32.",
+                            )))
+                        }
+                    };
+                    if start > end {
+                        (end, start)
+                    } else {
+                        (start, end)
+                    }
+                }
+                _ => {
+                    return Err(Self::Error::from(tonic::Status::invalid_argument(
+                        "Error: Incomplete block range given.",
+                    )))
+                }
+            },
+            None => {
+                return Err(Self::Error::from(tonic::Status::invalid_argument(
+                    "Error: No block range given.",
+                )))
+            }
+        };
+        self.get_address_tx_ids(GetAddressTxIdsRequest::from_parts(
+            vec![request.address],
+            start,
+            end,
+        ))
+        .await
+    }
 }
 
 /// LightWallet RPC method signatures.
@@ -458,4 +514,39 @@ pub trait LightWalletIndexer: Send + Sync + 'static {
     ///
     /// NOTE: Currently unimplemented in Zaino.
     async fn ping(&self, request: Duration) -> Result<PingResponse, Self::Error>;
+}
+
+pub(crate) async fn handle_raw_transaction<Indexer: LightWalletIndexer>(
+    chain_height: u64,
+    transaction: Result<GetRawTransaction, Indexer::Error>,
+    transmitter: mpsc::Sender<Result<RawTransaction, tonic::Status>>,
+) -> Result<(), mpsc::error::SendError<Result<RawTransaction, tonic::Status>>> {
+    match transaction {
+        Ok(GetRawTransaction::Object(transaction_obj)) => {
+            let height: u64 = match transaction_obj.height {
+                Some(h) => h as u64,
+                // Zebra returns None for mempool transactions, convert to `Mempool Height`.
+                None => chain_height,
+            };
+            transmitter
+                .send(Ok(RawTransaction {
+                    data: transaction_obj.hex.as_ref().to_vec(),
+                    height,
+                }))
+                .await
+        }
+        Ok(GetRawTransaction::Raw(_)) => {
+            transmitter
+                .send(Err(tonic::Status::unknown(
+                    "Received raw transaction type, this should not be impossible.",
+                )))
+                .await
+        }
+        Err(e) => {
+            // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+            transmitter
+                .send(Err(tonic::Status::unknown(e.to_string())))
+                .await
+        }
+    }
 }

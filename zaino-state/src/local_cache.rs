@@ -12,9 +12,7 @@ use zaino_fetch::{
     chain::block::FullBlock,
     jsonrpsee::{connector::JsonRpSeeConnector, response::GetBlockResponse},
 };
-use zaino_proto::proto::compact_formats::{
-    ChainMetadata, CompactBlock, CompactOrchardAction, CompactTx,
-};
+use zaino_proto::proto::compact_formats::{ChainMetadata, CompactBlock, CompactOrchardAction};
 use zebra_chain::block::{Hash, Height};
 use zebra_state::{HashOrHeight, ReadStateService};
 
@@ -180,42 +178,9 @@ impl BlockCacheSubscriber {
         &self,
         hash_or_height: String,
     ) -> Result<CompactBlock, BlockCacheError> {
-        match self.get_compact_block(hash_or_height).await {
-            Ok(block) => Ok(CompactBlock {
-                proto_version: block.proto_version,
-                height: block.height,
-                hash: block.hash,
-                prev_hash: block.prev_hash,
-                time: block.time,
-                header: block.header,
-                vtx: block
-                    .vtx
-                    .into_iter()
-                    .map(|tx| CompactTx {
-                        index: tx.index,
-                        hash: tx.hash,
-                        fee: tx.fee,
-                        spends: tx.spends,
-                        outputs: Vec::new(),
-                        actions: tx
-                            .actions
-                            .into_iter()
-                            .map(|action| CompactOrchardAction {
-                                nullifier: action.nullifier,
-                                cmx: Vec::new(),
-                                ephemeral_key: Vec::new(),
-                                ciphertext: Vec::new(),
-                            })
-                            .collect(),
-                    })
-                    .collect(),
-                chain_metadata: Some(ChainMetadata {
-                    sapling_commitment_tree_size: 0,
-                    orchard_commitment_tree_size: 0,
-                }),
-            }),
-            Err(e) => Err(e),
-        }
+        self.get_compact_block(hash_or_height)
+            .await
+            .map(compact_block_to_nullifiers)
     }
 
     /// Returns the height of the latest block in the [`BlockCache`].
@@ -294,4 +259,25 @@ pub(crate) fn display_txids_to_server(txids: Vec<String>) -> Result<Vec<Vec<u8>>
                 .collect::<Result<Vec<u8>, _>>()
         })
         .collect::<Result<Vec<Vec<u8>>, _>>()
+}
+
+/// Strips the ouputs and from all transactions, retains only
+/// the nullifier from all orcard actions, and clears the chain
+/// metadata from the block
+pub(crate) fn compact_block_to_nullifiers(mut block: CompactBlock) -> CompactBlock {
+    for ctransaction in &mut block.vtx {
+        ctransaction.outputs = Vec::new();
+        for caction in &mut ctransaction.actions {
+            *caction = CompactOrchardAction {
+                nullifier: caction.nullifier.clone(),
+                ..Default::default()
+            }
+        }
+    }
+
+    block.chain_metadata = Some(ChainMetadata {
+        sapling_commitment_tree_size: 0,
+        orchard_commitment_tree_size: 0,
+    });
+    block
 }
