@@ -65,7 +65,7 @@ use zebra_state::{
 
 use chrono::Utc;
 use futures::{FutureExt as _, TryFutureExt as _};
-use hex::{FromHex as _, ToHex as _};
+use hex::{FromHex as _, ToHex};
 use indexmap::IndexMap;
 use std::{future::poll_fn, io::Cursor, str::FromStr as _, sync::Arc};
 use tokio::{
@@ -1058,17 +1058,23 @@ impl ZcashIndexer for StateServiceSubscriber {
         futures::pin_mut!(mempool_transaction_future);
         futures::pin_mut!(onchain_transaction_future);
 
+        let not_found_error = || {
+            StateServiceError::RpcError(RpcError::new_from_legacycode(
+                LegacyCode::InvalidAddressOrKey,
+                "No such mempool or main chain transaction",
+            ))
+        };
         // This might be overengineered...try to find the txid on chain and in the mempool,
         // whichever one resolves first is tried first.
         let resolution =
             futures::future::select(mempool_transaction_future, onchain_transaction_future).await;
-
-        let handle_mempool = |txid| async {
-            self.rpc_client
-                .get_raw_transaction(txid, verbose)
+        let handle_mempool = |txid| async move {
+            self.mempool
+                .get_mempool()
                 .await
-                .map(GetRawTransaction::from)
-                .map_err(StateServiceError::JsonRpcConnectorError)
+                .into_iter()
+                .find_map(|(key, val)| if key.0 == txid { Some(val.0) } else { None })
+                .ok_or_else(not_found_error)
         };
 
         let handle_onchain = |response| {
@@ -1086,10 +1092,7 @@ impl ZcashIndexer for StateServiceSubscriber {
                     }),
                     None => GetRawTransaction::Raw(tx.into()),
                 }),
-                None => Err(StateServiceError::RpcError(RpcError::new_from_legacycode(
-                    LegacyCode::InvalidAddressOrKey,
-                    "No such mempool or main chain transaction",
-                ))),
+                None => Err(not_found_error()),
             }
         };
 
@@ -1321,29 +1324,20 @@ impl LightWalletIndexer for StateServiceSubscriber {
                 ))
             })?,
         );
-        let mut state = self.read_state_service.clone();
-        let response = state
-            .ready()
-            .await?
-            .call(ReadRequest::Transaction(hash))
-            .await?;
-        let transaction = expected_read_response!(response, Transaction);
-        transaction
-            .map(|MinedTx { tx, height, .. }| -> Result<_, std::io::Error> {
-                Ok(RawTransaction {
-                    data: tx.zcash_serialize_to_vec()?,
-                    height: height.as_usize() as u64,
-                })
+        let hex = hash.encode_hex();
+
+        // explicit over method call syntax to make it clear where this method is coming from
+        <Self as ZcashIndexer>::get_raw_transaction(&self, hex, Some(1))
+            .await
+            .and_then(|grt| match grt {
+                GetRawTransaction::Raw(_serialized_transaction) => Err(StateServiceError::Custom(
+                    "unreachable, verbose transaction expected".to_string(),
+                )),
+                GetRawTransaction::Object(transaction_object) => Ok(RawTransaction {
+                    data: transaction_object.hex.as_ref().to_vec(),
+                    height: transaction_object.height.unwrap_or(0) as u64,
+                }),
             })
-            .transpose()
-            .map_err(|_read_error| {
-                StateServiceError::TonicStatusError(tonic::Status::internal(
-                    "Error: transaction did not write to vec",
-                ))
-            })?
-            .ok_or(StateServiceError::TonicStatusError(
-                tonic::Status::invalid_argument("error: transaction not found"),
-            ))
     }
 
     /// Submit the given transaction to the Zcash network
