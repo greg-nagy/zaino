@@ -1,6 +1,6 @@
 //! Server configuration data.
 
-use std::net::SocketAddr;
+use std::{net::SocketAddr, path::PathBuf};
 
 use tonic::transport::{Identity, ServerTlsConfig};
 
@@ -51,8 +51,10 @@ impl GrpcConfig {
 pub struct JsonRpcConfig {
     /// Server bind addr.
     pub json_rpc_listen_address: SocketAddr,
-    /// Server Username.
-    pub user: Option<String>,
-    /// Server Password.
-    pub password: Option<String>,
+
+    /// Enable cookie-based authentication.
+    pub enable_cookie_auth: bool,
+
+    /// Directory to store authentication cookie file.
+    pub cookie_dir: Option<PathBuf>,
 }

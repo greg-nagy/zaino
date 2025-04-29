@@ -11,7 +11,13 @@ use zaino_state::{
     status::{AtomicStatus, StatusType},
 };
 
-use jsonrpsee::server::ServerBuilder;
+use zebra_rpc::server::{
+    cookie::{write_to_disk, Cookie},
+    http_request_compatibility::HttpRequestMiddlewareLayer,
+    rpc_call_compatibility::FixRpcResponseMiddleware,
+};
+
+use jsonrpsee::server::{RpcServiceBuilder, ServerBuilder};
 use std::time::Duration;
 use tokio::time::interval;
 use tracing::warn;
@@ -40,7 +46,35 @@ impl JsonRpcServer {
             service_subscriber: service_subscriber.clone(),
         };
 
+        // Initialize Zebra-compatible cookie-based authentication if enabled.
+        let cookie = if server_config.enable_cookie_auth {
+            let cookie = Cookie::default();
+            if let Some(dir) = &server_config.cookie_dir {
+                write_to_disk(&cookie, dir).map_err(|e| {
+                    ServerError::ServerConfigError(format!("Failed to write cookie: {}", e))
+                })?;
+            } else {
+                return Err(ServerError::ServerConfigError(
+                    "Cookie dir must be provided when auth is enabled".into(),
+                ));
+            }
+            Some(cookie)
+        } else {
+            None
+        };
+
+        // Set up Zebra HTTP request compatibility middleware (handles auth and content-type issues)
+        let http_middleware_layer = HttpRequestMiddlewareLayer::new(cookie);
+
+        // Set up Zebra JSON-RPC call compatibility middleware (RPC version fixes)
+        let rpc_middleware = RpcServiceBuilder::new()
+            .rpc_logger(1024)
+            .layer_fn(FixRpcResponseMiddleware::new);
+
+        // Build the JSON-RPC server with middleware integrated
         let server = ServerBuilder::default()
+            .set_http_middleware(tower::ServiceBuilder::new().layer(http_middleware_layer))
+            .set_rpc_middleware(rpc_middleware)
             .build(server_config.json_rpc_listen_address)
             .await
             .map_err(|e| {

@@ -8,8 +8,8 @@ use zebra_rpc::methods::{
     GetBlockChainInfo, GetInfo, GetRawTransaction, SentTransactionHash,
 };
 
-use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::types::ErrorObjectOwned;
+use jsonrpsee::{proc_macros::rpc, types::ErrorCode};
 
 use crate::rpc::JsonRpcClient;
 
@@ -254,6 +254,7 @@ pub trait ZcashIndexerRpc {
     ) -> Result<Vec<GetAddressUtxos>, ErrorObjectOwned>;
 }
 
+/// Uses ErrorCode::InvalidParams as this is converted to zcash legacy "minsc" ErrorCode in RPC middleware.
 #[jsonrpsee::core::async_trait]
 impl ZcashIndexerRpcServer for JsonRpcClient {
     async fn get_info(&self) -> Result<GetInfo, ErrorObjectOwned> {
@@ -261,7 +262,13 @@ impl ZcashIndexerRpcServer for JsonRpcClient {
             .inner_ref()
             .get_info()
             .await
-            .map_err(|e| ErrorObjectOwned::owned(-32000, "get_info error", Some(e.to_string())))
+            .map_err(|e| {
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
+            })
     }
 
     async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, ErrorObjectOwned> {
@@ -270,7 +277,11 @@ impl ZcashIndexerRpcServer for JsonRpcClient {
             .get_blockchain_info()
             .await
             .map_err(|e| {
-                ErrorObjectOwned::owned(-32000, "get_blockchain_info error", Some(e.to_string()))
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
             })
     }
 
@@ -283,7 +294,11 @@ impl ZcashIndexerRpcServer for JsonRpcClient {
             .z_get_address_balance(address_strings)
             .await
             .map_err(|e| {
-                ErrorObjectOwned::owned(-32000, "z_get_address_balance error", Some(e.to_string()))
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
             })
     }
 
@@ -296,7 +311,11 @@ impl ZcashIndexerRpcServer for JsonRpcClient {
             .send_raw_transaction(raw_transaction_hex)
             .await
             .map_err(|e| {
-                ErrorObjectOwned::owned(-32000, "send_raw_transaction error", Some(e.to_string()))
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
             })
     }
 
@@ -309,7 +328,13 @@ impl ZcashIndexerRpcServer for JsonRpcClient {
             .inner_ref()
             .z_get_block(hash_or_height, verbosity)
             .await
-            .map_err(|e| ErrorObjectOwned::owned(-32000, "z_get_block error", Some(e.to_string())))
+            .map_err(|e| {
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
+            })
     }
 
     async fn get_raw_mempool(&self) -> Result<Vec<String>, ErrorObjectOwned> {
@@ -318,7 +343,11 @@ impl ZcashIndexerRpcServer for JsonRpcClient {
             .get_raw_mempool()
             .await
             .map_err(|e| {
-                ErrorObjectOwned::owned(-32000, "get_raw_mempool error", Some(e.to_string()))
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
             })
     }
 
@@ -331,7 +360,11 @@ impl ZcashIndexerRpcServer for JsonRpcClient {
             .z_get_treestate(hash_or_height)
             .await
             .map_err(|e| {
-                ErrorObjectOwned::owned(-32000, "z_get_treestate error", Some(e.to_string()))
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
             })
     }
 
@@ -347,8 +380,8 @@ impl ZcashIndexerRpcServer for JsonRpcClient {
             .await
             .map_err(|e| {
                 ErrorObjectOwned::owned(
-                    -32000,
-                    "z_get_subtrees_by_index error",
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
                     Some(e.to_string()),
                 )
             })
@@ -364,7 +397,11 @@ impl ZcashIndexerRpcServer for JsonRpcClient {
             .get_raw_transaction(txid_hex, verbose)
             .await
             .map_err(|e| {
-                ErrorObjectOwned::owned(-32000, "get_raw_transaction error", Some(e.to_string()))
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
             })
     }
 
@@ -377,7 +414,11 @@ impl ZcashIndexerRpcServer for JsonRpcClient {
             .get_address_tx_ids(request)
             .await
             .map_err(|e| {
-                ErrorObjectOwned::owned(-32000, "get_address_tx_ids error", Some(e.to_string()))
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
             })
     }
 
@@ -390,7 +431,11 @@ impl ZcashIndexerRpcServer for JsonRpcClient {
             .z_get_address_utxos(address_strings)
             .await
             .map_err(|e| {
-                ErrorObjectOwned::owned(-32000, "z_get_address_utxos error", Some(e.to_string()))
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
             })
     }
 }
