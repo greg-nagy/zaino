@@ -1327,6 +1327,35 @@ mod zebrad {
                 state_service_treestate_by_height
             );
         }
+        #[tokio::test]
+        async fn get_latest_tree_state() {
+            let (
+                test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+            test_manager.local_net.generate_blocks(2).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let fetch_service_treestate = fetch_service_subscriber
+                .get_latest_tree_state()
+                .await
+                .unwrap();
+            let state_service_treestate = dbg!(state_service_subscriber
+                .get_latest_tree_state()
+                .await
+                .unwrap());
+            assert_eq!(fetch_service_treestate, state_service_treestate);
+        }
 
         async fn get_block_range_helper(nullifiers_only: bool) {
             let (

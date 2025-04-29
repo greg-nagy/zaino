@@ -1648,12 +1648,12 @@ impl LightWalletIndexer for StateServiceSubscriber {
 
     /// GetLatestTreeState returns the note commitment tree state corresponding to the chain tip.
     async fn get_latest_tree_state(&self) -> Result<TreeState, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(
-            tonic::Status::unimplemented(
-                "Not yet implemented. If you require this RPC please open an issue or PR at \
-            the Zaino github (https://github.com/zingolabs/zaino.git).",
-            ),
-        ))
+        let latest_block = self.chain_height().await?;
+        self.get_tree_state(BlockId {
+            height: latest_block.0 as u64,
+            hash: vec![],
+        })
+        .await
     }
 
     /// Returns a stream of information about roots of subtrees of the Sapling and Orchard
