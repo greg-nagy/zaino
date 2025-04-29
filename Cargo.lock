@@ -5861,6 +5861,7 @@ dependencies = [
  "jsonrpsee-core",
  "lazy-regex",
  "lmdb",
+ "nonempty 0.11.0",
  "prost",
  "serde",
  "serde_json",

@@ -72,6 +72,19 @@ impl Indexer {
         ))
         .await?;
 
+        // let read_state_service = IndexerService::<StateService>::spawn(StateServiceConfig::new(
+        //     todo!("add zebra config to indexerconfig"),
+        //     config.validator_listen_address,
+        //     config.validator_cookie_auth,
+        //     config.validator_cookie_path,
+        //     config.validator_user,
+        //     config.validator_password,
+        //     None,
+        //     None,
+        //     config.get_network()?,
+        // ))
+        // .await?;
+
         let grpc_server = TonicServer::spawn(
             chain_state_service.inner_ref().get_subscriber(),
             GrpcConfig {
