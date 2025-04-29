@@ -1291,6 +1291,42 @@ mod zebrad {
             assert_eq!(fetch_service_block_by_hash, state_service_block_by_hash);
             assert_eq!(state_service_block_by_hash, state_service_block_by_height)
         }
+        #[tokio::test]
+        async fn get_tree_state() {
+            let (
+                test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+            test_manager.local_net.generate_blocks(2).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let second_treestate_by_height = BlockId {
+                height: 2,
+                hash: vec![],
+            };
+            let fetch_service_treestate_by_height = fetch_service_subscriber
+                .get_tree_state(second_treestate_by_height.clone())
+                .await
+                .unwrap();
+            let state_service_treestate_by_height = dbg!(state_service_subscriber
+                .get_tree_state(second_treestate_by_height)
+                .await
+                .unwrap());
+            assert_eq!(
+                fetch_service_treestate_by_height,
+                state_service_treestate_by_height
+            );
+        }
 
         async fn get_block_range_helper(nullifiers_only: bool) {
             let (

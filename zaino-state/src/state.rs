@@ -1623,13 +1623,27 @@ impl LightWalletIndexer for StateServiceSubscriber {
     /// See section 3.7 of the Zcash protocol specification. It returns several other useful
     /// values also (even though they can be obtained using GetBlock).
     /// The block can be specified by either height or hash.
-    async fn get_tree_state(&self, _request: BlockId) -> Result<TreeState, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(
-            tonic::Status::unimplemented(
-                "Not yet implemented. If you require this RPC please open an issue or \
-            PR at the Zaino github (https://github.com/zingolabs/zaino.git).",
-            ),
-        ))
+    async fn get_tree_state(&self, request: BlockId) -> Result<TreeState, Self::Error> {
+        let hash_or_height = blockid_to_hashorheight(request).ok_or(
+            crate::error::StateServiceError::TonicStatusError(tonic::Status::invalid_argument(
+                "Invalid hash or height",
+            )),
+        )?;
+        let (hash, height, time, sapling, orchard) =
+            <StateServiceSubscriber as ZcashIndexer>::z_get_treestate(
+                self,
+                hash_or_height.to_string(),
+            )
+            .await?
+            .into_parts();
+        Ok(TreeState {
+            network: self.config.network.bip70_network_name(),
+            height: height.0 as u64,
+            hash: hash.to_string(),
+            time,
+            sapling_tree: sapling.map(hex::encode).unwrap_or_default(),
+            orchard_tree: orchard.map(hex::encode).unwrap_or_default(),
+        })
     }
 
     /// GetLatestTreeState returns the note commitment tree state corresponding to the chain tip.
