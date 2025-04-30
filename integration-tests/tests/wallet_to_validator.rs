@@ -9,9 +9,10 @@ use zaino_testutils::TestManager;
 use zaino_testutils::{Validator as _, ValidatorKind};
 
 async fn connect_to_node_get_info_for_validator(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-        .await
-        .unwrap();
+    let mut test_manager =
+        TestManager::launch(validator, None, None, true, false, false, true, true, true)
+            .await
+            .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
@@ -24,9 +25,10 @@ async fn connect_to_node_get_info_for_validator(validator: &ValidatorKind) {
 }
 
 async fn send_to_orchard(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-        .await
-        .unwrap();
+    let mut test_manager =
+        TestManager::launch(validator, None, None, true, false, false, true, true, true)
+            .await
+            .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
@@ -72,9 +74,10 @@ async fn send_to_orchard(validator: &ValidatorKind) {
 }
 
 async fn send_to_sapling(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-        .await
-        .unwrap();
+    let mut test_manager =
+        TestManager::launch(validator, None, None, true, false, false, true, true, true)
+            .await
+            .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
@@ -120,9 +123,10 @@ async fn send_to_sapling(validator: &ValidatorKind) {
 }
 
 async fn send_to_transparent(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-        .await
-        .unwrap();
+    let mut test_manager =
+        TestManager::launch(validator, None, None, true, false, false, true, true, true)
+            .await
+            .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
@@ -230,9 +234,10 @@ async fn send_to_transparent(validator: &ValidatorKind) {
 }
 
 async fn send_to_all(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-        .await
-        .unwrap();
+    let mut test_manager =
+        TestManager::launch(validator, None, None, true, false, false, true, true, true)
+            .await
+            .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
@@ -337,9 +342,10 @@ async fn send_to_all(validator: &ValidatorKind) {
 }
 
 async fn shield_for_validator(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-        .await
-        .unwrap();
+    let mut test_manager =
+        TestManager::launch(validator, None, None, true, false, false, true, true, true)
+            .await
+            .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
@@ -410,9 +416,10 @@ async fn shield_for_validator(validator: &ValidatorKind) {
 }
 
 async fn monitor_unverified_mempool_for_validator(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::launch(validator, None, None, true, true, true, true)
-        .await
-        .unwrap();
+    let mut test_manager =
+        TestManager::launch(validator, None, None, true, false, false, true, true, true)
+            .await
+            .unwrap();
     let clients = test_manager
         .clients
         .take()

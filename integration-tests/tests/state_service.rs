@@ -29,6 +29,8 @@ async fn create_test_manager_and_services(
         network,
         chain_cache.clone(),
         enable_zaino,
+        false,
+        false,
         true,
         true,
         enable_clients,

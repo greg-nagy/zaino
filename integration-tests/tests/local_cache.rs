@@ -27,6 +27,8 @@ async fn create_test_manager_and_block_cache(
         None,
         chain_cache,
         enable_zaino,
+        false,
+        false,
         zaino_no_sync,
         zaino_no_db,
         enable_clients,
