@@ -11,7 +11,7 @@ use crate::{
     status::{AtomicStatus, StatusType},
     stream::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
-        SubtreeRootReplyStream, UtxoReplyStream,
+        UtxoReplyStream,
     },
     utils::{blockid_to_hashorheight, get_build_info, ServiceMetadata},
 };
@@ -31,8 +31,8 @@ use zaino_proto::proto::{
     },
     service::{
         AddressList, BlockId, BlockRange, Exclude, GetAddressUtxosArg, GetAddressUtxosReplyList,
-        GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction, SendResponse,
-        TransparentAddressBlockFilter, TreeState, TxFilter,
+        LightdInfo, PingResponse, RawTransaction, SendResponse, TransparentAddressBlockFilter,
+        TreeState, TxFilter,
     },
 };
 
@@ -1656,18 +1656,11 @@ impl LightWalletIndexer for StateServiceSubscriber {
         .await
     }
 
-    /// Returns a stream of information about roots of subtrees of the Sapling and Orchard
-    /// note commitment trees.
-    async fn get_subtree_roots(
-        &self,
-        _request: GetSubtreeRootsArg,
-    ) -> Result<SubtreeRootReplyStream, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(
-            tonic::Status::unimplemented(
-                "Not yet implemented. If you require this RPC please open an issue or PR \
-            at the Zaino github (https://github.com/zingolabs/zaino.git).",
-            ),
-        ))
+    fn timeout_channel_size(&self) -> (u32, u32) {
+        (
+            self.config.service_timeout,
+            self.config.service_channel_size,
+        )
     }
 
     /// Returns all unspent outputs for a list of addresses.
