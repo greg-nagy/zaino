@@ -12,13 +12,13 @@ use zaino_state::{
 };
 
 use zebra_rpc::server::{
-    cookie::{write_to_disk, Cookie},
+    cookie::{remove_from_disk, write_to_disk, Cookie},
     http_request_compatibility::HttpRequestMiddlewareLayer,
     rpc_call_compatibility::FixRpcResponseMiddleware,
 };
 
 use jsonrpsee::server::{RpcServiceBuilder, ServerBuilder};
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 use tokio::time::interval;
 use tracing::warn;
 
@@ -28,6 +28,8 @@ pub struct JsonRpcServer {
     pub status: AtomicStatus,
     /// JoinHandle for the servers `serve` task.
     pub server_handle: Option<tokio::task::JoinHandle<Result<(), ServerError>>>,
+    /// Cookie dir.
+    cookie_dir: Option<PathBuf>,
 }
 
 impl JsonRpcServer {
@@ -47,7 +49,7 @@ impl JsonRpcServer {
         };
 
         // Initialize Zebra-compatible cookie-based authentication if enabled.
-        let cookie = if server_config.enable_cookie_auth {
+        let (cookie, cookie_dir) = if server_config.enable_cookie_auth {
             let cookie = Cookie::default();
             if let Some(dir) = &server_config.cookie_dir {
                 write_to_disk(&cookie, dir).map_err(|e| {
@@ -58,9 +60,9 @@ impl JsonRpcServer {
                     "Cookie dir must be provided when auth is enabled".into(),
                 ));
             }
-            Some(cookie)
+            (Some(cookie), server_config.cookie_dir)
         } else {
-            None
+            (None, None)
         };
 
         // Set up Zebra HTTP request compatibility middleware (handles auth and content-type issues)
@@ -115,12 +117,19 @@ impl JsonRpcServer {
         Ok(JsonRpcServer {
             status,
             server_handle: Some(server_task_handle),
+            cookie_dir,
         })
     }
 
     /// Sets the servers to close gracefully.
     pub async fn close(&mut self) {
         self.status.store(StatusType::Closing as usize);
+
+        if let Some(dir) = &self.cookie_dir {
+            if let Err(e) = remove_from_disk(dir) {
+                warn!("Error removing cookie: {e}");
+            }
+        }
 
         if let Some(handle) = self.server_handle.take() {
             let _ = handle.await;

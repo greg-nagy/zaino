@@ -4,7 +4,11 @@ use tokio::time::Instant;
 use tracing::info;
 
 use zaino_fetch::jsonrpsee::connector::test_node_and_return_url;
-use zaino_serve::server::{config::GrpcConfig, grpc::TonicServer};
+use zaino_serve::server::{
+    config::{GrpcConfig, JsonRpcConfig},
+    grpc::TonicServer,
+    jsonrpc::JsonRpcServer,
+};
 use zaino_state::{
     config::FetchServiceConfig,
     fetch::FetchService,
@@ -16,6 +20,10 @@ use crate::{config::IndexerConfig, error::IndexerError};
 
 /// Zingo-Indexer.
 pub struct Indexer {
+    /// JsonRPC server.
+    ///
+    /// Disabled by default.
+    json_server: Option<JsonRpcServer>,
     /// GRPC server.
     server: Option<TonicServer>,
     /// Chain fetch service state process handler..
@@ -85,6 +93,22 @@ impl Indexer {
         // ))
         // .await?;
 
+        let json_server = match config.enable_json_server {
+            true => Some(
+                JsonRpcServer::spawn(
+                    chain_state_service.inner_ref().get_subscriber(),
+                    JsonRpcConfig {
+                        json_rpc_listen_address: config.json_rpc_listen_address,
+                        enable_cookie_auth: config.enable_cookie_auth,
+                        cookie_dir: config.cookie_dir,
+                    },
+                )
+                .await
+                .unwrap(),
+            ),
+            false => None,
+        };
+
         let grpc_server = TonicServer::spawn(
             chain_state_service.inner_ref().get_subscriber(),
             GrpcConfig {
@@ -98,6 +122,7 @@ impl Indexer {
         .unwrap();
 
         let mut indexer = Indexer {
+            json_server,
             server: Some(grpc_server),
             service: Some(chain_state_service),
         };
@@ -149,6 +174,11 @@ impl Indexer {
 
     /// Sets the servers to close gracefully.
     async fn close(&mut self) {
+        if let Some(mut json_server) = self.json_server.take() {
+            json_server.close().await;
+            json_server.status.store(StatusType::Offline.into());
+        }
+
         if let Some(mut server) = self.server.take() {
             server.close().await;
             server.status.store(StatusType::Offline.into());
@@ -166,10 +196,20 @@ impl Indexer {
             Some(service) => service.inner_ref().status().await,
             None => return 7,
         };
-        let server_status = match &self.server {
+
+        let json_server_status = match &self.json_server {
+            Some(json_server) => Some(json_server.status()),
+            None => None,
+        };
+
+        let mut server_status = match &self.server {
             Some(server) => server.status(),
             None => return 7,
         };
+
+        if let Some(json_status) = json_server_status {
+            server_status = StatusType::combine(server_status, json_status);
+        }
 
         StatusType::combine(service_status, server_status) as u16
     }
@@ -185,17 +225,29 @@ impl Indexer {
             Some(service) => service.inner_ref().status().await,
             None => StatusType::Offline,
         };
+
+        let json_server_status = match &self.server {
+            Some(server) => server.status(),
+            None => StatusType::Offline,
+        };
+
         let grpc_server_status = match &self.server {
             Some(server) => server.status(),
             None => StatusType::Offline,
         };
 
         let service_status_symbol = service_status.get_status_symbol();
+        let json_server_status_symbol = json_server_status.get_status_symbol();
         let grpc_server_status_symbol = grpc_server_status.get_status_symbol();
 
         info!(
-            "Zaino status check - ChainState Service:{}{} gRPC Server:{}{}",
-            service_status_symbol, service_status, grpc_server_status_symbol, grpc_server_status
+            "Zaino status check - ChainState Service:{}{} JsonRPC Server:{}{} gRPC Server:{}{}",
+            service_status_symbol,
+            service_status,
+            json_server_status_symbol,
+            json_server_status,
+            grpc_server_status_symbol,
+            grpc_server_status
         );
     }
 }

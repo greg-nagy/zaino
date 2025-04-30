@@ -43,6 +43,14 @@ macro_rules! parse_field_or_warn_and_default {
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(default)]
 pub struct IndexerConfig {
+    /// Enable JsonRPC server.
+    pub enable_json_server: bool,
+    /// Server bind addr.
+    pub json_rpc_listen_address: SocketAddr,
+    /// Enable cookie-based authentication.
+    pub enable_cookie_auth: bool,
+    /// Directory to store authentication cookie file.
+    pub cookie_dir: Option<PathBuf>,
     /// gRPC server bind addr.
     pub grpc_listen_address: SocketAddr,
     /// Enables TLS.
@@ -188,6 +196,13 @@ impl IndexerConfig {
             warn!("Zaino built using disable_tls_unencrypted_traffic_mode feature, proceed with caution.");
         }
 
+        // Check gRPC and JsonRPC server are not listening on the same address.
+        if self.json_rpc_listen_address == self.grpc_listen_address {
+            return Err(IndexerError::ConfigError(
+                "gRPC server and JsonRPC server must listen on different addresses.".to_string(),
+            ));
+        }
+
         Ok(())
     }
 
@@ -210,6 +225,10 @@ impl IndexerConfig {
 impl Default for IndexerConfig {
     fn default() -> Self {
         Self {
+            enable_json_server: false,
+            json_rpc_listen_address: "127.0.0.1:8237".parse().unwrap(),
+            enable_cookie_auth: false,
+            cookie_dir: None,
             grpc_listen_address: "127.0.0.1:8137".parse().unwrap(),
             grpc_tls: false,
             tls_cert_path: None,
@@ -231,11 +250,20 @@ impl Default for IndexerConfig {
     }
 }
 
+/// Returns the default path for Zaino's ephemeral authentication cookie.
+fn default_ephemeral_cookie_path() -> PathBuf {
+    if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
+        PathBuf::from(runtime_dir).join("zaino").join(".cookie")
+    } else {
+        PathBuf::from("/tmp").join("zaino").join(".cookie")
+    }
+}
+
 /// Loads the default file path for zaino's local db.
 fn default_db_path() -> PathBuf {
     match std::env::var("HOME") {
         Ok(home) => PathBuf::from(home).join(".cache").join("zaino"),
-        Err(_) => PathBuf::from("/tmp").join("zaino"),
+        Err(_) => PathBuf::from("/tmp").join("zaino").join(".cache"),
     }
 }
 
@@ -292,6 +320,46 @@ pub fn load_config(file_path: &std::path::PathBuf) -> Result<IndexerConfig, Inde
     if let Ok(contents) = std::fs::read_to_string(file_path) {
         let parsed_config: toml::Value = toml::from_str(&contents)
             .map_err(|e| IndexerError::ConfigError(format!("TOML parsing error: {}", e)))?;
+
+        parse_field_or_warn_and_default!(
+            parsed_config,
+            enable_json_server,
+            Boolean,
+            default_config,
+            Some
+        );
+
+        parse_field_or_warn_and_default!(
+            parsed_config,
+            json_rpc_listen_address,
+            String,
+            default_config,
+            |val: String| match fetch_socket_addr_from_hostname(val.as_str()) {
+                Ok(val) => Some(val),
+                Err(_) => {
+                    warn!("Invalid `json_rpc_listen_address`, using default.");
+                    None
+                }
+            }
+        );
+
+        parse_field_or_warn_and_default!(
+            parsed_config,
+            enable_cookie_auth,
+            Boolean,
+            default_config,
+            Some
+        );
+
+        parse_field_or_warn_and_default!(parsed_config, cookie_dir, String, default_config, |v| {
+            Some(Some(PathBuf::from(v)))
+        });
+
+        let cookie_dir = if enable_cookie_auth {
+            cookie_dir.or_else(|| Some(default_ephemeral_cookie_path()))
+        } else {
+            None
+        };
 
         parse_field_or_warn_and_default!(
             parsed_config,
@@ -403,6 +471,10 @@ pub fn load_config(file_path: &std::path::PathBuf) -> Result<IndexerConfig, Inde
         parse_field_or_warn_and_default!(parsed_config, no_state, Boolean, default_config, Some);
 
         let config = IndexerConfig {
+            enable_json_server,
+            json_rpc_listen_address,
+            enable_cookie_auth,
+            cookie_dir,
             grpc_listen_address,
             grpc_tls,
             tls_cert_path,
