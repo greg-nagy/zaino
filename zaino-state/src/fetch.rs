@@ -487,8 +487,6 @@ impl ZcashIndexer for FetchServiceSubscriber {
 
 #[async_trait]
 impl LightWalletIndexer for FetchServiceSubscriber {
-    type Error = FetchServiceError;
-
     /// Return the height of the tip of the best chain
     async fn get_latest_block(&self) -> Result<BlockId, Self::Error> {
         let latest_height = self.block_cache.get_chain_height().await?;

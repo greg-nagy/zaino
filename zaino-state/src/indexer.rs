@@ -409,9 +409,8 @@ pub trait ZcashIndexer: Send + Sync + 'static {
 ///
 /// Doc comments taken from Zaino-Proto for consistency.
 #[async_trait]
-pub trait LightWalletIndexer: Send + Sync + Clone + 'static {
+pub trait LightWalletIndexer: Send + Sync + Clone + ZcashIndexer + 'static {
     /// Uses underlying error type of implementer.
-    type Error: std::error::Error + Send + Sync + 'static + From<tonic::Status>;
 
     /// Return the height of the tip of the best chain
     async fn get_latest_block(&self) -> Result<BlockId, Self::Error>;
@@ -490,14 +489,11 @@ pub trait LightWalletIndexer: Send + Sync + Clone + 'static {
     async fn get_subtree_roots(
         &self,
         request: GetSubtreeRootsArg,
-    ) -> Result<SubtreeRootReplyStream, <Self as LightWalletIndexer>::Error>
-    where
-        Self: ZcashIndexer<Error = <Self as LightWalletIndexer>::Error>,
-    {
+    ) -> Result<SubtreeRootReplyStream, <Self as ZcashIndexer>::Error> {
         let pool = match ShieldedProtocol::try_from(request.shielded_protocol) {
             Ok(protocol) => protocol.as_str_name(),
             Err(_) => {
-                return Err(<Self as LightWalletIndexer>::Error::from(
+                return Err(<Self as ZcashIndexer>::Error::from(
                     tonic::Status::invalid_argument("Error: Invalid shielded protocol value."),
                 ))
             }
@@ -505,7 +501,7 @@ pub trait LightWalletIndexer: Send + Sync + Clone + 'static {
         let start_index = match u16::try_from(request.start_index) {
             Ok(value) => value,
             Err(_) => {
-                return Err(<Self as LightWalletIndexer>::Error::from(
+                return Err(<Self as ZcashIndexer>::Error::from(
                     tonic::Status::invalid_argument("Error: start_index value exceeds u16 range."),
                 ))
             }
@@ -516,7 +512,7 @@ pub trait LightWalletIndexer: Send + Sync + Clone + 'static {
             match u16::try_from(request.max_entries) {
                 Ok(value) => Some(value),
                 Err(_) => {
-                    return Err(<Self as LightWalletIndexer>::Error::from(
+                    return Err(<Self as ZcashIndexer>::Error::from(
                         tonic::Status::invalid_argument(
                             "Error: max_entries value exceeds u16 range.",
                         ),

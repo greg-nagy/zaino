@@ -1241,8 +1241,6 @@ impl ZcashIndexer for StateServiceSubscriber {
 
 #[async_trait]
 impl LightWalletIndexer for StateServiceSubscriber {
-    type Error = StateServiceError;
-
     /// Return the height of the tip of the best chain
     async fn get_latest_block(&self) -> Result<BlockId, Self::Error> {
         let mut state = self.read_state_service.clone();
