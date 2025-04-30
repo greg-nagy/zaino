@@ -1215,7 +1215,9 @@ mod zebrad {
 
     pub(crate) mod lightwallet_indexer {
         use futures::StreamExt as _;
-        use zaino_proto::proto::service::{AddressList, BlockId, BlockRange, TxFilter};
+        use zaino_proto::proto::service::{
+            AddressList, BlockId, BlockRange, GetSubtreeRootsArg, TxFilter,
+        };
         use zaino_state::indexer::LightWalletIndexer;
         use zebra_rpc::methods::GetAddressTxIdsRequest;
 
@@ -1325,6 +1327,49 @@ mod zebrad {
             assert_eq!(
                 fetch_service_treestate_by_height,
                 state_service_treestate_by_height
+            );
+        }
+        #[tokio::test]
+        async fn get_subtree_roots() {
+            let (
+                test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+            test_manager.local_net.generate_blocks(5).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let sapling_subtree_roots_request = GetSubtreeRootsArg {
+                start_index: 2,
+                shielded_protocol: 0,
+                max_entries: 0,
+            };
+            let fetch_service_sapling_subtree_roots = fetch_service_subscriber
+                .get_subtree_roots(sapling_subtree_roots_request.clone())
+                .await
+                .unwrap()
+                .map(Result::unwrap)
+                .collect::<Vec<_>>()
+                .await;
+            let state_service_sapling_subtree_roots = state_service_subscriber
+                .get_subtree_roots(sapling_subtree_roots_request)
+                .await
+                .unwrap()
+                .map(Result::unwrap)
+                .collect::<Vec<_>>()
+                .await;
+            assert_eq!(
+                fetch_service_sapling_subtree_roots,
+                state_service_sapling_subtree_roots
             );
         }
         #[tokio::test]
