@@ -30,9 +30,9 @@ use zaino_proto::proto::{
         CompactSaplingSpend, CompactTx,
     },
     service::{
-        AddressList, BlockId, BlockRange, Exclude, GetAddressUtxosArg, GetAddressUtxosReplyList,
-        LightdInfo, PingResponse, RawTransaction, SendResponse, TransparentAddressBlockFilter,
-        TreeState, TxFilter,
+        AddressList, BlockId, BlockRange, Exclude, GetAddressUtxosArg, GetAddressUtxosReply,
+        GetAddressUtxosReplyList, LightdInfo, PingResponse, RawTransaction, SendResponse,
+        TransparentAddressBlockFilter, TreeState, TxFilter,
     },
 };
 
@@ -64,10 +64,10 @@ use zebra_state::{
 };
 
 use chrono::Utc;
-use futures::{FutureExt as _, TryFutureExt as _};
+use futures::{FutureExt as _, TryFutureExt as _, TryStreamExt as _};
 use hex::{FromHex as _, ToHex};
 use indexmap::IndexMap;
-use std::{future::poll_fn, io::Cursor, str::FromStr as _, sync::Arc};
+use std::{collections::HashSet, future::poll_fn, io::Cursor, str::FromStr, sync::Arc};
 use tokio::{
     sync::mpsc,
     time::{self, timeout},
@@ -1669,14 +1669,14 @@ impl LightWalletIndexer for StateServiceSubscriber {
     /// Utxos are collected and returned as a single Vec.
     async fn get_address_utxos(
         &self,
-        _request: GetAddressUtxosArg,
+        request: GetAddressUtxosArg,
     ) -> Result<GetAddressUtxosReplyList, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(
-            tonic::Status::unimplemented(
-                "Not yet implemented. If you require this RPC please open an issue or \
-            PR at the Zaino github (https://github.com/zingolabs/zaino.git).",
-            ),
-        ))
+        self.get_address_utxos_stream(request)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await
+            .map(|address_utxos| GetAddressUtxosReplyList { address_utxos })
+            .map_err(Self::Error::from)
     }
 
     /// Returns all unspent outputs for a list of addresses.
@@ -1687,14 +1687,50 @@ impl LightWalletIndexer for StateServiceSubscriber {
     /// Utxos are returned in a stream.
     async fn get_address_utxos_stream(
         &self,
-        _request: GetAddressUtxosArg,
+        request: GetAddressUtxosArg,
     ) -> Result<UtxoReplyStream, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(
-            tonic::Status::unimplemented(
-                "Not yet implemented. If you require this RPC please open an issue or PR at \
-            the Zaino github (https://github.com/zingolabs/zaino.git).",
-            ),
-        ))
+        let mut state = self.read_state_service.clone();
+        let mut address_set = HashSet::new();
+        for address in request.addresses {
+            address_set.insert(zebra_chain::transparent::Address::from_str(
+                address.as_ref(),
+            )?);
+        }
+
+        let address_utxos_response = state
+            .ready()
+            .and_then(|service| service.call(ReadRequest::UtxosByAddresses(address_set)))
+            .await?;
+        let utxos = expected_read_response!(address_utxos_response, AddressUtxos);
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
+        tokio::spawn(async move {
+            for utxo in utxos
+                .utxos()
+                .filter_map(|(address, hash, location, output)| {
+                    if location.height().0 as u64 >= request.start_height {
+                        Some(GetAddressUtxosReply {
+                            address: address.to_string(),
+                            txid: hash.bytes_in_display_order().to_vec(),
+                            index: location.output_index().index() as i32,
+                            script: output.lock_script.as_raw_bytes().to_vec(),
+                            value_zat: output.value.zatoshis(),
+                            height: location.height().0 as u64,
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .take(match usize::try_from(request.max_entries) {
+                    Ok(0) | Err(_) => usize::MAX,
+                    Ok(non_zero) => non_zero,
+                })
+            {
+                if channel_tx.send(Ok(utxo)).await.is_err() {
+                    return;
+                }
+            }
+        });
+        Ok(UtxoReplyStream::new(channel_rx))
     }
 
     /// Return information about this lightwalletd instance and the blockchain
