@@ -386,7 +386,7 @@ impl FinalisedState {
             .get_block(reorg_height.0.to_string(), Some(1))
             .await?
         {
-            zaino_fetch::jsonrpsee::response::GetBlockResponse::Object { hash, .. } => hash.0,
+            zaino_fetch::jsonrpsee::response::GetBlockResponse::Object(block) => block.hash.0,
             _ => {
                 return Err(FinalisedStateError::Custom(
                     "Unexpected block response type".to_string(),
@@ -420,7 +420,7 @@ impl FinalisedState {
                 .get_block(reorg_height.0.to_string(), Some(1))
                 .await?
             {
-                zaino_fetch::jsonrpsee::response::GetBlockResponse::Object { hash, .. } => hash.0,
+                zaino_fetch::jsonrpsee::response::GetBlockResponse::Object(block) => block.hash.0,
                 _ => {
                     return Err(FinalisedStateError::Custom(
                         "Unexpected block response type".to_string(),

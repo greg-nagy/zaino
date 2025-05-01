@@ -530,99 +530,104 @@ impl From<Solution> for zebra_chain::work::equihash::Solution {
 /// This is used for the output parameter of [`JsonRpcConnector::get_block`].
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(untagged)]
-#[allow(clippy::large_enum_variant)]
 pub enum GetBlockResponse {
     /// The request block, hex-encoded.
     Raw(#[serde(with = "hex")] SerializedBlock),
     /// The block object.
-    Object {
-        /// The hash of the requested block.
-        hash: GetBlockHash,
+    Object(Box<BlockObject>),
+}
 
-        /// The number of confirmations of this block in the best chain,
-        /// or -1 if it is not in the best chain.
-        confirmations: i64,
+/// A block object containing data and metadata about a block.
+///
+/// This is used for the output parameter of [`JsonRpcConnector::get_block`].
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct BlockObject {
+    /// The hash of the requested block.
+    pub hash: GetBlockHash,
 
-        /// The block size. TODO: fill it
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        size: Option<i64>,
+    /// The number of confirmations of this block in the best chain,
+    /// or -1 if it is not in the best chain.
+    pub confirmations: i64,
 
-        /// The height of the requested block.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        height: Option<zebra_chain::block::Height>,
+    /// The block size. TODO: fill it
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<i64>,
 
-        /// The version field of the requested block.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        version: Option<u32>,
+    /// The height of the requested block.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<zebra_chain::block::Height>,
 
-        /// The merkle root of the requested block.
-        #[serde(with = "opthex", rename = "merkleroot")]
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        merkle_root: Option<zebra_chain::block::merkle::Root>,
+    /// The version field of the requested block.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<u32>,
 
-        /// The blockcommitments field of the requested block. Its interpretation changes
-        /// depending on the network and height.
-        #[serde(with = "opthex", rename = "blockcommitments")]
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        block_commitments: Option<[u8; 32]>,
+    /// The merkle root of the requested block.
+    #[serde(with = "opthex", rename = "merkleroot")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merkle_root: Option<zebra_chain::block::merkle::Root>,
 
-        /// The root of the Sapling commitment tree after applying this block.
-        #[serde(with = "opthex", rename = "finalsaplingroot")]
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        final_sapling_root: Option<[u8; 32]>,
+    /// The blockcommitments field of the requested block. Its interpretation changes
+    /// depending on the network and height.
+    #[serde(with = "opthex", rename = "blockcommitments")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub block_commitments: Option<[u8; 32]>,
 
-        /// The root of the Orchard commitment tree after applying this block.
-        #[serde(with = "opthex", rename = "finalorchardroot")]
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        final_orchard_root: Option<[u8; 32]>,
+    /// The root of the Sapling commitment tree after applying this block.
+    #[serde(with = "opthex", rename = "finalsaplingroot")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub final_sapling_root: Option<[u8; 32]>,
 
-        /// The height of the requested block.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        time: Option<i64>,
+    /// The root of the Orchard commitment tree after applying this block.
+    #[serde(with = "opthex", rename = "finalorchardroot")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub final_orchard_root: Option<[u8; 32]>,
 
-        /// The nonce of the requested block header.
-        #[serde(with = "opthex")]
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        nonce: Option<[u8; 32]>,
+    /// The height of the requested block.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time: Option<i64>,
 
-        /// The Equihash solution in the requested block header.
-        /// Note: presence of this field in getblock is not documented in zcashd.
-        #[serde(with = "opthex")]
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        solution: Option<Solution>,
+    /// The nonce of the requested block header.
+    #[serde(with = "opthex")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nonce: Option<[u8; 32]>,
 
-        /// The difficulty threshold of the requested block header displayed in compact form.
-        #[serde(with = "opthex")]
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        bits: Option<CompactDifficulty>,
+    /// The Equihash solution in the requested block header.
+    /// Note: presence of this field in getblock is not documented in zcashd.
+    #[serde(with = "opthex")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub solution: Option<Solution>,
 
-        /// Floating point number that represents the difficulty limit for this block as a multiple
-        /// of the minimum difficulty for the network.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        difficulty: Option<f64>,
+    /// The difficulty threshold of the requested block header displayed in compact form.
+    #[serde(with = "opthex")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bits: Option<CompactDifficulty>,
 
-        /// List of transaction IDs in block order, hex-encoded.
-        tx: Vec<String>,
+    /// Floating point number that represents the difficulty limit for this block as a multiple
+    /// of the minimum difficulty for the network.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub difficulty: Option<f64>,
 
-        /// Information about the note commitment trees.
-        trees: GetBlockTrees,
+    /// List of transaction IDs in block order, hex-encoded.
+    pub tx: Vec<String>,
 
-        /// The previous block hash of the requested block header.
-        #[serde(
-            rename = "previousblockhash",
-            default,
-            skip_serializing_if = "Option::is_none"
-        )]
-        previous_block_hash: Option<GetBlockHash>,
+    /// Information about the note commitment trees.
+    pub trees: GetBlockTrees,
 
-        /// The next block hash after the requested block header.
-        #[serde(
-            rename = "nextblockhash",
-            default,
-            skip_serializing_if = "Option::is_none"
-        )]
-        next_block_hash: Option<GetBlockHash>,
-    },
+    /// The previous block hash of the requested block header.
+    #[serde(
+        rename = "previousblockhash",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub previous_block_hash: Option<GetBlockHash>,
+
+    /// The next block hash after the requested block header.
+    #[serde(
+        rename = "nextblockhash",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub next_block_hash: Option<GetBlockHash>,
 }
 
 impl TryFrom<GetBlockResponse> for zebra_rpc::methods::GetBlock {
@@ -633,27 +638,9 @@ impl TryFrom<GetBlockResponse> for zebra_rpc::methods::GetBlock {
             GetBlockResponse::Raw(serialized_block) => {
                 Ok(zebra_rpc::methods::GetBlock::Raw(serialized_block.0))
             }
-            GetBlockResponse::Object {
-                hash,
-                block_commitments,
-                confirmations,
-                size,
-                height,
-                version,
-                merkle_root,
-                final_sapling_root,
-                final_orchard_root,
-                tx,
-                time,
-                nonce,
-                solution,
-                bits,
-                difficulty,
-                trees,
-                previous_block_hash,
-                next_block_hash,
-            } => {
-                let tx_ids: Result<Vec<_>, _> = tx
+            GetBlockResponse::Object(block) => {
+                let tx_ids: Result<Vec<_>, _> = block
+                    .tx
                     .into_iter()
                     .map(|txid| {
                         txid.parse::<zebra_chain::transaction::Hash>()
@@ -662,24 +649,24 @@ impl TryFrom<GetBlockResponse> for zebra_rpc::methods::GetBlock {
                     .collect();
 
                 Ok(zebra_rpc::methods::GetBlock::Object {
-                    hash: zebra_rpc::methods::GetBlockHash(hash.0),
-                    block_commitments,
-                    confirmations,
-                    size,
-                    height,
-                    version,
-                    merkle_root,
-                    final_sapling_root,
-                    final_orchard_root,
+                    hash: zebra_rpc::methods::GetBlockHash(block.hash.0),
+                    block_commitments: block.block_commitments,
+                    confirmations: block.confirmations,
+                    size: block.size,
+                    height: block.height,
+                    version: block.version,
+                    merkle_root: block.merkle_root,
+                    final_sapling_root: block.final_sapling_root,
+                    final_orchard_root: block.final_orchard_root,
                     tx: tx_ids?,
-                    time,
-                    nonce,
-                    solution: solution.map(Into::into),
-                    bits,
-                    difficulty,
-                    trees: trees.into(),
-                    previous_block_hash: previous_block_hash.map(Into::into),
-                    next_block_hash: next_block_hash.map(Into::into),
+                    time: block.time,
+                    nonce: block.nonce,
+                    solution: block.solution.map(Into::into),
+                    bits: block.bits,
+                    difficulty: block.difficulty,
+                    trees: block.trees.into(),
+                    previous_block_hash: block.previous_block_hash.map(Into::into),
+                    next_block_hash: block.next_block_hash.map(Into::into),
                 })
             }
         }
