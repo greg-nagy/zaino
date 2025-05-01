@@ -32,7 +32,7 @@ pub trait ZcashIndexerRpc {
     ///
     /// Some fields from the zcashd reference are missing from Zebra's [`GetInfo`]. It only contains the fields
     /// [required for lightwalletd support.](https://github.com/zcash/lightwalletd/blob/v0.4.9/common/common.go#L91-L95)
-    #[method(name = "get_info")]
+    #[method(name = "getinfo")]
     async fn get_info(&self) -> Result<GetInfo, ErrorObjectOwned>;
 
     /// Returns blockchain state information, as a [`GetBlockChainInfo`] JSON struct.
@@ -45,7 +45,7 @@ pub trait ZcashIndexerRpc {
     ///
     /// Some fields from the zcashd reference are missing from Zebra's [`GetBlockChainInfo`]. It only contains the fields
     /// [required for lightwalletd support.](https://github.com/zcash/lightwalletd/blob/v0.4.9/common/common.go#L72-L89)
-    #[method(name = "get_blockchain_info")]
+    #[method(name = "getblockchaininfo")]
     async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, ErrorObjectOwned>;
 
     /// Returns the total balance of a provided `addresses` in an [`AddressBalance`] instance.
@@ -70,7 +70,7 @@ pub trait ZcashIndexerRpc {
     /// The RPC documentation says that the returned object has a string `balance` field, but
     /// zcashd actually [returns an
     /// integer](https://github.com/zcash/lightwalletd/blob/bdaac63f3ee0dbef62bde04f6817a9f90d483b00/common/common.go#L128-L130).
-    #[method(name = "z_get_address_balance")]
+    #[method(name = "zgetaddressbalance")]
     async fn z_get_address_balance(
         &self,
         address_strings: AddressStrings,
@@ -91,7 +91,7 @@ pub trait ZcashIndexerRpc {
     ///
     /// zcashd accepts an optional `allowhighfees` parameter. Zebra doesn't support this parameter,
     /// because lightwalletd doesn't use it.
-    #[method(name = "send_raw_transaction")]
+    #[method(name = "sendrawtransaction")]
     async fn send_raw_transaction(
         &self,
         raw_transaction_hex: String,
@@ -121,7 +121,7 @@ pub trait ZcashIndexerRpc {
     /// use verbosity=3.
     ///
     /// The undocumented `chainwork` field is not returned.
-    #[method(name = "get_block")]
+    #[method(name = "getblock")]
     async fn z_get_block(
         &self,
         hash_or_height: String,
@@ -133,7 +133,7 @@ pub trait ZcashIndexerRpc {
     /// zcashd reference: [`getrawmempool`](https://zcash.github.io/rpc/getrawmempool.html)
     /// method: post
     /// tags: blockchain
-    #[method(name = "get_raw_mempool")]
+    #[method(name = "getrawmempool")]
     async fn get_raw_mempool(&self) -> Result<Vec<String>, ErrorObjectOwned>;
 
     /// Returns information about the given block's Sapling & Orchard tree state.
@@ -152,7 +152,7 @@ pub trait ZcashIndexerRpc {
     /// negative where -1 is the last known valid block". On the other hand,
     /// `lightwalletd` only uses positive heights, so Zebra does not support
     /// negative heights.
-    #[method(name = "z_get_treestate")]
+    #[method(name = "zgettreestate")]
     async fn z_get_treestate(
         &self,
         hash_or_height: String,
@@ -176,7 +176,7 @@ pub trait ZcashIndexerRpc {
     /// starting at the chain tip. This RPC will return an empty list if the `start_index` subtree
     /// exists, but has not been rebuilt yet. This matches `zcashd`'s behaviour when subtrees aren't
     /// available yet. (But `zcashd` does its rebuild before syncing any blocks.)
-    #[method(name = "z_get_subtrees_by_index")]
+    #[method(name = "zgetsubtreesbyindex")]
     async fn z_get_subtrees_by_index(
         &self,
         pool: String,
@@ -203,7 +203,7 @@ pub trait ZcashIndexerRpc {
     /// In verbose mode, we only expose the `hex` and `height` fields since
     /// lightwalletd uses only those:
     /// <https://github.com/zcash/lightwalletd/blob/631bb16404e3d8b045e74a7c5489db626790b2f6/common/common.go#L119>
-    #[method(name = "get_raw_transaction")]
+    #[method(name = "getrawtransaction")]
     async fn get_raw_transaction(
         &self,
         txid_hex: String,
@@ -227,7 +227,7 @@ pub trait ZcashIndexerRpc {
     ///
     /// Only the multi-argument format is used by lightwalletd and this is what we currently support:
     /// <https://github.com/zcash/lightwalletd/blob/631bb16404e3d8b045e74a7c5489db626790b2f6/common/common.go#L97-L102>
-    #[method(name = "get_address_tx_ids")]
+    #[method(name = "getaddresstxids")]
     async fn get_address_tx_ids(
         &self,
         request: GetAddressTxIdsRequest,
@@ -247,7 +247,7 @@ pub trait ZcashIndexerRpc {
     ///
     /// lightwalletd always uses the multi-address request, without chaininfo:
     /// <https://github.com/zcash/lightwalletd/blob/master/frontend/service.go#L402>
-    #[method(name = "get_address_utxos")]
+    #[method(name = "getaddressutxos")]
     async fn z_get_address_utxos(
         &self,
         address_strings: AddressStrings,
