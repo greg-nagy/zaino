@@ -1710,7 +1710,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
                     if location.height().0 as u64 >= request.start_height {
                         Some(GetAddressUtxosReply {
                             address: address.to_string(),
-                            txid: hash.bytes_in_display_order().to_vec(),
+                            txid: hash.0.to_vec(),
                             index: location.output_index().index() as i32,
                             script: output.lock_script.as_raw_bytes().to_vec(),
                             value_zat: output.value.zatoshis(),
