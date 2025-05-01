@@ -70,7 +70,7 @@ pub trait ZcashIndexerRpc {
     /// The RPC documentation says that the returned object has a string `balance` field, but
     /// zcashd actually [returns an
     /// integer](https://github.com/zcash/lightwalletd/blob/bdaac63f3ee0dbef62bde04f6817a9f90d483b00/common/common.go#L128-L130).
-    #[method(name = "zgetaddressbalance")]
+    #[method(name = "getaddressbalance")]
     async fn z_get_address_balance(
         &self,
         address_strings: AddressStrings,
@@ -152,7 +152,7 @@ pub trait ZcashIndexerRpc {
     /// negative where -1 is the last known valid block". On the other hand,
     /// `lightwalletd` only uses positive heights, so Zebra does not support
     /// negative heights.
-    #[method(name = "zgettreestate")]
+    #[method(name = "z_gettreestate")]
     async fn z_get_treestate(
         &self,
         hash_or_height: String,
@@ -176,7 +176,7 @@ pub trait ZcashIndexerRpc {
     /// starting at the chain tip. This RPC will return an empty list if the `start_index` subtree
     /// exists, but has not been rebuilt yet. This matches `zcashd`'s behaviour when subtrees aren't
     /// available yet. (But `zcashd` does its rebuild before syncing any blocks.)
-    #[method(name = "zgetsubtreesbyindex")]
+    #[method(name = "z_getsubtreesbyindex")]
     async fn z_get_subtrees_by_index(
         &self,
         pool: String,
