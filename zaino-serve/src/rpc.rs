@@ -1,6 +1,6 @@
 //! gRPC / JsonRPC service implementations.
 
-use zaino_state::{fetch::FetchServiceSubscriber, indexer::IndexerSubscriber};
+use zaino_state::{FetchServiceSubscriber, IndexerSubscriber};
 
 pub mod grpc;
 pub mod jsonrpc;

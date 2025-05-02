@@ -1,4 +1,5 @@
-//! Holds the Indexer trait containing the zcash RPC definitions served by zaino.
+//! Holds the Indexer trait containing the zcash RPC definitions served by zaino
+//! and generic wrapper structs for the various backend options available.
 
 use async_trait::async_trait;
 
@@ -30,9 +31,8 @@ use crate::{
 
 /// Wrapper Struct for a ZainoState chain-fetch service (StateService, FetchService)
 ///
-/// The future plan is to also add a TonicService and DarksideService to this to enable wallets to use a single unified chain fetch service.
-///
-/// NOTE: Work to implement a unified endpoint for IndexerService will be completed in Milestone 3 of the Zaino Dev Grant.
+/// The future plan is to also add a TonicService and DarksideService to this to enable
+/// wallets to use a single unified chain fetch service.
 #[derive(Clone)]
 pub struct IndexerService<Service: ZcashService> {
     /// Underlying Service.

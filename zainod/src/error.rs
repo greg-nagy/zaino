@@ -2,7 +2,7 @@
 
 use zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError;
 use zaino_serve::server::error::ServerError;
-use zaino_state::error::{FetchServiceError, StateServiceError};
+use zaino_state::{FetchServiceError, StateServiceError};
 
 /// Zingo-Indexer errors.
 #[derive(Debug, thiserror::Error)]

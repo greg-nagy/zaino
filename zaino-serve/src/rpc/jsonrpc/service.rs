@@ -1,6 +1,6 @@
 //! Zcash RPC implementations.
 
-use zaino_state::indexer::ZcashIndexer as _;
+use zaino_state::ZcashIndexer as _;
 use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},

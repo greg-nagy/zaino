@@ -447,7 +447,7 @@ impl FinalisedState {
             loop {
                 match self.state.clone() {
                     Some(state) => {
-                        match crate::state::get_compact_block(
+                        match crate::backends::state::get_compact_block(
                             &state,
                             HashOrHeight::Height(Height(block_height)),
                             &self.config.network,

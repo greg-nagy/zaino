@@ -14,11 +14,8 @@ use zaino_proto::proto::{
     },
 };
 use zaino_state::{
-    indexer::LightWalletIndexer,
-    stream::{
-        AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
-        SubtreeRootReplyStream, UtxoReplyStream,
-    },
+    AddressStream, CompactBlockStream, CompactTransactionStream, LightWalletIndexer,
+    RawTransactionStream, SubtreeRootReplyStream, UtxoReplyStream,
 };
 
 /// A helper macro invoked by implement_client_methods, as the

@@ -9,12 +9,7 @@ use zaino_serve::server::{
     grpc::TonicServer,
     jsonrpc::JsonRpcServer,
 };
-use zaino_state::{
-    config::FetchServiceConfig,
-    fetch::FetchService,
-    indexer::{IndexerService, ZcashService},
-    status::StatusType,
-};
+use zaino_state::{FetchService, FetchServiceConfig, IndexerService, StatusType, ZcashService};
 
 use crate::{config::IndexerConfig, error::IndexerError};
 

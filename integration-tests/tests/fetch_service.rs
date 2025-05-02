@@ -5,10 +5,8 @@ use zaino_proto::proto::service::{
     TransparentAddressBlockFilter, TxFilter,
 };
 use zaino_state::{
-    config::FetchServiceConfig,
-    fetch::{FetchService, FetchServiceSubscriber},
-    indexer::{LightWalletIndexer, ZcashIndexer as _, ZcashService as _},
-    status::StatusType,
+    FetchService, FetchServiceConfig, FetchServiceSubscriber, LightWalletIndexer, StatusType,
+    ZcashIndexer as _, ZcashService as _,
 };
 use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind};

@@ -1,9 +1,6 @@
 use core::panic;
 use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
-use zaino_state::{
-    config::BlockCacheConfig,
-    local_cache::{BlockCache, BlockCacheSubscriber},
-};
+use zaino_state::{BlockCache, BlockCacheConfig, BlockCacheSubscriber};
 use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind};
 use zebra_chain::block::Height;

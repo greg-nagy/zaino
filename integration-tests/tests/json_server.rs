@@ -1,7 +1,5 @@
 use zaino_state::{
-    config::FetchServiceConfig,
-    fetch::{FetchService, FetchServiceSubscriber},
-    indexer::{ZcashIndexer, ZcashService as _},
+    FetchService, FetchServiceConfig, FetchServiceSubscriber, ZcashIndexer, ZcashService as _,
 };
 use zaino_testutils::{from_inputs, Validator as _};
 use zaino_testutils::{TestManager, ValidatorKind};

@@ -1,8 +1,6 @@
 use zaino_state::{
-    config::{FetchServiceConfig, StateServiceConfig},
-    fetch::{FetchService, FetchServiceSubscriber},
-    indexer::{ZcashIndexer, ZcashService as _},
-    state::{StateService, StateServiceSubscriber},
+    FetchService, FetchServiceConfig, FetchServiceSubscriber, LightWalletIndexer, StateService,
+    StateServiceConfig, StateServiceSubscriber, ZcashIndexer, ZcashService as _,
 };
 use zaino_testutils::from_inputs;
 use zaino_testutils::services;
@@ -1220,7 +1218,6 @@ mod zebrad {
         use zaino_proto::proto::service::{
             AddressList, BlockId, BlockRange, GetAddressUtxosArg, GetSubtreeRootsArg, TxFilter,
         };
-        use zaino_state::indexer::LightWalletIndexer;
         use zebra_rpc::methods::GetAddressTxIdsRequest;
 
         use super::*;

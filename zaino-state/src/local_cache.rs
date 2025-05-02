@@ -3,6 +3,7 @@
 use crate::{config::BlockCacheConfig, error::BlockCacheError, status::StatusType};
 
 pub mod finalised_state;
+pub mod mempool;
 pub mod non_finalised_state;
 
 use finalised_state::{FinalisedState, FinalisedStateSubscriber};
@@ -146,7 +147,7 @@ impl BlockCacheSubscriber {
                 // Fetch from Validator.
                 None => match self.state.clone() {
                     Some(state) => {
-                        match crate::state::get_compact_block(
+                        match crate::backends::state::get_compact_block(
                             &state,
                             hash_or_height,
                             &self.config.network,
