@@ -11,7 +11,7 @@ use crate::{
     status::{AtomicStatus, StatusType},
     stream::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
-        SubtreeRootReplyStream, UtxoReplyStream,
+        UtxoReplyStream,
     },
     utils::{blockid_to_hashorheight, get_build_info, ServiceMetadata},
 };
@@ -30,8 +30,8 @@ use zaino_proto::proto::{
         CompactSaplingSpend, CompactTx,
     },
     service::{
-        AddressList, BlockId, BlockRange, Exclude, GetAddressUtxosArg, GetAddressUtxosReplyList,
-        GetSubtreeRootsArg, LightdInfo, PingResponse, RawTransaction, SendResponse,
+        AddressList, BlockId, BlockRange, Exclude, GetAddressUtxosArg, GetAddressUtxosReply,
+        GetAddressUtxosReplyList, LightdInfo, PingResponse, RawTransaction, SendResponse,
         TransparentAddressBlockFilter, TreeState, TxFilter,
     },
 };
@@ -64,10 +64,10 @@ use zebra_state::{
 };
 
 use chrono::Utc;
-use futures::{FutureExt as _, TryFutureExt as _};
+use futures::{FutureExt as _, TryFutureExt as _, TryStreamExt as _};
 use hex::{FromHex as _, ToHex};
 use indexmap::IndexMap;
-use std::{future::poll_fn, io::Cursor, str::FromStr as _, sync::Arc};
+use std::{collections::HashSet, future::poll_fn, io::Cursor, str::FromStr, sync::Arc};
 use tokio::{
     sync::mpsc,
     time::{self, timeout},
@@ -1241,8 +1241,6 @@ impl ZcashIndexer for StateServiceSubscriber {
 
 #[async_trait]
 impl LightWalletIndexer for StateServiceSubscriber {
-    type Error = StateServiceError;
-
     /// Return the height of the tip of the best chain
     async fn get_latest_block(&self) -> Result<BlockId, Self::Error> {
         let mut state = self.read_state_service.clone();
@@ -1623,37 +1621,44 @@ impl LightWalletIndexer for StateServiceSubscriber {
     /// See section 3.7 of the Zcash protocol specification. It returns several other useful
     /// values also (even though they can be obtained using GetBlock).
     /// The block can be specified by either height or hash.
-    async fn get_tree_state(&self, _request: BlockId) -> Result<TreeState, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(
-            tonic::Status::unimplemented(
-                "Not yet implemented. If you require this RPC please open an issue or \
-            PR at the Zaino github (https://github.com/zingolabs/zaino.git).",
-            ),
-        ))
+    async fn get_tree_state(&self, request: BlockId) -> Result<TreeState, Self::Error> {
+        let hash_or_height = blockid_to_hashorheight(request).ok_or(
+            crate::error::StateServiceError::TonicStatusError(tonic::Status::invalid_argument(
+                "Invalid hash or height",
+            )),
+        )?;
+        let (hash, height, time, sapling, orchard) =
+            <StateServiceSubscriber as ZcashIndexer>::z_get_treestate(
+                self,
+                hash_or_height.to_string(),
+            )
+            .await?
+            .into_parts();
+        Ok(TreeState {
+            network: self.config.network.bip70_network_name(),
+            height: height.0 as u64,
+            hash: hash.to_string(),
+            time,
+            sapling_tree: sapling.map(hex::encode).unwrap_or_default(),
+            orchard_tree: orchard.map(hex::encode).unwrap_or_default(),
+        })
     }
 
     /// GetLatestTreeState returns the note commitment tree state corresponding to the chain tip.
     async fn get_latest_tree_state(&self) -> Result<TreeState, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(
-            tonic::Status::unimplemented(
-                "Not yet implemented. If you require this RPC please open an issue or PR at \
-            the Zaino github (https://github.com/zingolabs/zaino.git).",
-            ),
-        ))
+        let latest_block = self.chain_height().await?;
+        self.get_tree_state(BlockId {
+            height: latest_block.0 as u64,
+            hash: vec![],
+        })
+        .await
     }
 
-    /// Returns a stream of information about roots of subtrees of the Sapling and Orchard
-    /// note commitment trees.
-    async fn get_subtree_roots(
-        &self,
-        _request: GetSubtreeRootsArg,
-    ) -> Result<SubtreeRootReplyStream, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(
-            tonic::Status::unimplemented(
-                "Not yet implemented. If you require this RPC please open an issue or PR \
-            at the Zaino github (https://github.com/zingolabs/zaino.git).",
-            ),
-        ))
+    fn timeout_channel_size(&self) -> (u32, u32) {
+        (
+            self.config.service_timeout,
+            self.config.service_channel_size,
+        )
     }
 
     /// Returns all unspent outputs for a list of addresses.
@@ -1664,14 +1669,14 @@ impl LightWalletIndexer for StateServiceSubscriber {
     /// Utxos are collected and returned as a single Vec.
     async fn get_address_utxos(
         &self,
-        _request: GetAddressUtxosArg,
+        request: GetAddressUtxosArg,
     ) -> Result<GetAddressUtxosReplyList, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(
-            tonic::Status::unimplemented(
-                "Not yet implemented. If you require this RPC please open an issue or \
-            PR at the Zaino github (https://github.com/zingolabs/zaino.git).",
-            ),
-        ))
+        self.get_address_utxos_stream(request)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await
+            .map(|address_utxos| GetAddressUtxosReplyList { address_utxos })
+            .map_err(Self::Error::from)
     }
 
     /// Returns all unspent outputs for a list of addresses.
@@ -1682,14 +1687,50 @@ impl LightWalletIndexer for StateServiceSubscriber {
     /// Utxos are returned in a stream.
     async fn get_address_utxos_stream(
         &self,
-        _request: GetAddressUtxosArg,
+        request: GetAddressUtxosArg,
     ) -> Result<UtxoReplyStream, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(
-            tonic::Status::unimplemented(
-                "Not yet implemented. If you require this RPC please open an issue or PR at \
-            the Zaino github (https://github.com/zingolabs/zaino.git).",
-            ),
-        ))
+        let mut state = self.read_state_service.clone();
+        let mut address_set = HashSet::new();
+        for address in request.addresses {
+            address_set.insert(zebra_chain::transparent::Address::from_str(
+                address.as_ref(),
+            )?);
+        }
+
+        let address_utxos_response = state
+            .ready()
+            .and_then(|service| service.call(ReadRequest::UtxosByAddresses(address_set)))
+            .await?;
+        let utxos = expected_read_response!(address_utxos_response, AddressUtxos);
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
+        tokio::spawn(async move {
+            for utxo in utxos
+                .utxos()
+                .filter_map(|(address, hash, location, output)| {
+                    if location.height().0 as u64 >= request.start_height {
+                        Some(GetAddressUtxosReply {
+                            address: address.to_string(),
+                            txid: hash.0.to_vec(),
+                            index: location.output_index().index() as i32,
+                            script: output.lock_script.as_raw_bytes().to_vec(),
+                            value_zat: output.value.zatoshis(),
+                            height: location.height().0 as u64,
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .take(match usize::try_from(request.max_entries) {
+                    Ok(0) | Err(_) => usize::MAX,
+                    Ok(non_zero) => non_zero,
+                })
+            {
+                if channel_tx.send(Ok(utxo)).await.is_err() {
+                    return;
+                }
+            }
+        });
+        Ok(UtxoReplyStream::new(channel_rx))
     }
 
     /// Return information about this lightwalletd instance and the blockchain

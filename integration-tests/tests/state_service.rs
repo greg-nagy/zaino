@@ -1217,7 +1217,9 @@ mod zebrad {
 
     pub(crate) mod lightwallet_indexer {
         use futures::StreamExt as _;
-        use zaino_proto::proto::service::{AddressList, BlockId, BlockRange, TxFilter};
+        use zaino_proto::proto::service::{
+            AddressList, BlockId, BlockRange, GetAddressUtxosArg, GetSubtreeRootsArg, TxFilter,
+        };
         use zaino_state::indexer::LightWalletIndexer;
         use zebra_rpc::methods::GetAddressTxIdsRequest;
 
@@ -1292,6 +1294,114 @@ mod zebrad {
                 .unwrap());
             assert_eq!(fetch_service_block_by_hash, state_service_block_by_hash);
             assert_eq!(state_service_block_by_hash, state_service_block_by_height)
+        }
+        #[tokio::test]
+        async fn get_tree_state() {
+            let (
+                test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+            test_manager.local_net.generate_blocks(2).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let second_treestate_by_height = BlockId {
+                height: 2,
+                hash: vec![],
+            };
+            let fetch_service_treestate_by_height = fetch_service_subscriber
+                .get_tree_state(second_treestate_by_height.clone())
+                .await
+                .unwrap();
+            let state_service_treestate_by_height = dbg!(state_service_subscriber
+                .get_tree_state(second_treestate_by_height)
+                .await
+                .unwrap());
+            assert_eq!(
+                fetch_service_treestate_by_height,
+                state_service_treestate_by_height
+            );
+        }
+        #[tokio::test]
+        async fn get_subtree_roots() {
+            let (
+                test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+            test_manager.local_net.generate_blocks(5).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let sapling_subtree_roots_request = GetSubtreeRootsArg {
+                start_index: 2,
+                shielded_protocol: 0,
+                max_entries: 0,
+            };
+            let fetch_service_sapling_subtree_roots = fetch_service_subscriber
+                .get_subtree_roots(sapling_subtree_roots_request.clone())
+                .await
+                .unwrap()
+                .map(Result::unwrap)
+                .collect::<Vec<_>>()
+                .await;
+            let state_service_sapling_subtree_roots = state_service_subscriber
+                .get_subtree_roots(sapling_subtree_roots_request)
+                .await
+                .unwrap()
+                .map(Result::unwrap)
+                .collect::<Vec<_>>()
+                .await;
+            assert_eq!(
+                fetch_service_sapling_subtree_roots,
+                state_service_sapling_subtree_roots
+            );
+        }
+        #[tokio::test]
+        async fn get_latest_tree_state() {
+            let (
+                test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+            test_manager.local_net.generate_blocks(2).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let fetch_service_treestate = fetch_service_subscriber
+                .get_latest_tree_state()
+                .await
+                .unwrap();
+            let state_service_treestate = dbg!(state_service_subscriber
+                .get_latest_tree_state()
+                .await
+                .unwrap());
+            assert_eq!(fetch_service_treestate, state_service_treestate);
         }
 
         async fn get_block_range_helper(nullifiers_only: bool) {
@@ -1451,6 +1561,102 @@ mod zebrad {
                 .await
                 .unwrap();
             assert_eq!(fetch_service_taddress_txids, state_service_taddress_txids);
+        }
+
+        #[tokio::test]
+        async fn get_address_utxos_stream() {
+            let (
+                mut test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                true,
+                true,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+
+            let clients = test_manager.clients.take().unwrap();
+            let taddr = clients.get_faucet_address("transparent").await;
+            test_manager.local_net.generate_blocks(5).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            let request = GetAddressUtxosArg {
+                addresses: vec![taddr],
+                start_height: 2,
+                max_entries: 3,
+            };
+            let state_service_address_utxos_streamed = state_service_subscriber
+                .get_address_utxos_stream(request.clone())
+                .await
+                .unwrap()
+                .map(Result::unwrap)
+                .collect::<Vec<_>>()
+                .await;
+            let fetch_service_address_utxos_streamed = fetch_service_subscriber
+                .get_address_utxos_stream(request)
+                .await
+                .unwrap()
+                .map(Result::unwrap)
+                .collect::<Vec<_>>()
+                .await;
+            assert_eq!(
+                fetch_service_address_utxos_streamed,
+                state_service_address_utxos_streamed
+            );
+            clients.faucet.do_sync(false).await.unwrap();
+            assert_eq!(
+                fetch_service_address_utxos_streamed.first().unwrap().txid,
+                clients.faucet.transaction_summaries().await.txids()[1].as_ref()
+            );
+        }
+        #[tokio::test]
+        async fn get_address_utxos() {
+            let (
+                mut test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                true,
+                true,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+
+            let clients = test_manager.clients.take().unwrap();
+            let taddr = clients.get_faucet_address("transparent").await;
+            test_manager.local_net.generate_blocks(5).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            let request = GetAddressUtxosArg {
+                addresses: vec![taddr],
+                start_height: 2,
+                max_entries: 3,
+            };
+            let state_service_address_utxos = state_service_subscriber
+                .get_address_utxos(request.clone())
+                .await
+                .unwrap();
+            let fetch_service_address_utxos = fetch_service_subscriber
+                .get_address_utxos(request)
+                .await
+                .unwrap();
+            assert_eq!(fetch_service_address_utxos, state_service_address_utxos);
+            clients.faucet.do_sync(false).await.unwrap();
+            assert_eq!(
+                fetch_service_address_utxos
+                    .address_utxos
+                    .first()
+                    .unwrap()
+                    .txid,
+                clients.faucet.transaction_summaries().await.txids()[1].as_ref()
+            );
         }
         #[tokio::test]
         async fn get_taddress_balance() {

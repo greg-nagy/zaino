@@ -24,9 +24,8 @@ use zaino_proto::proto::{
     compact_formats::CompactBlock,
     service::{
         AddressList, Balance, BlockId, BlockRange, Duration, Exclude, GetAddressUtxosArg,
-        GetAddressUtxosReply, GetAddressUtxosReplyList, GetSubtreeRootsArg, LightdInfo,
-        PingResponse, RawTransaction, SendResponse, ShieldedProtocol, SubtreeRoot,
-        TransparentAddressBlockFilter, TreeState, TxFilter,
+        GetAddressUtxosReply, GetAddressUtxosReplyList, LightdInfo, PingResponse, RawTransaction,
+        SendResponse, TransparentAddressBlockFilter, TreeState, TxFilter,
     },
 };
 
@@ -41,7 +40,7 @@ use crate::{
     status::StatusType,
     stream::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
-        SubtreeRootReplyStream, UtxoReplyStream,
+        UtxoReplyStream,
     },
     utils::{blockid_to_hashorheight, get_build_info, ServiceMetadata},
 };
@@ -488,8 +487,6 @@ impl ZcashIndexer for FetchServiceSubscriber {
 
 #[async_trait]
 impl LightWalletIndexer for FetchServiceSubscriber {
-    type Error = FetchServiceError;
-
     /// Return the height of the tip of the best chain
     async fn get_latest_block(&self) -> Result<BlockId, Self::Error> {
         let latest_height = self.block_cache.get_chain_height().await?;
@@ -1297,161 +1294,11 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         }
     }
 
-    /// Returns a stream of information about roots of subtrees of the Sapling and Orchard
-    /// note commitment trees.
-    async fn get_subtree_roots(
-        &self,
-        request: GetSubtreeRootsArg,
-    ) -> Result<SubtreeRootReplyStream, Self::Error> {
-        let pool = match ShieldedProtocol::try_from(request.shielded_protocol) {
-            Ok(protocol) => protocol.as_str_name(),
-            Err(_) => {
-                return Err(FetchServiceError::TonicStatusError(
-                    tonic::Status::invalid_argument("Error: Invalid shielded protocol value."),
-                ))
-            }
-        };
-        let start_index = match u16::try_from(request.start_index) {
-            Ok(value) => value,
-            Err(_) => {
-                return Err(FetchServiceError::TonicStatusError(
-                    tonic::Status::invalid_argument("Error: start_index value exceeds u16 range."),
-                ))
-            }
-        };
-        let limit = if request.max_entries == 0 {
-            None
-        } else {
-            match u16::try_from(request.max_entries) {
-                Ok(value) => Some(value),
-                Err(_) => {
-                    return Err(FetchServiceError::TonicStatusError(
-                        tonic::Status::invalid_argument(
-                            "Error: max_entries value exceeds u16 range.",
-                        ),
-                    ))
-                }
-            }
-        };
-        let subtrees = self
-            .z_get_subtrees_by_index(
-                pool.to_string(),
-                NoteCommitmentSubtreeIndex(start_index),
-                limit.map(NoteCommitmentSubtreeIndex),
-            )
-            .await?;
-        let fetch_service_clone = self.clone();
-        let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
-        tokio::spawn(async move {
-            let timeout = timeout(
-                time::Duration::from_secs((service_timeout * 4) as u64),
-                async {
-                    for subtree in subtrees.subtrees {
-                        match fetch_service_clone
-                            .z_get_block(subtree.end_height.0.to_string(), Some(1))
-                            .await
-                        {
-                            Ok(GetBlock::Object { hash, height, .. }) => {
-                                let checked_height = match height {
-                                    Some(h) => h.0 as u64,
-                                    None => {
-                                        match channel_tx
-                                            .send(Err(tonic::Status::unknown(
-                                                "Error: No block height returned by node.",
-                                            )))
-                                            .await
-                                        {
-                                            Ok(_) => break,
-                                            Err(e) => {
-                                                warn!(
-                                                    "GetSubtreeRoots channel closed unexpectedly: {}",
-                                                    e
-                                                );
-                                                break;
-                                            }
-                                        }
-                                    }
-                                };
-                                let checked_root_hash = match hex::decode(&subtree.root) {
-                                    Ok(hash) => hash,
-                                    Err(e) => {
-                                        match channel_tx
-                                            .send(Err(tonic::Status::unknown(format!(
-                                                "Error: Failed to hex decode root hash: {}.",
-                                                e
-                                            ))))
-                                            .await
-                                        {
-                                            Ok(_) => break,
-                                            Err(e) => {
-                                                warn!(
-                                                    "GetSubtreeRoots channel closed unexpectedly: {}",
-                                                    e
-                                                );
-                                                break;
-                                            }
-                                        }
-                                    }
-                                };
-                                if channel_tx
-                                    .send(Ok(SubtreeRoot {
-                                        root_hash: checked_root_hash,
-                                        completing_block_hash: hash
-                                            .0
-                                            .bytes_in_display_order()
-                                            .to_vec(),
-                                        completing_block_height: checked_height,
-                                    }))
-                                    .await
-                                    .is_err()
-                                {
-                                    break;
-                                }
-                            }
-                            Ok(GetBlock::Raw(_)) => {
-                                // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                                if channel_tx
-                                .send(Err(tonic::Status::unknown(
-                                    "Error: Received raw block type, this should not be possible.",
-                                )))
-                                .await
-                                .is_err()
-                            {
-                                break;
-                            }
-                            }
-                            Err(e) => {
-                                // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                                if channel_tx
-                                    .send(Err(tonic::Status::unknown(format!(
-                                        "Error: Could not fetch block at height [{}] from node: {}",
-                                        subtree.end_height.0, e
-                                    ))))
-                                    .await
-                                    .is_err()
-                                {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                },
-            )
-            .await;
-            match timeout {
-                Ok(_) => {}
-                Err(_) => {
-                    channel_tx
-                        .send(Err(tonic::Status::deadline_exceeded(
-                            "Error: get_mempool_stream gRPC request timed out",
-                        )))
-                        .await
-                        .ok();
-                }
-            }
-        });
-        Ok(SubtreeRootReplyStream::new(channel_rx))
+    fn timeout_channel_size(&self) -> (u32, u32) {
+        (
+            self.config.service_timeout,
+            self.config.service_channel_size,
+        )
     }
 
     /// Returns all unspent outputs for a list of addresses.
