@@ -5926,6 +5926,7 @@ dependencies = [
  "zaino-serve",
  "zaino-state",
  "zebra-chain 1.0.0-beta.45 (git+https://github.com/ZcashFoundation/zebra.git?rev=0d201a59f812d7312239f488f9c8beea73cd64d4)",
+ "zebra-state 1.0.0-beta.45 (git+https://github.com/ZcashFoundation/zebra.git?rev=0d201a59f812d7312239f488f9c8beea73cd64d4)",
 ]
 
 [[package]]

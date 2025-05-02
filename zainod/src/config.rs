@@ -8,7 +8,7 @@ use std::{
 
 use toml::Value;
 use tracing::warn;
-use zaino_state::BackendType;
+use zaino_state::{BackendConfig, BackendType, FetchServiceConfig, StateServiceConfig};
 
 use crate::error::IndexerError;
 
@@ -545,5 +545,60 @@ pub fn load_config(file_path: &std::path::PathBuf) -> Result<IndexerConfig, Inde
     } else {
         warn!("Could not find config file at given path, using default config.");
         Ok(default_config)
+    }
+}
+
+impl TryFrom<IndexerConfig> for BackendConfig {
+    type Error = IndexerError;
+
+    fn try_from(cfg: IndexerConfig) -> Result<Self, Self::Error> {
+        let network = cfg.get_network()?;
+
+        match cfg.backend {
+            BackendType::State => Ok(BackendConfig::State(StateServiceConfig {
+                validator_config: zebra_state::Config {
+                    cache_dir: cfg.zebra_db_path.clone(),
+                    ephemeral: false,
+                    delete_old_database: true,
+                    debug_stop_at_height: None,
+                    debug_validity_check_interval: None,
+                },
+                validator_rpc_address: cfg.validator_listen_address,
+                validator_cookie_auth: cfg.validator_cookie_auth,
+                validator_cookie_path: cfg.validator_cookie_path,
+                validator_rpc_user: cfg.validator_user.unwrap_or_else(|| "xxxxxx".to_string()),
+                validator_rpc_password: cfg
+                    .validator_password
+                    .unwrap_or_else(|| "xxxxxx".to_string()),
+                service_timeout: 30,
+                service_channel_size: 32,
+                map_capacity: cfg.map_capacity,
+                map_shard_amount: cfg.map_shard_amount,
+                db_path: cfg.zebra_db_path,
+                db_size: cfg.db_size,
+                network,
+                no_sync: cfg.no_sync,
+                no_db: cfg.no_db,
+            })),
+
+            BackendType::Fetch => Ok(BackendConfig::Fetch(FetchServiceConfig {
+                validator_rpc_address: cfg.validator_listen_address,
+                validator_cookie_auth: cfg.validator_cookie_auth,
+                validator_cookie_path: cfg.validator_cookie_path,
+                validator_rpc_user: cfg.validator_user.unwrap_or_else(|| "xxxxxx".to_string()),
+                validator_rpc_password: cfg
+                    .validator_password
+                    .unwrap_or_else(|| "xxxxxx".to_string()),
+                service_timeout: 30,
+                service_channel_size: 32,
+                map_capacity: cfg.map_capacity,
+                map_shard_amount: cfg.map_shard_amount,
+                db_path: cfg.zaino_db_path,
+                db_size: cfg.db_size,
+                network,
+                no_sync: cfg.no_sync,
+                no_db: cfg.no_db,
+            })),
+        }
     }
 }
