@@ -11,6 +11,7 @@ use std::{
 use tempfile::TempDir;
 use testvectors::{seeds, REG_O_ADDR_FROM_ABANDONART};
 use tracing_subscriber::EnvFilter;
+use zaino_state::BackendType;
 use zainodlib::config::default_ephemeral_cookie_path;
 use zcash_client_backend::proto::service::compact_tx_streamer_client::CompactTxStreamerClient;
 pub use zingo_infra_services as services;
@@ -381,7 +382,7 @@ impl TestManager {
                     rpc_listen_port: Some(zebrad_rpc_listen_port),
                     activation_heights: zingo_infra_services::network::ActivationHeights::default(),
                     miner_address: Some(REG_O_ADDR_FROM_ABANDONART),
-                    chain_cache,
+                    chain_cache: chain_cache.clone(),
                 };
                 ValidatorConfig::ZcashdConfig(cfg)
             }
@@ -392,7 +393,7 @@ impl TestManager {
                     rpc_listen_port: Some(zebrad_rpc_listen_port),
                     activation_heights: zingo_infra_services::network::ActivationHeights::default(),
                     miner_address: zingo_infra_services::validator::ZEBRAD_DEFAULT_MINER,
-                    chain_cache,
+                    chain_cache: chain_cache.clone(),
                     network,
                 };
                 ValidatorConfig::ZebradConfig(cfg)
@@ -400,7 +401,12 @@ impl TestManager {
         };
         let local_net = LocalNet::launch(validator_config).await.unwrap();
         let data_dir = local_net.data_dir().path().to_path_buf();
-        let db_path = data_dir.join("zaino");
+        let zaino_db_path = data_dir.join("zaino");
+
+        let zebra_db_path = match chain_cache {
+            Some(cache) => cache,
+            None => data_dir.clone(),
+        };
 
         // Launch Zaino:
         let (
@@ -419,6 +425,8 @@ impl TestManager {
             let zaino_json_server_cookie_dir = Some(default_ephemeral_cookie_path());
 
             let indexer_config = zainodlib::config::IndexerConfig {
+                // TODO: Make configurable.
+                backend: BackendType::Fetch,
                 enable_json_server: enable_zaino_jsonrpc_server,
                 json_rpc_listen_address: zaino_json_listen_address,
                 enable_cookie_auth: enable_zaino_jsonrpc_server_cookie_auth,
@@ -434,12 +442,13 @@ impl TestManager {
                 validator_password: Some("xxxxxx".to_string()),
                 map_capacity: None,
                 map_shard_amount: None,
-                db_path,
+                zaino_db_path,
+                zebra_db_path,
                 db_size: None,
                 network: network.to_string(),
                 no_sync: zaino_no_sync,
                 no_db: zaino_no_db,
-                no_state: false,
+                slow_sync: false,
             };
             let handle = zainodlib::indexer::Indexer::spawn(indexer_config)
                 .await

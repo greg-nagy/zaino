@@ -5898,6 +5898,7 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "tracing-subscriber",
+ "zaino-state",
  "zainod",
  "zcash_client_backend",
  "zcash_protocol 0.4.0",

@@ -67,7 +67,7 @@ impl Indexer {
             None,
             config.map_capacity,
             config.map_shard_amount,
-            config.db_path.clone(),
+            config.zaino_db_path.clone(),
             config.db_size,
             config.get_network()?,
             config.no_sync,

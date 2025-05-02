@@ -31,7 +31,7 @@ pub use local_cache::*;
 
 pub(crate) mod config;
 
-pub use config::{FetchServiceConfig, StateServiceConfig};
+pub use config::{BackendConfig, BackendType, FetchServiceConfig, StateServiceConfig};
 
 #[cfg(feature = "bench")]
 pub use config::BlockCacheConfig;

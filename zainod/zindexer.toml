@@ -1,5 +1,12 @@
 # Configuration for Zaino
 
+# Backend:
+
+# Type of backend to use. Options are:
+# - "fetch" - Uses JsonRPC client to fetch data (Zcashd, Zainod).
+# - "state" - Uses ReadStateService to fetch data (Zebrad).
+backend = "fetch"
+
 # JsonRPC server config:
 
 # Enables JsonRPC server.
@@ -70,12 +77,15 @@ map_capacity = "None"
 # None by default.
 map_shard_amount = "None"
 
-# Block Cache database file path.
-#
-# This is Zaino's Compact Block Cache db if using the FetchService or Zebra's RocksDB if using the StateService.
+# Zaino Block Cache database file path.
 #
 # None by default, this defaults to `$HOME/.cache/zaino/`
-db_path = "None"
+zaino_db_path = "None"
+
+# Zebra Block Cache database file path.
+#
+# None by default, this defaults to `$HOME/.cache/zebra/`
+zebra_db_path = "None"
 
 # Block Cache database maximum size in gb.
 #
@@ -101,9 +111,8 @@ no_sync = false
 # Used for testing.
 no_db = false
 
-# Disables internal mempool and blockcache.
+# When enabled Zaino syncs it DB in the background, fetching data from the validator.
 #
-# For use by lightweight wallets that do not want to run any extra processes.
-#
-no_state = false
+# NOTE: Unimplemented.
+slow_sync = false
 
