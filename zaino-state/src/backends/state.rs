@@ -140,7 +140,6 @@ impl StateService {
 
 #[async_trait]
 impl ZcashService for StateService {
-    type Error = StateServiceError;
     type Subscriber = StateServiceSubscriber;
     type Config = StateServiceConfig;
 

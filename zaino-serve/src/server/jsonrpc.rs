@@ -5,7 +5,10 @@ use crate::{
     server::{config::JsonRpcConfig, error::ServerError},
 };
 
-use zaino_state::{AtomicStatus, FetchServiceSubscriber, IndexerSubscriber, StatusType};
+use zaino_state::{
+    AtomicStatus, FetchServiceSubscriber, IndexerSubscriber, LightWalletIndexer, StatusType,
+    ZcashIndexer,
+};
 
 use zebra_rpc::server::{
     cookie::{remove_from_disk, write_to_disk, Cookie},
@@ -34,8 +37,8 @@ impl JsonRpcServer {
     /// Launches all components then enters command loop:
     /// - Updates the ServerStatus.
     /// - Checks for shutdown signal, shutting down server if received.
-    pub async fn spawn(
-        service_subscriber: IndexerSubscriber<FetchServiceSubscriber>,
+    pub async fn spawn<Service: ZcashIndexer + LightWalletIndexer + Clone>(
+        service_subscriber: IndexerSubscriber<Service>,
         server_config: JsonRpcConfig,
     ) -> Result<Self, ServerError> {
         let status = AtomicStatus::new(StatusType::Spawning.into());

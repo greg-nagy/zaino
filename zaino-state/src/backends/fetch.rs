@@ -69,7 +69,6 @@ pub struct FetchService {
 
 #[async_trait]
 impl ZcashService for FetchService {
-    type Error = FetchServiceError;
     type Subscriber = FetchServiceSubscriber;
     type Config = FetchServiceConfig;
     /// Initializes a new StateService instance and starts sync process.
