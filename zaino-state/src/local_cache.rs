@@ -221,9 +221,7 @@ pub(crate) async fn fetch_block_from_node(
             GetBlockResponse::Raw(_) => Err(BlockCacheError::Custom(
                 "Found transaction of `Raw` type, expected only `Hash` types.".to_string(),
             )),
-            GetBlockResponse::Object {
-                hash, tx, trees, ..
-            } => Ok((hash, tx, trees)),
+            GetBlockResponse::Object(block) => Ok((block.hash, block.tx, block.trees)),
         })?;
     fetcher
         .get_block(hash.0.to_string(), Some(0))
