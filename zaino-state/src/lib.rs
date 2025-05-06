@@ -13,7 +13,8 @@
 pub(crate) mod indexer;
 
 pub use indexer::{
-    IndexerService, IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService,
+    IndexerService, IndexerSubscriber, LightWalletIndexer, LightWalletService, ZcashIndexer,
+    ZcashService,
 };
 
 pub(crate) mod backends;

@@ -1,6 +1,6 @@
 //! Zcash RPC implementations.
 
-use zaino_state::ZcashIndexer as _;
+use zaino_state::{LightWalletIndexer, ZcashIndexer};
 use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
@@ -256,7 +256,7 @@ pub trait ZcashIndexerRpc {
 
 /// Uses ErrorCode::InvalidParams as this is converted to zcash legacy "minsc" ErrorCode in RPC middleware.
 #[jsonrpsee::core::async_trait]
-impl ZcashIndexerRpcServer for JsonRpcClient {
+impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonRpcClient<Indexer> {
     async fn get_info(&self) -> Result<GetInfo, ErrorObjectOwned> {
         self.service_subscriber
             .inner_ref()

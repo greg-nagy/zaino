@@ -44,9 +44,13 @@ where
     Service: ZcashService,
 {
     /// Creates a new `IndexerService` using the provided `config`.
-    pub async fn spawn(config: Service::Config) -> Result<Self, Service::Error> {
+    pub async fn spawn(
+        config: Service::Config,
+    ) -> Result<Self, <Service::Subscriber as ZcashIndexer>::Error> {
         Ok(IndexerService {
-            service: Service::spawn(config).await?,
+            service: Service::spawn(config)
+                .await
+                .map_err(Into::<tonic::Status>::into)?,
         })
     }
 
@@ -64,9 +68,6 @@ where
 /// Zcash Service functionality.
 #[async_trait]
 pub trait ZcashService: Sized {
-    /// Uses underlying error type of implementer.
-    type Error: std::error::Error + Send + Sync + 'static;
-
     /// A subscriber to the service, used to fetch chain data.
     type Subscriber: Clone + ZcashIndexer + LightWalletIndexer;
 
@@ -74,7 +75,8 @@ pub trait ZcashService: Sized {
     type Config: Clone;
 
     /// Spawns a [`Service`].
-    async fn spawn(config: Self::Config) -> Result<Self, Self::Error>;
+    async fn spawn(config: Self::Config)
+        -> Result<Self, <Self::Subscriber as ZcashIndexer>::Error>;
 
     /// Returns a [`ServiceSubscriber`].
     fn get_subscriber(&self) -> IndexerSubscriber<Self::Subscriber>;
@@ -126,7 +128,12 @@ where
 #[async_trait]
 pub trait ZcashIndexer: Send + Sync + 'static {
     /// Uses underlying error type of implementer.
-    type Error: std::error::Error + From<tonic::Status> + Send + Sync + 'static;
+    type Error: std::error::Error
+        + From<tonic::Status>
+        + Into<tonic::Status>
+        + Send
+        + Sync
+        + 'static;
 
     /// Returns software information from the RPC server, as a [`GetInfo`] JSON struct.
     ///
@@ -669,6 +676,11 @@ pub trait LightWalletIndexer: Send + Sync + Clone + ZcashIndexer + 'static {
     /// NOTE: Currently unimplemented in Zaino.
     async fn ping(&self, request: Duration) -> Result<PingResponse, Self::Error>;
 }
+/// Zcash Service functionality.
+#[async_trait]
+pub trait LightWalletService: Sized + ZcashService<Subscriber: LightWalletIndexer> {}
+
+impl<T> LightWalletService for T where T: ZcashService {}
 
 pub(crate) async fn handle_raw_transaction<Indexer: LightWalletIndexer>(
     chain_height: u64,

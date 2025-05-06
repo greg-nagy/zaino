@@ -450,7 +450,7 @@ impl TestManager {
                 no_db: zaino_no_db,
                 slow_sync: false,
             };
-            let handle = zainodlib::indexer::Indexer::spawn(indexer_config)
+            let handle = zainodlib::indexer::spawn_indexer(indexer_config)
                 .await
                 .unwrap();
 
