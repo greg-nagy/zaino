@@ -564,7 +564,7 @@ impl FinalisedState {
                             &blockchain_info.blocks.0,
                             &blockchain_info.estimated_height.0
                         );
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
                     continue;
                 }
             }
