@@ -574,7 +574,7 @@ impl TryFrom<IndexerConfig> for BackendConfig {
                 service_channel_size: 32,
                 map_capacity: cfg.map_capacity,
                 map_shard_amount: cfg.map_shard_amount,
-                db_path: cfg.zebra_db_path,
+                db_path: cfg.zaino_db_path,
                 db_size: cfg.db_size,
                 network,
                 no_sync: cfg.no_sync,

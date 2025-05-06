@@ -413,7 +413,7 @@ impl FinalisedState {
                 }
             };
 
-            reorg_hash = self.get_hash(reorg_height.0)?;
+            reorg_hash = self.get_hash(reorg_height.0).unwrap_or(Hash([0u8; 32]));
 
             check_hash = match self
                 .fetcher
