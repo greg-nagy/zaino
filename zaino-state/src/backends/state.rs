@@ -17,6 +17,7 @@ use crate::{
 };
 
 use nonempty::NonEmpty;
+use tokio_stream::StreamExt as _;
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
@@ -30,9 +31,9 @@ use zaino_proto::proto::{
         CompactSaplingSpend, CompactTx,
     },
     service::{
-        AddressList, BlockId, BlockRange, Exclude, GetAddressUtxosArg, GetAddressUtxosReply,
-        GetAddressUtxosReplyList, LightdInfo, PingResponse, RawTransaction, SendResponse,
-        TransparentAddressBlockFilter, TreeState, TxFilter,
+        AddressList, Balance, BlockId, BlockRange, Exclude, GetAddressUtxosArg,
+        GetAddressUtxosReply, GetAddressUtxosReplyList, LightdInfo, PingResponse, RawTransaction,
+        SendResponse, TransparentAddressBlockFilter, TreeState, TxFilter,
     },
 };
 
@@ -1397,16 +1398,108 @@ impl LightWalletIndexer for StateServiceSubscriber {
         })
     }
     /// Returns the total balance for a list of taddrs
+    ///
+    /// TODO: This is taken from fetch.rs, we could / probably should reconfigure into a trait implementation.
     async fn get_taddress_balance_stream(
         &self,
-        _request: AddressStream,
+        mut request: AddressStream,
     ) -> Result<zaino_proto::proto::service::Balance, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(
-            tonic::Status::unimplemented(
-                "Not yet implemented. If you require this RPC please \
-            open an issue or PR at the Zaino github (https://github.com/zingolabs/zaino.git).",
-            ),
-        ))
+        let fetch_service_clone = self.clone();
+        let service_timeout = self.config.service_timeout;
+        let (channel_tx, mut channel_rx) =
+            mpsc::channel::<String>(self.config.service_channel_size as usize);
+        let fetcher_task_handle = tokio::spawn(async move {
+            let fetcher_timeout = timeout(
+                time::Duration::from_secs((service_timeout * 4) as u64),
+                async {
+                    let mut total_balance: u64 = 0;
+                    loop {
+                        match channel_rx.recv().await {
+                            Some(taddr) => {
+                                let taddrs =
+                                    AddressStrings::new_valid(vec![taddr]).map_err(|err_obj| {
+                                        StateServiceError::RpcError(RpcError::new_from_errorobject(
+                                            err_obj,
+                                            "Error in Validator",
+                                        ))
+                                    })?;
+                                let balance =
+                                    fetch_service_clone.z_get_address_balance(taddrs).await?;
+                                total_balance += balance.balance;
+                            }
+                            None => {
+                                return Ok(total_balance);
+                            }
+                        }
+                    }
+                },
+            )
+            .await;
+            match fetcher_timeout {
+                Ok(result) => result,
+                Err(_) => Err(tonic::Status::deadline_exceeded(
+                    "Error: get_taddress_balance_stream request timed out.",
+                )),
+            }
+        });
+        // NOTE: This timeout is so slow due to the blockcache not being implemented. This should be reduced to 30s once functionality is in place.
+        // TODO: Make [rpc_timout] a configurable system variable with [default = 30s] and [mempool_rpc_timout = 4*rpc_timeout]
+        let addr_recv_timeout = timeout(
+            time::Duration::from_secs((service_timeout * 4) as u64),
+            async {
+                while let Some(address_result) = request.next().await {
+                    // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                    let address = address_result.map_err(|e| {
+                        tonic::Status::unknown(format!("Failed to read from stream: {}", e))
+                    })?;
+                    if channel_tx.send(address.address).await.is_err() {
+                        // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                        return Err(tonic::Status::unknown(
+                            "Error: Failed to send address to balance task.",
+                        ));
+                    }
+                }
+                drop(channel_tx);
+                Ok::<(), tonic::Status>(())
+            },
+        )
+        .await;
+        match addr_recv_timeout {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                fetcher_task_handle.abort();
+                return Err(StateServiceError::TonicStatusError(e));
+            }
+            Err(_) => {
+                fetcher_task_handle.abort();
+                return Err(StateServiceError::TonicStatusError(
+                    tonic::Status::deadline_exceeded(
+                        "Error: get_taddress_balance_stream request timed out in address loop.",
+                    ),
+                ));
+            }
+        }
+        match fetcher_task_handle.await {
+            Ok(Ok(total_balance)) => {
+                let checked_balance: i64 = match i64::try_from(total_balance) {
+                    Ok(balance) => balance,
+                    Err(_) => {
+                        // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                        return Err(StateServiceError::TonicStatusError(tonic::Status::unknown(
+                            "Error: Error converting balance from u64 to i64.",
+                        )));
+                    }
+                };
+                Ok(Balance {
+                    value_zat: checked_balance,
+                })
+            }
+            Ok(Err(e)) => Err(StateServiceError::TonicStatusError(e)),
+            // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+            Err(e) => Err(StateServiceError::TonicStatusError(tonic::Status::unknown(
+                format!("Fetcher Task failed: {}", e),
+            ))),
+        }
     }
 
     /// Return the compact transactions currently in the mempool; the results
@@ -1733,13 +1826,45 @@ impl LightWalletIndexer for StateServiceSubscriber {
     }
 
     /// Return information about this lightwalletd instance and the blockchain
+    ///
+    /// TODO: This could be made more efficient by fetching data directly (not using self.get_blockchain_info())
     async fn get_lightd_info(&self) -> Result<LightdInfo, Self::Error> {
-        Err(crate::error::StateServiceError::TonicStatusError(
-            tonic::Status::unimplemented(
-                "Not yet implemented. If you require this RPC please open an issue or PR \
-            at the Zaino github (https://github.com/zingolabs/zaino.git).",
-            ),
-        ))
+        let blockchain_info = self.get_blockchain_info().await?;
+        let sapling_id = zebra_rpc::methods::ConsensusBranchIdHex::new(
+            zebra_chain::parameters::ConsensusBranchId::from_hex("76b809bb")
+                .map_err(|_e| {
+                    tonic::Status::internal(
+                        "Internal Error - Consesnsus Branch ID hex conversion failed",
+                    )
+                })?
+                .into(),
+        );
+        let sapling_activation_height = blockchain_info
+            .upgrades()
+            .get(&sapling_id)
+            .map_or(Height(1), |sapling_json| sapling_json.into_parts().1);
+
+        let consensus_branch_id = zebra_chain::parameters::ConsensusBranchId::from(
+            blockchain_info.consensus().into_parts().0,
+        )
+        .to_string();
+
+        Ok(LightdInfo {
+            version: self.data.build_info().version(),
+            vendor: "ZingoLabs ZainoD".to_string(),
+            taddr_support: true,
+            chain_name: blockchain_info.chain(),
+            sapling_activation_height: sapling_activation_height.0 as u64,
+            consensus_branch_id,
+            block_height: blockchain_info.blocks().0 as u64,
+            git_commit: self.data.build_info().commit_hash(),
+            branch: self.data.build_info().branch(),
+            build_date: self.data.build_info().build_date(),
+            build_user: self.data.build_info().build_user(),
+            estimated_height: blockchain_info.estimated_height().0 as u64,
+            zcashd_build: self.data.zebra_build(),
+            zcashd_subversion: self.data.zebra_subversion(),
+        })
     }
 
     /// Testing-only, requires lightwalletd --ping-very-insecure (do not enable in production)
