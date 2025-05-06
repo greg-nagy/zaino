@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize, PartialEq, Copy)]
 #[serde(rename_all = "lowercase")]
 /// Type of backend to be used.
 pub enum BackendType {

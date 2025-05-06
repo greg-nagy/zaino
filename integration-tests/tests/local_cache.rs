@@ -1,6 +1,6 @@
 use core::panic;
 use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
-use zaino_state::{BlockCache, BlockCacheConfig, BlockCacheSubscriber};
+use zaino_state::{BackendType, BlockCache, BlockCacheConfig, BlockCacheSubscriber};
 use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind};
 use zebra_chain::block::Height;
@@ -21,6 +21,7 @@ async fn create_test_manager_and_block_cache(
 ) {
     let test_manager = TestManager::launch(
         validator,
+        &BackendType::Fetch,
         None,
         chain_cache,
         enable_zaino,

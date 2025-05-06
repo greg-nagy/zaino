@@ -1,3 +1,4 @@
+use zaino_state::BackendType;
 use zaino_state::{
     FetchService, FetchServiceConfig, FetchServiceSubscriber, LightWalletIndexer, StateService,
     StateServiceConfig, StateServiceSubscriber, ZcashIndexer, ZcashService as _,
@@ -24,6 +25,7 @@ async fn create_test_manager_and_services(
 ) {
     let test_manager = TestManager::launch(
         validator,
+        &BackendType::Fetch,
         network,
         chain_cache.clone(),
         enable_zaino,

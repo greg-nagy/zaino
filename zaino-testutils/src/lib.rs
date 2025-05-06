@@ -78,6 +78,7 @@ pub static ZEBRAD_TESTNET_CACHE_DIR: Lazy<Option<PathBuf>> = Lazy::new(|| {
     Some(home_path.join(".cache/zebra"))
 });
 
+#[derive(PartialEq, Clone, Copy)]
 /// Represents the type of validator to launch.
 pub enum ValidatorKind {
     /// Zcashd.
@@ -344,6 +345,7 @@ impl TestManager {
     /// TODO: Add TestManagerConfig struct and constructor methods of common test setups.
     pub async fn launch(
         validator: &ValidatorKind,
+        backend: &BackendType,
         network: Option<services::network::Network>,
         chain_cache: Option<PathBuf>,
         enable_zaino: bool,
@@ -353,6 +355,12 @@ impl TestManager {
         zaino_no_db: bool,
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
+        if (validator == &ValidatorKind::Zcashd) && (backend == &BackendType::State) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Cannot use state backend with zcashd.",
+            ));
+        }
         let _ = tracing_subscriber::fmt()
             .with_env_filter(
                 EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -426,7 +434,7 @@ impl TestManager {
 
             let indexer_config = zainodlib::config::IndexerConfig {
                 // TODO: Make configurable.
-                backend: BackendType::Fetch,
+                backend: *backend,
                 enable_json_server: enable_zaino_jsonrpc_server,
                 json_rpc_listen_address: zaino_json_listen_address,
                 enable_cookie_auth: enable_zaino_jsonrpc_server_cookie_auth,
@@ -534,6 +542,7 @@ mod launch_testmanager {
         pub(crate) async fn basic() {
             let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zcashd,
+                &BackendType::Fetch,
                 None,
                 None,
                 false,
@@ -556,6 +565,7 @@ mod launch_testmanager {
         pub(crate) async fn generate_blocks() {
             let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zcashd,
+                &BackendType::Fetch,
                 None,
                 None,
                 false,
@@ -583,6 +593,7 @@ mod launch_testmanager {
         pub(crate) async fn with_chain() {
             let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zcashd,
+                &BackendType::Fetch,
                 None,
                 ZCASHD_CHAIN_CACHE_DIR.clone(),
                 false,
@@ -605,6 +616,7 @@ mod launch_testmanager {
         pub(crate) async fn zaino() {
             let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zcashd,
+                &BackendType::Fetch,
                 None,
                 None,
                 true,
@@ -637,6 +649,7 @@ mod launch_testmanager {
         pub(crate) async fn zaino_clients() {
             let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zcashd,
+                &BackendType::Fetch,
                 None,
                 None,
                 true,
@@ -664,6 +677,7 @@ mod launch_testmanager {
         pub(crate) async fn zaino_clients_receive_mining_reward() {
             let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zcashd,
+                &BackendType::Fetch,
                 None,
                 None,
                 true,
@@ -702,6 +716,7 @@ mod launch_testmanager {
         pub(crate) async fn basic() {
             let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zebrad,
+                &BackendType::Fetch,
                 None,
                 None,
                 false,
@@ -724,6 +739,7 @@ mod launch_testmanager {
         pub(crate) async fn generate_blocks() {
             let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zebrad,
+                &BackendType::Fetch,
                 None,
                 None,
                 false,
@@ -751,6 +767,7 @@ mod launch_testmanager {
         pub(crate) async fn with_chain() {
             let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zebrad,
+                &BackendType::Fetch,
                 None,
                 ZEBRAD_CHAIN_CACHE_DIR.clone(),
                 false,
@@ -773,6 +790,7 @@ mod launch_testmanager {
         pub(crate) async fn zaino() {
             let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zebrad,
+                &BackendType::Fetch,
                 None,
                 None,
                 true,
@@ -805,6 +823,7 @@ mod launch_testmanager {
         pub(crate) async fn zaino_clients() {
             let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zebrad,
+                &BackendType::Fetch,
                 None,
                 None,
                 true,
@@ -832,6 +851,7 @@ mod launch_testmanager {
         pub(crate) async fn zaino_clients_receive_mining_reward() {
             let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zebrad,
+                &BackendType::Fetch,
                 None,
                 None,
                 true,
@@ -870,6 +890,7 @@ mod launch_testmanager {
         pub(crate) async fn zaino_clients_receive_mining_reward_and_send() {
             let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zebrad,
+                &BackendType::Fetch,
                 None,
                 None,
                 true,
@@ -956,6 +977,7 @@ mod launch_testmanager {
         pub(crate) async fn zaino_testnet() {
             let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zebrad,
+                &BackendType::Fetch,
                 Some(services::network::Network::Testnet),
                 ZEBRAD_TESTNET_CACHE_DIR.clone(),
                 true,

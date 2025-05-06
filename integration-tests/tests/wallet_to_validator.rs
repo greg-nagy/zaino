@@ -4,15 +4,17 @@
 
 use std::sync::Arc;
 use zaino_fetch::jsonrpsee::connector::test_node_and_return_url;
+use zaino_state::BackendType;
 use zaino_testutils::from_inputs;
 use zaino_testutils::TestManager;
 use zaino_testutils::{Validator as _, ValidatorKind};
 
-async fn connect_to_node_get_info_for_validator(validator: &ValidatorKind) {
-    let mut test_manager =
-        TestManager::launch(validator, None, None, true, false, false, true, true, true)
-            .await
-            .unwrap();
+async fn connect_to_node_get_info_for_validator(validator: &ValidatorKind, backend: &BackendType) {
+    let mut test_manager = TestManager::launch(
+        validator, backend, None, None, true, false, false, true, true, true,
+    )
+    .await
+    .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
@@ -24,11 +26,12 @@ async fn connect_to_node_get_info_for_validator(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-async fn send_to_orchard(validator: &ValidatorKind) {
-    let mut test_manager =
-        TestManager::launch(validator, None, None, true, false, false, true, true, true)
-            .await
-            .unwrap();
+async fn send_to_orchard(validator: &ValidatorKind, backend: &BackendType) {
+    let mut test_manager = TestManager::launch(
+        validator, backend, None, None, true, false, false, true, true, true,
+    )
+    .await
+    .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
@@ -73,11 +76,12 @@ async fn send_to_orchard(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-async fn send_to_sapling(validator: &ValidatorKind) {
-    let mut test_manager =
-        TestManager::launch(validator, None, None, true, false, false, true, true, true)
-            .await
-            .unwrap();
+async fn send_to_sapling(validator: &ValidatorKind, backend: &BackendType) {
+    let mut test_manager = TestManager::launch(
+        validator, backend, None, None, true, false, false, true, true, true,
+    )
+    .await
+    .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
@@ -122,11 +126,12 @@ async fn send_to_sapling(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-async fn send_to_transparent(validator: &ValidatorKind) {
-    let mut test_manager =
-        TestManager::launch(validator, None, None, true, false, false, true, true, true)
-            .await
-            .unwrap();
+async fn send_to_transparent(validator: &ValidatorKind, backend: &BackendType) {
+    let mut test_manager = TestManager::launch(
+        validator, backend, None, None, true, false, false, true, true, true,
+    )
+    .await
+    .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
@@ -233,11 +238,12 @@ async fn send_to_transparent(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-async fn send_to_all(validator: &ValidatorKind) {
-    let mut test_manager =
-        TestManager::launch(validator, None, None, true, false, false, true, true, true)
-            .await
-            .unwrap();
+async fn send_to_all(validator: &ValidatorKind, backend: &BackendType) {
+    let mut test_manager = TestManager::launch(
+        validator, backend, None, None, true, false, false, true, true, true,
+    )
+    .await
+    .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
@@ -341,11 +347,12 @@ async fn send_to_all(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-async fn shield_for_validator(validator: &ValidatorKind) {
-    let mut test_manager =
-        TestManager::launch(validator, None, None, true, false, false, true, true, true)
-            .await
-            .unwrap();
+async fn shield_for_validator(validator: &ValidatorKind, backend: &BackendType) {
+    let mut test_manager = TestManager::launch(
+        validator, backend, None, None, true, false, false, true, true, true,
+    )
+    .await
+    .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
@@ -415,11 +422,15 @@ async fn shield_for_validator(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-async fn monitor_unverified_mempool_for_validator(validator: &ValidatorKind) {
-    let mut test_manager =
-        TestManager::launch(validator, None, None, true, false, false, true, true, true)
-            .await
-            .unwrap();
+async fn monitor_unverified_mempool_for_validator(
+    validator: &ValidatorKind,
+    backend: &BackendType,
+) {
+    let mut test_manager = TestManager::launch(
+        validator, backend, None, None, true, false, false, true, true, true,
+    )
+    .await
+    .unwrap();
     let clients = test_manager
         .clients
         .take()
@@ -566,12 +577,11 @@ async fn monitor_unverified_mempool_for_validator(validator: &ValidatorKind) {
 }
 
 mod zcashd {
-
     use super::*;
 
     #[tokio::test]
     async fn connect_to_node_get_info() {
-        connect_to_node_get_info_for_validator(&ValidatorKind::Zcashd).await;
+        connect_to_node_get_info_for_validator(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
     }
 
     mod sent_to {
@@ -579,75 +589,80 @@ mod zcashd {
 
         #[tokio::test]
         pub(crate) async fn orchard() {
-            send_to_orchard(&ValidatorKind::Zcashd).await;
+            send_to_orchard(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
         }
 
         #[tokio::test]
         pub(crate) async fn sapling() {
-            send_to_sapling(&ValidatorKind::Zcashd).await;
+            send_to_sapling(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
         }
 
         #[tokio::test]
         pub(crate) async fn transparent() {
-            send_to_transparent(&ValidatorKind::Zcashd).await;
+            send_to_transparent(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
         }
 
         #[tokio::test]
         pub(crate) async fn all() {
-            send_to_all(&ValidatorKind::Zcashd).await;
+            send_to_all(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
         }
     }
 
     #[tokio::test]
     async fn shield() {
-        shield_for_validator(&ValidatorKind::Zcashd).await;
+        shield_for_validator(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
     }
 
     #[tokio::test]
     async fn monitor_unverified_mempool() {
-        monitor_unverified_mempool_for_validator(&ValidatorKind::Zcashd).await;
+        monitor_unverified_mempool_for_validator(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
     }
 }
 
 mod zebrad {
-
     use super::*;
 
-    #[tokio::test]
-    async fn connect_to_node_get_info() {
-        connect_to_node_get_info_for_validator(&ValidatorKind::Zebrad).await;
-    }
-    mod send_to {
+    mod fetch_service {
         use super::*;
 
         #[tokio::test]
-        pub(crate) async fn sapling() {
-            send_to_sapling(&ValidatorKind::Zebrad).await;
+        async fn connect_to_node_get_info() {
+            connect_to_node_get_info_for_validator(&ValidatorKind::Zebrad, &BackendType::Fetch)
+                .await;
         }
+        mod send_to {
+            use super::*;
 
-        #[tokio::test]
-        pub(crate) async fn orchard() {
-            send_to_orchard(&ValidatorKind::Zebrad).await;
-        }
+            #[tokio::test]
+            pub(crate) async fn sapling() {
+                send_to_sapling(&ValidatorKind::Zebrad, &BackendType::Fetch).await;
+            }
 
-        /// Bug documented in https://github.com/zingolabs/zaino/issues/145.
-        #[tokio::test]
-        pub(crate) async fn transparent() {
-            send_to_transparent(&ValidatorKind::Zebrad).await;
-        }
+            #[tokio::test]
+            pub(crate) async fn orchard() {
+                send_to_orchard(&ValidatorKind::Zebrad, &BackendType::Fetch).await;
+            }
 
-        #[tokio::test]
-        pub(crate) async fn all() {
-            send_to_all(&ValidatorKind::Zebrad).await;
+            /// Bug documented in https://github.com/zingolabs/zaino/issues/145.
+            #[tokio::test]
+            pub(crate) async fn transparent() {
+                send_to_transparent(&ValidatorKind::Zebrad, &BackendType::Fetch).await;
+            }
+
+            #[tokio::test]
+            pub(crate) async fn all() {
+                send_to_all(&ValidatorKind::Zebrad, &BackendType::Fetch).await;
+            }
         }
-    }
-    #[tokio::test]
-    async fn shield() {
-        shield_for_validator(&ValidatorKind::Zebrad).await;
-    }
-    /// Bug documented in https://github.com/zingolabs/zaino/issues/144.
-    #[tokio::test]
-    async fn monitor_unverified_mempool() {
-        monitor_unverified_mempool_for_validator(&ValidatorKind::Zebrad).await;
+        #[tokio::test]
+        async fn shield() {
+            shield_for_validator(&ValidatorKind::Zebrad, &BackendType::Fetch).await;
+        }
+        /// Bug documented in https://github.com/zingolabs/zaino/issues/144.
+        #[tokio::test]
+        async fn monitor_unverified_mempool() {
+            monitor_unverified_mempool_for_validator(&ValidatorKind::Zebrad, &BackendType::Fetch)
+                .await;
+        }
     }
 }

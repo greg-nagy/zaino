@@ -198,28 +198,26 @@ impl ZcashService for StateService {
         state_service.status.store(StatusType::Syncing.into());
 
         // Wait for ReadStateService to catch up to primary database:
-        if !state_service.config.network.is_regtest() && !state_service.config.no_sync {
-            loop {
-                let server_height = rpc_client.get_blockchain_info().await?.blocks.0 as u64;
-                let syncer_height = state_service
-                    .get_subscriber()
-                    .inner_ref()
-                    .get_latest_block()
-                    .await?
-                    .height;
+        loop {
+            let server_height = rpc_client.get_blockchain_info().await?.blocks.0 as u64;
+            let syncer_height = state_service
+                .get_subscriber()
+                .inner_ref()
+                .get_latest_block()
+                .await?
+                .height;
 
-                if server_height == syncer_height {
-                    break;
-                } else {
-                    info!(" - ReadStateService syncing with Zebra. Syncer chain height: {}, Validator chain height: {}",
+            if server_height == syncer_height {
+                break;
+            } else {
+                info!(" - ReadStateService syncing with Zebra. Syncer chain height: {}, Validator chain height: {}",
                             &syncer_height,
                             &server_height
                         );
-                    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-                    continue;
-                }
+                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                continue;
             }
-        };
+        }
 
         state_service.status.store(StatusType::Ready.into());
 
