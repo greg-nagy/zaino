@@ -2090,43 +2090,65 @@ fn tx_to_compact(
     index: u64,
 ) -> Result<CompactTx, StateServiceError> {
     let (spends, outputs) = if transaction.has_sapling_shielded_data() {
-        (
-            transaction
-                .sapling_nullifiers()
-                .map(|nullifier| CompactSaplingSpend {
-                    nf: nullifier.0.to_vec(),
-                })
-                .collect(),
-            transaction
-                .sapling_outputs()
-                .map(
-                    |output| -> Result<CompactSaplingOutput, StateServiceError> {
-                        let ciphertext = output
-                            .enc_ciphertext
-                            .zcash_serialize_to_vec()
-                            .map_err(StateServiceError::IoError)?;
+        let spends = transaction
+            .sapling_nullifiers()
+            .map(|nullifier| CompactSaplingSpend {
+                nf: nullifier.0.to_vec(),
+            })
+            .collect();
 
-                        Ok(CompactSaplingOutput {
-                            cmu: output.cm_u.to_bytes().to_vec(),
-                            ephemeral_key: <[u8; 32]>::from(output.ephemeral_key).to_vec(),
-                            ciphertext,
-                        })
-                    },
-                )
-                .collect::<Result<Vec<CompactSaplingOutput>, _>>()?,
-        )
+        let outputs = transaction
+            .sapling_outputs()
+            .map(
+                |output| -> Result<CompactSaplingOutput, StateServiceError> {
+                    let full_ciphertext = output
+                        .enc_ciphertext
+                        .zcash_serialize_to_vec()
+                        .map_err(StateServiceError::IoError)?;
+
+                    let ciphertext = full_ciphertext
+                        .get(..52)
+                        .ok_or_else(|| {
+                            StateServiceError::Custom(format!(
+                                "Sapling ciphertext too short ({} bytes)",
+                                full_ciphertext.len()
+                            ))
+                        })?
+                        .to_vec();
+
+                    Ok(CompactSaplingOutput {
+                        cmu: output.cm_u.to_bytes().to_vec(),
+                        ephemeral_key: <[u8; 32]>::from(output.ephemeral_key).to_vec(),
+                        ciphertext,
+                    })
+                },
+            )
+            .collect::<Result<Vec<CompactSaplingOutput>, _>>()?;
+
+        (spends, outputs)
     } else {
         (Vec::new(), Vec::new())
     };
+
     let actions = if transaction.has_orchard_shielded_data() {
         transaction
             .orchard_actions()
             .map(
                 |action| -> Result<CompactOrchardAction, StateServiceError> {
-                    let ciphertext = action
+                    let full_ciphertext = action
                         .enc_ciphertext
                         .zcash_serialize_to_vec()
                         .map_err(StateServiceError::IoError)?;
+
+                    let ciphertext = full_ciphertext
+                        .get(..52)
+                        .ok_or_else(|| {
+                            StateServiceError::Custom(format!(
+                                "Orchard ciphertext too short ({} bytes)",
+                                full_ciphertext.len()
+                            ))
+                        })?
+                        .to_vec();
 
                     Ok(CompactOrchardAction {
                         nullifier: <[u8; 32]>::from(action.nullifier).to_vec(),
