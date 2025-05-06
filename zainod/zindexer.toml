@@ -14,10 +14,10 @@ enable_json_server =  false
 
 # JsonRPC server listen addr.
 json_rpc_listen_address = "localhost:8237"
-    
+
 # Enables cookie-based authentication for JsonRPC server.
 enable_cookie_auth = false
-    
+
 # Directory to store authentication cookie file.
 cookie_dir = "None"
 
