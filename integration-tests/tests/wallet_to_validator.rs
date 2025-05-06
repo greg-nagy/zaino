@@ -665,4 +665,48 @@ mod zebrad {
                 .await;
         }
     }
+
+    mod state_service {
+        use super::*;
+
+        #[tokio::test]
+        async fn connect_to_node_get_info() {
+            connect_to_node_get_info_for_validator(&ValidatorKind::Zebrad, &BackendType::State)
+                .await;
+        }
+        mod send_to {
+            use super::*;
+
+            #[tokio::test]
+            pub(crate) async fn sapling() {
+                send_to_sapling(&ValidatorKind::Zebrad, &BackendType::State).await;
+            }
+
+            #[tokio::test]
+            pub(crate) async fn orchard() {
+                send_to_orchard(&ValidatorKind::Zebrad, &BackendType::State).await;
+            }
+
+            /// Bug documented in https://github.com/zingolabs/zaino/issues/145.
+            #[tokio::test]
+            pub(crate) async fn transparent() {
+                send_to_transparent(&ValidatorKind::Zebrad, &BackendType::State).await;
+            }
+
+            #[tokio::test]
+            pub(crate) async fn all() {
+                send_to_all(&ValidatorKind::Zebrad, &BackendType::State).await;
+            }
+        }
+        #[tokio::test]
+        async fn shield() {
+            shield_for_validator(&ValidatorKind::Zebrad, &BackendType::State).await;
+        }
+        /// Bug documented in https://github.com/zingolabs/zaino/issues/144.
+        #[tokio::test]
+        async fn monitor_unverified_mempool() {
+            monitor_unverified_mempool_for_validator(&ValidatorKind::Zebrad, &BackendType::State)
+                .await;
+        }
+    }
 }
