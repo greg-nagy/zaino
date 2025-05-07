@@ -1402,7 +1402,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
             let timeout = timeout(
                 std::time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
-                    for (i, txid) in txids.into_iter().enumerate() {
+                    for txid in txids {
                         let transaction = service_clone.get_raw_transaction(txid, Some(1)).await;
                         if handle_raw_transaction::<Self>(
                             chain_height.0 as u64,
