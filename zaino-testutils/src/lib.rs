@@ -506,6 +506,15 @@ impl TestManager {
         })
     }
 
+    /// Generates [blocks] regtest blocks.
+    /// Adds a delay between blocks to allow zaino / zebra to catch up with test.
+    pub async fn generate_blocks_with_delay(&self, blocks: u32) {
+        for _ in 0..blocks {
+            self.local_net.generate_blocks(1).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+    }
+
     /// Closes the TestManager.
     pub async fn close(&mut self) {
         if let Some(handle) = self.zaino_handle.take() {
@@ -1048,7 +1057,7 @@ mod launch_testmanager {
                     1,
                     u32::from(test_manager.local_net.get_chain_height().await)
                 );
-                test_manager.local_net.generate_blocks(1).await.unwrap();
+                test_manager.generate_blocks_with_delay(1).await;
                 assert_eq!(
                     2,
                     u32::from(test_manager.local_net.get_chain_height().await)
@@ -1140,6 +1149,7 @@ mod launch_testmanager {
             /// This test shows currently we do not receive mining rewards from Zebra unless we mine 100 blocks at a time.
             /// This is not the case with Zcashd and should not be the case here.
             /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
+            #[ignore = "Bug in zingolib 1.0 sync, reinstate on zinglib 2.0 upgrade."]
             #[tokio::test]
             pub(crate) async fn zaino_clients_receive_mining_reward() {
                 let mut test_manager = TestManager::launch(
@@ -1164,7 +1174,7 @@ mod launch_testmanager {
                 clients.faucet.do_sync(true).await.unwrap();
                 dbg!(clients.faucet.do_balance().await);
 
-                test_manager.local_net.generate_blocks(100).await.unwrap();
+                test_manager.generate_blocks_with_delay(100).await;
                 clients.faucet.do_sync(true).await.unwrap();
                 dbg!(clients.faucet.do_balance().await);
 
@@ -1179,6 +1189,7 @@ mod launch_testmanager {
                 test_manager.close().await;
             }
 
+            #[ignore = "Bug in zingolib 1.0 sync, reinstate on zinglib 2.0 upgrade."]
             #[tokio::test]
             pub(crate) async fn zaino_clients_receive_mining_reward_and_send() {
                 let mut test_manager = TestManager::launch(
@@ -1200,8 +1211,7 @@ mod launch_testmanager {
                     .as_ref()
                     .expect("Clients are not initialized");
 
-                test_manager.local_net.generate_blocks(100).await.unwrap();
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                test_manager.generate_blocks_with_delay(100).await;
                 clients.faucet.do_sync(true).await.unwrap();
                 dbg!(clients.faucet.do_balance().await);
 
@@ -1224,8 +1234,7 @@ mod launch_testmanager {
 
                 // *Send all transparent funds to own orchard address.
                 clients.faucet.quick_shield().await.unwrap();
-                test_manager.local_net.generate_blocks(1).await.unwrap();
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                test_manager.generate_blocks_with_delay(1).await;
                 clients.faucet.do_sync(true).await.unwrap();
                 dbg!(clients.faucet.do_balance().await);
 
@@ -1247,8 +1256,7 @@ mod launch_testmanager {
                 .await
                 .unwrap();
 
-                test_manager.local_net.generate_blocks(1).await.unwrap();
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                test_manager.generate_blocks_with_delay(1).await;
                 clients.recipient.do_sync(true).await.unwrap();
                 dbg!(clients.recipient.do_balance().await);
 

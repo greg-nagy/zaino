@@ -1242,7 +1242,8 @@ mod zebrad {
             test_manager.local_net.generate_blocks(1).await.unwrap();
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-            let fetch_service_block = fetch_service_subscriber.get_latest_block().await.unwrap();
+            let fetch_service_block =
+                dbg!(fetch_service_subscriber.get_latest_block().await.unwrap());
             let state_service_block =
                 dbg!(state_service_subscriber.get_latest_block().await.unwrap());
             assert_eq!(fetch_service_block, state_service_block);
@@ -1283,10 +1284,10 @@ mod zebrad {
 
             let hash = fetch_service_block_by_height.hash;
             let second_block_by_hash = BlockId { height: 0, hash };
-            let fetch_service_block_by_hash = fetch_service_subscriber
+            let fetch_service_block_by_hash = dbg!(fetch_service_subscriber
                 .get_block(second_block_by_hash.clone())
                 .await
-                .unwrap();
+                .unwrap());
             let state_service_block_by_hash = dbg!(state_service_subscriber
                 .get_block(second_block_by_hash)
                 .await
@@ -1317,10 +1318,10 @@ mod zebrad {
                 height: 2,
                 hash: vec![],
             };
-            let fetch_service_treestate_by_height = fetch_service_subscriber
+            let fetch_service_treestate_by_height = dbg!(fetch_service_subscriber
                 .get_tree_state(second_treestate_by_height.clone())
                 .await
-                .unwrap();
+                .unwrap());
             let state_service_treestate_by_height = dbg!(state_service_subscriber
                 .get_tree_state(second_treestate_by_height)
                 .await
@@ -1544,7 +1545,7 @@ mod zebrad {
 
             let clients = test_manager.clients.take().unwrap();
             let taddr = clients.get_faucet_address("transparent").await;
-            test_manager.local_net.generate_blocks(5).await.unwrap();
+            test_manager.local_net.generate_blocks(100).await.unwrap();
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
             let state_service_taddress_txids = state_service_subscriber
@@ -1555,10 +1556,12 @@ mod zebrad {
                 ))
                 .await
                 .unwrap();
+            dbg!(&state_service_taddress_txids);
             let fetch_service_taddress_txids = fetch_service_subscriber
                 .get_address_tx_ids(GetAddressTxIdsRequest::from_parts(vec![taddr], 2, 5))
                 .await
                 .unwrap();
+            dbg!(&fetch_service_taddress_txids);
             assert_eq!(fetch_service_taddress_txids, state_service_taddress_txids);
         }
 
