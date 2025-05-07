@@ -26,10 +26,7 @@ use zaino_fetch::{
     },
 };
 use zaino_proto::proto::{
-    compact_formats::{
-        ChainMetadata, CompactBlock, CompactOrchardAction, CompactSaplingOutput,
-        CompactSaplingSpend, CompactTx,
-    },
+    compact_formats::CompactBlock,
     service::{
         AddressList, Balance, BlockId, BlockRange, Exclude, GetAddressUtxosArg,
         GetAddressUtxosReply, GetAddressUtxosReplyList, LightdInfo, PingResponse, RawTransaction,
@@ -41,9 +38,8 @@ use zebra_chain::{
     block::{Header, Height, SerializedBlock},
     chain_tip::NetworkChainTipHeightEstimator,
     parameters::{ConsensusBranchId, Network, NetworkUpgrade},
-    serialization::{ZcashDeserialize, ZcashSerialize},
+    serialization::ZcashSerialize,
     subtree::NoteCommitmentSubtreeIndex,
-    transaction::Transaction,
 };
 use zebra_rpc::{
     methods::{
@@ -68,7 +64,7 @@ use chrono::Utc;
 use futures::{FutureExt as _, TryFutureExt as _, TryStreamExt as _};
 use hex::{FromHex as _, ToHex};
 use indexmap::IndexMap;
-use std::{collections::HashSet, future::poll_fn, io::Cursor, str::FromStr, sync::Arc};
+use std::{collections::HashSet, future::poll_fn, str::FromStr, sync::Arc};
 use tokio::{
     sync::mpsc,
     time::{self, timeout},
@@ -167,13 +163,37 @@ impl ZcashService for StateService {
         info!("Using Zcash build: {}", data);
 
         info!("Launching Chain Syncer..");
-        let (read_state_service, _latest_chain_tip, _chain_tip_change, sync_task_handle) =
+        let (mut read_state_service, _latest_chain_tip, _chain_tip_change, sync_task_handle) =
             init_read_state_with_syncer(
                 config.validator_config.clone(),
                 &config.network,
                 config.validator_rpc_address,
             )
             .await??;
+
+        // Wait for ReadStateService to catch up to primary database:
+        loop {
+            let server_height = rpc_client.get_blockchain_info().await?.blocks;
+
+            let syncer_response = read_state_service
+                .ready()
+                .and_then(|service| service.call(ReadRequest::Tip))
+                .await?;
+            let (syncer_height, _) = expected_read_response!(syncer_response, Tip).ok_or(
+                RpcError::new_from_legacycode(LegacyCode::Misc, "no blocks in chain"),
+            )?;
+
+            if server_height.0 == syncer_height.0 {
+                break;
+            } else {
+                info!(" - ReadStateService syncing with Zebra. Syncer chain height: {}, Validator chain height: {}",
+                            &syncer_height.0,
+                            &server_height.0
+                        );
+                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                continue;
+            }
+        }
 
         let block_cache = BlockCache::spawn(
             &rpc_client,
@@ -194,30 +214,6 @@ impl ZcashService for StateService {
             config,
             status: AtomicStatus::new(StatusType::Spawning.into()),
         };
-
-        state_service.status.store(StatusType::Syncing.into());
-
-        // Wait for ReadStateService to catch up to primary database:
-        loop {
-            let server_height = rpc_client.get_blockchain_info().await?.blocks.0 as u64;
-            let syncer_height = state_service
-                .get_subscriber()
-                .inner_ref()
-                .get_latest_block()
-                .await?
-                .height;
-
-            if server_height == syncer_height {
-                break;
-            } else {
-                info!(" - ReadStateService syncing with Zebra. Syncer chain height: {}, Validator chain height: {}",
-                            &syncer_height,
-                            &server_height
-                        );
-                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-                continue;
-            }
-        }
 
         state_service.status.store(StatusType::Ready.into());
 
@@ -312,15 +308,14 @@ impl StateServiceSubscriber {
     /// This rpc is used by get_block(verbose), there is currently no
     /// plan to offer this RPC publicly.
     async fn get_block_header(
-        &self,
-        hash_or_height: String,
+        state: &ReadStateService,
+        network: &Network,
+        hash_or_height: HashOrHeight,
         verbose: Option<bool>,
     ) -> Result<GetBlockHeader, StateServiceError> {
-        let mut state = self.read_state_service.clone();
+        let mut state = state.clone();
         let verbose = verbose.unwrap_or(true);
-        let network = self.data.network().clone();
-
-        let hash_or_height: HashOrHeight = hash_or_height.parse()?;
+        let network = network.clone();
 
         let zebra_state::ReadResponse::BlockHeader {
             header,
@@ -406,12 +401,8 @@ impl StateServiceSubscriber {
                 };
 
             let difficulty = header.difficulty_threshold.relative_to_network(&network);
-            let block_commitments = header_to_block_commitments(
-                &header,
-                &self.config.network,
-                height,
-                final_sapling_root,
-            )?;
+            let block_commitments =
+                header_to_block_commitments(&header, &network, height, final_sapling_root)?;
 
             let block_header = GetBlockHeaderObject {
                 hash: GetBlockHash(hash),
@@ -583,6 +574,7 @@ impl StateServiceSubscriber {
         });
         Ok(CompactBlockStream::new(channel_rx))
     }
+
     async fn error_get_block(
         &self,
         e: BlockCacheError,
@@ -603,6 +595,165 @@ impl StateServiceSubscriber {
                 e,
             )))
         })
+    }
+
+    pub(crate) async fn get_block_inner(
+        state: &ReadStateService,
+        network: &Network,
+        hash_or_height: HashOrHeight,
+        verbosity: Option<u8>,
+    ) -> Result<GetBlock, StateServiceError> {
+        let mut state_1 = state.clone();
+
+        let verbosity = verbosity.unwrap_or(1);
+        match verbosity {
+            0 => {
+                let request = ReadRequest::Block(hash_or_height);
+                let response = state_1
+                    .ready()
+                    .and_then(|service| service.call(request))
+                    .await?;
+                let block = expected_read_response!(response, Block);
+                block.map(SerializedBlock::from).map(GetBlock::Raw).ok_or(
+                    StateServiceError::RpcError(RpcError::new_from_legacycode(
+                        LegacyCode::InvalidParameter,
+                        "block not found",
+                    )),
+                )
+            }
+            1 | 2 => {
+                let state_2 = state.clone();
+                let state_3 = state.clone();
+
+                let hash_or_height = hash_or_height;
+                let txids_or_fullblock_request = match verbosity {
+                    1 => ReadRequest::TransactionIdsForBlock(hash_or_height),
+                    2 => ReadRequest::Block(hash_or_height),
+                    _ => unreachable!("verbosity is known to be 1 or 2"),
+                };
+                let txids_future = {
+                    let req = txids_or_fullblock_request;
+                    async move { state_1.ready().and_then(|service| service.call(req)).await }
+                };
+                let orchard_future = {
+                    let req = ReadRequest::OrchardTree(hash_or_height);
+                    async move {
+                        state_2
+                            .clone()
+                            .ready()
+                            .and_then(|service| service.call(req))
+                            .await
+                    }
+                };
+                let (txids_or_fullblock, orchard_tree_response, header) = futures::join!(
+                    txids_future,
+                    orchard_future,
+                    StateServiceSubscriber::get_block_header(
+                        &state_3,
+                        network,
+                        hash_or_height,
+                        Some(true)
+                    )
+                );
+
+                let header_obj = match header? {
+                    GetBlockHeader::Raw(_hex_data) => unreachable!(
+                        "`true` was passed to get_block_header, an object should be returned"
+                    ),
+                    GetBlockHeader::Object(get_block_header_object) => get_block_header_object,
+                };
+                let GetBlockHeaderObject {
+                    hash,
+                    confirmations,
+                    height,
+                    version,
+                    merkle_root,
+                    final_sapling_root,
+                    sapling_tree_size,
+                    time,
+                    nonce,
+                    solution,
+                    bits,
+                    difficulty,
+                    previous_block_hash,
+                    next_block_hash,
+                    block_commitments,
+                } = *header_obj;
+
+                let transactions_response: Vec<GetBlockTransaction> = match txids_or_fullblock {
+                    Ok(ReadResponse::TransactionIdsForBlock(Some(txids))) => Ok(txids
+                        .iter()
+                        .copied()
+                        .map(GetBlockTransaction::Hash)
+                        .collect()),
+                    Ok(ReadResponse::Block(Some(block))) => Ok(block
+                        .transactions
+                        .iter()
+                        .map(|transaction| {
+                            GetBlockTransaction::Object(TransactionObject {
+                                hex: transaction.as_ref().into(),
+                                height: Some(height.0),
+                                // Confirmations should never be greater than
+                                // the current block height
+                                confirmations: Some(confirmations as u32),
+                            })
+                        })
+                        .collect()),
+                    Ok(ReadResponse::TransactionIdsForBlock(None))
+                    | Ok(ReadResponse::Block(None)) => {
+                        Err(StateServiceError::RpcError(RpcError::new_from_legacycode(
+                            LegacyCode::InvalidParameter,
+                            "block not found",
+                        )))
+                    }
+                    Ok(unexpected) => {
+                        unreachable!("Unexpected response from state service: {unexpected:?}")
+                    }
+                    Err(e) => Err(e.into()),
+                }?;
+
+                let orchard_tree_response = orchard_tree_response?;
+                let orchard_tree = expected_read_response!(orchard_tree_response, OrchardTree)
+                    .ok_or(StateServiceError::RpcError(RpcError::new_from_legacycode(
+                        LegacyCode::Misc,
+                        "missing orchard tree",
+                    )))?;
+
+                let final_orchard_root = match NetworkUpgrade::Nu5.activation_height(&network) {
+                    Some(activation_height) if height >= activation_height => {
+                        Some(orchard_tree.root().into())
+                    }
+                    _otherwise => None,
+                };
+
+                let trees = GetBlockTrees::new(sapling_tree_size, orchard_tree.count());
+
+                Ok(GetBlock::Object {
+                    hash,
+                    confirmations,
+                    height: Some(height),
+                    version: Some(version),
+                    merkle_root: Some(merkle_root),
+                    time: Some(time),
+                    nonce: Some(nonce),
+                    solution: Some(solution),
+                    bits: Some(bits),
+                    difficulty: Some(difficulty),
+                    tx: transactions_response,
+                    trees,
+                    size: None,
+                    final_sapling_root: Some(final_sapling_root),
+                    final_orchard_root,
+                    previous_block_hash: Some(previous_block_hash),
+                    next_block_hash,
+                    block_commitments: Some(block_commitments),
+                })
+            }
+            more_than_two => Err(StateServiceError::RpcError(RpcError::new_from_legacycode(
+                LegacyCode::InvalidParameter,
+                format!("invalid verbosity of {more_than_two}"),
+            ))),
+        }
     }
 }
 
@@ -785,147 +936,15 @@ impl ZcashIndexer for StateServiceSubscriber {
         hash_or_height_string: String,
         verbosity: Option<u8>,
     ) -> Result<GetBlock, Self::Error> {
-        let mut state_1 = self.read_state_service.clone();
-
-        let verbosity = verbosity.unwrap_or(1);
         let hash_or_height = HashOrHeight::from_str(&hash_or_height_string);
-        match verbosity {
-            0 => {
-                let request = ReadRequest::Block(hash_or_height?);
-                let response = state_1
-                    .ready()
-                    .and_then(|service| service.call(request))
-                    .await?;
-                let block = expected_read_response!(response, Block);
-                block.map(SerializedBlock::from).map(GetBlock::Raw).ok_or(
-                    StateServiceError::RpcError(RpcError::new_from_legacycode(
-                        LegacyCode::InvalidParameter,
-                        "block not found",
-                    )),
-                )
-            }
-            1 | 2 => {
-                let mut state_2 = self.read_state_service.clone();
 
-                let hash_or_height = hash_or_height?;
-                let txids_or_fullblock_request = match verbosity {
-                    1 => ReadRequest::TransactionIdsForBlock(hash_or_height),
-                    2 => ReadRequest::Block(hash_or_height),
-                    _ => unreachable!("verbosity is known to be 1 or 2"),
-                };
-                let txids_future = {
-                    let req = txids_or_fullblock_request;
-                    async move { state_1.ready().and_then(|service| service.call(req)).await }
-                };
-                let orchard_future = {
-                    let req = ReadRequest::OrchardTree(hash_or_height);
-                    async move { state_2.ready().and_then(|service| service.call(req)).await }
-                };
-                let (txids_or_fullblock, orchard_tree_response, header) = futures::join!(
-                    txids_future,
-                    orchard_future,
-                    self.get_block_header(hash_or_height_string, Some(true))
-                );
-
-                let header_obj = match header? {
-                    GetBlockHeader::Raw(_hex_data) => unreachable!(
-                        "`true` was passed to get_block_header, an object should be returned"
-                    ),
-                    GetBlockHeader::Object(get_block_header_object) => get_block_header_object,
-                };
-                let GetBlockHeaderObject {
-                    hash,
-                    confirmations,
-                    height,
-                    version,
-                    merkle_root,
-                    final_sapling_root,
-                    sapling_tree_size,
-                    time,
-                    nonce,
-                    solution,
-                    bits,
-                    difficulty,
-                    previous_block_hash,
-                    next_block_hash,
-                    block_commitments,
-                } = *header_obj;
-
-                let transactions_response: Vec<GetBlockTransaction> = match txids_or_fullblock {
-                    Ok(ReadResponse::TransactionIdsForBlock(Some(txids))) => Ok(txids
-                        .iter()
-                        .copied()
-                        .map(GetBlockTransaction::Hash)
-                        .collect()),
-                    Ok(ReadResponse::Block(Some(block))) => Ok(block
-                        .transactions
-                        .iter()
-                        .map(|transaction| {
-                            GetBlockTransaction::Object(TransactionObject {
-                                hex: transaction.as_ref().into(),
-                                height: Some(height.0),
-                                // Confirmations should never be greater than
-                                // the current block height
-                                confirmations: Some(confirmations as u32),
-                            })
-                        })
-                        .collect()),
-                    Ok(ReadResponse::TransactionIdsForBlock(None))
-                    | Ok(ReadResponse::Block(None)) => {
-                        Err(StateServiceError::RpcError(RpcError::new_from_legacycode(
-                            LegacyCode::InvalidParameter,
-                            "block not found",
-                        )))
-                    }
-                    Ok(unexpected) => {
-                        unreachable!("Unexpected response from state service: {unexpected:?}")
-                    }
-                    Err(e) => Err(e.into()),
-                }?;
-
-                let orchard_tree_response = orchard_tree_response?;
-                let orchard_tree = expected_read_response!(orchard_tree_response, OrchardTree)
-                    .ok_or(StateServiceError::RpcError(RpcError::new_from_legacycode(
-                        LegacyCode::Misc,
-                        "missing orchard tree",
-                    )))?;
-
-                let final_orchard_root =
-                    match NetworkUpgrade::Nu5.activation_height(&self.config.network) {
-                        Some(activation_height) if height >= activation_height => {
-                            Some(orchard_tree.root().into())
-                        }
-                        _otherwise => None,
-                    };
-
-                let trees = GetBlockTrees::new(sapling_tree_size, orchard_tree.count());
-
-                Ok(GetBlock::Object {
-                    hash,
-                    confirmations,
-                    height: Some(height),
-                    version: Some(version),
-                    merkle_root: Some(merkle_root),
-                    time: Some(time),
-                    nonce: Some(nonce),
-                    solution: Some(solution),
-                    bits: Some(bits),
-                    difficulty: Some(difficulty),
-                    tx: transactions_response,
-                    trees,
-                    size: None,
-                    final_sapling_root: Some(final_sapling_root),
-                    final_orchard_root,
-                    previous_block_hash: Some(previous_block_hash),
-                    next_block_hash,
-                    block_commitments: Some(block_commitments),
-                })
-            }
-            more_than_two => Err(StateServiceError::RpcError(RpcError::new_from_legacycode(
-                LegacyCode::InvalidParameter,
-                format!("invalid verbosity of {more_than_two}"),
-            ))),
-        }
+        StateServiceSubscriber::get_block_inner(
+            &self.read_state_service.clone(),
+            &self.data.network(),
+            hash_or_height?,
+            verbosity,
+        )
+        .await
     }
 
     async fn get_raw_mempool(&self) -> Result<Vec<String>, Self::Error> {
@@ -1922,296 +1941,6 @@ impl LightWalletIndexer for StateServiceSubscriber {
             ),
         ))
     }
-}
-
-/// Returns a [`zaino_proto::proto::compact_formats::CompactTx`].
-///
-/// Notes:
-///
-/// Written to avoid taking [`Self`] to simplify use in [`get_block_range`].
-///
-/// This function is used by get_block_range, there is currently no plan to offer this RPC publicly.
-///
-/// LightWalletD doesnt return a compact block header, however this could be used to return
-/// data if useful.
-///
-/// This impl is still slow, either CompactBl,ocks should be returned directly from
-/// the [`ReadStateService`] or Zaino should hold an internal compact block cache.
-pub(crate) async fn get_compact_block(
-    read_state_service: &ReadStateService,
-    hash_or_height: HashOrHeight,
-    network: &Network,
-) -> Result<CompactBlock, StateServiceError> {
-    let mut state = read_state_service.clone();
-    let mut state_1 = read_state_service.clone();
-    let cloned_network = network.clone();
-
-    let get_block_header_future = tokio::spawn(async move {
-        let zebra_state::ReadResponse::BlockHeader {
-            header,
-            hash,
-            height,
-            next_block_hash,
-        } = state_1
-            .ready()
-            .and_then(|service| service.call(zebra_state::ReadRequest::BlockHeader(hash_or_height)))
-            .await
-            .map_err(|_| {
-                StateServiceError::RpcError(RpcError {
-                    // Compatibility with zcashd. Note that since this function
-                    // is reused by getblock(), we return the errors expected
-                    // by it (they differ whether a hash or a height was passed)
-                    code: LegacyCode::InvalidParameter as i64,
-                    message: "block height not in best chain".to_string(),
-                    data: None,
-                })
-            })?
-        else {
-            return Err(StateServiceError::Custom(
-                "Unexpected response to BlockHeader request".to_string(),
-            ));
-        };
-
-        let zebra_state::ReadResponse::SaplingTree(sapling_tree) = state_1
-            .ready()
-            .and_then(|service| service.call(zebra_state::ReadRequest::SaplingTree(hash_or_height)))
-            .await?
-        else {
-            return Err(StateServiceError::Custom(
-                "Unexpected response to SaplingTree request".to_string(),
-            ));
-        };
-        // This could be `None` if there's a chain reorg between state queries.
-        let sapling_tree = sapling_tree.ok_or_else(|| {
-            StateServiceError::RpcError(zaino_fetch::jsonrpsee::connector::RpcError {
-                code: LegacyCode::InvalidParameter as i64,
-                message: "missing sapling tree for block".to_string(),
-                data: None,
-            })
-        })?;
-
-        let zebra_state::ReadResponse::Depth(depth) = state_1
-            .ready()
-            .and_then(|service| service.call(zebra_state::ReadRequest::Depth(hash)))
-            .await?
-        else {
-            return Err(StateServiceError::Custom(
-                "Unexpected response to Depth request".to_string(),
-            ));
-        };
-
-        // From <https://zcash.github.io/rpc/getblock.html>
-        // TODO: Deduplicate const definition, consider refactoring this to avoid duplicate logic
-        const NOT_IN_BEST_CHAIN_CONFIRMATIONS: i64 = -1;
-
-        // Confirmations are one more than the depth.
-        // Depth is limited by height, so it will never overflow an i64.
-        let confirmations = depth
-            .map(|depth| i64::from(depth) + 1)
-            .unwrap_or(NOT_IN_BEST_CHAIN_CONFIRMATIONS);
-
-        let mut nonce = *header.nonce;
-        nonce.reverse();
-
-        let sapling_activation = NetworkUpgrade::Sapling.activation_height(&cloned_network);
-        let sapling_tree_size = sapling_tree.count();
-        let final_sapling_root: [u8; 32] =
-            if sapling_activation.is_some() && height >= sapling_activation.unwrap() {
-                let mut root: [u8; 32] = sapling_tree.root().into();
-                root.reverse();
-                root
-            } else {
-                [0; 32]
-            };
-
-        let difficulty = header
-            .difficulty_threshold
-            .relative_to_network(&cloned_network);
-        let block_commitments =
-            header_to_block_commitments(&header, &cloned_network, height, final_sapling_root)?;
-
-        Ok(GetBlockHeaderObject {
-            hash: GetBlockHash(hash),
-            confirmations,
-            height,
-            version: header.version,
-            merkle_root: header.merkle_root,
-            final_sapling_root,
-            sapling_tree_size,
-            time: header.time.timestamp(),
-            nonce,
-            solution: header.solution,
-            bits: header.difficulty_threshold,
-            difficulty,
-            previous_block_hash: GetBlockHash(header.previous_block_hash),
-            next_block_hash: next_block_hash.map(GetBlockHash),
-            block_commitments,
-        })
-    });
-
-    let get_orchard_trees_future = {
-        let mut state_2 = read_state_service.clone();
-        let req = ReadRequest::OrchardTree(hash_or_height);
-        async move { state_2.ready().and_then(|service| service.call(req)).await }
-    };
-
-    let zebra_state::ReadResponse::Block(Some(block_raw)) = state
-        .ready()
-        .and_then(|service| service.call(zebra_state::ReadRequest::Block(hash_or_height)))
-        .await?
-    else {
-        return Err(StateServiceError::RpcError(
-            zaino_fetch::jsonrpsee::connector::RpcError {
-                code: LegacyCode::InvalidParameter as i64,
-                message: "Block not found".to_string(),
-                data: None,
-            },
-        ));
-    };
-
-    let block_bytes = block_raw
-        .zcash_serialize_to_vec()
-        .map_err(|e| StateServiceError::Custom(format!("Failed to serialize block: {:#?}", e)))?;
-    let mut cursor = Cursor::new(block_bytes);
-    let block = zebra_chain::block::Block::zcash_deserialize(&mut cursor).map_err(|e| {
-        StateServiceError::Custom(format!("Failed to deserialize block bytes: {:#?}", e))
-    })?;
-    let vtx = block
-        .transactions
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, tx)| {
-            if tx.has_shielded_inputs() || tx.has_shielded_outputs() {
-                Some(tx_to_compact(tx, index as u64))
-            } else {
-                None
-            }
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let block_header = get_block_header_future.await??;
-    let zebra_state::ReadResponse::OrchardTree(Some(orchard_trees)) =
-        get_orchard_trees_future.await?
-    else {
-        return Err(StateServiceError::Custom(
-            "Unexpected response type for OrchardTrees".into(),
-        ));
-    };
-    let chain_metadata = Some(ChainMetadata {
-        sapling_commitment_tree_size: block_header.sapling_tree_size.try_into()?,
-        orchard_commitment_tree_size: orchard_trees.count().try_into()?,
-    });
-
-    let compact_block = CompactBlock {
-        proto_version: block.header.version,
-        height: block_header.height.0 as u64,
-        hash: block_header.hash.0 .0.to_vec(),
-        prev_hash: block_header.previous_block_hash.0 .0.to_vec(),
-        time: block_header.time.try_into()?,
-        header: Vec::new(),
-        vtx,
-        chain_metadata,
-    };
-
-    Ok(compact_block)
-}
-
-/// Converts a [`zebra_chain::transaction::Transaction`] into a
-/// [`zaino_proto::proto::compact_formats::CompactTx`].
-///
-/// Notes:
-///
-/// Currently only supports V4 and V5 transactions.
-///
-/// LightWalletD currently does not return a fee and is not currently priority here.
-/// Please open an Issue or PR at the Zingo-Indexer github
-/// (https://github.com/zingolabs/zingo-indexer) if you require this functionality.
-fn tx_to_compact(
-    transaction: std::sync::Arc<Transaction>,
-    index: u64,
-) -> Result<CompactTx, StateServiceError> {
-    let (spends, outputs) = if transaction.has_sapling_shielded_data() {
-        let spends = transaction
-            .sapling_nullifiers()
-            .map(|nullifier| CompactSaplingSpend {
-                nf: nullifier.0.to_vec(),
-            })
-            .collect();
-
-        let outputs = transaction
-            .sapling_outputs()
-            .map(
-                |output| -> Result<CompactSaplingOutput, StateServiceError> {
-                    let full_ciphertext = output
-                        .enc_ciphertext
-                        .zcash_serialize_to_vec()
-                        .map_err(StateServiceError::IoError)?;
-
-                    let ciphertext = full_ciphertext
-                        .get(..52)
-                        .ok_or_else(|| {
-                            StateServiceError::Custom(format!(
-                                "Sapling ciphertext too short ({} bytes)",
-                                full_ciphertext.len()
-                            ))
-                        })?
-                        .to_vec();
-
-                    Ok(CompactSaplingOutput {
-                        cmu: output.cm_u.to_bytes().to_vec(),
-                        ephemeral_key: <[u8; 32]>::from(output.ephemeral_key).to_vec(),
-                        ciphertext,
-                    })
-                },
-            )
-            .collect::<Result<Vec<CompactSaplingOutput>, _>>()?;
-
-        (spends, outputs)
-    } else {
-        (Vec::new(), Vec::new())
-    };
-
-    let actions = if transaction.has_orchard_shielded_data() {
-        transaction
-            .orchard_actions()
-            .map(
-                |action| -> Result<CompactOrchardAction, StateServiceError> {
-                    let full_ciphertext = action
-                        .enc_ciphertext
-                        .zcash_serialize_to_vec()
-                        .map_err(StateServiceError::IoError)?;
-
-                    let ciphertext = full_ciphertext
-                        .get(..52)
-                        .ok_or_else(|| {
-                            StateServiceError::Custom(format!(
-                                "Orchard ciphertext too short ({} bytes)",
-                                full_ciphertext.len()
-                            ))
-                        })?
-                        .to_vec();
-
-                    Ok(CompactOrchardAction {
-                        nullifier: <[u8; 32]>::from(action.nullifier).to_vec(),
-                        cmx: <[u8; 32]>::from(action.cm_x).to_vec(),
-                        ephemeral_key: <[u8; 32]>::from(action.ephemeral_key).to_vec(),
-                        ciphertext,
-                    })
-                },
-            )
-            .collect::<Result<Vec<CompactOrchardAction>, _>>()?
-    } else {
-        Vec::new()
-    };
-
-    Ok(CompactTx {
-        index,
-        hash: transaction.hash().0.to_vec(),
-        fee: 0,
-        spends,
-        outputs,
-        actions,
-    })
 }
 
 fn header_to_block_commitments(
