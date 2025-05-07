@@ -1377,19 +1377,40 @@ impl LightWalletIndexer for StateServiceSubscriber {
         let txids = self.get_taddress_txids_helper(request).await?;
         let chain_height = self.chain_height().await?;
         let (transmitter, receiver) = mpsc::channel(self.config.service_channel_size as usize);
-        for txid in txids {
-            let transaction = self.get_raw_transaction(txid, Some(1)).await;
-            if handle_raw_transaction::<Self>(
-                chain_height.0 as u64,
-                transaction,
-                transmitter.clone(),
+        let service_timeout = self.config.service_timeout;
+        let service_clone = self.clone();
+        tokio::spawn(async move {
+            let timeout = timeout(
+                std::time::Duration::from_secs((service_timeout * 4) as u64),
+                async {
+                    for (i, txid) in txids.into_iter().enumerate() {
+                        let transaction = service_clone.get_raw_transaction(txid, Some(1)).await;
+                        if handle_raw_transaction::<Self>(
+                            chain_height.0 as u64,
+                            transaction,
+                            transmitter.clone(),
+                        )
+                        .await
+                        .is_err()
+                        {
+                            break;
+                        }
+                    }
+                },
             )
-            .await
-            .is_err()
-            {
-                break;
+            .await;
+            match timeout {
+                Ok(_) => {}
+                Err(_) => {
+                    transmitter
+                        .send(Err(tonic::Status::deadline_exceeded(
+                            "Error: get_mempool_stream gRPC request timed out",
+                        )))
+                        .await
+                        .ok();
+                }
             }
-        }
+        });
         Ok(RawTransactionStream::new(receiver))
     }
 

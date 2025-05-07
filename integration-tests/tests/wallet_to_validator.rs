@@ -652,38 +652,32 @@ mod zebrad {
         mod send_to {
             use super::*;
 
-            #[ignore = "Bug in zingolib 1.0 sync, reinstate on zinglib 2.0 upgrade."]
             #[tokio::test]
             pub(crate) async fn sapling() {
                 send_to_sapling(&ValidatorKind::Zebrad, &BackendType::State).await;
             }
 
-            #[ignore = "Bug in zingolib 1.0 sync, reinstate on zinglib 2.0 upgrade."]
             #[tokio::test]
             pub(crate) async fn orchard() {
                 send_to_orchard(&ValidatorKind::Zebrad, &BackendType::State).await;
             }
 
-            #[ignore = "Bug in zingolib 1.0 sync, reinstate on zinglib 2.0 upgrade."]
             #[tokio::test]
             pub(crate) async fn transparent() {
                 send_to_transparent(&ValidatorKind::Zebrad, &BackendType::State).await;
             }
 
-            #[ignore = "Bug in zingolib 1.0 sync, reinstate on zinglib 2.0 upgrade."]
             #[tokio::test]
             pub(crate) async fn all() {
                 send_to_all(&ValidatorKind::Zebrad, &BackendType::State).await;
             }
         }
 
-        #[ignore = "Bug in zingolib 1.0 sync, reinstate on zinglib 2.0 upgrade."]
         #[tokio::test]
         async fn shield() {
             shield_for_validator(&ValidatorKind::Zebrad, &BackendType::State).await;
         }
 
-        #[ignore = "Bug in zingolib 1.0 sync, reinstate on zinglib 2.0 upgrade."]
         #[tokio::test]
         async fn monitor_unverified_mempool() {
             monitor_unverified_mempool_for_validator(&ValidatorKind::Zebrad, &BackendType::State)
