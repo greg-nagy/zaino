@@ -1,32 +1,57 @@
 //! Zaino's core mempool and chain-fetching Library.
 //!
-//! Built to use a configurable backend, current and planned backend options:
-//! - FetchService (WIP - Functionality complete, requires local compact block cache for efficiency).
+//! Built to use a configurable backend:
+//! - FetchService
 //!    - Built using the Zcash Json RPC Services for backwards compatibility with Zcashd and other JsonRPC based validators.
-//! - StateService (WIP)
+//! - StateService
 //!    - Built using Zebra's ReadStateService for efficient chain access.
-//! - TonicService (PLANNED)
-//! - DarksideService (PLANNED)
 
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
 
 // Zaino's Indexer library frontend.
-pub mod indexer;
+pub(crate) mod indexer;
 
-// Core Indexer functionality
-// NOTE: This should possibly be made pub(crate) and moved to the indexer mod.
-pub mod fetch;
-pub mod local_cache;
-pub mod mempool;
-pub mod state;
+pub use indexer::{
+    IndexerService, IndexerSubscriber, LightWalletIndexer, LightWalletService, ZcashIndexer,
+    ZcashService,
+};
 
-// Exposed backend Indexer functionality
-pub mod config;
-pub mod error;
-pub mod status;
-pub mod stream;
+pub(crate) mod backends;
 
-// Internal backend Indexer functionality.
+pub use backends::{
+    fetch::{FetchService, FetchServiceSubscriber},
+    state::{StateService, StateServiceSubscriber},
+};
+
+// TODO: Rework local_cache -> ChainIndex
+pub(crate) mod local_cache;
+
+#[cfg(feature = "bench")]
+pub use local_cache::*;
+
+pub(crate) mod config;
+
+pub use config::{BackendConfig, BackendType, FetchServiceConfig, StateServiceConfig};
+
+#[cfg(feature = "bench")]
+pub use config::BlockCacheConfig;
+
+pub(crate) mod error;
+
+pub use error::{FetchServiceError, StateServiceError};
+
+pub(crate) mod status;
+
+pub use status::{AtomicStatus, StatusType};
+
+pub(crate) mod stream;
+
+pub use stream::{
+    AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
+    SubtreeRootReplyStream, UtxoReplyStream,
+};
+
 pub(crate) mod broadcast;
+
 pub(crate) mod utils;

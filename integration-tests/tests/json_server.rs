@@ -1,7 +1,6 @@
 use zaino_state::{
-    config::FetchServiceConfig,
-    fetch::{FetchService, FetchServiceSubscriber},
-    indexer::{ZcashIndexer, ZcashService as _},
+    BackendType, FetchService, FetchServiceConfig, FetchServiceSubscriber, ZcashIndexer,
+    ZcashService as _,
 };
 use zaino_testutils::{from_inputs, Validator as _};
 use zaino_testutils::{TestManager, ValidatorKind};
@@ -21,6 +20,7 @@ async fn create_test_manager_and_fetch_services(
     println!("Launching test manager..");
     let test_manager = TestManager::launch(
         &ValidatorKind::Zcashd,
+        &BackendType::Fetch,
         None,
         None,
         true,

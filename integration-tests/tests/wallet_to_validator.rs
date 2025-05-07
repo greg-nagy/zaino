@@ -4,15 +4,17 @@
 
 use std::sync::Arc;
 use zaino_fetch::jsonrpsee::connector::test_node_and_return_url;
+use zaino_state::BackendType;
 use zaino_testutils::from_inputs;
 use zaino_testutils::TestManager;
-use zaino_testutils::{Validator as _, ValidatorKind};
+use zaino_testutils::ValidatorKind;
 
-async fn connect_to_node_get_info_for_validator(validator: &ValidatorKind) {
-    let mut test_manager =
-        TestManager::launch(validator, None, None, true, false, false, true, true, true)
-            .await
-            .unwrap();
+async fn connect_to_node_get_info_for_validator(validator: &ValidatorKind, backend: &BackendType) {
+    let mut test_manager = TestManager::launch(
+        validator, backend, None, None, true, false, false, true, true, true,
+    )
+    .await
+    .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
@@ -24,11 +26,12 @@ async fn connect_to_node_get_info_for_validator(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-async fn send_to_orchard(validator: &ValidatorKind) {
-    let mut test_manager =
-        TestManager::launch(validator, None, None, true, false, false, true, true, true)
-            .await
-            .unwrap();
+async fn send_to_orchard(validator: &ValidatorKind, backend: &BackendType) {
+    let mut test_manager = TestManager::launch(
+        validator, backend, None, None, true, false, false, true, true, true,
+    )
+    .await
+    .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
@@ -37,12 +40,10 @@ async fn send_to_orchard(validator: &ValidatorKind) {
     clients.faucet.do_sync(true).await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
-        test_manager.local_net.generate_blocks(100).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.do_sync(true).await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
-        test_manager.local_net.generate_blocks(1).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        test_manager.generate_blocks_with_delay(1).await;
         clients.faucet.do_sync(true).await.unwrap();
     };
 
@@ -56,8 +57,7 @@ async fn send_to_orchard(validator: &ValidatorKind) {
     )
     .await
     .unwrap();
-    test_manager.local_net.generate_blocks(1).await.unwrap();
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    test_manager.generate_blocks_with_delay(1).await;
     clients.recipient.do_sync(true).await.unwrap();
 
     assert_eq!(
@@ -73,11 +73,12 @@ async fn send_to_orchard(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-async fn send_to_sapling(validator: &ValidatorKind) {
-    let mut test_manager =
-        TestManager::launch(validator, None, None, true, false, false, true, true, true)
-            .await
-            .unwrap();
+async fn send_to_sapling(validator: &ValidatorKind, backend: &BackendType) {
+    let mut test_manager = TestManager::launch(
+        validator, backend, None, None, true, false, false, true, true, true,
+    )
+    .await
+    .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
@@ -86,12 +87,10 @@ async fn send_to_sapling(validator: &ValidatorKind) {
     clients.faucet.do_sync(true).await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
-        test_manager.local_net.generate_blocks(100).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.do_sync(true).await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
-        test_manager.local_net.generate_blocks(1).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        test_manager.generate_blocks_with_delay(1).await;
         clients.faucet.do_sync(true).await.unwrap();
     };
 
@@ -105,8 +104,7 @@ async fn send_to_sapling(validator: &ValidatorKind) {
     )
     .await
     .unwrap();
-    test_manager.local_net.generate_blocks(1).await.unwrap();
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    test_manager.generate_blocks_with_delay(1).await;
     clients.recipient.do_sync(true).await.unwrap();
 
     assert_eq!(
@@ -122,11 +120,12 @@ async fn send_to_sapling(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-async fn send_to_transparent(validator: &ValidatorKind) {
-    let mut test_manager =
-        TestManager::launch(validator, None, None, true, false, false, true, true, true)
-            .await
-            .unwrap();
+async fn send_to_transparent(validator: &ValidatorKind, backend: &BackendType) {
+    let mut test_manager = TestManager::launch(
+        validator, backend, None, None, true, false, false, true, true, true,
+    )
+    .await
+    .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
@@ -135,12 +134,10 @@ async fn send_to_transparent(validator: &ValidatorKind) {
     clients.faucet.do_sync(true).await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
-        test_manager.local_net.generate_blocks(100).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.do_sync(true).await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
-        test_manager.local_net.generate_blocks(1).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        test_manager.generate_blocks_with_delay(1).await;
         clients.faucet.do_sync(true).await.unwrap();
     };
 
@@ -155,8 +152,7 @@ async fn send_to_transparent(validator: &ValidatorKind) {
     .await
     .unwrap();
 
-    test_manager.local_net.generate_blocks(1).await.unwrap();
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    test_manager.generate_blocks_with_delay(1).await;
 
     let fetch_service = zaino_fetch::jsonrpsee::connector::JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
@@ -196,8 +192,7 @@ async fn send_to_transparent(validator: &ValidatorKind) {
     //       for this reason we generate blocks 1 at a time and sleep to let other tasks run.
     for height in 1..=99 {
         dbg!("Generating block at height: {}", height);
-        test_manager.local_net.generate_blocks(1).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        test_manager.generate_blocks_with_delay(1).await;
     }
 
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -233,36 +228,32 @@ async fn send_to_transparent(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-async fn send_to_all(validator: &ValidatorKind) {
-    let mut test_manager =
-        TestManager::launch(validator, None, None, true, false, false, true, true, true)
-            .await
-            .unwrap();
+async fn send_to_all(validator: &ValidatorKind, backend: &BackendType) {
+    let mut test_manager = TestManager::launch(
+        validator, backend, None, None, true, false, false, true, true, true,
+    )
+    .await
+    .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
         .expect("Clients are not initialized");
 
-    test_manager.local_net.generate_blocks(2).await.unwrap();
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    test_manager.generate_blocks_with_delay(2).await;
     clients.faucet.do_sync(true).await.unwrap();
 
     // "Create" 3 orchard notes in faucet.
     if matches!(validator, ValidatorKind::Zebrad) {
-        test_manager.local_net.generate_blocks(100).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.do_sync(true).await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
-        test_manager.local_net.generate_blocks(100).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.do_sync(true).await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
-        test_manager.local_net.generate_blocks(100).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.do_sync(true).await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
-        test_manager.local_net.generate_blocks(1).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        test_manager.generate_blocks_with_delay(1).await;
         clients.faucet.do_sync(true).await.unwrap();
     };
 
@@ -303,8 +294,7 @@ async fn send_to_all(validator: &ValidatorKind) {
     //       for this reason we generate blocks 1 at a time and sleep to let other tasks run.
     for height in 1..=100 {
         dbg!("Generating block at height: {}", height);
-        test_manager.local_net.generate_blocks(1).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        test_manager.generate_blocks_with_delay(1).await;
     }
 
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -341,11 +331,12 @@ async fn send_to_all(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-async fn shield_for_validator(validator: &ValidatorKind) {
-    let mut test_manager =
-        TestManager::launch(validator, None, None, true, false, false, true, true, true)
-            .await
-            .unwrap();
+async fn shield_for_validator(validator: &ValidatorKind, backend: &BackendType) {
+    let mut test_manager = TestManager::launch(
+        validator, backend, None, None, true, false, false, true, true, true,
+    )
+    .await
+    .unwrap();
     let clients = test_manager
         .clients
         .as_ref()
@@ -354,12 +345,10 @@ async fn shield_for_validator(validator: &ValidatorKind) {
     clients.faucet.do_sync(true).await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
-        test_manager.local_net.generate_blocks(100).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.do_sync(true).await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
-        test_manager.local_net.generate_blocks(1).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        test_manager.generate_blocks_with_delay(1).await;
         clients.faucet.do_sync(true).await.unwrap();
     };
 
@@ -380,8 +369,7 @@ async fn shield_for_validator(validator: &ValidatorKind) {
     //       for this reason we generate blocks 1 at a time and sleep to let other tasks run.
     for height in 1..=100 {
         dbg!("Generating block at height: {}", height);
-        test_manager.local_net.generate_blocks(1).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        test_manager.generate_blocks_with_delay(1).await;
     }
 
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -398,8 +386,7 @@ async fn shield_for_validator(validator: &ValidatorKind) {
     );
 
     clients.recipient.quick_shield().await.unwrap();
-    test_manager.local_net.generate_blocks(1).await.unwrap();
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    test_manager.generate_blocks_with_delay(1).await;
     clients.recipient.do_sync(true).await.unwrap();
 
     assert_eq!(
@@ -415,32 +402,32 @@ async fn shield_for_validator(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-async fn monitor_unverified_mempool_for_validator(validator: &ValidatorKind) {
-    let mut test_manager =
-        TestManager::launch(validator, None, None, true, false, false, true, true, true)
-            .await
-            .unwrap();
+async fn monitor_unverified_mempool_for_validator(
+    validator: &ValidatorKind,
+    backend: &BackendType,
+) {
+    let mut test_manager = TestManager::launch(
+        validator, backend, None, None, true, false, false, true, true, true,
+    )
+    .await
+    .unwrap();
     let clients = test_manager
         .clients
         .take()
         .expect("Clients are not initialized");
     let recipient_client = Arc::new(clients.recipient);
 
-    test_manager.local_net.generate_blocks(1).await.unwrap();
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    test_manager.generate_blocks_with_delay(1).await;
     clients.faucet.do_sync(true).await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
-        test_manager.local_net.generate_blocks(100).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.do_sync(true).await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
-        test_manager.local_net.generate_blocks(100).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.do_sync(true).await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
-        test_manager.local_net.generate_blocks(1).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        test_manager.generate_blocks_with_delay(1).await;
         clients.faucet.do_sync(true).await.unwrap();
     };
 
@@ -526,8 +513,7 @@ async fn monitor_unverified_mempool_for_validator(validator: &ValidatorKind) {
         250_000
     );
 
-    test_manager.local_net.generate_blocks(1).await.unwrap();
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    test_manager.generate_blocks_with_delay(1).await;
 
     println!("\n\nFetching Mined Tx 1!\n");
     let _transaction_1 = dbg!(
@@ -566,12 +552,11 @@ async fn monitor_unverified_mempool_for_validator(validator: &ValidatorKind) {
 }
 
 mod zcashd {
-
     use super::*;
 
     #[tokio::test]
     async fn connect_to_node_get_info() {
-        connect_to_node_get_info_for_validator(&ValidatorKind::Zcashd).await;
+        connect_to_node_get_info_for_validator(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
     }
 
     mod sent_to {
@@ -579,75 +564,124 @@ mod zcashd {
 
         #[tokio::test]
         pub(crate) async fn orchard() {
-            send_to_orchard(&ValidatorKind::Zcashd).await;
+            send_to_orchard(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
         }
 
         #[tokio::test]
         pub(crate) async fn sapling() {
-            send_to_sapling(&ValidatorKind::Zcashd).await;
+            send_to_sapling(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
         }
 
         #[tokio::test]
         pub(crate) async fn transparent() {
-            send_to_transparent(&ValidatorKind::Zcashd).await;
+            send_to_transparent(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
         }
 
         #[tokio::test]
         pub(crate) async fn all() {
-            send_to_all(&ValidatorKind::Zcashd).await;
+            send_to_all(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
         }
     }
 
     #[tokio::test]
     async fn shield() {
-        shield_for_validator(&ValidatorKind::Zcashd).await;
+        shield_for_validator(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
     }
 
     #[tokio::test]
     async fn monitor_unverified_mempool() {
-        monitor_unverified_mempool_for_validator(&ValidatorKind::Zcashd).await;
+        monitor_unverified_mempool_for_validator(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
     }
 }
 
 mod zebrad {
-
     use super::*;
 
-    #[tokio::test]
-    async fn connect_to_node_get_info() {
-        connect_to_node_get_info_for_validator(&ValidatorKind::Zebrad).await;
-    }
-    mod send_to {
+    mod fetch_service {
         use super::*;
 
         #[tokio::test]
-        pub(crate) async fn sapling() {
-            send_to_sapling(&ValidatorKind::Zebrad).await;
+        async fn connect_to_node_get_info() {
+            connect_to_node_get_info_for_validator(&ValidatorKind::Zebrad, &BackendType::Fetch)
+                .await;
         }
+        mod send_to {
+            use super::*;
 
-        #[tokio::test]
-        pub(crate) async fn orchard() {
-            send_to_orchard(&ValidatorKind::Zebrad).await;
+            #[tokio::test]
+            pub(crate) async fn sapling() {
+                send_to_sapling(&ValidatorKind::Zebrad, &BackendType::Fetch).await;
+            }
+
+            #[tokio::test]
+            pub(crate) async fn orchard() {
+                send_to_orchard(&ValidatorKind::Zebrad, &BackendType::Fetch).await;
+            }
+
+            /// Bug documented in https://github.com/zingolabs/zaino/issues/145.
+            #[tokio::test]
+            pub(crate) async fn transparent() {
+                send_to_transparent(&ValidatorKind::Zebrad, &BackendType::Fetch).await;
+            }
+
+            #[tokio::test]
+            pub(crate) async fn all() {
+                send_to_all(&ValidatorKind::Zebrad, &BackendType::Fetch).await;
+            }
         }
-
-        /// Bug documented in https://github.com/zingolabs/zaino/issues/145.
         #[tokio::test]
-        pub(crate) async fn transparent() {
-            send_to_transparent(&ValidatorKind::Zebrad).await;
+        async fn shield() {
+            shield_for_validator(&ValidatorKind::Zebrad, &BackendType::Fetch).await;
         }
-
+        /// Bug documented in https://github.com/zingolabs/zaino/issues/144.
         #[tokio::test]
-        pub(crate) async fn all() {
-            send_to_all(&ValidatorKind::Zebrad).await;
+        async fn monitor_unverified_mempool() {
+            monitor_unverified_mempool_for_validator(&ValidatorKind::Zebrad, &BackendType::Fetch)
+                .await;
         }
     }
-    #[tokio::test]
-    async fn shield() {
-        shield_for_validator(&ValidatorKind::Zebrad).await;
-    }
-    /// Bug documented in https://github.com/zingolabs/zaino/issues/144.
-    #[tokio::test]
-    async fn monitor_unverified_mempool() {
-        monitor_unverified_mempool_for_validator(&ValidatorKind::Zebrad).await;
+
+    mod state_service {
+        use super::*;
+
+        #[tokio::test]
+        async fn connect_to_node_get_info() {
+            connect_to_node_get_info_for_validator(&ValidatorKind::Zebrad, &BackendType::State)
+                .await;
+        }
+        mod send_to {
+            use super::*;
+
+            #[tokio::test]
+            pub(crate) async fn sapling() {
+                send_to_sapling(&ValidatorKind::Zebrad, &BackendType::State).await;
+            }
+
+            #[tokio::test]
+            pub(crate) async fn orchard() {
+                send_to_orchard(&ValidatorKind::Zebrad, &BackendType::State).await;
+            }
+
+            #[tokio::test]
+            pub(crate) async fn transparent() {
+                send_to_transparent(&ValidatorKind::Zebrad, &BackendType::State).await;
+            }
+
+            #[tokio::test]
+            pub(crate) async fn all() {
+                send_to_all(&ValidatorKind::Zebrad, &BackendType::State).await;
+            }
+        }
+
+        #[tokio::test]
+        async fn shield() {
+            shield_for_validator(&ValidatorKind::Zebrad, &BackendType::State).await;
+        }
+
+        #[tokio::test]
+        async fn monitor_unverified_mempool() {
+            monitor_unverified_mempool_for_validator(&ValidatorKind::Zebrad, &BackendType::State)
+                .await;
+        }
     }
 }
