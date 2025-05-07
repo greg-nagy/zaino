@@ -1,6 +1,8 @@
 //! Holds Zaino's local compact block cache implementation.
 
-use crate::{config::BlockCacheConfig, error::BlockCacheError, status::StatusType};
+use crate::{
+    config::BlockCacheConfig, error::BlockCacheError, status::StatusType, StateServiceSubscriber,
+};
 
 pub mod finalised_state;
 pub mod mempool;
@@ -14,7 +16,11 @@ use zaino_fetch::{
     jsonrpsee::{connector::JsonRpSeeConnector, response::GetBlockResponse},
 };
 use zaino_proto::proto::compact_formats::{ChainMetadata, CompactBlock, CompactOrchardAction};
-use zebra_chain::block::{Hash, Height};
+use zebra_chain::{
+    block::{Hash, Height},
+    parameters::Network,
+};
+use zebra_rpc::methods::{GetBlock, GetBlockTransaction};
 use zebra_state::{HashOrHeight, ReadStateService};
 
 /// Zaino's internal compact block cache.
@@ -53,7 +59,7 @@ impl BlockCache {
         };
 
         let non_finalised_state =
-            NonFinalisedState::spawn(fetcher, channel_tx, config.clone()).await?;
+            NonFinalisedState::spawn(fetcher, state, channel_tx, config.clone()).await?;
 
         Ok(BlockCache {
             fetcher: fetcher.clone(),
@@ -145,29 +151,16 @@ impl BlockCacheSubscriber {
                     .await
                     .map_err(BlockCacheError::FinalisedStateError),
                 // Fetch from Validator.
-                None => match self.state.clone() {
-                    Some(state) => {
-                        match crate::backends::state::get_compact_block(
-                            &state,
-                            hash_or_height,
-                            &self.config.network,
-                        )
-                        .await
-                        {
-                            Ok(block) => Ok(block),
-                            Err(_) => {
-                                let (_, block) =
-                                    fetch_block_from_node(&self.fetcher, hash_or_height).await?;
-                                Ok(block)
-                            }
-                        }
-                    }
-                    None => {
-                        let (_, block) =
-                            fetch_block_from_node(&self.fetcher, hash_or_height).await?;
-                        Ok(block)
-                    }
-                },
+                None => {
+                    let (_, block) = fetch_block_from_node(
+                        self.state.as_ref(),
+                        Some(&self.config.network),
+                        &self.fetcher,
+                        hash_or_height,
+                    )
+                    .await?;
+                    Ok(block)
+                }
             }
         }
     }
@@ -211,6 +204,80 @@ impl BlockCacheSubscriber {
 ///
 /// Uses 2 calls as z_get_block verbosity=1 is required to fetch txids from zcashd.
 pub(crate) async fn fetch_block_from_node(
+    state: Option<&ReadStateService>,
+    network: Option<&Network>,
+    fetcher: &JsonRpSeeConnector,
+    hash_or_height: HashOrHeight,
+) -> Result<(Hash, CompactBlock), BlockCacheError> {
+    if let (Some(state), Some(network)) = (state, network) {
+        match try_state_path(state, network, hash_or_height).await {
+            Ok(result) => return Ok(result),
+            Err(e) => {
+                eprintln!("StateService fallback triggered due to: {e}");
+            }
+        }
+    }
+    try_fetcher_path(fetcher, hash_or_height).await
+}
+
+async fn try_state_path(
+    state: &ReadStateService,
+    network: &Network,
+    hash_or_height: HashOrHeight,
+) -> Result<(Hash, CompactBlock), BlockCacheError> {
+    let (hash, tx, trees) =
+        StateServiceSubscriber::get_block_inner(state, network, hash_or_height, Some(1))
+            .await
+            .map_err(|e| {
+                eprintln!("{e}");
+                BlockCacheError::Custom("Error retrieving block from ReadStateService".to_string())
+            })
+            .and_then(|response| match response {
+                GetBlock::Raw(_) => Err(BlockCacheError::Custom(
+                    "Found transaction of `Raw` type, expected only `Hash` types.".to_string(),
+                )),
+                GetBlock::Object {
+                    hash, tx, trees, ..
+                } => Ok((hash, tx, trees)),
+            })?;
+
+    StateServiceSubscriber::get_block_inner(state, network, hash_or_height, Some(0))
+        .await
+        .map_err(|_| {
+            BlockCacheError::Custom("Error retrieving raw block from ReadStateService".to_string())
+        })
+        .and_then(|response| match response {
+            GetBlock::Object { .. } => Err(BlockCacheError::Custom(
+                "Found transaction of `Object` type, expected only `Hash` types.".to_string(),
+            )),
+            GetBlock::Raw(block_hex) => {
+                let txid_strings = tx
+                    .iter()
+                    .filter_map(|t| {
+                        if let GetBlockTransaction::Hash(h) = t {
+                            Some(h.to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<String>>();
+
+                Ok((
+                    hash.0,
+                    FullBlock::parse_from_hex(
+                        block_hex.as_ref(),
+                        Some(display_txids_to_server(txid_strings)?),
+                    )?
+                    .into_compact(
+                        u32::try_from(trees.sapling())?,
+                        u32::try_from(trees.orchard())?,
+                    )?,
+                ))
+            }
+        })
+}
+
+async fn try_fetcher_path(
     fetcher: &JsonRpSeeConnector,
     hash_or_height: HashOrHeight,
 ) -> Result<(Hash, CompactBlock), BlockCacheError> {
@@ -224,6 +291,7 @@ pub(crate) async fn fetch_block_from_node(
             )),
             GetBlockResponse::Object(block) => Ok((block.hash, block.tx, block.trees)),
         })?;
+
     fetcher
         .get_block(hash.0.to_string(), Some(0))
         .await
