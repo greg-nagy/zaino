@@ -28,14 +28,14 @@ pub use backends::{
 pub(crate) mod local_cache;
 
 #[cfg(feature = "bench")]
-pub use local_cache::*;
+/// allow public access to additional APIs, for testing
+pub mod bench {
+    pub use crate::{config::BlockCacheConfig, local_cache::*};
+}
 
 pub(crate) mod config;
 
 pub use config::{BackendConfig, BackendType, FetchServiceConfig, StateServiceConfig};
-
-#[cfg(feature = "bench")]
-pub use config::BlockCacheConfig;
 
 pub(crate) mod error;
 
