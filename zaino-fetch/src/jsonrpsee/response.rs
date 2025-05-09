@@ -705,6 +705,8 @@ impl<'de> serde::Deserialize<'de> for TxidsResponse {
 /// Contains the hex-encoded Sapling & Orchard note commitment trees, and their
 /// corresponding [`block::Hash`], [`Height`], and block time.
 ///
+/// Encoded using v0 frontier encoding.
+///
 /// This is used for the output parameter of [`JsonRpcConnector::get_treestate`].
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
 pub struct GetTreestateResponse {
