@@ -6,8 +6,11 @@ use crate::{
     indexer::{
         handle_raw_transaction, IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService,
     },
-    local_cache::{compact_block_to_nullifiers, BlockCache, BlockCacheSubscriber},
-    mempool::{Mempool, MempoolSubscriber},
+    local_cache::{
+        compact_block_to_nullifiers,
+        mempool::{Mempool, MempoolSubscriber},
+        BlockCache, BlockCacheSubscriber,
+    },
     status::{AtomicStatus, StatusType},
     stream::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
