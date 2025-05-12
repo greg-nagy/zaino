@@ -20,9 +20,7 @@ pub struct MempoolKey(pub String);
 
 /// Mempool value.
 ///
-/// NOTE: Currently holds a copy of txid,
-///       this could be updated to store the corresponding transaction as the value,
-///       this would enable the serving of mempool transactions directly, significantly increasing efficiency.
+/// Holds GetRawTransaction::TransactionObject.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MempoolValue(pub GetRawTransaction);
 
