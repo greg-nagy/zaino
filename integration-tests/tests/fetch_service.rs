@@ -63,7 +63,7 @@ async fn create_test_manager_and_fetch_service(
                 canopy: Some(1),
                 nu5: Some(1),
                 nu6: Some(1),
-                nu7: Some(1),
+                nu7: None,
             },
         ),
         true,
