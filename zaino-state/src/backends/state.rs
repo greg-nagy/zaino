@@ -49,11 +49,11 @@ use zebra_rpc::{
         chain_tip_difficulty,
         hex_data::HexData,
         trees::{GetSubtrees, GetTreestate, SubtreeRpcData},
+        types::transaction::TransactionObject,
         AddressBalance, AddressStrings, ConsensusBranchIdHex, GetAddressTxIdsRequest,
         GetAddressUtxos, GetBlock, GetBlockChainInfo, GetBlockHash, GetBlockHeader,
         GetBlockHeaderObject, GetBlockTransaction, GetBlockTrees, GetInfo, GetRawTransaction,
         NetworkUpgradeInfo, NetworkUpgradeStatus, SentTransactionHash, TipConsensusBranch,
-        TransactionObject,
     },
     server::error::LegacyCode,
     sync::init_read_state_with_syncer,
@@ -693,13 +693,23 @@ impl StateServiceSubscriber {
                         .transactions
                         .iter()
                         .map(|transaction| {
-                            GetBlockTransaction::Object(TransactionObject {
+                            GetBlockTransaction::Object(Box::new(TransactionObject {
                                 hex: transaction.as_ref().into(),
                                 height: Some(height.0),
                                 // Confirmations should never be greater than
                                 // the current block height
                                 confirmations: Some(confirmations as u32),
-                            })
+                                // TODO: use these fields!
+                                inputs: None,
+                                outputs: None,
+                                shielded_spends: None,
+                                shielded_outputs: None,
+                                orchard: None,
+                                value_balance: None,
+                                value_balance_zat: None,
+                                size: None,
+                                time: None,
+                            }))
                         })
                         .collect()),
                     Ok(ReadResponse::TransactionIdsForBlock(None))
@@ -871,10 +881,14 @@ impl ZcashIndexer for StateServiceSubscriber {
             .inner(),
         );
 
-        let difficulty =
-            chain_tip_difficulty(self.config.network.clone(), self.read_state_service.clone())
-                .await
-                .unwrap();
+        // TODO: Remove unwrap()
+        let difficulty = chain_tip_difficulty(
+            self.config.network.clone(),
+            self.read_state_service.clone(),
+            false,
+        )
+        .await
+        .unwrap();
 
         let verification_progress = f64::from(height.0) / f64::from(zebra_estimated_height.0);
 
@@ -883,8 +897,8 @@ impl ZcashIndexer for StateServiceSubscriber {
             height,
             hash,
             estimated_height,
-            zebra_rpc::methods::types::Balance::chain_supply(balance),
-            zebra_rpc::methods::types::Balance::value_pools(balance),
+            zebra_rpc::methods::types::get_blockchain_info::Balance::chain_supply(balance),
+            zebra_rpc::methods::types::get_blockchain_info::Balance::value_pools(balance),
             upgrades,
             consensus,
             height,
@@ -1126,12 +1140,23 @@ impl ZcashIndexer for StateServiceSubscriber {
                     tx,
                     height,
                     confirmations,
+                    block_time: _block_time,
                 }) => Ok(match verbose {
-                    Some(_verbosity) => GetRawTransaction::Object(TransactionObject {
+                    Some(_verbosity) => GetRawTransaction::Object(Box::new(TransactionObject {
                         hex: tx.into(),
                         height: Some(height.0),
                         confirmations: Some(confirmations),
-                    }),
+                        // TODO: use these fields!
+                        inputs: None,
+                        outputs: None,
+                        shielded_spends: None,
+                        shielded_outputs: None,
+                        orchard: None,
+                        value_balance: None,
+                        value_balance_zat: None,
+                        size: None,
+                        time: None,
+                    })),
                     None => GetRawTransaction::Raw(tx.into()),
                 }),
                 None => Err(not_found_error()),

@@ -49,7 +49,22 @@ async fn create_test_manager_and_services(
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
             (Network::new_default_testnet(), false)
         }
-        _ => (Network::new_regtest(Some(1), Some(1)), true),
+        _ => (
+            Network::new_regtest(
+                zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                    before_overwinter: Some(1),
+                    overwinter: Some(1),
+                    sapling: Some(1),
+                    blossom: Some(1),
+                    heartwood: Some(1),
+                    canopy: Some(1),
+                    nu5: Some(1),
+                    nu6: Some(1),
+                    nu7: Some(1),
+                },
+            ),
+            true,
+        ),
     };
 
     test_manager.local_net.print_stdout();
