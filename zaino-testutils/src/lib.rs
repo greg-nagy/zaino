@@ -319,17 +319,13 @@ async fn build_lightclients(
     indexer_port: portpicker::Port,
 ) -> (LightClient, LightClient) {
     let mut client_builder = ClientBuilder::new(make_uri(indexer_port), lightclient_dir);
-    let faucet = client_builder
-        .build_faucet(true, RegtestNetwork::all_upgrades_active())
-        .await;
-    let recipient = client_builder
-        .build_client(
-            seeds::HOSPITAL_MUSEUM_SEED.to_string(),
-            1,
-            true,
-            RegtestNetwork::all_upgrades_active(),
-        )
-        .await;
+    let faucet = client_builder.build_faucet(true, RegtestNetwork::all_upgrades_active());
+    let recipient = client_builder.build_client(
+        seeds::HOSPITAL_MUSEUM_SEED.to_string(),
+        1,
+        true,
+        RegtestNetwork::all_upgrades_active(),
+    );
 
     (faucet, recipient)
 }
@@ -531,19 +527,14 @@ impl Drop for TestManager {
     }
 }
 
-/// Builds a client for creating RPC requests to the indexer/light-node
-pub fn build_client(
-    uri: http::Uri,
-) -> impl std::future::Future<Output = Result<CompactTxStreamerClient<UnderlyingService>, GetClientError>>
-{
-    GrpcConnector::new(uri).get_client()
-}
 #[cfg(test)]
 mod launch_testmanager {
 
     use super::*;
 
     mod zcashd {
+
+        use zingo_infra_testutils::client::build_client;
 
         use super::*;
 
@@ -703,7 +694,7 @@ mod launch_testmanager {
                 .as_ref()
                 .expect("Clients are not initialized");
 
-            clients.faucet.do_sync(true).await.unwrap();
+            clients.faucet.sync_and_await().await.unwrap();
             dbg!(clients.faucet.do_balance().await);
 
             assert!(
@@ -880,11 +871,11 @@ mod launch_testmanager {
                     .as_ref()
                     .expect("Clients are not initialized");
 
-                clients.faucet.do_sync(true).await.unwrap();
+                clients.faucet.sync_and_await().await.unwrap();
                 dbg!(clients.faucet.do_balance().await);
 
                 test_manager.local_net.generate_blocks(100).await.unwrap();
-                clients.faucet.do_sync(true).await.unwrap();
+                clients.faucet.sync_and_await().await.unwrap();
                 dbg!(clients.faucet.do_balance().await);
 
                 assert!(
@@ -921,7 +912,7 @@ mod launch_testmanager {
 
                 test_manager.local_net.generate_blocks(100).await.unwrap();
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                clients.faucet.do_sync(true).await.unwrap();
+                clients.faucet.sync_and_await().await.unwrap();
                 dbg!(clients.faucet.do_balance().await);
 
                 assert!(
@@ -945,7 +936,7 @@ mod launch_testmanager {
                 clients.faucet.quick_shield().await.unwrap();
                 test_manager.local_net.generate_blocks(1).await.unwrap();
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                clients.faucet.do_sync(true).await.unwrap();
+                clients.faucet.sync_and_await().await.unwrap();
                 dbg!(clients.faucet.do_balance().await);
 
                 assert!(
@@ -968,7 +959,7 @@ mod launch_testmanager {
 
                 test_manager.local_net.generate_blocks(1).await.unwrap();
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                clients.recipient.do_sync(true).await.unwrap();
+                clients.recipient.sync_and_await().await.unwrap();
                 dbg!(clients.recipient.do_balance().await);
 
                 assert_eq!(
@@ -1171,11 +1162,11 @@ mod launch_testmanager {
                     .as_ref()
                     .expect("Clients are not initialized");
 
-                clients.faucet.do_sync(true).await.unwrap();
+                clients.faucet.sync_and_await().await.unwrap();
                 dbg!(clients.faucet.do_balance().await);
 
                 test_manager.generate_blocks_with_delay(100).await;
-                clients.faucet.do_sync(true).await.unwrap();
+                clients.faucet.sync_and_await().await.unwrap();
                 dbg!(clients.faucet.do_balance().await);
 
                 assert!(
@@ -1212,7 +1203,7 @@ mod launch_testmanager {
                     .expect("Clients are not initialized");
 
                 test_manager.generate_blocks_with_delay(100).await;
-                clients.faucet.do_sync(true).await.unwrap();
+                clients.faucet.sync_and_await().await.unwrap();
                 dbg!(clients.faucet.do_balance().await);
 
                 assert!(
@@ -1235,7 +1226,7 @@ mod launch_testmanager {
                 // *Send all transparent funds to own orchard address.
                 clients.faucet.quick_shield().await.unwrap();
                 test_manager.generate_blocks_with_delay(1).await;
-                clients.faucet.do_sync(true).await.unwrap();
+                clients.faucet.sync_and_await().await.unwrap();
                 dbg!(clients.faucet.do_balance().await);
 
                 assert!(
@@ -1257,7 +1248,7 @@ mod launch_testmanager {
                 .unwrap();
 
                 test_manager.generate_blocks_with_delay(1).await;
-                clients.recipient.do_sync(true).await.unwrap();
+                clients.recipient.sync_and_await().await.unwrap();
                 dbg!(clients.recipient.do_balance().await);
 
                 assert_eq!(

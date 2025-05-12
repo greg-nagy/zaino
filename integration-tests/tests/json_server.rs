@@ -221,7 +221,7 @@ async fn z_get_address_balance_inner() {
         .expect("Clients are not initialized");
     let recipient_address = clients.get_recipient_address("transparent").await;
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     from_inputs::quick_send(
         &clients.faucet,
@@ -232,7 +232,7 @@ async fn z_get_address_balance_inner() {
     test_manager.local_net.generate_blocks(1).await.unwrap();
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    clients.recipient.do_sync(true).await.unwrap();
+    clients.recipient.sync_and_await().await.unwrap();
     let recipient_balance = clients.recipient.do_balance().await;
 
     let zcashd_service_balance = zcashd_subscriber
@@ -249,9 +249,12 @@ async fn z_get_address_balance_inner() {
     dbg!(&zcashd_service_balance);
     dbg!(&zaino_service_balance);
 
-    assert_eq!(recipient_balance.transparent_balance.unwrap(), 250_000,);
     assert_eq!(
-        recipient_balance.transparent_balance.unwrap(),
+        recipient_balance.confirmed_transparent_balance.unwrap(),
+        250_000,
+    );
+    assert_eq!(
+        recipient_balance.confirmed_transparent_balance.unwrap(),
         zcashd_service_balance.balance,
     );
     assert_eq!(zcashd_service_balance, zaino_service_balance);
@@ -312,7 +315,7 @@ async fn get_raw_mempool_inner() {
     test_manager.local_net.generate_blocks(1).await.unwrap();
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     from_inputs::quick_send(
         &clients.faucet,
@@ -360,7 +363,7 @@ async fn z_get_treestate_inner() {
         .as_ref()
         .expect("Clients are not initialized");
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     from_inputs::quick_send(
         &clients.faucet,
@@ -400,7 +403,7 @@ async fn z_get_subtrees_by_index_inner() {
         .as_ref()
         .expect("Clients are not initialized");
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     from_inputs::quick_send(
         &clients.faucet,
@@ -440,7 +443,7 @@ async fn get_raw_transaction_inner() {
         .as_ref()
         .expect("Clients are not initialized");
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     let tx = from_inputs::quick_send(
         &clients.faucet,
@@ -483,7 +486,7 @@ async fn get_address_tx_ids_inner() {
         .expect("Clients are not initialized");
     let recipient_address = clients.get_recipient_address("transparent").await;
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     let tx = from_inputs::quick_send(
         &clients.faucet,
@@ -540,7 +543,7 @@ async fn z_get_address_utxos_inner() {
         .expect("Clients are not initialized");
     let recipient_address = clients.get_recipient_address("transparent").await;
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     let txid_1 = from_inputs::quick_send(
         &clients.faucet,
@@ -551,7 +554,7 @@ async fn z_get_address_utxos_inner() {
     test_manager.local_net.generate_blocks(1).await.unwrap();
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     let zcashd_utxos = zcashd_subscriber
         .z_get_address_utxos(AddressStrings::new_valid(vec![recipient_address.clone()]).unwrap())

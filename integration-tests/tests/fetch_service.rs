@@ -89,16 +89,16 @@ async fn fetch_service_get_address_balance(validator: &ValidatorKind) {
         .expect("Clients are not initialized");
     let recipient_address = clients.get_recipient_address("transparent").await;
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
     };
 
     zaino_testutils::from_inputs::quick_send(
@@ -110,7 +110,7 @@ async fn fetch_service_get_address_balance(validator: &ValidatorKind) {
     test_manager.local_net.generate_blocks(1).await.unwrap();
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    clients.recipient.do_sync(true).await.unwrap();
+    clients.recipient.sync_and_await().await.unwrap();
     let recipient_balance = clients.recipient.do_balance().await;
 
     let fetch_service_balance = fetch_service_subscriber
@@ -121,9 +121,12 @@ async fn fetch_service_get_address_balance(validator: &ValidatorKind) {
     dbg!(recipient_balance.clone());
     dbg!(fetch_service_balance);
 
-    assert_eq!(recipient_balance.transparent_balance.unwrap(), 250_000,);
     assert_eq!(
-        recipient_balance.transparent_balance.unwrap(),
+        recipient_balance.confirmed_transparent_balance.unwrap(),
+        250_000,
+    );
+    assert_eq!(
+        recipient_balance.confirmed_transparent_balance.unwrap(),
         fetch_service_balance.balance,
     );
 
@@ -180,20 +183,20 @@ async fn fetch_service_get_raw_mempool(validator: &ValidatorKind) {
     test_manager.local_net.generate_blocks(1).await.unwrap();
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
     };
 
     zaino_testutils::from_inputs::quick_send(
@@ -240,16 +243,16 @@ async fn fetch_service_z_get_treestate(validator: &ValidatorKind) {
         .as_ref()
         .expect("Clients are not initialized");
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
     };
 
     zaino_testutils::from_inputs::quick_send(
@@ -283,16 +286,16 @@ async fn fetch_service_z_get_subtrees_by_index(validator: &ValidatorKind) {
         .as_ref()
         .expect("Clients are not initialized");
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
     };
 
     zaino_testutils::from_inputs::quick_send(
@@ -326,16 +329,16 @@ async fn fetch_service_get_raw_transaction(validator: &ValidatorKind) {
         .as_ref()
         .expect("Clients are not initialized");
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
     };
 
     let tx = zaino_testutils::from_inputs::quick_send(
@@ -370,16 +373,16 @@ async fn fetch_service_get_address_tx_ids(validator: &ValidatorKind) {
         .expect("Clients are not initialized");
     let recipient_address = clients.get_recipient_address("transparent").await;
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
     };
 
     let tx = zaino_testutils::from_inputs::quick_send(
@@ -425,16 +428,16 @@ async fn fetch_service_get_address_utxos(validator: &ValidatorKind) {
         .expect("Clients are not initialized");
     let recipient_address = clients.get_recipient_address("transparent").await;
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
     };
 
     let txid_1 = zaino_testutils::from_inputs::quick_send(
@@ -446,7 +449,7 @@ async fn fetch_service_get_address_utxos(validator: &ValidatorKind) {
     test_manager.local_net.generate_blocks(1).await.unwrap();
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     let fetch_service_utxos = fetch_service_subscriber
         .z_get_address_utxos(AddressStrings::new_valid(vec![recipient_address]).unwrap())
@@ -623,16 +626,16 @@ async fn fetch_service_get_transaction_mined(validator: &ValidatorKind) {
         .as_ref()
         .expect("Clients are not initialized");
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
     };
 
     let tx = zaino_testutils::from_inputs::quick_send(
@@ -673,16 +676,16 @@ async fn fetch_service_get_transaction_mempool(validator: &ValidatorKind) {
         .as_ref()
         .expect("Clients are not initialized");
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
     };
 
     let tx = zaino_testutils::from_inputs::quick_send(
@@ -724,16 +727,16 @@ async fn fetch_service_get_taddress_txids(validator: &ValidatorKind) {
         .expect("Clients are not initialized");
     let recipient_address = clients.get_recipient_address("transparent").await;
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
     };
 
     let tx = zaino_testutils::from_inputs::quick_send(
@@ -794,16 +797,16 @@ async fn fetch_service_get_taddress_balance(validator: &ValidatorKind) {
         .expect("Clients are not initialized");
     let recipient_address = clients.get_recipient_address("transparent").await;
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
     };
 
     zaino_testutils::from_inputs::quick_send(
@@ -815,7 +818,7 @@ async fn fetch_service_get_taddress_balance(validator: &ValidatorKind) {
     test_manager.local_net.generate_blocks(1).await.unwrap();
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    clients.recipient.do_sync(true).await.unwrap();
+    clients.recipient.sync_and_await().await.unwrap();
     let balance = clients.recipient.do_balance().await;
 
     let address_list = AddressList {
@@ -830,7 +833,7 @@ async fn fetch_service_get_taddress_balance(validator: &ValidatorKind) {
     dbg!(&fetch_service_balance);
     assert_eq!(
         fetch_service_balance.value_zat as u64,
-        balance.transparent_balance.unwrap()
+        balance.confirmed_transparent_balance.unwrap()
     );
 
     test_manager.close().await;
@@ -847,20 +850,20 @@ async fn fetch_service_get_mempool_tx(validator: &ValidatorKind) {
     test_manager.local_net.generate_blocks(1).await.unwrap();
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
     };
 
     let tx_1 = zaino_testutils::from_inputs::quick_send(
@@ -948,20 +951,20 @@ async fn fetch_service_get_mempool_stream(validator: &ValidatorKind) {
     test_manager.local_net.generate_blocks(1).await.unwrap();
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
     };
 
     let fetch_service_handle = tokio::spawn(async move {
@@ -1077,16 +1080,16 @@ async fn fetch_service_get_taddress_utxos(validator: &ValidatorKind) {
         .expect("Clients are not initialized");
     let recipient_address = clients.get_recipient_address("transparent").await;
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
     };
 
     let tx = zaino_testutils::from_inputs::quick_send(
@@ -1125,16 +1128,16 @@ async fn fetch_service_get_taddress_utxos_stream(validator: &ValidatorKind) {
         .expect("Clients are not initialized");
     let recipient_address = clients.get_recipient_address("transparent").await;
 
-    clients.faucet.do_sync(true).await.unwrap();
+    clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield().await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.do_sync(true).await.unwrap();
+        clients.faucet.sync_and_await().await.unwrap();
     };
 
     zaino_testutils::from_inputs::quick_send(
