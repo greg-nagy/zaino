@@ -628,7 +628,6 @@ impl StateServiceSubscriber {
                 let state_2 = state.clone();
                 let state_3 = state.clone();
 
-                let hash_or_height = hash_or_height;
                 let txids_or_fullblock_request = match verbosity {
                     1 => ReadRequest::TransactionIdsForBlock(hash_or_height),
                     2 => ReadRequest::Block(hash_or_height),
@@ -722,7 +721,7 @@ impl StateServiceSubscriber {
                         "missing orchard tree",
                     )))?;
 
-                let final_orchard_root = match NetworkUpgrade::Nu5.activation_height(&network) {
+                let final_orchard_root = match NetworkUpgrade::Nu5.activation_height(network) {
                     Some(activation_height) if height >= activation_height => {
                         Some(orchard_tree.root().into())
                     }
@@ -1367,7 +1366,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
         let hex = hash.encode_hex();
 
         // explicit over method call syntax to make it clear where this method is coming from
-        <Self as ZcashIndexer>::get_raw_transaction(&self, hex, Some(1))
+        <Self as ZcashIndexer>::get_raw_transaction(self, hex, Some(1))
             .await
             .and_then(|grt| match grt {
                 GetRawTransaction::Raw(_serialized_transaction) => Err(StateServiceError::Custom(
