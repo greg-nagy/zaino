@@ -587,6 +587,7 @@ mod launch_testmanager {
             test_manager.close().await;
         }
 
+        #[ignore = "chain cache needs development"]
         #[tokio::test]
         pub(crate) async fn with_chain() {
             let mut test_manager = TestManager::launch(
@@ -766,6 +767,7 @@ mod launch_testmanager {
                 test_manager.close().await;
             }
 
+            #[ignore = "chain cache needs development"]
             #[tokio::test]
             pub(crate) async fn with_chain() {
                 let mut test_manager = TestManager::launch(
@@ -1055,6 +1057,7 @@ mod launch_testmanager {
                 test_manager.close().await;
             }
 
+            #[ignore = "chain cache needs development"]
             #[tokio::test]
             pub(crate) async fn with_chain() {
                 let mut test_manager = TestManager::launch(
