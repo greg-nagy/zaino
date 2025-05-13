@@ -800,6 +800,20 @@ impl<'de> serde::Deserialize<'de> for GetTransactionResponse {
                 .and_then(|v| v.as_u64())
                 .map(|v| v as u32);
 
+            // if let Some(vin_value) = tx_value.get("vin") {
+            //     match serde_json::from_value::<Vec<Input>>(vin_value.clone()) {
+            //         Ok(_inputs) => { /* continue */ }
+            //         Err(err) => {
+            //             eprintln!("Failed to parse vin: {err}");
+            //             eprintln!(
+            //                 "Offending JSON:\n{}",
+            //                 serde_json::to_string_pretty(vin_value).unwrap()
+            //             );
+            //             return Err(serde::de::Error::custom("Failed to deserialize vin"));
+            //         }
+            //     }
+            // }
+
             let inputs = tx_value
                 .get("vin")
                 .map(|v| serde_json::from_value::<Vec<Input>>(v.clone()))
