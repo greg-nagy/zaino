@@ -343,6 +343,7 @@ impl TestManager {
     /// If clients is set to active zingolib lightclients will be created for test use.
     ///
     /// TODO: Add TestManagerConfig struct and constructor methods of common test setups.
+    #[allow(clippy::too_many_arguments)]
     pub async fn launch(
         validator: &ValidatorKind,
         backend: &BackendType,
