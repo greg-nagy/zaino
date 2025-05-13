@@ -34,9 +34,9 @@ zcash_client_backend = { version = "0.18.0" , features = [ "lightwalletd-tonic" 
 zcash_protocol = "0.5.1"
 
 # Zebra
-zebra-chain = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "a6ca5eafd2c9856e255e36d4e58c4ee5b6938f26" }
-zebra-state = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "a6ca5eafd2c9856e255e36d4e58c4ee5b6938f26" }
-zebra-rpc = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "a6ca5eafd2c9856e255e36d4e58c4ee5b6938f26" }
+zebra-chain = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "3abdd93e25e5728f8c0884d3fc7a1696b3e7928b" }
+zebra-state = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "3abdd93e25e5728f8c0884d3fc7a1696b3e7928b" }
+zebra-rpc = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "3abdd93e25e5728f8c0884d3fc7a1696b3e7928b" }
 
 # Runtime
 tokio = { version = "1.38", features = ["full"] }
