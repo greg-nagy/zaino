@@ -1,6 +1,6 @@
 //! Holds Zaino's mempool implementation.
 
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 
 use crate::{
     broadcast::{Broadcast, BroadcastSubscriber},
@@ -359,6 +359,16 @@ impl MempoolSubscriber {
         });
 
         Ok((channel_rx, streamer_handle))
+    }
+
+    /// Returns true if mempool contains the given txid.
+    pub async fn contains_txid(&self, txid: &MempoolKey) -> bool {
+        self.subscriber.contains_key(txid)
+    }
+
+    /// Returns transaction by txid if in the mempool, else returns none.
+    pub async fn get_transaction(&self, txid: &MempoolKey) -> Option<Arc<MempoolValue>> {
+        self.subscriber.get(txid)
     }
 
     /// Returns the status of the mempool.

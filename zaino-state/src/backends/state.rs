@@ -17,6 +17,7 @@ use crate::{
         UtxoReplyStream,
     },
     utils::{blockid_to_hashorheight, get_build_info, ServiceMetadata},
+    MempoolKey,
 };
 
 use nonempty::NonEmpty;
@@ -628,7 +629,6 @@ impl StateServiceSubscriber {
                 let state_2 = state.clone();
                 let state_3 = state.clone();
 
-                let hash_or_height = hash_or_height;
                 let txids_or_fullblock_request = match verbosity {
                     1 => ReadRequest::TransactionIdsForBlock(hash_or_height),
                     2 => ReadRequest::Block(hash_or_height),
@@ -732,7 +732,7 @@ impl StateServiceSubscriber {
                         "missing orchard tree",
                     )))?;
 
-                let final_orchard_root = match NetworkUpgrade::Nu5.activation_height(&network) {
+                let final_orchard_root = match NetworkUpgrade::Nu5.activation_height(network) {
                     Some(activation_height) if height >= activation_height => {
                         Some(orchard_tree.root().into())
                     }
@@ -1099,85 +1099,60 @@ impl ZcashIndexer for StateServiceSubscriber {
             RpcError::new_from_legacycode(LegacyCode::InvalidAddressOrKey, e.to_string())
         })?;
 
-        // check the mempool for the transaction
-        let mempool_transaction_future = self.rpc_client.get_raw_mempool().then(|result| async {
-            result.map(|TxidsResponse { transactions }| {
-                transactions
-                    .into_iter()
-                    .find(|mempool_txid| *mempool_txid == txid.to_string())
-            })
-        });
-        let onchain_transaction_future = state
-            .ready()
-            .and_then(|service| service.call(ReadRequest::Transaction(txid)));
-
-        futures::pin_mut!(mempool_transaction_future);
-        futures::pin_mut!(onchain_transaction_future);
-
         let not_found_error = || {
             StateServiceError::RpcError(RpcError::new_from_legacycode(
                 LegacyCode::InvalidAddressOrKey,
                 "No such mempool or main chain transaction",
             ))
         };
-        // This might be overengineered...try to find the txid on chain and in the mempool,
-        // whichever one resolves first is tried first.
-        let resolution =
-            futures::future::select(mempool_transaction_future, onchain_transaction_future).await;
-        let handle_mempool = |txid| async move {
-            self.mempool
-                .get_mempool()
-                .await
-                .into_iter()
-                .find_map(|(key, val)| if key.0 == txid { Some(val.0) } else { None })
-                .ok_or_else(not_found_error)
-        };
 
-        let handle_onchain = |response| {
-            let transaction = expected_read_response!(response, Transaction);
-            match transaction {
-                Some(MinedTx {
-                    tx,
-                    height,
-                    confirmations,
-                    block_time: _block_time,
-                }) => Ok(match verbose {
-                    Some(_verbosity) => GetRawTransaction::Object(Box::new(TransactionObject {
-                        hex: tx.into(),
-                        height: Some(height.0),
-                        confirmations: Some(confirmations),
-                        // TODO: use these fields!
-                        inputs: None,
-                        outputs: None,
-                        shielded_spends: None,
-                        shielded_outputs: None,
-                        orchard: None,
-                        value_balance: None,
-                        value_balance_zat: None,
-                        size: None,
-                        time: None,
-                    })),
-                    None => GetRawTransaction::Raw(tx.into()),
-                }),
-                None => Err(not_found_error()),
-            }
-        };
-
-        match resolution {
-            futures::future::Either::Left((response, other_fut)) => match response? {
-                Some(txid) => handle_mempool(txid).await,
-                None => {
-                    let response = other_fut.await?;
-                    handle_onchain(response)
+        // First check if transaction is in mempool as this is quick.
+        match self
+            .mempool
+            .contains_txid(&MempoolKey(txid.to_string()))
+            .await
+        {
+            // Fetch trasaction from mempool.
+            true => {
+                match self
+                    .mempool
+                    .get_transaction(&MempoolKey(txid.to_string()))
+                    .await
+                {
+                    Some(tx) => {
+                        if let GetRawTransaction::Object(transaction_object) = &tx.0 {
+                            Ok(GetRawTransaction::Object(transaction_object.clone()))
+                        } else {
+                            unreachable!("unmatched response to a `Transaction` read request")
+                        }
+                    }
+                    None => Err(not_found_error()),
                 }
-            },
-            futures::future::Either::Right((response, other_fut)) => {
-                match handle_onchain(response?) {
-                    Ok(val) => Ok(val),
-                    Err(e) => match other_fut.await? {
-                        Some(txid) => handle_mempool(txid).await,
-                        None => Err(e),
-                    },
+            }
+            // Fetch transaction from state.
+            false => {
+                //
+                match state
+                    .ready()
+                    .and_then(|service| service.call(zebra_state::ReadRequest::Transaction(txid)))
+                    .await
+                    .map_err(|_| not_found_error())?
+                {
+                    zebra_state::ReadResponse::Transaction(Some(tx)) => Ok(match verbose {
+                        Some(_verbosity) => GetRawTransaction::Object(Box::new(
+                            TransactionObject::from_transaction(
+                                tx.tx.clone(),
+                                Some(tx.height),
+                                Some(tx.confirmations),
+                                &self.config.network,
+                                Some(tx.block_time),
+                            ),
+                        )),
+                        None => GetRawTransaction::Raw(tx.tx.into()),
+                    }),
+                    zebra_state::ReadResponse::Transaction(None) => Err(not_found_error()),
+
+                    _ => unreachable!("unmatched response to a `Transaction` read request"),
                 }
             }
         }
@@ -1392,7 +1367,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
         let hex = hash.encode_hex();
 
         // explicit over method call syntax to make it clear where this method is coming from
-        <Self as ZcashIndexer>::get_raw_transaction(&self, hex, Some(1))
+        <Self as ZcashIndexer>::get_raw_transaction(self, hex, Some(1))
             .await
             .and_then(|grt| match grt {
                 GetRawTransaction::Raw(_serialized_transaction) => Err(StateServiceError::Custom(
