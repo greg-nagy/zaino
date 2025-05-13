@@ -5666,7 +5666,6 @@ dependencies = [
  "zebra-chain 1.0.0-beta.45",
  "zingo-infra-services",
  "zingo-infra-testutils",
- "zingo-netutils",
  "zingolib",
 ]
 

@@ -24,7 +24,6 @@ zingo-infra-services = { workspace = true }
 zingo-infra-testutils = { workspace = true }
 
 # ZingoLib
-zingo-netutils = { workspace = true }
 zingolib = { workspace = true }
 testvectors = { workspace = true }
 

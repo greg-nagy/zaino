@@ -13,11 +13,9 @@ use testvectors::{seeds, REG_O_ADDR_FROM_ABANDONART};
 use tracing_subscriber::EnvFilter;
 use zaino_state::BackendType;
 use zainodlib::config::default_ephemeral_cookie_path;
-use zcash_client_backend::proto::service::compact_tx_streamer_client::CompactTxStreamerClient;
 pub use zingo_infra_services as services;
 pub use zingo_infra_services::network::Network;
 pub use zingo_infra_services::validator::Validator;
-use zingo_netutils::{GetClientError, GrpcConnector, UnderlyingService};
 use zingolib::{config::RegtestNetwork, testutils::scenarios::setup::ClientBuilder};
 pub use zingolib::{
     get_base_address_macro, lightclient::LightClient, testutils::lightclient::from_inputs,
@@ -689,9 +687,9 @@ mod launch_testmanager {
             )
             .await
             .unwrap();
-            let clients = test_manager
+            let mut clients = test_manager
                 .clients
-                .as_ref()
+                .take()
                 .expect("Clients are not initialized");
 
             clients.faucet.sync_and_await().await.unwrap();
@@ -699,10 +697,10 @@ mod launch_testmanager {
 
             assert!(
                     clients.faucet.do_balance().await.orchard_balance.unwrap() > 0
-                        || clients.faucet.do_balance().await.transparent_balance.unwrap() > 0,
+                        || clients.faucet.do_balance().await.confirmed_transparent_balance.unwrap() > 0,
                     "No mining reward received from Zcashd. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
                     clients.faucet.do_balance().await.orchard_balance.unwrap(),
-                    clients.faucet.do_balance().await.transparent_balance.unwrap()
+                    clients.faucet.do_balance().await.confirmed_transparent_balance.unwrap()
                 );
 
             test_manager.close().await;
@@ -713,6 +711,8 @@ mod launch_testmanager {
         use super::*;
 
         mod fetch_service {
+            use zingo_infra_testutils::client::build_client;
+
             use super::*;
 
             #[tokio::test]
@@ -866,9 +866,9 @@ mod launch_testmanager {
                 )
                 .await
                 .unwrap();
-                let clients = test_manager
+                let mut clients = test_manager
                     .clients
-                    .as_ref()
+                    .take()
                     .expect("Clients are not initialized");
 
                 clients.faucet.sync_and_await().await.unwrap();
@@ -880,10 +880,10 @@ mod launch_testmanager {
 
                 assert!(
                     clients.faucet.do_balance().await.orchard_balance.unwrap() > 0
-                        || clients.faucet.do_balance().await.transparent_balance.unwrap() > 0,
+                        || clients.faucet.do_balance().await.confirmed_transparent_balance.unwrap() > 0,
                     "No mining reward received from Zebrad. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
                     clients.faucet.do_balance().await.orchard_balance.unwrap(),
-                    clients.faucet.do_balance().await.transparent_balance.unwrap()
+                    clients.faucet.do_balance().await.confirmed_transparent_balance.unwrap()
             );
 
                 test_manager.close().await;
@@ -905,9 +905,9 @@ mod launch_testmanager {
                 )
                 .await
                 .unwrap();
-                let clients = test_manager
+                let mut clients = test_manager
                     .clients
-                    .as_ref()
+                    .take()
                     .expect("Clients are not initialized");
 
                 test_manager.local_net.generate_blocks(100).await.unwrap();
@@ -920,7 +920,7 @@ mod launch_testmanager {
                         .faucet
                         .do_balance()
                         .await
-                        .transparent_balance
+                        .confirmed_transparent_balance
                         .unwrap()
                         > 0,
                     "No mining reward received from Zebrad. Faucet Transparent Balance: {:}.",
@@ -928,7 +928,7 @@ mod launch_testmanager {
                         .faucet
                         .do_balance()
                         .await
-                        .transparent_balance
+                        .confirmed_transparent_balance
                         .unwrap()
                 );
 
@@ -943,16 +943,13 @@ mod launch_testmanager {
                 clients.faucet.do_balance().await.orchard_balance.unwrap() > 0,
                 "No funds received from shield. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
                 clients.faucet.do_balance().await.orchard_balance.unwrap(),
-                clients.faucet.do_balance().await.transparent_balance.unwrap()
+                clients.faucet.do_balance().await.confirmed_transparent_balance.unwrap()
             );
 
+                let recipient_zaddr = clients.get_recipient_address("sapling").await;
                 zingolib::testutils::lightclient::from_inputs::quick_send(
-                    &clients.faucet,
-                    vec![(
-                        &clients.get_recipient_address("sapling").await,
-                        250_000,
-                        None,
-                    )],
+                    &mut clients.faucet,
+                    vec![(&recipient_zaddr, 250_000, None)],
                 )
                 .await
                 .unwrap();
@@ -1003,6 +1000,8 @@ mod launch_testmanager {
         }
 
         mod state_service {
+            use zingo_infra_testutils::client::build_client;
+
             use super::*;
 
             #[tokio::test]
@@ -1157,9 +1156,10 @@ mod launch_testmanager {
                 )
                 .await
                 .unwrap();
-                let clients = test_manager
+
+                let mut clients = test_manager
                     .clients
-                    .as_ref()
+                    .take()
                     .expect("Clients are not initialized");
 
                 clients.faucet.sync_and_await().await.unwrap();
@@ -1171,10 +1171,10 @@ mod launch_testmanager {
 
                 assert!(
                     clients.faucet.do_balance().await.orchard_balance.unwrap() > 0
-                        || clients.faucet.do_balance().await.transparent_balance.unwrap() > 0,
+                        || clients.faucet.do_balance().await.confirmed_transparent_balance.unwrap() > 0,
                     "No mining reward received from Zebrad. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
                     clients.faucet.do_balance().await.orchard_balance.unwrap(),
-                    clients.faucet.do_balance().await.transparent_balance.unwrap()
+                    clients.faucet.do_balance().await.confirmed_transparent_balance.unwrap()
             );
 
                 test_manager.close().await;
@@ -1197,9 +1197,10 @@ mod launch_testmanager {
                 )
                 .await
                 .unwrap();
-                let clients = test_manager
+
+                let mut clients = test_manager
                     .clients
-                    .as_ref()
+                    .take()
                     .expect("Clients are not initialized");
 
                 test_manager.generate_blocks_with_delay(100).await;
@@ -1211,7 +1212,7 @@ mod launch_testmanager {
                         .faucet
                         .do_balance()
                         .await
-                        .transparent_balance
+                        .confirmed_transparent_balance
                         .unwrap()
                         > 0,
                     "No mining reward received from Zebrad. Faucet Transparent Balance: {:}.",
@@ -1219,7 +1220,7 @@ mod launch_testmanager {
                         .faucet
                         .do_balance()
                         .await
-                        .transparent_balance
+                        .confirmed_transparent_balance
                         .unwrap()
                 );
 
@@ -1233,16 +1234,13 @@ mod launch_testmanager {
                 clients.faucet.do_balance().await.orchard_balance.unwrap() > 0,
                 "No funds received from shield. Faucet Orchard Balance: {:}. Faucet Transparent Balance: {:}.",
                 clients.faucet.do_balance().await.orchard_balance.unwrap(),
-                clients.faucet.do_balance().await.transparent_balance.unwrap()
+                clients.faucet.do_balance().await.confirmed_transparent_balance.unwrap()
             );
 
+                let recipient_zaddr = clients.get_recipient_address("sapling").await;
                 zingolib::testutils::lightclient::from_inputs::quick_send(
-                    &clients.faucet,
-                    vec![(
-                        &clients.get_recipient_address("sapling").await,
-                        250_000,
-                        None,
-                    )],
+                    &mut clients.faucet,
+                    vec![(&recipient_zaddr, 250_000, None)],
                 )
                 .await
                 .unwrap();
