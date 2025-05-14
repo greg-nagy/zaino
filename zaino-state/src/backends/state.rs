@@ -24,10 +24,7 @@ use nonempty::NonEmpty;
 use tokio_stream::StreamExt as _;
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpsee::{
-        connector::{JsonRpSeeConnector, RpcError},
-        response::TxidsResponse,
-    },
+    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
 };
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
@@ -60,12 +57,11 @@ use zebra_rpc::{
     sync::init_read_state_with_syncer,
 };
 use zebra_state::{
-    HashOrHeight, MinedTx, OutputLocation, ReadRequest, ReadResponse, ReadStateService,
-    TransactionLocation,
+    HashOrHeight, OutputLocation, ReadRequest, ReadResponse, ReadStateService, TransactionLocation,
 };
 
-use chrono::Utc;
-use futures::{FutureExt as _, TryFutureExt as _, TryStreamExt as _};
+use chrono::{DateTime, Utc};
+use futures::{TryFutureExt as _, TryStreamExt as _};
 use hex::{FromHex as _, ToHex};
 use indexmap::IndexMap;
 use std::{collections::HashSet, future::poll_fn, str::FromStr, sync::Arc};
@@ -693,23 +689,15 @@ impl StateServiceSubscriber {
                         .transactions
                         .iter()
                         .map(|transaction| {
-                            GetBlockTransaction::Object(Box::new(TransactionObject {
-                                hex: transaction.as_ref().into(),
-                                height: Some(height.0),
-                                // Confirmations should never be greater than
-                                // the current block height
-                                confirmations: Some(confirmations as u32),
-                                // TODO: use these fields!
-                                inputs: None,
-                                outputs: None,
-                                shielded_spends: None,
-                                shielded_outputs: None,
-                                orchard: None,
-                                value_balance: None,
-                                value_balance_zat: None,
-                                size: None,
-                                time: None,
-                            }))
+                            GetBlockTransaction::Object(Box::new(
+                                TransactionObject::from_transaction(
+                                    transaction.clone(),
+                                    Some(height),
+                                    Some(confirmations as u32),
+                                    &network,
+                                    DateTime::<Utc>::from_timestamp(time, 0),
+                                ),
+                            ))
                         })
                         .collect()),
                     Ok(ReadResponse::TransactionIdsForBlock(None))
