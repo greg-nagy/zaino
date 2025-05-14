@@ -224,7 +224,7 @@ impl IndexerConfig {
                     canopy: Some(1),
                     nu5: Some(1),
                     nu6: Some(1),
-                    nu7: Some(1),
+                    nu7: None,
                 },
             )),
             "Testnet" => Ok(zebra_chain::parameters::Network::new_default_testnet()),
