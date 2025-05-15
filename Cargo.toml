@@ -35,7 +35,7 @@ zcash_client_backend = { version = "0.18.0" , features = [ "lightwalletd-tonic" 
 zcash_protocol = "0.5.1"
 
 # Zebra
-# Can be updated to 2.4.0 once lands. Shouls be updated to crates.io releases once available.
+# Can be updated to 2.4.0 once lands. Should be updated to crates.io releases once available.
 zebra-chain = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "8b9fdd073d822a02768927634c635e84edb4eee4" }
 zebra-state = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "8b9fdd073d822a02768927634c635e84edb4eee4" }
 zebra-rpc = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "8b9fdd073d822a02768927634c635e84edb4eee4" }
