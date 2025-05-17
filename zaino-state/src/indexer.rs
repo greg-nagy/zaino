@@ -2,7 +2,6 @@
 //! and generic wrapper structs for the various backend options available.
 
 use async_trait::async_trait;
-
 use tokio::{sync::mpsc, time::timeout};
 use tracing::warn;
 use zaino_proto::proto::{
@@ -410,6 +409,15 @@ pub trait ZcashIndexer: Send + Sync + 'static {
         ))
         .await
     }
+}
+
+/// LightWallet RPC method signatures.
+///
+/// Doc comments taken from Zaino-Proto for consistency.
+#[async_trait]
+pub trait BlockExplorerIndexer: Send + Sync + Clone + ZcashIndexer + 'static {
+    /// Return best block (tip) hash
+    async fn get_best_block_hash(&self) -> Result<String, Self::Error>;
 }
 
 /// LightWallet RPC method signatures.

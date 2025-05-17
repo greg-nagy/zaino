@@ -4,7 +4,8 @@ use crate::{
     config::StateServiceConfig,
     error::{BlockCacheError, StateServiceError},
     indexer::{
-        handle_raw_transaction, IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService,
+        handle_raw_transaction, BlockExplorerIndexer, IndexerSubscriber, LightWalletIndexer,
+        ZcashIndexer, ZcashService,
     },
     local_cache::{
         compact_block_to_nullifiers,
@@ -1266,6 +1267,16 @@ impl ZcashIndexer for StateServiceSubscriber {
             RpcError::new_from_legacycode(LegacyCode::Misc, "no blocks in chain"),
         )?;
         Ok(chain_height)
+    }
+}
+
+// No request parameters.
+#[async_trait]
+impl BlockExplorerIndexer for StateServiceSubscriber {
+    /// Return the hex encoded hash of the best (tip) block, in the longest block chain.
+    async fn get_best_block_hash(&self) -> Result<String, Self::Error> {
+        // return should be valid hex encoded.
+        return Ok("test_return".to_string());
     }
 }
 
