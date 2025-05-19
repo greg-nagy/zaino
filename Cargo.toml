@@ -33,6 +33,7 @@ zingo-infra-services = { git = "https://github.com/zingolabs/infrastructure.git"
 # Librustzcash
 zcash_client_backend = { version = "0.18.0" , features = [ "lightwalletd-tonic" ] }
 zcash_protocol = "0.5.1"
+zcash_primitives = "0.22"
 
 # Zebra
 # Can be updated to 2.4.0 once lands. Should be updated to crates.io releases once available.
@@ -93,6 +94,7 @@ byteorder = "1.5"
 sha2 = "0.10"
 hex = "0.4"
 toml = "0.5"
+primitive-types = "0.13"
 
 # Test
 portpicker = "0.1"
