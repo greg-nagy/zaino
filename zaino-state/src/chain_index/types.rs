@@ -824,13 +824,13 @@ pub struct CompactSaplingOutput {
     /// Ephemeral public key used by receivers to detect/decrypt the note.
     ephemeral_key: [u8; 32],
     /// Encrypted note ciphertext (minimal required portion).
-    #[serde(with = "serde_arrays::fixed_35")]
-    ciphertext: [u8; 35],
+    #[serde(with = "serde_arrays::fixed_52")]
+    ciphertext: [u8; 52],
 }
 
 impl CompactSaplingOutput {
     /// Creates a new CompactSaplingOutput instance.
-    pub fn new(cmu: [u8; 32], ephemeral_key: [u8; 32], ciphertext: [u8; 35]) -> Self {
+    pub fn new(cmu: [u8; 32], ephemeral_key: [u8; 32], ciphertext: [u8; 52]) -> Self {
         Self {
             cmu,
             ephemeral_key,
@@ -849,7 +849,7 @@ impl CompactSaplingOutput {
     }
 
     /// Returns ciphertext.
-    pub fn ciphertext(&self) -> &[u8; 35] {
+    pub fn ciphertext(&self) -> &[u8; 52] {
         &self.ciphertext
     }
 }
@@ -970,25 +970,6 @@ impl ShardRoot {
 
 pub mod serde_arrays {
     use serde::{Deserialize, Deserializer, Serializer};
-
-    pub mod fixed_35 {
-        use super::*;
-        pub fn serialize<S>(val: &[u8; 35], s: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            s.serialize_bytes(val)
-        }
-
-        pub fn deserialize<'de, D>(d: D) -> Result<[u8; 35], D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            let v: &[u8] = Deserialize::deserialize(d)?;
-            v.try_into()
-                .map_err(|_| serde::de::Error::custom("invalid length for [u8; 35]"))
-        }
-    }
 
     pub mod fixed_52 {
         use super::*;
