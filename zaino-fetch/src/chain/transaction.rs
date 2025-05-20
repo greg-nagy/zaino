@@ -9,11 +9,15 @@ use zaino_proto::proto::compact_formats::{
     CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactTx,
 };
 
+use super::utils::read_i64;
+
 /// Txin format as described in https://en.bitcoin.it/wiki/Transaction
 #[derive(Debug, Clone)]
 struct TxIn {
-    // PrevTxHash [IGNORED] - Size[bytes]: 32
-    // PrevTxOutIndex [IGNORED] - Size[bytes]: 4
+    // PrevTxHash - Size[bytes]: 32
+    prev_txid: Vec<u8>,
+    // PrevTxOutIndex - Size[bytes]: 4
+    prev_index: u32,
     /// CompactSize-prefixed, could be a pubkey or a script
     ///
     /// Size[bytes]: CompactSize
@@ -22,8 +26,8 @@ struct TxIn {
 }
 
 impl TxIn {
-    fn into_inner(self) -> Vec<u8> {
-        self.script_sig
+    fn into_inner(self) -> (Vec<u8>, u32, Vec<u8>) {
+        (self.prev_txid, self.prev_index, self.script_sig)
     }
 }
 
@@ -45,8 +49,8 @@ impl ParseFromSlice for TxIn {
         }
         let mut cursor = Cursor::new(data);
 
-        skip_bytes(&mut cursor, 32, "Error skipping TxIn::PrevTxHash")?;
-        skip_bytes(&mut cursor, 4, "Error skipping TxIn::PrevTxOutIndex")?;
+        let prev_txid = read_bytes(&mut cursor, 32, "Error reading TxIn::PrevTxHash")?;
+        let prev_index = read_u32(&mut cursor, "Error reading TxIn::PrevTxOutIndex")?;
         let script_sig = {
             let compact_length = CompactSize::read(&mut cursor)?;
             read_bytes(
@@ -57,7 +61,14 @@ impl ParseFromSlice for TxIn {
         };
         skip_bytes(&mut cursor, 4, "Error skipping TxIn::SequenceNumber")?;
 
-        Ok((&data[cursor.position() as usize..], TxIn { script_sig }))
+        Ok((
+            &data[cursor.position() as usize..],
+            TxIn {
+                prev_txid,
+                prev_index,
+                script_sig,
+            },
+        ))
     }
 }
 
@@ -68,12 +79,13 @@ struct TxOut {
     ///
     /// Size[bytes]: 8
     value: u64,
-    // Script [IGNORED] - Size[bytes]: CompactSize
+    // Script - Size[bytes]: CompactSize
+    script_hash: Vec<u8>,
 }
 
 impl TxOut {
-    fn into_inner(self) -> u64 {
-        self.value
+    fn into_inner(self) -> (u64, Vec<u8>) {
+        (self.value, self.script_hash)
     }
 }
 
@@ -102,8 +114,19 @@ impl ParseFromSlice for TxOut {
             compact_length as usize,
             "Error skipping TxOut::Script",
         )?;
+        let script_hash = {
+            let compact_length = CompactSize::read(&mut cursor)?;
+            read_bytes(
+                &mut cursor,
+                compact_length as usize,
+                "Error reading TxIn::ScriptHash",
+            )?
+        };
 
-        Ok((&data[cursor.position() as usize..], TxOut { value }))
+        Ok((
+            &data[cursor.position() as usize..],
+            TxOut { script_hash, value },
+        ))
     }
 }
 
@@ -409,7 +432,12 @@ struct TransactionData {
     transparent_outputs: Vec<TxOut>,
     // NLockTime [IGNORED] - Size[bytes]: 4
     // NExpiryHeight [IGNORED] - Size[bytes]: 4
-    // ValueBalanceSapling [IGNORED] - Size[bytes]: 8
+    // ValueBalanceSapling - Size[bytes]: 8
+    /// Value balance for the Sapling pool (v4/v5). None if not present.
+    value_balance_sapling: Option<i64>,
+    // ValueBalanceOrchard - Size[bytes]: 8
+    /// Value balance for the Orchard pool (v5 only). None if not present.
+    value_balance_orchard: Option<i64>,
     /// List of shielded spends from the Sapling pool
     ///
     /// Size[bytes]: Vec<384>
@@ -456,11 +484,10 @@ impl TransactionData {
             4,
             "Error skipping TransactionData::nExpiryHeight",
         )?;
-        skip_bytes(
+        let value_balance_sapling = Some(read_i64(
             &mut cursor,
-            8,
-            "Error skipping TransactionData::valueBalance",
-        )?;
+            "Error reading TransactionData::valueBalanceSapling",
+        )?);
 
         let spend_count = CompactSize::read(&mut cursor)?;
         let mut shielded_spends = Vec::with_capacity(spend_count as usize);
@@ -516,6 +543,8 @@ impl TransactionData {
                 consensus_branch_id: 0,
                 transparent_inputs,
                 transparent_outputs,
+                value_balance_sapling,
+                value_balance_orchard: None,
                 shielded_spends,
                 shielded_outputs,
                 join_splits,
@@ -582,13 +611,14 @@ impl TransactionData {
             cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
         }
 
-        if spend_count + output_count > 0 {
-            skip_bytes(
+        let value_balance_sapling = if spend_count + output_count > 0 {
+            Some(read_i64(
                 &mut cursor,
-                8,
-                "Error skipping TransactionData::valueBalance",
-            )?;
-        }
+                "Error reading TransactionData::valueBalanceSapling",
+            )?)
+        } else {
+            None
+        };
         if spend_count > 0 {
             skip_bytes(
                 &mut cursor,
@@ -636,17 +666,17 @@ impl TransactionData {
             cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
         }
 
+        let mut value_balance_orchard = None;
         if actions_count > 0 {
             skip_bytes(
                 &mut cursor,
                 1,
                 "Error skipping TransactionData::flagsOrchard",
             )?;
-            skip_bytes(
+            value_balance_orchard = Some(read_i64(
                 &mut cursor,
-                8,
-                "Error skipping TransactionData::valueBalanceOrchard",
-            )?;
+                "Error reading TransactionData::valueBalanceOrchard",
+            )?);
             skip_bytes(
                 &mut cursor,
                 32,
@@ -680,6 +710,8 @@ impl TransactionData {
                 consensus_branch_id,
                 transparent_inputs,
                 transparent_outputs,
+                value_balance_sapling,
+                value_balance_orchard,
                 shielded_spends,
                 shielded_outputs,
                 join_splits: Vec::new(),
@@ -784,8 +816,8 @@ impl FullTransaction {
         self.raw_transaction.consensus_branch_id
     }
 
-    /// Returns a vec of transparent input script_sigs for the transaction.
-    pub fn transparent_inputs(&self) -> Vec<Vec<u8>> {
+    /// Returns a vec of transparent inputs: (prev_txid, prev_index, script_sig).
+    pub fn transparent_inputs(&self) -> Vec<(Vec<u8>, u32, Vec<u8>)> {
         self.raw_transaction
             .transparent_inputs
             .iter()
@@ -793,13 +825,23 @@ impl FullTransaction {
             .collect()
     }
 
-    /// Returns a vec of transparent output values for the transaction.
-    pub fn transparent_outputs(&self) -> Vec<u64> {
+    /// Returns a vec of transparent outputs: (value, script_hash).
+    pub fn transparent_outputs(&self) -> Vec<(u64, Vec<u8>)> {
         self.raw_transaction
             .transparent_outputs
             .iter()
-            .map(|input| input.clone().into_inner())
+            .map(|output| output.clone().into_inner())
             .collect()
+    }
+
+    /// Returns sapling and orchard value balances for the transaction.
+    ///
+    /// Returned as (Option<valueBalanceSapling>, Option<valueBalanceOrchard>).
+    pub fn value_balances(&self) -> (Option<i64>, Option<i64>) {
+        (
+            self.raw_transaction.value_balance_sapling,
+            self.raw_transaction.value_balance_orchard,
+        )
     }
 
     /// Returns a vec of sapling nullifiers for the transaction.

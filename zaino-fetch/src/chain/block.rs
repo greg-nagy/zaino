@@ -396,7 +396,8 @@ impl FullBlock {
     /// Extracts the block height from the coinbase transaction.
     fn get_block_height(transactions: &[FullTransaction]) -> Result<i32, ParseError> {
         let transparent_inputs = transactions[0].transparent_inputs();
-        let coinbase_script = transparent_inputs[0].as_slice();
+        let (_, _, script_sig) = transparent_inputs[0].clone();
+        let coinbase_script = script_sig.as_slice();
 
         let mut cursor = Cursor::new(coinbase_script);
 

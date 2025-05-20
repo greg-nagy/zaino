@@ -372,6 +372,8 @@ pub struct BlockData {
     /// Merkle root hash of all transaction IDs in the block (used for quick tx inclusion proofs).
     merkle_root: [u8; 32],
     /// Digest representing the block-commitments Merkle root (commitment to note states).
+    ///
+    /// [`hashAuthDataRoot`]
     commitment_digest: [u8; 32],
     /// Roots of the Sapling and Orchard note-commitment trees (for shielded tx verification).
     commitment_tree_roots: CommitmentTreeRoots,
@@ -379,9 +381,6 @@ pub struct BlockData {
     commitment_tree_size: CommitmentTreeSizes,
     /// Compact difficulty target used for proof-of-work and difficulty calculation.
     bits: u32,
-    /// Orchard anchor (Orchard note commitment tree root) at this block,
-    /// required to build Orchard CompactBlocks and verify Orchard shielded transactions.
-    orchard_anchor: [u8; 32],
 }
 
 impl BlockData {
@@ -396,7 +395,6 @@ impl BlockData {
         commitment_tree_roots: CommitmentTreeRoots,
         commitment_tree_size: CommitmentTreeSizes,
         bits: u32,
-        orchard_anchor: [u8; 32],
     ) -> Self {
         Self {
             version,
@@ -407,7 +405,6 @@ impl BlockData {
             commitment_tree_roots,
             commitment_tree_size,
             bits,
-            orchard_anchor,
         }
     }
 
@@ -449,11 +446,6 @@ impl BlockData {
     /// Returns nbits.
     pub fn bits(&self) -> u32 {
         self.bits
-    }
-
-    /// Returns orchard anchor.
-    pub fn orchard_anchor(&self) -> &[u8; 32] {
-        &self.orchard_anchor
     }
 
     /// Converts compact bits field into the full target as a 256-bit integer.
@@ -559,8 +551,8 @@ pub struct TxData {
     index: u64,
     /// Unique identifier (hash) of the transaction, used for lookup and indexing.
     txid: [u8; 32],
-    /// The fee (in zatoshis) paid by this transaction.
-    fee: u32,
+    /// Sapling and Orchard value balances, (Sapling, Orchard).
+    value_balances: (Option<i64>, Option<i64>),
     /// Compact representation of transparent inputs/outputs in the transaction.
     transparent: TransparentCompactTx,
     /// Compact representation of Sapling shielded data.
@@ -574,7 +566,7 @@ impl TxData {
     pub fn new(
         index: u64,
         txid: [u8; 32],
-        fee: u32,
+        value_balances: (Option<i64>, Option<i64>),
         transparent: TransparentCompactTx,
         sapling: SaplingCompactTx,
         orchard: Vec<CompactOrchardAction>,
@@ -582,7 +574,7 @@ impl TxData {
         Self {
             index,
             txid,
-            fee,
+            value_balances,
             transparent,
             sapling,
             orchard,
@@ -599,9 +591,9 @@ impl TxData {
         &self.txid
     }
 
-    /// Returns transaction fee.
-    pub fn fee(&self) -> u32 {
-        self.fee
+    /// Returns sapling and orchard value balances.
+    pub fn balances(&self) -> (Option<i64>, Option<i64>) {
+        self.value_balances
     }
 
     /// Returns compact transparent tx data.
@@ -617,6 +609,121 @@ impl TxData {
     /// Returns compact orchard tx data.
     pub fn orchard(&self) -> &[CompactOrchardAction] {
         &self.orchard
+    }
+}
+
+impl TryFrom<(u64, zaino_fetch::chain::transaction::FullTransaction)> for TxData {
+    type Error = String;
+
+    fn try_from(
+        (index, tx): (u64, zaino_fetch::chain::transaction::FullTransaction),
+    ) -> Result<Self, Self::Error> {
+        let txid_vec = tx.tx_id();
+        let txid: [u8; 32] = txid_vec
+            .try_into()
+            .map_err(|_| "txid must be 32 bytes".to_string())?;
+
+        let value_balances = tx.value_balances();
+
+        let vin: Vec<TxInCompact> = tx
+            .transparent_inputs()
+            .into_iter()
+            .map(|(prev_txid, prev_index, _)| {
+                let prev_txid_arr: [u8; 32] = prev_txid
+                    .try_into()
+                    .map_err(|_| "prev_txid must be 32 bytes".to_string())?;
+                Ok::<_, String>(TxInCompact::new(prev_txid_arr, prev_index))
+            })
+            .collect::<Result<_, _>>()?;
+
+        let vout: Vec<TxOutCompact> = tx
+            .transparent_outputs()
+            .into_iter()
+            .map(|(value, script_hash)| {
+                if script_hash.len() == 21 {
+                    let script_type = script_hash[0];
+                    let mut hash_bytes = [0u8; 20];
+                    hash_bytes.copy_from_slice(&script_hash[1..]);
+                    TxOutCompact::new(value, hash_bytes, script_type)
+                } else {
+                    // Fallback: non-standard
+                    let mut fallback_hash = [0u8; 20];
+                    let usable_len = script_hash.len().min(20);
+                    fallback_hash[..usable_len].copy_from_slice(&script_hash[..usable_len]);
+                    Some(TxOutCompact::new(
+                        value,
+                        fallback_hash,
+                        ScriptType::NonStandard as u8,
+                    )?)
+                }
+            })
+            .flatten() // to handle Option<Option<TxOutCompact>>
+            .collect();
+
+        let transparent = TransparentCompactTx::new(vin, vout);
+
+        let spends: Vec<CompactSaplingSpend> = tx
+            .shielded_spends()
+            .into_iter()
+            .map(|nf| {
+                let arr: [u8; 32] = nf
+                    .try_into()
+                    .map_err(|_| "sapling nullifier must be 32 bytes".to_string())?;
+                Ok::<_, String>(CompactSaplingSpend::new(arr))
+            })
+            .collect::<Result<_, _>>()?;
+
+        let outputs: Vec<CompactSaplingOutput> = tx
+            .shielded_outputs()
+            .into_iter()
+            .map(|(cmu, epk, ct)| {
+                let cmu: [u8; 32] = cmu
+                    .try_into()
+                    .map_err(|_| "cmu must be 32 bytes".to_string())?;
+                let epk: [u8; 32] = epk
+                    .try_into()
+                    .map_err(|_| "ephemeral_key must be 32 bytes".to_string())?;
+                let ct: [u8; 52] = ct
+                    .get(..52)
+                    .ok_or("ciphertext must be at least 52 bytes")?
+                    .try_into()
+                    .map_err(|_| "ciphertext must be 52 bytes".to_string())?;
+                Ok::<_, String>(CompactSaplingOutput::new(cmu, epk, ct))
+            })
+            .collect::<Result<_, _>>()?;
+
+        let sapling = SaplingCompactTx::new(spends, outputs);
+
+        let orchard = tx
+            .orchard_actions()
+            .into_iter()
+            .map(|(nf, cmx, epk, ct)| {
+                let nf: [u8; 32] = nf
+                    .try_into()
+                    .map_err(|_| "orchard nullifier must be 32 bytes".to_string())?;
+                let cmx: [u8; 32] = cmx
+                    .try_into()
+                    .map_err(|_| "orchard cmx must be 32 bytes".to_string())?;
+                let epk: [u8; 32] = epk
+                    .try_into()
+                    .map_err(|_| "orchard ephemeral_key must be 32 bytes".to_string())?;
+                let ct: [u8; 52] = ct
+                    .get(..52)
+                    .ok_or("orchard ciphertext must be at least 52 bytes")?
+                    .try_into()
+                    .map_err(|_| "orchard ciphertext must be 52 bytes".to_string())?;
+                Ok::<_, String>(CompactOrchardAction::new(nf, cmx, epk, ct))
+            })
+            .collect::<Result<_, _>>()?;
+
+        Ok(TxData::new(
+            index,
+            txid,
+            value_balances,
+            transparent,
+            sapling,
+            orchard,
+        ))
     }
 }
 
@@ -763,22 +870,12 @@ pub struct SaplingCompactTx {
     spend: Vec<CompactSaplingSpend>,
     /// Shielded outputs (new notes created).
     output: Vec<CompactSaplingOutput>,
-    /// Anchor (Sapling note commitment tree root) referenced by this transaction.
-    anchor: [u8; 32],
 }
 
 impl SaplingCompactTx {
     /// Creates a new SaplingCompactTx instance.
-    pub fn new(
-        spend: Vec<CompactSaplingSpend>,
-        output: Vec<CompactSaplingOutput>,
-        anchor: [u8; 32],
-    ) -> Self {
-        Self {
-            spend,
-            output,
-            anchor,
-        }
+    pub fn new(spend: Vec<CompactSaplingSpend>, output: Vec<CompactSaplingOutput>) -> Self {
+        Self { spend, output }
     }
 
     /// Returns sapling spends.
@@ -789,11 +886,6 @@ impl SaplingCompactTx {
     /// Returns sapling outputs
     pub fn outputs(&self) -> &[CompactSaplingOutput] {
         &self.output
-    }
-
-    /// Returns sapling anchor.
-    pub fn anchor(&self) -> &[u8; 32] {
-        &self.anchor
     }
 }
 
