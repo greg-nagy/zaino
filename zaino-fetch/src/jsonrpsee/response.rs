@@ -736,20 +736,28 @@ impl TryFrom<GetTreestateResponse> for zebra_rpc::methods::trees::GetTreestate {
             zebra_chain::serialization::SerializationError::Parse("negative block height")
         })?;
 
-        let sapling_bytes = hex::decode(value.sapling.inner().inner().as_ref().ok_or(
-            zebra_chain::serialization::SerializationError::Parse("missing sapling tree"),
-        )?)?;
+        let sapling_bytes = value
+            .sapling
+            .inner()
+            .inner()
+            .as_ref()
+            .map(hex::decode)
+            .transpose()?;
 
-        let orchard_bytes = hex::decode(value.orchard.inner().inner().as_ref().ok_or(
-            zebra_chain::serialization::SerializationError::Parse("missing orchard tree"),
-        )?)?;
+        let orchard_bytes = value
+            .orchard
+            .inner()
+            .inner()
+            .as_ref()
+            .map(hex::decode)
+            .transpose()?;
 
         Ok(zebra_rpc::methods::trees::GetTreestate::from_parts(
             parsed_hash,
             zebra_chain::block::Height(height_u32),
             value.time,
-            Some(sapling_bytes),
-            Some(orchard_bytes),
+            sapling_bytes,
+            orchard_bytes,
         ))
     }
 }
