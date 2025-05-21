@@ -2,6 +2,7 @@ use std::{collections::HashMap, mem, sync::Arc};
 
 use crate::chain_index::types::{Hash, Height};
 use tokio::sync::{mpsc, RwLock};
+use tower::Service;
 use zaino_fetch::jsonrpsee::connector::JsonRpSeeConnector;
 use zebra_state::ReadStateService;
 
@@ -9,6 +10,9 @@ use crate::ChainBlock;
 
 /// Holds the block cache
 struct NonFinalzedState {
+    /// We need access to the validator's best block hash, as well
+    /// as a source of blocks
+    source: BlockchainSource,
     staged: RwLock<mpsc::UnboundedReceiver<ChainBlock>>,
     staging_sender: mpsc::UnboundedSender<ChainBlock>,
     /// This lock should not be exposed to consumers. Rather,
@@ -18,9 +22,6 @@ struct NonFinalzedState {
 }
 
 pub(crate) struct BlockCacheSnapshot {
-    /// We need access to the validator's best block hash, as well
-    /// as a source of blocks
-    source: BlockchainSource,
     /// the set of all known blocks < 100 blocks old
     /// this includes all blocks on-chain, as well as
     /// all blocks known to have been on-chain before being
@@ -28,11 +29,15 @@ pub(crate) struct BlockCacheSnapshot {
     blocks: HashMap<Hash, ChainBlock>,
     // Do we need height here?
     /// The highest known block
-    best_tip: (Hash, Height),
+    best_tip: (Height, Hash),
 }
 
 /// This is the core of the concurrent block cache.
 impl NonFinalzedState {
+    /// sync to the top of the chain
+    pub async fn sync(&self) {
+        let best_hash = self.source.get_tip().await;
+    }
     /// Stage a block
     pub fn stage(&self, block: ChainBlock) -> Result<(), mpsc::error::SendError<ChainBlock>> {
         self.staging_sender.send(block)
@@ -71,16 +76,12 @@ impl NonFinalzedState {
 
         let best_tip = blocks.iter().fold(snapshot.best_tip, |acc, (hash, block)| {
             match block.index().height() {
-                Some(height) if height > acc.1 => ((*hash).clone(), height),
+                Some(height) if height > acc.0 => (height, (*hash).clone()),
                 _ => acc,
             }
         });
         // Need to get best hash at some point in this process
-        *self.current.write().await = Arc::new(BlockCacheSnapshot {
-            blocks,
-            best_tip,
-            source: snapshot.source.clone(),
-        });
+        *self.current.write().await = Arc::new(BlockCacheSnapshot { blocks, best_tip });
 
         Ok(())
     }
@@ -96,4 +97,36 @@ impl NonFinalzedState {
 enum BlockchainSource {
     State(ReadStateService),
     Fetch(JsonRpSeeConnector),
+}
+
+struct BlockchainSourceError {}
+
+impl BlockchainSource {
+    async fn get_tip(
+        &self,
+    ) -> Result<Option<(zebra_chain::block::Height, zebra_chain::block::Hash)>, BlockchainSourceError>
+    {
+        match self {
+            BlockchainSource::State(read_state_service) => {
+                let response = match read_state_service
+                    .clone()
+                    .call(zebra_state::ReadRequest::Tip)
+                    .await
+                {
+                    Ok(resp) => resp,
+                    Err(_) => todo!(),
+                };
+                match response {
+                    zebra_state::ReadResponse::Tip(tip) => Ok(tip),
+                    _ => unreachable!("bad read response"),
+                }
+            }
+            BlockchainSource::Fetch(json_rp_see_connector) => {
+                match json_rp_see_connector.get_blockchain_info().await {
+                    Ok(info) => Ok(Some((info.blocks, info.best_block_hash))),
+                    Err(_) => todo!(),
+                }
+            }
+        }
+    }
 }
