@@ -2,6 +2,8 @@ use std::{collections::HashMap, mem, sync::Arc};
 
 use crate::chain_index::types::{Hash, Height};
 use tokio::sync::{mpsc, RwLock};
+use zaino_fetch::jsonrpsee::connector::JsonRpSeeConnector;
+use zebra_state::ReadStateService;
 
 use crate::ChainBlock;
 
@@ -16,8 +18,16 @@ struct NonFinalzedState {
 }
 
 pub(crate) struct BlockCacheSnapshot {
+    /// We need access to the validator's best block hash, as well
+    /// as a source of blocks
+    source: BlockchainSource,
+    /// the set of all known blocks < 100 blocks old
+    /// this includes all blocks on-chain, as well as
+    /// all blocks known to have been on-chain before being
+    /// removed by a reorg. Blocks reorged away have no height.
     blocks: HashMap<Hash, ChainBlock>,
     // Do we need height here?
+    /// The highest known block
     best_tip: (Hash, Height),
 }
 
@@ -66,7 +76,11 @@ impl NonFinalzedState {
             }
         });
         // Need to get best hash at some point in this process
-        *self.current.write().await = Arc::new(BlockCacheSnapshot { blocks, best_tip });
+        *self.current.write().await = Arc::new(BlockCacheSnapshot {
+            blocks,
+            best_tip,
+            source: snapshot.source.clone(),
+        });
 
         Ok(())
     }
@@ -75,4 +89,11 @@ impl NonFinalzedState {
     pub async fn get_snapshot(&self) -> Arc<BlockCacheSnapshot> {
         self.current.read().await.clone()
     }
+}
+
+/// A connection to a validator.
+#[derive(Clone)]
+enum BlockchainSource {
+    State(ReadStateService),
+    Fetch(JsonRpSeeConnector),
 }
