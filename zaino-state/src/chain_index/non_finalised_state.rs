@@ -3,8 +3,9 @@ use std::{collections::HashMap, mem, sync::Arc};
 use crate::chain_index::types::{Hash, Height};
 use tokio::sync::{mpsc, RwLock};
 use tower::Service;
-use zaino_fetch::jsonrpsee::connector::JsonRpSeeConnector;
-use zebra_state::ReadStateService;
+use zaino_fetch::jsonrpsee::{connector::JsonRpSeeConnector, response::GetBlockResponse};
+use zebra_chain::serialization::ZcashDeserialize;
+use zebra_state::{HashOrHeight, ReadStateService};
 
 use crate::ChainBlock;
 
@@ -36,7 +37,31 @@ pub(crate) struct BlockCacheSnapshot {
 impl NonFinalzedState {
     /// sync to the top of the chain
     pub async fn sync(&self) {
-        let best_hash = self.source.get_tip().await;
+        let best_hash = match self.source.get_tip().await {
+            Ok(Some((_height, hash))) => hash,
+            Ok(None) => todo!(),
+            Err(_) => todo!(),
+        };
+
+        let initial_state = self.get_snapshot().await;
+        let best_chain_block_at_current_height = match self
+            .source
+            .get_block(HashOrHeight::Height(zebra_chain::block::Height(
+                initial_state.best_tip.0.into(),
+            )))
+            .await
+        {
+            Ok(Some(block)) => block,
+            Ok(None) => todo!("validator behind local best chain"),
+            Err(_) => todo!(),
+        };
+        if best_chain_block_at_current_height.hash()
+            == zebra_chain::block::Hash::from(initial_state.best_tip.1)
+        {
+            todo!("no reorg")
+        } else {
+            todo!("reorg")
+        }
     }
     /// Stage a block
     pub fn stage(&self, block: ChainBlock) -> Result<(), mpsc::error::SendError<ChainBlock>> {
@@ -101,6 +126,8 @@ enum BlockchainSource {
 
 struct BlockchainSourceError {}
 
+type BlockchainSourceResult<T> = Result<T, BlockchainSourceError>;
+
 impl BlockchainSource {
     async fn get_tip(
         &self,
@@ -124,6 +151,36 @@ impl BlockchainSource {
             BlockchainSource::Fetch(json_rp_see_connector) => {
                 match json_rp_see_connector.get_blockchain_info().await {
                     Ok(info) => Ok(Some((info.blocks, info.best_block_hash))),
+                    Err(_) => todo!(),
+                }
+            }
+        }
+    }
+
+    async fn get_block(
+        &self,
+        id: HashOrHeight,
+    ) -> BlockchainSourceResult<Option<Arc<zebra_chain::block::Block>>> {
+        match self {
+            BlockchainSource::State(read_state_service) => match read_state_service
+                .clone()
+                .call(zebra_state::ReadRequest::Block(id))
+                .await
+            {
+                Ok(zebra_state::ReadResponse::Block(block)) => Ok(block),
+                Ok(_) => todo!(),
+                Err(_) => todo!(),
+            },
+            BlockchainSource::Fetch(json_rp_see_connector) => {
+                match json_rp_see_connector
+                    .get_block(id.to_string(), Some(0))
+                    .await
+                {
+                    Ok(GetBlockResponse::Raw(raw_block)) => Ok(Some(Arc::new(
+                        zebra_chain::block::Block::zcash_deserialize(raw_block.as_ref())
+                            .unwrap_or_else(|_e| todo!("block too large")),
+                    ))),
+                    Ok(_) => unreachable!(),
                     Err(_) => todo!(),
                 }
             }
