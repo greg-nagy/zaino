@@ -6,7 +6,7 @@ use tokio::sync::{mpsc, RwLock};
 use crate::ChainBlock;
 
 /// Holds the block cache
-struct ConcurrentBlockCache {
+struct NonFinalzedState {
     staged: RwLock<mpsc::UnboundedReceiver<ChainBlock>>,
     staging_sender: mpsc::UnboundedSender<ChainBlock>,
     /// This lock should not be exposed to consumers. Rather,
@@ -22,7 +22,12 @@ pub(crate) struct BlockCacheSnapshot {
 }
 
 /// This is the core of the concurrent block cache.
-impl ConcurrentBlockCache {
+impl NonFinalzedState {
+    /// Stage a block
+    pub fn stage(&self, block: ChainBlock) -> Result<(), mpsc::error::SendError<ChainBlock>> {
+        self.staging_sender.send(block)
+    }
+    /// Add all blocks from the staging area, and save a new cache snapshot
     pub async fn update(&self, finalized_height: Height) -> Result<(), ()> {
         let mut new = HashMap::<Hash, ChainBlock>::new();
         let mut staged = self.staged.write().await;
@@ -51,6 +56,9 @@ impl ConcurrentBlockCache {
                 Some(height) => height <= finalized_height,
                 None => false,
             });
+        // TODO: At this point, we need to ensure the newly-finalized blocks are known
+        // to be in the finalzed state
+
         let best_tip = blocks.iter().fold(snapshot.best_tip, |acc, (hash, block)| {
             match block.index().height() {
                 Some(height) if height > acc.1 => ((*hash).clone(), height),
@@ -63,6 +71,7 @@ impl ConcurrentBlockCache {
         Ok(())
     }
 
+    /// Get a copy of the block cache as it existed at the last [update] call
     pub async fn get_snapshot(&self) -> Arc<BlockCacheSnapshot> {
         self.current.read().await.clone()
     }
