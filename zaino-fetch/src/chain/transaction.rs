@@ -106,18 +106,12 @@ impl ParseFromSlice for TxOut {
         let mut cursor = Cursor::new(data);
 
         let value = read_u64(&mut cursor, "Error TxOut::reading Value")?;
-        let compact_length = CompactSize::read(&mut cursor)?;
-        skip_bytes(
-            &mut cursor,
-            compact_length as usize,
-            "Error skipping TxOut::Script",
-        )?;
         let script_hash = {
             let compact_length = CompactSize::read(&mut cursor)?;
             read_bytes(
                 &mut cursor,
                 compact_length as usize,
-                "Error reading TxIn::ScriptHash",
+                "Error reading TxOut::ScriptHash",
             )?
         };
 
