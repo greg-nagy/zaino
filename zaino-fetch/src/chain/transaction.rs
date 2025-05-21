@@ -2,14 +2,12 @@
 
 use crate::chain::{
     error::ParseError,
-    utils::{read_bytes, read_u32, read_u64, skip_bytes, CompactSize, ParseFromSlice},
+    utils::{read_bytes, read_i64, read_u32, read_u64, skip_bytes, CompactSize, ParseFromSlice},
 };
 use std::io::Cursor;
 use zaino_proto::proto::compact_formats::{
     CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactTx,
 };
-
-use super::utils::read_i64;
 
 /// Txin format as described in https://en.bitcoin.it/wiki/Transaction
 #[derive(Debug, Clone)]
@@ -435,9 +433,6 @@ struct TransactionData {
     // ValueBalanceSapling - Size[bytes]: 8
     /// Value balance for the Sapling pool (v4/v5). None if not present.
     value_balance_sapling: Option<i64>,
-    // ValueBalanceOrchard - Size[bytes]: 8
-    /// Value balance for the Orchard pool (v5 only). None if not present.
-    value_balance_orchard: Option<i64>,
     /// List of shielded spends from the Sapling pool
     ///
     /// Size[bytes]: Vec<384>
@@ -458,6 +453,9 @@ struct TransactionData {
     ///
     /// Size[bytes]: Vec<820>
     orchard_actions: Vec<Action>,
+    // ValueBalanceOrchard - Size[bytes]: 8
+    /// Value balance for the Orchard pool (v5 only). None if not present.
+    value_balance_orchard: Option<i64>,
 }
 
 impl TransactionData {
@@ -544,11 +542,11 @@ impl TransactionData {
                 transparent_inputs,
                 transparent_outputs,
                 value_balance_sapling,
-                value_balance_orchard: None,
                 shielded_spends,
                 shielded_outputs,
                 join_splits,
                 orchard_actions: Vec::new(),
+                value_balance_orchard: None,
             },
         ))
     }
@@ -682,7 +680,6 @@ impl TransactionData {
                 32,
                 "Error skipping TransactionData::anchorOrchard",
             )?;
-
             let proofs_count = CompactSize::read(&mut cursor)?;
             skip_bytes(
                 &mut cursor,
@@ -711,11 +708,11 @@ impl TransactionData {
                 transparent_inputs,
                 transparent_outputs,
                 value_balance_sapling,
-                value_balance_orchard,
                 shielded_spends,
                 shielded_outputs,
                 join_splits: Vec::new(),
                 orchard_actions,
+                value_balance_orchard,
             },
         ))
     }

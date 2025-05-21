@@ -216,6 +216,11 @@ impl FullBlockHeader {
         self.raw_block_header.hash_merkle_root.clone()
     }
 
+    /// Returns the final sapling root of the block.
+    pub fn final_sapling_root(&self) -> Vec<u8> {
+        self.raw_block_header.hash_final_sapling_root.clone()
+    }
+
     /// Returns the time when the miner started hashing the header (according to the miner).
     pub fn time(&self) -> u32 {
         self.raw_block_header.time

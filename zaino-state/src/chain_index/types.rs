@@ -82,6 +82,128 @@ impl ChainBlock {
     }
 }
 
+/// TryFrom inputs:
+/// - FullBlock:
+///   - Holds block data.
+/// - parent_block_chain_work:
+///   - Used to calculate cumulative chain work.
+/// - Final sapling root:
+///  - Must be fetched from separate RPC.
+/// - Final orchard root:
+///  - Must be fetched from separate RPC.
+/// - parent_block_sapling_tree_size:
+///   - Used to calculate sapling tree size.
+/// - parent_block_orchard_tree_size:
+///   - Used to calculate sapling tree size.
+impl
+    TryFrom<(
+        zaino_fetch::chain::block::FullBlock,
+        ChainWork,
+        [u8; 32],
+        [u8; 32],
+        u32,
+        u32,
+    )> for ChainBlock
+{
+    type Error = String;
+
+    fn try_from(
+        (
+            full_block,
+            parent_chainwork,
+            final_sapling_root,
+            final_orchard_root,
+            parent_sapling_size,
+            parent_orchard_size,
+        ): (
+            zaino_fetch::chain::block::FullBlock,
+            ChainWork,
+            [u8; 32],
+            [u8; 32],
+            u32,
+            u32,
+        ),
+    ) -> Result<Self, Self::Error> {
+        // --- Block Header Info ---
+        let header = full_block.header();
+        let height = Height::try_from(full_block.height() as u32)
+            .map_err(|e| format!("Invalid block height: {e}"))?;
+
+        let hash: [u8; 32] = header
+            .cached_hash()
+            .try_into()
+            .map_err(|_| "Block hash must be 32 bytes")?;
+        let parent_hash: [u8; 32] = header
+            .hash_prev_block()
+            .try_into()
+            .map_err(|_| "Parent block hash must be 32 bytes")?;
+
+        let n_bits_bytes = header.n_bits_bytes();
+        if n_bits_bytes.len() != 4 {
+            return Err("nBits must be 4 bytes".to_string());
+        }
+        let bits = u32::from_le_bytes(n_bits_bytes.try_into().unwrap());
+
+        let mut sapling_note_count = 0;
+        let mut orchard_note_count = 0;
+
+        // --- Convert transactions ---
+        let full_transactions = full_block.transactions();
+        let mut tx = Vec::with_capacity(full_transactions.len());
+        let mut spent_outpoints = Vec::new();
+
+        for (i, ftx) in full_transactions.into_iter().enumerate() {
+            let txdata = TxData::try_from((i as u64, ftx))
+                .map_err(|e| format!("TxData conversion failed at index {}: {e}", i))?;
+
+            sapling_note_count += txdata.sapling().outputs().len();
+            orchard_note_count += txdata.orchard().len();
+
+            for input in txdata.transparent().inputs() {
+                spent_outpoints.push(SpentOutpoint::new(
+                    *input.prevout_txid(),
+                    input.prevout_index(),
+                ));
+            }
+
+            tx.push(txdata);
+        }
+
+        // --- Compute commitment trees ---
+        let sapling_root = final_sapling_root;
+        let orchard_root = final_orchard_root;
+
+        let commitment_tree_roots = CommitmentTreeRoots::new(sapling_root, orchard_root);
+
+        let commitment_tree_size = CommitmentTreeSizes::new(
+            parent_sapling_size + sapling_note_count as u32,
+            parent_orchard_size + orchard_note_count as u32,
+        );
+
+        // --- Compute chainwork ---
+        let block_data = BlockData::new(
+            header.version() as u32,
+            header.time() as i64,
+            header.hash_merkle_root().try_into().unwrap(),
+            [0u8; 32], // TODO: Implement commitment_digest
+            commitment_tree_roots,
+            commitment_tree_size,
+            bits,
+        );
+        let chainwork = parent_chainwork.add(&ChainWork::from(block_data.work()));
+
+        // --- Final index and block data ---
+        let index = BlockIndex::new(
+            Hash::from(hash),
+            Hash::from(parent_hash),
+            chainwork,
+            Some(height),
+        );
+
+        Ok(ChainBlock::new(index, block_data, tx, spent_outpoints))
+    }
+}
+
 /// Metadata about the block used to identify and navigate the blockchain.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BlockIndex {
@@ -367,8 +489,6 @@ pub struct BlockData {
     version: u32,
     /// Unix timestamp of when the block was mined (seconds since epoch).
     time: i64,
-    /// The size of the full block in bytes (header + transactions).
-    size: u64,
     /// Merkle root hash of all transaction IDs in the block (used for quick tx inclusion proofs).
     merkle_root: [u8; 32],
     /// Digest representing the block-commitments Merkle root (commitment to note states).
@@ -389,7 +509,6 @@ impl BlockData {
     pub fn new(
         version: u32,
         time: i64,
-        size: u64,
         merkle_root: [u8; 32],
         commitment_digest: [u8; 32],
         commitment_tree_roots: CommitmentTreeRoots,
@@ -399,7 +518,6 @@ impl BlockData {
         Self {
             version,
             time,
-            size,
             merkle_root,
             commitment_digest,
             commitment_tree_roots,
@@ -416,11 +534,6 @@ impl BlockData {
     /// Returns block time.
     pub fn time(&self) -> i64 {
         self.time
-    }
-
-    /// Returns block size.
-    pub fn size(&self) -> u64 {
-        self.size
     }
 
     /// Returns block merkle root.
