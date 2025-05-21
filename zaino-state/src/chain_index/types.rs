@@ -80,6 +80,39 @@ impl ChainBlock {
     pub fn work(&self) -> U256 {
         self.data.work()
     }
+
+    /// Converts this `ChainBlock` into a CompactBlock protobuf message using proto v4 format.
+    pub fn to_compact_block(&self) -> zaino_proto::proto::compact_formats::CompactBlock {
+        // NOTE: Returns u64::MAX if the block is not in the best chain.
+        let height: u64 = self.height().map(|h| h.0.into()).unwrap_or(u64::MAX);
+
+        let hash = self.hash().0.to_vec();
+        let prev_hash = self.index().parent_hash().0.to_vec();
+
+        let vtx: Vec<zaino_proto::proto::compact_formats::CompactTx> = self
+            .transactions()
+            .iter()
+            .map(|tx| tx.to_compact_tx(None))
+            .collect();
+
+        let sapling_commitment_tree_size = self.data().commitment_tree_size().sapling();
+        let orchard_commitment_tree_size = self.data().commitment_tree_size().orchard();
+
+        zaino_proto::proto::compact_formats::CompactBlock {
+            proto_version: 4,
+            height,
+            hash,
+            prev_hash,
+            time: self.data().time() as u32,
+            // Header not currently used by CompactBlocks.
+            header: vec![],
+            vtx,
+            chain_metadata: Some(zaino_proto::proto::compact_formats::ChainMetadata {
+                sapling_commitment_tree_size,
+                orchard_commitment_tree_size,
+            }),
+        }
+    }
 }
 
 /// TryFrom inputs:
@@ -723,8 +756,65 @@ impl TxData {
     pub fn orchard(&self) -> &[CompactOrchardAction] {
         &self.orchard
     }
+
+    /// Converts this `TxData` into a `CompactTx` protobuf message with an optional fee.
+    pub fn to_compact_tx(
+        &self,
+        fee: Option<u32>,
+    ) -> zaino_proto::proto::compact_formats::CompactTx {
+        let fee = fee.unwrap_or(0);
+
+        let spends = self
+            .sapling()
+            .spends()
+            .iter()
+            .map(
+                |s| zaino_proto::proto::compact_formats::CompactSaplingSpend {
+                    nf: s.nullifier().to_vec(),
+                },
+            )
+            .collect();
+
+        let outputs = self
+            .sapling()
+            .outputs()
+            .iter()
+            .map(
+                |o| zaino_proto::proto::compact_formats::CompactSaplingOutput {
+                    cmu: o.cmu().to_vec(),
+                    ephemeral_key: o.ephemeral_key().to_vec(),
+                    ciphertext: o.ciphertext().to_vec(),
+                },
+            )
+            .collect();
+
+        let actions = self
+            .orchard()
+            .iter()
+            .map(
+                |a| zaino_proto::proto::compact_formats::CompactOrchardAction {
+                    nullifier: a.nullifier().to_vec(),
+                    cmx: a.cmx().to_vec(),
+                    ephemeral_key: a.ephemeral_key().to_vec(),
+                    ciphertext: a.ciphertext().to_vec(),
+                },
+            )
+            .collect();
+
+        zaino_proto::proto::compact_formats::CompactTx {
+            index: self.index(),
+            hash: self.txid().to_vec(),
+            fee,
+            spends,
+            outputs,
+            actions,
+        }
+    }
 }
 
+/// TryFrom inputs:
+/// - Transaction Index
+/// - Full Transaction
 impl TryFrom<(u64, zaino_fetch::chain::transaction::FullTransaction)> for TxData {
     type Error = String;
 

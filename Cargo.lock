@@ -998,6 +998,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dcbor"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "402f083d3c2daef249d4c06ef827c8b743ab88536f73dae52201f4de5abb0354"
+dependencies = [
+ "chrono",
+ "half",
+ "hex",
+ "paste",
+ "thiserror 1.0.69",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "der"
 version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1509,6 +1523,16 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+]
+
+[[package]]
+name = "half"
+version = "2.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "459196ed295495a68f7d7fe1d84f6c4b7ff0e21fe3017b2f283c6fac3ad803c9"
+dependencies = [
+ "cfg-if",
+ "crunchy",
 ]
 
 [[package]]
@@ -2864,6 +2888,12 @@ dependencies = [
  "static_assertions",
  "subtle",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
 name = "pbkdf2"
@@ -5638,6 +5668,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "dashmap",
+ "dcbor",
  "futures",
  "hex",
  "http",
