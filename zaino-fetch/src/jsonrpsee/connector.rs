@@ -41,7 +41,7 @@ struct RpcRequest<T> {
 struct RpcResponse<T> {
     id: i64,
     jsonrpc: Option<String>,
-    result: T,
+    result: Option<T>,
     error: Option<RpcError>,
 }
 
@@ -285,7 +285,7 @@ impl JsonRpSeeConnector {
                 .await
                 .map_err(JsonRpSeeConnectorError::ReqwestError)?;
 
-            let body_str = String::from_utf8_lossy(&body_bytes);
+            let body_str = dbg!(String::from_utf8_lossy(&body_bytes));
 
             if body_str.contains("Work queue depth exceeded") {
                 if attempts >= max_attempts {
@@ -307,12 +307,15 @@ impl JsonRpSeeConnector {
             let response: RpcResponse<R> = serde_json::from_slice(&body_bytes)
                 .map_err(JsonRpSeeConnectorError::SerdeJsonError)?;
 
-            return match response.error {
-                Some(error) => Err(JsonRpSeeConnectorError::new(format!(
+            return match (response.error, response.result) {
+                (Some(error), _) => Err(JsonRpSeeConnectorError::new(format!(
                     "Error: Error from node's rpc server: {} - {}",
                     error.code, error.message
                 ))),
-                None => Ok(response.result),
+                (None, Some(result)) => Ok(result),
+                (None, None) => Err(JsonRpSeeConnectorError::new(format!(
+                    "error: no response body"
+                ))),
             };
         }
     }
