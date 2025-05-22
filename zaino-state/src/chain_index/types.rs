@@ -215,6 +215,12 @@ impl
         }
         let bits = u32::from_le_bytes(n_bits_bytes.try_into().unwrap());
 
+        // --- Fetch AuthDataRoot ---
+        let auth_data_root = full_block
+            .auth_data_root()
+            .and_then(|v| v.try_into().ok())
+            .unwrap_or([0u8; 32]);
+
         let mut sapling_note_count = 0;
         let mut orchard_note_count = 0;
 
@@ -256,7 +262,7 @@ impl
             header.version() as u32,
             header.time() as i64,
             header.hash_merkle_root().try_into().unwrap(),
-            [0u8; 32], // TODO: Implement commitment_digest
+            auth_data_root,
             commitment_tree_roots,
             commitment_tree_size,
             bits,
@@ -786,7 +792,7 @@ pub struct BlockData {
     /// Digest representing the block-commitments Merkle root (commitment to note states).
     ///
     /// [`hashAuthDataRoot`]
-    commitment_digest: [u8; 32],
+    auth_data_root: [u8; 32],
     /// Roots of the Sapling and Orchard note-commitment trees (for shielded tx verification).
     commitment_tree_roots: CommitmentTreeRoots,
     /// Number of leaves in Sapling/Orchard note commitment trees at this block.
@@ -802,7 +808,7 @@ impl BlockData {
         version: u32,
         time: i64,
         merkle_root: [u8; 32],
-        commitment_digest: [u8; 32],
+        auth_data_root: [u8; 32],
         commitment_tree_roots: CommitmentTreeRoots,
         commitment_tree_size: CommitmentTreeSizes,
         bits: u32,
@@ -811,7 +817,7 @@ impl BlockData {
             version,
             time,
             merkle_root,
-            commitment_digest,
+            auth_data_root,
             commitment_tree_roots,
             commitment_tree_size,
             bits,
@@ -833,9 +839,9 @@ impl BlockData {
         &self.merkle_root
     }
 
-    /// Returns block commitment digest.
-    pub fn commitment_digest(&self) -> &[u8; 32] {
-        &self.commitment_digest
+    /// Returns blocks authDataRoot.
+    pub fn auth_data_root(&self) -> &[u8; 32] {
+        &self.auth_data_root
     }
 
     /// Returns commitment tree roots.
@@ -909,7 +915,7 @@ impl CBORTaggedEncodable for BlockData {
             CBOR::from(self.version),
             CBOR::from(self.time),
             CBOR::from(&self.merkle_root[..]),
-            CBOR::from(&self.commitment_digest[..]),
+            CBOR::from(&self.auth_data_root[..]),
             self.commitment_tree_roots.untagged_cbor(),
             self.commitment_tree_size.untagged_cbor(),
             CBOR::from(self.bits),
@@ -936,7 +942,7 @@ impl CBORTaggedDecodable for BlockData {
                     merkle_root: merkle_root_vec
                         .try_into()
                         .map_err(|_| dcbor::Error::WrongType)?,
-                    commitment_digest: commitment_digest_vec
+                    auth_data_root: commitment_digest_vec
                         .try_into()
                         .map_err(|_| dcbor::Error::WrongType)?,
                     commitment_tree_roots,

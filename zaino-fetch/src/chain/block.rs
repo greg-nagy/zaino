@@ -345,6 +345,16 @@ impl FullBlock {
         self.height
     }
 
+    /// Returns the Orchard `authDataRoot` of the block, taken from the coinbase transaction's anchorOrchard field.
+    ///
+    /// If the coinbase transaction is v5 and includes an Orchard bundle, this is the root of the Orchard commitment tree
+    /// after applying all Orchard actions in the block.
+    ///
+    /// Returns `Some(Vec<u8>)` if present, else `None`.
+    pub fn auth_data_root(&self) -> Option<Vec<u8>> {
+        self.vtx.first().and_then(|tx| tx.anchor_orchard())
+    }
+
     /// Decodes a hex encoded zcash full block into a FullBlock struct.
     pub fn parse_from_hex(data: &[u8], txid: Option<Vec<Vec<u8>>>) -> Result<Self, ParseError> {
         let (remaining_data, full_block) = Self::parse_from_slice(data, txid, None)?;

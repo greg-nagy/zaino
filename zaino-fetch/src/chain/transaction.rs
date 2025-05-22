@@ -440,16 +440,21 @@ struct TransactionData {
     /// Size[bytes]: Vec<1602-1698>
     #[allow(dead_code)]
     join_splits: Vec<JoinSplit>,
-    //joinSplitPubKey [IGNORED] - Size[bytes]: 32
-    //joinSplitSig [IGNORED] - Size[bytes]: 64
-    //bindingSigSapling [IGNORED] - Size[bytes]: 64
-    ///List of Orchard actions.
+    /// joinSplitPubKey [IGNORED] - Size[bytes]: 32
+    /// joinSplitSig [IGNORED] - Size[bytes]: 64
+    /// bindingSigSapling [IGNORED] - Size[bytes]: 64
+    /// List of Orchard actions.
     ///
     /// Size[bytes]: Vec<820>
     orchard_actions: Vec<Action>,
-    // ValueBalanceOrchard - Size[bytes]: 8
+    /// ValueBalanceOrchard - Size[bytes]: 8
     /// Value balance for the Orchard pool (v5 only). None if not present.
     value_balance_orchard: Option<i64>,
+    /// AnchorOrchard - Size[bytes]: 32
+    /// In non-coinbase transactions, this is the anchor (authDataRoot) of a prior block's Orchard note commitment tree.
+    /// In the coinbase transaction, this commits to the final Orchard tree state for the current block — i.e., it *is* the block's authDataRoot.
+    /// Present in v5 transactions only, if any Orchard actions exist in the block.
+    anchor_orchard: Option<Vec<u8>>,
 }
 
 impl TransactionData {
@@ -541,6 +546,7 @@ impl TransactionData {
                 join_splits,
                 orchard_actions: Vec::new(),
                 value_balance_orchard: None,
+                anchor_orchard: None,
             },
         ))
     }
@@ -659,6 +665,7 @@ impl TransactionData {
         }
 
         let mut value_balance_orchard = None;
+        let mut anchor_orchard = None;
         if actions_count > 0 {
             skip_bytes(
                 &mut cursor,
@@ -669,11 +676,11 @@ impl TransactionData {
                 &mut cursor,
                 "Error reading TransactionData::valueBalanceOrchard",
             )?);
-            skip_bytes(
+            anchor_orchard = Some(read_bytes(
                 &mut cursor,
                 32,
-                "Error skipping TransactionData::anchorOrchard",
-            )?;
+                "Error reading TransactionData::anchorOrchard",
+            )?);
             let proofs_count = CompactSize::read(&mut cursor)?;
             skip_bytes(
                 &mut cursor,
@@ -707,6 +714,7 @@ impl TransactionData {
                 join_splits: Vec::new(),
                 orchard_actions,
                 value_balance_orchard,
+                anchor_orchard,
             },
         ))
     }
@@ -866,6 +874,13 @@ impl FullTransaction {
             .iter()
             .map(|input| input.clone().into_parts())
             .collect()
+    }
+
+    /// Returns the orchard anchor of the transaction.
+    ///
+    /// If this is the Coinbase transaction then this returns the AuthDataRoot of the block.
+    pub fn anchor_orchard(&self) -> Option<Vec<u8>> {
+        self.raw_transaction.anchor_orchard.clone()
     }
 
     /// Returns the transaction as raw bytes.
