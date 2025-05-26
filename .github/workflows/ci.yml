@@ -8,6 +8,14 @@ on:
       - test-sh-cache
   pull_request:
 
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.MINIO_ACCESS_KEY }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.MINIO_SECRET_KEY }}
+  AWS_REGION: us-east-1
+  CACHE_ENDPOINT: gh-cache-hl.minio-tenants.svc.cluster.local
+  CACHE_BUCKET: gha-cache-bucket
+  INSECURE_CACHE: true
+
 jobs:
 
   build-test-artifacts:
@@ -15,27 +23,25 @@ jobs:
     container:
       image: zingodevops/zaino-ci
     runs-on: arc-sh-runners
-
     if: github.event.pull_request.draft == false
-    # env:
-    #   RUSTFLAGS: -D warnings
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # - uses: actions-rust-lang/setup-rust-toolchain@v1
-
-      # - name: Install nextest
-      #   uses: taiki-e/install-action@v2
-      #   with:
-      #     tool: nextest@0.9.78
-
       - run: rustup toolchain install stable --profile minimal
 
-      - name: Cargo cache
-        uses: Swatinem/rust-cache@v2
-        with: 
-          cache-provider: buildjet
+      - name: MinIO Cache (cargo + target)
+        uses: tespkg/actions-cache@v1
+        with:
+          endpoint: ${{ env.CACHE_ENDPOINT }}
+          bucket: ${{ env.CACHE_BUCKET }}
+          insecure: ${{ env.INSECURE_CACHE }}
+          key: rust-cache-${{ github.job }}-${{ github.run_id }}
+          restore-keys: rust-cache-${{ github.job }}-
+          path: |
+            ~/.cargo
+            target
 
       - name: Build and archive tests
         run: cargo nextest archive --verbose --workspace --all-features --archive-file nextest-archive.tar.zst
@@ -48,18 +54,25 @@ jobs:
 
   check:
     name: Cargo Check
-    runs-on: ziserv-2
+    runs-on: arc-sh-runners
     container:
-      image: zingodevops/zaino-ci:latest  # Your pre-built Docker image
+      image: zingodevops/zaino-ci:latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
 
-      - name: Cargo cache
-        uses: Swatinem/rust-cache@v2
-        with: 
-          cache-provider: buildjet
+      - name: MinIO Cache (cargo + target)
+        uses: tespkg/actions-cache@v1
+        with:
+          endpoint: ${{ env.CACHE_ENDPOINT }}
+          bucket: ${{ env.CACHE_BUCKET }}
+          insecure: ${{ env.INSECURE_CACHE }}
+          key: rust-cache-${{ github.job }}-${{ github.run_id }}
+          restore-keys: rust-cache-${{ github.job }}-
+          path: |
+            ~/.cargo
+            target
 
       - name: Cargo Check
         run: |
@@ -75,9 +88,9 @@ jobs:
   test:
     name: Tests
     needs: build-test-artifacts
-    runs-on: ziserv-2
+    runs-on: arc-sh-runners
     container:
-      image: zingodevops/zaino-ci:latest  # Your pre-built Docker image
+      image: zingodevops/zaino-ci:latest
     strategy:
       fail-fast: false
       matrix:
@@ -89,15 +102,21 @@ jobs:
           - "zaino-testutils"
 
     steps:
-
       - uses: actions/checkout@v4
 
       - run: rustup toolchain install stable --profile minimal
 
-      - name: Cargo cache
-        uses: Swatinem/rust-cache@v2
+      - name: MinIO Cache (cargo + target)
+        uses: tespkg/actions-cache@v1
         with:
-          cache-provider: buildjet
+          endpoint: ${{ env.CACHE_ENDPOINT }}
+          bucket: ${{ env.CACHE_BUCKET }}
+          insecure: ${{ env.INSECURE_CACHE }}
+          key: rust-cache-${{ github.job }}-${{ github.run_id }}
+          restore-keys: rust-cache-${{ github.job }}-
+          path: |
+            ~/.cargo
+            target
 
       - name: Copy bins into test_binaries
         run: |
@@ -110,7 +129,6 @@ jobs:
           name: nextest-archive
 
       - name: Run Tests (Nextest)
-        # continue-on-error: true
         run: |
           cargo nextest run --verbose --profile ci --retries 2 --archive-file nextest-archive.tar.zst \
             --workspace-remap ./ --filterset "binary_id(${{ matrix.partition }})" ${{ env.NEXTEST-FLAGS }}
@@ -123,7 +141,7 @@ jobs:
 
   fmt:
     name: Rustfmt
-    runs-on: ziserv-2
+    runs-on: arc-sh-runners
     steps:
       - uses: actions/checkout@v4
 
@@ -131,17 +149,24 @@ jobs:
         with:
           components: clippy
 
-      - name: Cargo cache
-        uses: Swatinem/rust-cache@v2
-        with: 
-          cache-provider: buildjet
+      - name: MinIO Cache (cargo + target)
+        uses: tespkg/actions-cache@v1
+        with:
+          endpoint: ${{ env.CACHE_ENDPOINT }}
+          bucket: ${{ env.CACHE_BUCKET }}
+          insecure: ${{ env.INSECURE_CACHE }}
+          key: rust-cache-${{ github.job }}-${{ github.run_id }}
+          restore-keys: rust-cache-${{ github.job }}-
+          path: |
+            ~/.cargo
+            target
 
       - name: Check formatting
         run: cargo fmt --all -- --check
 
   clippy:
     name: Clippy
-    runs-on: ziserv-2
+    runs-on: arc-sh-runners
     steps:
       - uses: actions/checkout@v4
 
@@ -149,10 +174,17 @@ jobs:
         with:
           components: clippy
 
-      - name: Cargo cache
-        uses: Swatinem/rust-cache@v2
-        with: 
-          cache-provider: buildjet
+      - name: MinIO Cache (cargo + target)
+        uses: tespkg/actions-cache@v1
+        with:
+          endpoint: ${{ env.CACHE_ENDPOINT }}
+          bucket: ${{ env.CACHE_BUCKET }}
+          insecure: ${{ env.INSECURE_CACHE }}
+          key: rust-cache-${{ github.job }}-${{ github.run_id }}
+          restore-keys: rust-cache-${{ github.job }}-
+          path: |
+            ~/.cargo
+            target
 
       - name: Run clippy with console output
         run: cargo clippy --all-targets
@@ -160,7 +192,6 @@ jobs:
 
       - name: Output clippy to Github
         uses: actions-rs/clippy-check@v1
-        # Remove when clippy is green in local dev environments
         continue-on-error: true
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -168,115 +199,24 @@ jobs:
 
   whitespace:
     name: Whitespace check
-    runs-on: ziserv-2
+    runs-on: arc-sh-runners
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
 
-      - name: Cargo cache
-        uses: Swatinem/rust-cache@v2
-        with: 
-          cache-provider: buildjet
+      - name: MinIO Cache (cargo + target)
+        uses: tespkg/actions-cache@v1
+        with:
+          endpoint: ${{ env.CACHE_ENDPOINT }}
+          bucket: ${{ env.CACHE_BUCKET }}
+          insecure: ${{ env.INSECURE_CACHE }}
+          key: rust-cache-${{ github.job }}-${{ github.run_id }}
+          restore-keys: rust-cache-${{ github.job }}-
+          path: |
+            ~/.cargo
+            target
 
       - name: Check trailing whitespace
         run: ./utils/trailing-whitespace.sh reject
         working-directory: .
-
-  docker:
-    name: Build Docker images
-    runs-on: ziserv-2
-    env:
-      PUSH_IMAGES: true
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Extract metadata for Docker (default image)
-        id: meta-default
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}
-          tags: |
-            type=semver,pattern={{version}}, prefix=v
-
-      - name: Build and Push Default Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          platforms: linux/amd64
-          push: ${{ env.PUSH_IMAGES }}
-          tags: ${{ steps.meta-default.outputs.tags }}
-          labels: ${{ steps.meta-default.outputs.labels }}
-          cache-from: |
-            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}:buildcache
-            type=gha
-          cache-to: |
-            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}:buildcache,mode=max
-            type=gha,mode=max
-
-
-      - name: Extract metadata for Docker (no-tls image)
-        id: meta-no-tls
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}
-          flavor: |
-            suffix=-no-tls
-          tags: |
-            type=semver,pattern={{version}}, prefix=v
-
-      - name: Build and Push No-TLS Image
-        uses: docker/build-push-action@v5
-        with:
-          build-args: NO_TLS=true
-          context: .
-          platforms: linux/amd64
-          push: ${{ env.PUSH_IMAGES }}
-          tags: "${{ steps.meta-no-tls.outputs.tags }}"
-          labels: ${{ steps.meta-no-tls.outputs.labels }}
-          cache-from: |
-            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}:buildcache-no-tls
-            type=gha
-          cache-to: |
-            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}:buildcache-no-tls,mode=max
-            type=gha,mode=max
-
-  create-release:
-    needs: docker
-    name: Create GitHub Release
-    runs-on: ziserv-2
-    if: startsWith(github.ref, 'refs/tags/') && github.token != ''
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Generate Changelog
-        id: changelog
-        run: |
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [ -z "$PREVIOUS_TAG" ]; then
-            git log --pretty=format:"* %s" > CHANGELOG.md
-          else
-            git log --pretty=format:"* %s" $PREVIOUS_TAG..HEAD > CHANGELOG.md
-          fi
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            CHANGELOG.md
-          body_path: CHANGELOG.md
-          draft: false
-          prerelease: false
-          token: ${{ secrets.GITHUB_TOKEN }}
