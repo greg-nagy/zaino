@@ -12,7 +12,7 @@ jobs:
     name: Build test artifacts
     container:
       image: zingodevops/zaino-ci
-    runs-on: ziserv-2
+    runs-on: arc-sh-runners
 
     if: github.event.pull_request.draft == false
     # env:
