@@ -48,10 +48,14 @@ jobs:
       - name: Build and archive tests
         run: cargo nextest archive --verbose --workspace --all-features --archive-file nextest-archive.tar.zst
 
-      - name: Upload archive
-        uses: actions/upload-artifact@v4
+      - name: Save nextest archive to S3
+        uses: tespkg/actions-cache/save@v1
         with:
-          name: nextest-archive
+          endpoint: ${{ env.CACHE_ENDPOINT }}
+          port: ${{ env.CACHE_PORT }}
+          bucket: ${{ env.CACHE_BUCKET }}
+          insecure: ${{ env.INSECURE_CACHE }}
+          key: nextest-archive-${{ github.sha }}
           path: nextest-archive.tar.zst
 
   check:
@@ -127,10 +131,15 @@ jobs:
           mkdir -p ./test_binaries/bins
           cp /usr/local/bin/* ./test_binaries/bins/
 
-      - name: Download archive
-        uses: actions/download-artifact@v4
+      - name: Restore nextest archive from S3
+        uses: tespkg/actions-cache/restore@v1
         with:
-          name: nextest-archive
+          endpoint: ${{ env.CACHE_ENDPOINT }}
+          port: ${{ env.CACHE_PORT }}
+          bucket: ${{ env.CACHE_BUCKET }}
+          insecure: ${{ env.INSECURE_CACHE }}
+          key: nextest-archive-${{ github.sha }}
+          path: nextest-archive.tar.zst
 
       - name: Run Tests (Nextest)
         run: |
