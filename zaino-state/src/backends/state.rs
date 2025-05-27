@@ -1018,6 +1018,16 @@ impl ZcashIndexer for StateServiceSubscriber {
         ))
     }
 
+    /// TODO: Handle error case & compare with `zcashd`.
+    /// Returns the current block count in the best valid block chain.
+    ///
+    /// zcashd reference: [`getblockcount`](https://zcash.github.io/rpc/getblockcount.html)
+    /// method: post
+    /// tags: blockchain
+    async fn get_block_count(&self) -> Result<Height, Self::Error> {
+        Ok(self.block_cache.get_chain_height().await?)
+    }
+
     async fn z_get_subtrees_by_index(
         &self,
         pool: String,

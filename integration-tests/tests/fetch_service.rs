@@ -525,6 +525,26 @@ async fn fetch_service_get_block(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
+async fn fetch_service_get_block_count(validator: &ValidatorKind) {
+    let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+        create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
+
+    test_manager.local_net.generate_blocks(5).await.unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+    let block_id = BlockId {
+        height: 6,
+        hash: Vec::new(),
+    };
+
+    let fetch_service_get_block_count =
+        dbg!(fetch_service_subscriber.get_block_count().await.unwrap());
+
+    assert_eq!(fetch_service_get_block_count.0 as u64, block_id.height);
+
+    test_manager.close().await;
+}
+
 async fn fetch_service_get_block_nullifiers(validator: &ValidatorKind) {
     let (mut test_manager, _fetch_service, fetch_service_subscriber) =
         create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
@@ -1235,6 +1255,11 @@ mod zcashd {
         }
 
         #[tokio::test]
+        pub(crate) async fn block_count() {
+            fetch_service_get_block_count(&ValidatorKind::Zcashd).await;
+        }
+
+        #[tokio::test]
         pub(crate) async fn block_nullifiers() {
             fetch_service_get_block_nullifiers(&ValidatorKind::Zcashd).await;
         }
@@ -1396,6 +1421,11 @@ mod zebrad {
         #[tokio::test]
         pub(crate) async fn block() {
             fetch_service_get_block(&ValidatorKind::Zebrad).await;
+        }
+
+        #[tokio::test]
+        pub(crate) async fn block_count() {
+            fetch_service_get_block_count(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test]

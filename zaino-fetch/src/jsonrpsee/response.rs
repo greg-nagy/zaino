@@ -502,6 +502,18 @@ pub enum GetBlockResponse {
     Object(Box<BlockObject>),
 }
 
+/// Contains the height of the most recent block in the best valid block chain
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct GetBlockCountResponse(Height);
+
+impl TryFrom<GetBlockCountResponse> for Height {
+    type Error = zebra_chain::serialization::SerializationError;
+
+    fn try_from(response: GetBlockCountResponse) -> Result<Self, Self::Error> {
+        Ok(response.0)
+    }
+}
+
 /// A block object containing data and metadata about a block.
 ///
 /// This is used for the output parameter of [`JsonRpcConnector::get_block`].
