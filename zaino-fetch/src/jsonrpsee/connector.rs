@@ -285,7 +285,7 @@ impl JsonRpSeeConnector {
                 .await
                 .map_err(JsonRpSeeConnectorError::ReqwestError)?;
 
-            let body_str = dbg!(String::from_utf8_lossy(&body_bytes));
+            let body_str = String::from_utf8_lossy(&body_bytes);
 
             if body_str.contains("Work queue depth exceeded") {
                 if attempts >= max_attempts {
@@ -313,9 +313,9 @@ impl JsonRpSeeConnector {
                     error.code, error.message
                 ))),
                 (None, Some(result)) => Ok(result),
-                (None, None) => Err(JsonRpSeeConnectorError::new(format!(
-                    "error: no response body"
-                ))),
+                (None, None) => Err(JsonRpSeeConnectorError::new(
+                    "error: no response body".to_string(),
+                )),
             };
         }
     }
