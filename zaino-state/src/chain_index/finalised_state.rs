@@ -1,10 +1,166 @@
 //! Holds the Finalised portion of the chain index on disk.
 
+use crate::{config::BlockCacheConfig, error::FinalisedStateError, AtomicStatus, StatusType};
+
+use zebra_chain::parameters::NetworkKind;
+
 use blake2::{
     digest::{Update, VariableOutput},
     Blake2bVar,
 };
 use dcbor::{CBORCase, CBORTagged, CBORTaggedDecodable, CBORTaggedEncodable, Tag, CBOR};
+use lmdb::{Database, DatabaseFlags, Environment, EnvironmentFlags};
+use std::{fs, sync::Arc};
+use tracing::info;
+
+/// Zaino’s Finalised state.
+/// Implements a persistent LMDB-backed chain index for fast read access and verified data.
+pub struct ZainoDB {
+    /// Shared LMDB environment.
+    env: Arc<Environment>,
+
+    /// Block headers: Hash -> StoredEntry<BlockHeaderData>
+    headers_db: Database,
+    /// Transactions: Hash -> StoredEntry<Vec<TxData>>
+    ///
+    /// Stored per-block, in order.
+    transactions_db: Database,
+    /// Spent outpoints: Hash -> StoredEntry<Vec<SpentOutpoint>>
+    ///
+    /// Stored per-block
+    spent_db: Database,
+    /// Best chain index: Height -> Hash
+    ///
+    /// Used for height based fetch of the best chain.
+    best_chain_db: Database,
+    /// Subtree roots: Index -> StoredEntry<ShardRoot>
+    roots_db: Database,
+    /// Metadata: singleton entry "metadata" -> StoredEntry<DbMetadata>
+    metadata_db: Database,
+
+    /// Database handler task handle.
+    db_handler: Option<tokio::task::JoinHandle<()>>,
+    /// ZainoDB status.
+    status: AtomicStatus,
+    /// BlockCache config data.
+    config: BlockCacheConfig,
+}
+
+impl ZainoDB {
+    /// Spawns a new [`ZainoDB`] and syncs the FinalisedState to the servers finalised state.
+    ///
+    /// Uses ReadStateService to fetch chain data if given else uses JsonRPC client.
+    ///
+    /// Inputs:
+    /// - config: ChainIndexConfig.
+    pub async fn spawn(config: &BlockCacheConfig) -> Result<Self, FinalisedStateError> {
+        info!("Launching ZainoDB");
+        let db_size = config.db_size.unwrap_or(128);
+        let db_size_bytes = db_size * 1024 * 1024 * 1024;
+        let db_path_dir = match config.network.kind() {
+            NetworkKind::Mainnet => "mainnet",
+            NetworkKind::Testnet => "testnet",
+            NetworkKind::Regtest => "regtest",
+        };
+        let db_path = config.db_path.join(db_path_dir);
+        if !db_path.exists() {
+            fs::create_dir_all(&db_path)?;
+        }
+
+        let env = Environment::new()
+            .set_max_dbs(6)
+            .set_map_size(db_size_bytes)
+            .set_flags(EnvironmentFlags::NO_TLS)
+            .open(&db_path)?;
+
+        let headers_db = Self::open_or_create_db(&env, "headers", DatabaseFlags::empty())?;
+        let transactions_db =
+            Self::open_or_create_db(&env, "transactions", DatabaseFlags::empty())?;
+        let spent_db = Self::open_or_create_db(&env, "spent", DatabaseFlags::empty())?;
+        let best_chain_db =
+            Self::open_or_create_db(&env, "best_chain", DatabaseFlags::INTEGER_KEY)?;
+        let roots_db = Self::open_or_create_db(&env, "roots", DatabaseFlags::empty())?;
+        let metadata_db = Self::open_or_create_db(&env, "metadata", DatabaseFlags::empty())?;
+
+        let mut zaino_db = Self {
+            env: Arc::new(env),
+            headers_db,
+            transactions_db,
+            spent_db,
+            best_chain_db,
+            roots_db,
+            metadata_db,
+            db_handler: None,
+            status: AtomicStatus::new(StatusType::Spawning.into()),
+            config: config.clone(),
+        };
+
+        // check schema / version, perform conversions
+
+        zaino_db.spawn_handler().await?;
+
+        Ok(zaino_db)
+    }
+
+    /// Spawns a task to handle background validation and cleanup.
+    async fn spawn_handler(&mut self) -> Result<(), FinalisedStateError> {
+        let mut zaino_db = Self {
+            env: Arc::clone(&self.env),
+            headers_db: self.headers_db,
+            transactions_db: self.transactions_db,
+            spent_db: self.spent_db,
+            best_chain_db: self.best_chain_db,
+            roots_db: self.roots_db,
+            metadata_db: self.metadata_db,
+            db_handler: None,
+            status: self.status.clone(),
+            config: self.config.clone(),
+        };
+
+        let db_handler = tokio::spawn(async move {
+            // validate database, clean trailing transactions
+        });
+
+        self.db_handler = Some(db_handler);
+        Ok(())
+    }
+
+    // clean_trailing()
+    // cleans trailing transactions.
+
+    // write_block(block)
+
+    // delete_block(hash)
+
+    // get_block_header_data(hash_or_height)
+
+    // get_block_transactions(hash_or_height)
+
+    // get_block_spends(hash_or_height)
+
+    // get_roots(start_index, end_index)
+
+    // get_chain_index(hash_or_height)
+
+    // get_chain_block(hash_or_height)
+
+    // get_compact_block(hash_or_height)
+
+    /// Opens an lmdb database if present else creates a new one.
+    fn open_or_create_db(
+        env: &Environment,
+        name: &str,
+        flags: DatabaseFlags,
+    ) -> Result<Database, FinalisedStateError> {
+        match env.open_db(Some(name)) {
+            Ok(db) => Ok(db),
+            Err(lmdb::Error::NotFound) => env
+                .create_db(Some(name), flags)
+                .map_err(FinalisedStateError::LmdbError),
+            Err(e) => Err(FinalisedStateError::LmdbError(e)),
+        }
+    }
+}
 
 /// DCBOR serialisation schema tags.
 ///
