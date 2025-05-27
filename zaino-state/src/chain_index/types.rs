@@ -24,17 +24,18 @@ pub enum CborTag {
     BlockData = 516,
     CommitmentTreeRoots = 517,
     CommitmentTreeSizes = 518,
-    TxData = 519,
-    TransparentCompactTx = 520,
-    TxInCompact = 521,
-    ScriptType = 522,
-    TxOutCompact = 523,
-    SaplingCompactTx = 524,
-    CompactSaplingSpend = 525,
-    CompactSaplingOutput = 526,
-    CompactOrchardAction = 527,
-    SpentOutpoint = 528,
-    ShardRoot = 529,
+    BlockHeaderData = 519,
+    TxData = 520,
+    TransparentCompactTx = 521,
+    TxInCompact = 522,
+    ScriptType = 523,
+    TxOutCompact = 524,
+    SaplingCompactTx = 525,
+    CompactSaplingSpend = 526,
+    CompactSaplingOutput = 527,
+    CompactOrchardAction = 528,
+    SpentOutpoint = 529,
+    ShardRoot = 530,
 }
 
 impl CborTag {
@@ -1080,6 +1081,44 @@ impl CBORTaggedDecodable for CommitmentTreeSizes {
 }
 
 impl TryFrom<CBOR> for CommitmentTreeSizes {
+    type Error = dcbor::Error;
+    fn try_from(cbor: CBOR) -> dcbor::Result<Self> {
+        Self::from_tagged_cbor(cbor)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockHeaderData {
+    pub index: BlockIndex,
+    pub data: BlockData,
+}
+
+impl CBORTagged for BlockHeaderData {
+    fn cbor_tags() -> Vec<dcbor::Tag> {
+        vec![CborTag::BlockHeaderData.tag()]
+    }
+}
+
+impl CBORTaggedEncodable for BlockHeaderData {
+    fn untagged_cbor(&self) -> CBOR {
+        CBOR::from(vec![self.index.tagged_cbor(), self.data.tagged_cbor()])
+    }
+}
+
+impl CBORTaggedDecodable for BlockHeaderData {
+    fn from_untagged_cbor(cbor: CBOR) -> dcbor::Result<Self> {
+        match cbor.into_case() {
+            CBORCase::Array(arr) if arr.len() == 2 => {
+                let index = BlockIndex::try_from(arr[0].clone())?;
+                let data = BlockData::try_from(arr[1].clone())?;
+                Ok(Self { index, data })
+            }
+            _ => Err(dcbor::Error::WrongType),
+        }
+    }
+}
+
+impl TryFrom<CBOR> for BlockHeaderData {
     type Error = dcbor::Error;
     fn try_from(cbor: CBOR) -> dcbor::Result<Self> {
         Self::from_tagged_cbor(cbor)
