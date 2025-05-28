@@ -44,7 +44,7 @@ pub struct GetInfoResponse {
 
     /// The current network difficulty
     #[serde(default)]
-    difficulty: f64,
+    pub difficulty: f64,
 
     /// True if the server is running in testnet mode, false otherwise
     #[serde(default)]
@@ -185,6 +185,9 @@ pub struct GetBlockchainInfoResponse {
     #[serde(default)]
     commitments: u64,
 }
+
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct GetDifficultyResponse(pub f64);
 
 fn default_header() -> Height {
     Height(0)

@@ -5,6 +5,7 @@ use async_trait::async_trait;
 
 use tokio::{sync::mpsc, time::timeout};
 use tracing::warn;
+use zaino_fetch::jsonrpsee::response::GetDifficultyResponse;
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
     service::{
@@ -14,7 +15,9 @@ use zaino_proto::proto::{
         TxFilter,
     },
 };
-use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
+use zebra_chain::{
+    block::Height, subtree::NoteCommitmentSubtreeIndex, work::difficulty::CompactDifficulty,
+};
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
@@ -162,6 +165,13 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// Some fields from the zcashd reference are missing from Zebra's [`GetBlockChainInfo`]. It only contains the fields
     /// [required for lightwalletd support.](https://github.com/zcash/lightwalletd/blob/v0.4.9/common/common.go#L72-L89)
     async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, Self::Error>;
+
+    /// Returns the proof-of-work difficulty as a multiple of the minimum difficulty.
+    ///
+    /// zcashd reference: [`getdifficulty`](https://zcash.github.io/rpc/getdifficulty.html)
+    /// method: post
+    /// tags: blockchain
+    async fn get_difficulty(&self) -> Result<f64, Self::Error>;
 
     /// Returns the total balance of a provided `addresses` in an [`AddressBalance`] instance.
     ///

@@ -24,7 +24,10 @@ use nonempty::NonEmpty;
 use tokio_stream::StreamExt as _;
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
+    jsonrpsee::{
+        connector::{JsonRpSeeConnector, RpcError},
+        response::GetDifficultyResponse,
+    },
 };
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
@@ -41,6 +44,7 @@ use zebra_chain::{
     parameters::{ConsensusBranchId, Network, NetworkUpgrade},
     serialization::ZcashSerialize,
     subtree::NoteCommitmentSubtreeIndex,
+    work::difficulty::{CompactDifficulty, ExpandedDifficulty},
 };
 use zebra_rpc::{
     methods::{
@@ -770,6 +774,17 @@ impl ZcashIndexer for StateServiceSubscriber {
             .await
             .map(GetInfo::from)
             .map_err(Self::Error::from)
+    }
+
+    async fn get_difficulty(&self) -> Result<f64, Self::Error> {
+        match self
+            .rpc_client
+            .get_difficulty()
+            .await
+            .map_err(Self::Error::from)?
+        {
+            GetDifficultyResponse(difficulty) => Ok(difficulty),
+        }
     }
 
     async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, Self::Error> {
