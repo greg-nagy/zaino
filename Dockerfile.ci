@@ -1,0 +1,107 @@
+# syntax=docker/dockerfile:1.4
+
+#### 🔧 Global Build Arguments and User Config
+ARG RUST_VERSION=1.76.0
+ARG GO_VERSION=latest
+ARG LIGHTWALLETD_VERSION=0.4.16
+ARG ZCASH_VERSION=6.1.0
+ARG ZEBRA_VERSION=1.15.0
+
+ARG UID=10003
+ARG GID=${UID}
+ARG USER="zaino"
+ARG HOME="/home/zaino"
+ARG CARGO_HOME="${HOME}/.cargo"
+ARG CARGO_TARGET_DIR="${HOME}/target"
+
+#### 🏗️ Build lightwalletd
+FROM golang:${GO_VERSION} AS lightwalletd-builder
+ARG LIGHTWALLETD_VERSION
+WORKDIR /build
+
+RUN git clone --branch v${LIGHTWALLETD_VERSION} --depth 1 https://github.com/zcash/lightwalletd && \
+    cd lightwalletd && \
+    make && \
+    cp lightwalletd /usr/local/bin/
+
+#### 🏗️ Build zcashd and zcash-cli
+FROM rust:${RUST_VERSION}-bookworm AS zcash-builder
+ARG ZCASH_VERSION
+ARG CARGO_HOME
+ARG CARGO_TARGET_DIR
+
+ENV CARGO_HOME=${CARGO_HOME}
+ENV CARGO_TARGET_DIR=${CARGO_TARGET_DIR}
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    coreutils \
+    bsdmainutils \
+    musl-dev \
+    gcc \
+    clang \
+    llvm-dev \
+    libclang-dev \
+    libssl-dev \
+    cmake \
+    make \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/* /tmp/*
+
+RUN git clone --branch v${ZCASH_VERSION} --depth 1 https://github.com/zcash/zcash && \
+    cd zcash && \
+    ./zcutil/build.sh -j$(nproc) && \
+    cp src/zcashd src/zcash-cli /usr/local/bin/
+
+#### 📦 Pull Zebrad Binary
+FROM zfnd/zebra:${ZEBRA_VERSION} AS zebra-downloader
+
+#### 🚀 Final Runtime Image
+FROM rust:${RUST_VERSION}-slim-bookworm AS final
+
+ARG UID GID USER HOME
+ARG RUST_VERSION GO_VERSION
+ARG LIGHTWALLETD_VERSION ZCASH_VERSION ZEBRA_VERSION
+
+LABEL maintainer="nachog00" \
+    description="Image with zcashd, lightwalletd, zebrad, and cargo-nextest for CI/local testing." \
+    usage="Run with:\n  docker run --rm -v \$PWD:/app -v \$PWD/target:/home/zaino/target -v \$HOME/.cargo:/home/zaino/.cargo -w /app zaino-ci" \
+    org.zaino.rust-version="${RUST_VERSION}" \
+    org.zaino.go-version="${GO_VERSION}" \
+    org.zaino.lightwalletd-version="${LIGHTWALLETD_VERSION}" \
+    org.zaino.zcashd-version="${ZCASH_VERSION}" \
+    org.zaino.zebra-version="${ZEBRA_VERSION}"
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/* /tmp/*
+
+# Setup non-root user
+RUN addgroup --quiet --gid ${GID} ${USER} && \
+    adduser --quiet --gid ${GID} --uid ${UID} --home ${HOME} ${USER} --disabled-password --gecos "" && \
+    mkdir -p ${CARGO_HOME} ${CARGO_TARGET_DIR} && \
+    chown -R ${UID}:${GID} ${HOME}
+
+ENV CARGO_HOME=${CARGO_HOME}
+ENV CARGO_TARGET_DIR=${CARGO_TARGET_DIR}
+ENV PATH="/usr/local/bin:${PATH}"
+
+WORKDIR /app
+
+# Copy binaries from builders
+COPY --from=lightwalletd-builder /usr/local/bin/lightwalletd /usr/local/bin/
+COPY --from=zcash-builder /usr/local/bin/zcashd /usr/local/bin/
+COPY --from=zcash-builder /usr/local/bin/zcash-cli /usr/local/bin/
+COPY --from=zebra-downloader /usr/local/bin/zebrad /usr/local/bin/
+
+# Install cargo-nextest
+RUN cargo install cargo-nextest --locked --verbose
+
+USER ${USER}
+CMD ["cargo", "nextest", "run"]
