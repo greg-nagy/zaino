@@ -318,7 +318,6 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .try_into()?)
     }
 
-    /// TODO: Handle error case & compare with `zcashd`.
     /// Returns the current block count in the best valid block chain.
     ///
     /// zcashd reference: [`getblockcount`](https://zcash.github.io/rpc/getblockcount.html)
