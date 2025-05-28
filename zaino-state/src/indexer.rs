@@ -417,7 +417,7 @@ pub trait ZcashIndexer: Send + Sync + 'static {
 #[async_trait]
 pub trait BlockExplorerIndexer: Send + Sync + Clone + ZcashIndexer + 'static {
     /// Return best block (tip) hash
-    async fn get_best_block_hash(&self) -> Result<String, Self::Error>;
+    async fn get_best_blockhash(&self) -> Result<String, Self::Error>;
 }
 
 /// LightWallet RPC method signatures.
