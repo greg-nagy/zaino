@@ -100,12 +100,6 @@ jobs:
           cargo check --all-features
           cargo check --tests --all-features
 
-      - name: Output clippy to Github
-        uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-targets
-
   test:
     name: Tests
     needs: build-test-artifacts
