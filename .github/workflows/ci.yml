@@ -89,8 +89,8 @@ jobs:
           port: ${{ env.CACHE_PORT }}
           bucket: ${{ env.CACHE_BUCKET }}
           insecure: ${{ env.INSECURE_CACHE }}
-          key: rust-cache-${{ github.job }}-${{ github.run_id }}
-          restore-keys: rust-cache-${{ github.job }}-
+          key: cargo-deps-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-deps-
           path: |
             ~/.cargo
             target
@@ -179,8 +179,8 @@ jobs:
           port: ${{ env.CACHE_PORT }}
           bucket: ${{ env.CACHE_BUCKET }}
           insecure: ${{ env.INSECURE_CACHE }}
-          key: rust-cache-${{ github.job }}-${{ github.run_id }}
-          restore-keys: rust-cache-${{ github.job }}-
+          key: cargo-deps-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-deps-
           path: |
             ~/.cargo
             target
@@ -207,8 +207,8 @@ jobs:
           port: ${{ env.CACHE_PORT }}
           bucket: ${{ env.CACHE_BUCKET }}
           insecure: ${{ env.INSECURE_CACHE }}
-          key: rust-cache-${{ github.job }}-${{ github.run_id }}
-          restore-keys: rust-cache-${{ github.job }}-
+          key: cargo-deps-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-deps-
           path: |
             ~/.cargo
             target
@@ -241,8 +241,8 @@ jobs:
           port: ${{ env.CACHE_PORT }}
           bucket: ${{ env.CACHE_BUCKET }}
           insecure: ${{ env.INSECURE_CACHE }}
-          key: rust-cache-${{ github.job }}-${{ github.run_id }}
-          restore-keys: rust-cache-${{ github.job }}-
+          key: cargo-deps-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-deps-
           path: |
             ~/.cargo
             target
