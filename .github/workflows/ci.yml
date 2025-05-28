@@ -163,6 +163,8 @@ jobs:
   fmt:
     name: Rustfmt
     runs-on: arc-sh-runners
+    container:
+      image: zingodevops/zaino-ci:latest
     steps:
       - uses: actions/checkout@v4
 
