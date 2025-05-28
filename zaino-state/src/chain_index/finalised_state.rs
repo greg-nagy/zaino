@@ -1,6 +1,10 @@
 //! Holds the Finalised portion of the chain index on disk.
 
-use crate::{config::BlockCacheConfig, error::FinalisedStateError, AtomicStatus, StatusType};
+use crate::{
+    config::BlockCacheConfig, error::FinalisedStateError, AtomicStatus, BlockData, BlockIndex,
+    ChainBlock, Hash, Height, Index, ShardRoot, SpentList, SpentOutpoint, StatusType, TxData,
+    TxList,
+};
 
 use zebra_chain::parameters::NetworkKind;
 
@@ -9,9 +13,14 @@ use blake2::{
     Blake2bVar,
 };
 use dcbor::{CBORCase, CBORTagged, CBORTaggedDecodable, CBORTaggedEncodable, Tag, CBOR};
-use lmdb::{Database, DatabaseFlags, Environment, EnvironmentFlags};
+use lmdb::{
+    Cursor, Database, DatabaseFlags, Environment, EnvironmentFlags, Transaction as _, WriteFlags,
+};
 use std::{fs, sync::Arc};
 use tracing::info;
+use zebra_state::HashOrHeight;
+
+use super::types::BlockHeaderData;
 
 /// Zaino’s Finalised state.
 /// Implements a persistent LMDB-backed chain index for fast read access and verified data.
@@ -79,7 +88,7 @@ impl ZainoDB {
         let spent_db = Self::open_or_create_db(&env, "spent", DatabaseFlags::empty())?;
         let best_chain_db =
             Self::open_or_create_db(&env, "best_chain", DatabaseFlags::INTEGER_KEY)?;
-        let roots_db = Self::open_or_create_db(&env, "roots", DatabaseFlags::empty())?;
+        let roots_db = Self::open_or_create_db(&env, "roots", DatabaseFlags::INTEGER_KEY)?;
         let metadata_db = Self::open_or_create_db(&env, "metadata", DatabaseFlags::empty())?;
 
         let mut zaino_db = Self {
@@ -95,7 +104,7 @@ impl ZainoDB {
             config: config.clone(),
         };
 
-        // check schema / version, perform conversions
+        // TODO: check schema / version, perform conversions (metadata db)
 
         zaino_db.spawn_handler().await?;
 
@@ -104,7 +113,7 @@ impl ZainoDB {
 
     /// Spawns a task to handle background validation and cleanup.
     async fn spawn_handler(&mut self) -> Result<(), FinalisedStateError> {
-        let mut zaino_db = Self {
+        let _zaino_db = Self {
             env: Arc::clone(&self.env),
             headers_db: self.headers_db,
             transactions_db: self.transactions_db,
@@ -118,33 +127,396 @@ impl ZainoDB {
         };
 
         let db_handler = tokio::spawn(async move {
-            // validate database, clean trailing transactions
+            // TODO: validate database, clean trailing transactions
         });
 
         self.db_handler = Some(db_handler);
         Ok(())
     }
 
-    // clean_trailing()
-    // cleans trailing transactions.
+    /// Clears stale reader slots by opening and closing a read transaction.
+    pub fn clean_trailing(&self) -> Result<(), FinalisedStateError> {
+        let txn = self.env.begin_ro_txn()?;
+        drop(txn);
+        Ok(())
+    }
 
-    // write_block(block)
+    /// Writes a given [`ChainBlock`] to ZainoDB.
+    pub fn write_block(&self, block: ChainBlock) -> Result<(), FinalisedStateError> {
+        let block_hash_bytes: [u8; 32] = (*block.index().hash()).into();
+        let block_height_bytes = block
+            .index()
+            .height()
+            .ok_or(FinalisedStateError::Custom(
+                "finalised state received non finalised block".to_string(),
+            ))?
+            .to_ne_bytes();
 
-    // delete_block(hash)
+        let header_entry = StoredEntry::new(BlockHeaderData {
+            index: *block.index(),
+            data: *block.data(),
+        });
+        let tx_entry = StoredEntry::new(block.tx_list());
+        let spent_entry = StoredEntry::new(block.spent_list());
 
-    // get_block_header_data(hash_or_height)
+        let mut txn = self.env.begin_rw_txn()?;
 
-    // get_block_transactions(hash_or_height)
+        txn.put(
+            self.headers_db,
+            &block_hash_bytes,
+            &header_entry.serialize(),
+            WriteFlags::NO_OVERWRITE,
+        )?;
 
-    // get_block_spends(hash_or_height)
+        txn.put(
+            self.transactions_db,
+            &block_hash_bytes,
+            &tx_entry.serialize(),
+            WriteFlags::NO_OVERWRITE,
+        )?;
 
-    // get_roots(start_index, end_index)
+        txn.put(
+            self.spent_db,
+            &block_hash_bytes,
+            &spent_entry.serialize(),
+            WriteFlags::NO_OVERWRITE,
+        )?;
 
-    // get_chain_index(hash_or_height)
+        txn.put(
+            self.best_chain_db,
+            &block_height_bytes,
+            &block_hash_bytes,
+            WriteFlags::NO_OVERWRITE,
+        )?;
 
-    // get_chain_block(hash_or_height)
+        txn.commit()?;
+        Ok(())
+    }
 
-    // get_compact_block(hash_or_height)
+    /// Inserts a `ShardRoot` at its numeric `Index`.
+    ///
+    /// * The key is the 4-byte native-endian encoding of `index`.
+    /// * The value is a `StoredEntry<ShardRoot>` (tagged-CBOR + checksum).
+    ///
+    /// Returns an error if an entry already exists for that index.
+    pub fn write_root(&self, index: Index, root: ShardRoot) -> Result<(), FinalisedStateError> {
+        let key = index.to_ne_bytes();
+        let entry = StoredEntry::new(root);
+        let mut txn = self.env.begin_rw_txn()?;
+
+        match txn.put(
+            self.roots_db,
+            &key,
+            &entry.serialize(),
+            WriteFlags::NO_OVERWRITE,
+        ) {
+            Ok(()) => {
+                txn.commit()?;
+                Ok(())
+            }
+            Err(lmdb::Error::KeyExist) => Err(FinalisedStateError::Custom(format!(
+                "shard-root for index {} already present",
+                index.0
+            ))),
+            Err(e) => Err(FinalisedStateError::LmdbError(e)),
+        }
+    }
+
+    /// Deletes a block identified by hash *or* height from every finalised table.  
+    pub fn delete_block(&self, id: HashOrHeight) -> Result<(), FinalisedStateError> {
+        // Resolve the HashOrHeight and find corresponding value from DB.
+        let (hash, height_opt) = match id {
+            HashOrHeight::Height(height) => {
+                let height_bytes = Height::try_from(height.0)
+                    .expect("zebra height always fits")
+                    .to_ne_bytes();
+
+                // Look up hash in best_chain_db
+                let hash = {
+                    let ro = self.env.begin_ro_txn()?;
+                    let hash_bytes = ro.get(self.best_chain_db, &height_bytes).map_err(|e| {
+                        if e == lmdb::Error::NotFound {
+                            FinalisedStateError::Custom("height not found in best chain".into())
+                        } else {
+                            FinalisedStateError::LmdbError(e)
+                        }
+                    })?;
+                    let check_hash_bytes: [u8; 32] = hash_bytes
+                        .try_into()
+                        .expect("LMDB returned correct length value");
+                    Hash::from(check_hash_bytes)
+                };
+                (
+                    hash,
+                    Some(
+                        Height::try_from(height.0)
+                            .expect("blocks in the finalised state always have a height"),
+                    ),
+                )
+            }
+            HashOrHeight::Hash(z_hash) => {
+                let hash: Hash = z_hash.into();
+                let hash_key: [u8; 32] = hash.into();
+
+                // Clone header bytes out of the RO txn and fetch height.
+                let header_vec: Vec<u8> = {
+                    let ro = self.env.begin_ro_txn()?;
+                    let bytes = ro.get(self.headers_db, &hash_key).map_err(|e| {
+                        if e == lmdb::Error::NotFound {
+                            FinalisedStateError::Custom("block not found".into())
+                        } else {
+                            FinalisedStateError::LmdbError(e)
+                        }
+                    })?;
+                    bytes.to_vec()
+                };
+
+                let stored: StoredEntry<BlockHeaderData> = StoredEntry::deserialize(&header_vec)
+                    .map_err(|e| {
+                        FinalisedStateError::Custom(format!("corrupt header CBOR: {e}"))
+                    })?;
+                (hash, stored.item.index.height())
+            }
+        };
+
+        let hash_key: [u8; 32] = hash.into();
+        let height_key_opt = height_opt.map(|h| h.to_ne_bytes());
+
+        // Delete block in single transaction.
+        let mut txn = self.env.begin_rw_txn()?;
+
+        for db in [self.headers_db, self.transactions_db, self.spent_db] {
+            match txn.del(db, &hash_key, None) {
+                Ok(()) | Err(lmdb::Error::NotFound) => {}
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            }
+        }
+
+        if let Some(hk) = height_key_opt {
+            match txn.del(self.best_chain_db, &hk, None) {
+                Ok(()) | Err(lmdb::Error::NotFound) => {}
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            }
+        }
+
+        txn.commit()?;
+        Ok(())
+    }
+
+    /// Removes the `ShardRoot` stored at the specified `Index`.
+    ///
+    /// Returns an error if no entry exists at that index.
+    pub fn delete_root(&self, index: Index) -> Result<(), FinalisedStateError> {
+        let key = index.to_ne_bytes();
+        let mut txn = self.env.begin_rw_txn()?;
+
+        match txn.del(self.roots_db, &key, None) {
+            Ok(()) => {
+                txn.commit()?;
+                Ok(())
+            }
+            Err(lmdb::Error::NotFound) => Err(FinalisedStateError::Custom(format!(
+                "no shard-root at index {}",
+                index.0
+            ))),
+            Err(e) => Err(FinalisedStateError::LmdbError(e)),
+        }
+    }
+
+    /// Returns block header and chain indexing data for the block.
+    pub fn get_block_header_data(
+        &self,
+        hash_or_height: HashOrHeight,
+    ) -> Result<BlockHeaderData, FinalisedStateError> {
+        let hash_key: [u8; 32] = self.resolve_hash_or_height(hash_or_height)?.into();
+
+        let hdr_vec: Vec<u8> = {
+            let ro = self.env.begin_ro_txn()?;
+            ro.get(self.headers_db, &hash_key)?.to_vec()
+        };
+        let stored: StoredEntry<BlockHeaderData> = StoredEntry::deserialize(&hdr_vec)
+            .map_err(|e| FinalisedStateError::Custom(format!("corrupt header CBOR: {e}")))?;
+        Ok(stored.item)
+    }
+
+    /// Returns transaction data for the block.
+    pub fn get_block_transactions(
+        &self,
+        hash_or_height: HashOrHeight,
+    ) -> Result<TxList, FinalisedStateError> {
+        let hash_key: [u8; 32] = self.resolve_hash_or_height(hash_or_height)?.into();
+
+        let tx_vec: Vec<u8> = {
+            let ro = self.env.begin_ro_txn()?;
+            ro.get(self.transactions_db, &hash_key)?.to_vec()
+        };
+        let stored: StoredEntry<TxList> = StoredEntry::deserialize(&tx_vec)
+            .map_err(|e| FinalisedStateError::Custom(format!("corrupt tx CBOR: {e}")))?;
+        Ok(stored.item)
+    }
+
+    // Returns a single [`TxData`] from the block, identified by its
+    /// zero-based position within the block’s compact-transaction list.
+    pub fn get_transaction(
+        &self,
+        hash_or_height: HashOrHeight,
+        tx_index: u32,
+    ) -> Result<TxData, FinalisedStateError> {
+        let list = self.get_block_transactions(hash_or_height)?;
+        let idx = tx_index as usize;
+
+        list.0.get(idx).cloned().ok_or_else(|| {
+            FinalisedStateError::Custom(format!("transaction index {tx_index} out of range"))
+        })
+    }
+
+    /// Returns spend data for the block.
+    pub fn get_block_spends(
+        &self,
+        hash_or_height: HashOrHeight,
+    ) -> Result<SpentList, FinalisedStateError> {
+        let hash_key: [u8; 32] = self.resolve_hash_or_height(hash_or_height)?.into();
+
+        let sp_vec: Vec<u8> = {
+            let ro = self.env.begin_ro_txn()?;
+            ro.get(self.spent_db, &hash_key)?.to_vec()
+        };
+        let stored: StoredEntry<SpentList> = StoredEntry::deserialize(&sp_vec)
+            .map_err(|e| FinalisedStateError::Custom(format!("corrupt spends CBOR: {e}")))?;
+        Ok(stored.item)
+    }
+
+    /// Returns a single `SpentOutpoint` from the block, identified by its
+    /// zero-based position inside the stored spends list.
+    pub fn get_spend(
+        &self,
+        hash_or_height: HashOrHeight,
+        spend_index: u32,
+    ) -> Result<SpentOutpoint, FinalisedStateError> {
+        let list = self.get_block_spends(hash_or_height)?;
+        let idx = spend_index as usize;
+
+        list.0.get(idx).cloned().ok_or_else(|| {
+            FinalisedStateError::Custom(format!("spend index {spend_index} out of range"))
+        })
+    }
+
+    /// Returns every `ShardRoot` whose index satisfies `start_index ≤ idx < end_index`.
+    /// If `start_index >= end_index` an empty vector is returned.
+    pub fn get_shard_roots(
+        &self,
+        start_index: u32,
+        end_index: u32,
+    ) -> Result<Vec<ShardRoot>, FinalisedStateError> {
+        if start_index > end_index {
+            return Ok(Vec::new());
+        }
+
+        // first key in native-endian order
+        let first_key = Index(start_index).to_ne_bytes();
+
+        let ro_txn = self.env.begin_ro_txn()?;
+        let mut cursor = ro_txn.open_ro_cursor(self.roots_db)?;
+
+        let mut roots = Vec::new();
+
+        // `iter_from` → Iterator<Item = (&[u8], &[u8])>
+        for (key_bytes, val_bytes) in cursor.iter_from::<&[u8]>(&first_key) {
+            let idx =
+                u32::from_ne_bytes(key_bytes.try_into().expect("INTEGER_KEY keys are 4 bytes"));
+            if idx > end_index {
+                break;
+            }
+
+            let stored: StoredEntry<ShardRoot> = StoredEntry::deserialize(val_bytes)
+                .map_err(|e| FinalisedStateError::Custom(format!("corrupt root CBOR: {e}")))?;
+            roots.push(stored.item);
+        }
+
+        Ok(roots)
+    }
+
+    /// Returns chain indexing data for the block.
+    pub fn get_chain_index(
+        &self,
+        hash_or_height: HashOrHeight,
+    ) -> Result<BlockIndex, FinalisedStateError> {
+        Ok(self.get_block_header_data(hash_or_height)?.index)
+    }
+
+    /// Returns header data for the block.
+    pub fn get_block_header(
+        &self,
+        hash_or_height: HashOrHeight,
+    ) -> Result<BlockData, FinalisedStateError> {
+        Ok(self.get_block_header_data(hash_or_height)?.data)
+    }
+
+    /// Returns the **entire** [`ChainBlock`] (header/index + compact txs +
+    /// spent outpoints) identified by `hash_or_height`.
+    pub fn get_chain_block(
+        &self,
+        hash_or_height: HashOrHeight,
+    ) -> Result<ChainBlock, FinalisedStateError> {
+        let header_data = self.get_block_header_data(hash_or_height)?;
+
+        let tx_list = self.get_block_transactions(hash_or_height)?;
+
+        let spent_list = self.get_block_spends(hash_or_height)?;
+
+        Ok(ChainBlock::new(
+            header_data.index,
+            header_data.data,
+            tx_list.0,
+            spent_list.0,
+        ))
+    }
+
+    /// Returns a CompactBlock identified by `hash_or_height`.
+    pub fn get_compact_block(
+        &self,
+        hash_or_height: HashOrHeight,
+    ) -> Result<zaino_proto::proto::compact_formats::CompactBlock, FinalisedStateError> {
+        Ok(self.get_chain_block(hash_or_height)?.to_compact_block())
+    }
+
+    /// Resolve a `HashOrHeight` to the block hash stored on disk.
+    ///
+    /// * Hash  ➜  returned unchanged (zero cost).  
+    /// * Height ➜  native-endian lookup in `best_chain_db`.
+    fn resolve_hash_or_height(
+        &self,
+        hash_or_height: HashOrHeight,
+    ) -> Result<Hash, FinalisedStateError> {
+        match hash_or_height {
+            // Fast path: we already have the hash.
+            HashOrHeight::Hash(z_hash) => Ok(z_hash.into()),
+
+            // Height lookup path.
+            HashOrHeight::Height(z_height) => {
+                let height = Height::try_from(z_height.0)
+                    .map_err(|_| FinalisedStateError::Custom("height out of range".into()))?;
+                let hkey = height.to_ne_bytes();
+
+                let hash_vec: Vec<u8> = {
+                    let ro = self.env.begin_ro_txn()?;
+                    ro.get(self.best_chain_db, &hkey)
+                        .map_err(|e| {
+                            if e == lmdb::Error::NotFound {
+                                FinalisedStateError::Custom("height not found in best chain".into())
+                            } else {
+                                FinalisedStateError::LmdbError(e)
+                            }
+                        })?
+                        .to_vec() // clone to break lifetime
+                };
+                let arr: [u8; 32] = hash_vec
+                    .try_into()
+                    .expect("best_chain value must be 32 bytes");
+                Ok(Hash::from(arr))
+            }
+        }
+    }
 
     /// Opens an lmdb database if present else creates a new one.
     fn open_or_create_db(
@@ -368,3 +740,5 @@ impl TryFrom<CBOR> for DbVersion {
         Self::from_tagged_cbor(cbor)
     }
 }
+
+// TODO: Define v1 schema const

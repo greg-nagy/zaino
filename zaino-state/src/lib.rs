@@ -31,8 +31,8 @@ pub(crate) mod chain_index;
 pub use chain_index::types::{
     BlockData, BlockIndex, ChainBlock, ChainWork, CommitmentTreeRoots, CommitmentTreeSizes,
     CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, Hash, Height, Index,
-    SaplingCompactTx, ScriptType, ShardRoot, SpentOutpoint, TransparentCompactTx, TxData,
-    TxInCompact, TxOutCompact,
+    SaplingCompactTx, ScriptType, ShardRoot, SpentList, SpentOutpoint, TransparentCompactTx,
+    TxData, TxInCompact, TxList, TxOutCompact,
 };
 
 pub(crate) mod local_cache;

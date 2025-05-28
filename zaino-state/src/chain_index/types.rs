@@ -36,6 +36,8 @@ pub enum CborTag {
     CompactOrchardAction = 528,
     SpentOutpoint = 529,
     ShardRoot = 530,
+    TxList = 531,
+    SpentList = 532,
 }
 
 impl CborTag {
@@ -90,9 +92,19 @@ impl ChainBlock {
         &self.tx
     }
 
+    /// Convenience: return the transactions as a dCBOR-ready `TxList`.
+    pub fn tx_list(&self) -> TxList {
+        TxList::from(self.tx.clone())
+    }
+
     /// Returns a reference to the spent transparent outpoints.
     pub fn spent_outpoints(&self) -> &[SpentOutpoint] {
         &self.spent_outpoints
+    }
+
+    /// Convenience: return spent outpoints as a dCBOR-ready `SpentList`.
+    pub fn spent_list(&self) -> SpentList {
+        SpentList::from(self.spent_outpoints.clone())
     }
 
     /// Returns the block hash.
@@ -584,6 +596,14 @@ impl TryFrom<CBOR> for Hash {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct Height(u32);
 
+impl Height {
+    /// Return the underlying value as native-endian bytes (suitable for
+    /// LMDB when the database is opened with `INTEGER_KEY`).
+    pub fn to_ne_bytes(self) -> [u8; 4] {
+        self.0.to_ne_bytes()
+    }
+}
+
 impl TryFrom<u32> for Height {
     type Error = &'static str;
 
@@ -675,6 +695,14 @@ impl TryFrom<CBOR> for Height {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct Index(pub u32);
+
+impl Index {
+    /// Return the underlying value as native-endian bytes (suitable for
+    /// LMDB when the database is opened with `INTEGER_KEY`).
+    pub fn to_ne_bytes(self) -> [u8; 4] {
+        self.0.to_ne_bytes()
+    }
+}
 
 impl CBORTagged for Index {
     fn cbor_tags() -> Vec<dcbor::Tag> {
@@ -1450,6 +1478,56 @@ impl TryFrom<CBOR> for TxData {
     }
 }
 
+/// dCBOR-tagged wrapper around `Vec<TxData>`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TxList(pub Vec<TxData>);
+
+impl From<Vec<TxData>> for TxList {
+    fn from(v: Vec<TxData>) -> Self {
+        TxList(v)
+    }
+}
+
+impl From<&[TxData]> for TxList {
+    fn from(slice: &[TxData]) -> Self {
+        TxList(slice.to_vec())
+    }
+}
+
+impl CBORTagged for TxList {
+    fn cbor_tags() -> Vec<Tag> {
+        vec![CborTag::TxList.tag()]
+    }
+}
+
+impl CBORTaggedEncodable for TxList {
+    fn untagged_cbor(&self) -> CBOR {
+        CBOR::from(self.0.iter().map(|tx| tx.tagged_cbor()).collect::<Vec<_>>())
+    }
+}
+
+impl CBORTaggedDecodable for TxList {
+    fn from_untagged_cbor(cbor: CBOR) -> dcbor::Result<Self> {
+        match cbor.into_case() {
+            CBORCase::Array(arr) => {
+                let inner = arr
+                    .into_iter()
+                    .map(TxData::try_from)
+                    .collect::<Result<_, _>>()?;
+                Ok(Self(inner))
+            }
+            _ => Err(dcbor::Error::WrongType),
+        }
+    }
+}
+
+impl TryFrom<CBOR> for TxList {
+    type Error = dcbor::Error;
+    fn try_from(value: CBOR) -> dcbor::Result<Self> {
+        Self::from_tagged_cbor(value)
+    }
+}
+
 /// Compact transaction inputs and outputs for transparent (unshielded) transactions.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
@@ -2120,6 +2198,55 @@ impl TryFrom<CBOR> for SpentOutpoint {
     type Error = dcbor::Error;
     fn try_from(cbor: CBOR) -> dcbor::Result<Self> {
         Self::from_tagged_cbor(cbor)
+    }
+}
+
+/// dCBOR-tagged wrapper around `Vec<SpentOutpoint>`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpentList(pub Vec<SpentOutpoint>);
+
+impl From<Vec<SpentOutpoint>> for SpentList {
+    fn from(v: Vec<SpentOutpoint>) -> Self {
+        SpentList(v)
+    }
+}
+
+impl From<&[SpentOutpoint]> for SpentList {
+    fn from(slice: &[SpentOutpoint]) -> Self {
+        SpentList(slice.to_vec())
+    }
+}
+impl CBORTagged for SpentList {
+    fn cbor_tags() -> Vec<Tag> {
+        vec![CborTag::SpentList.tag()]
+    }
+}
+
+impl CBORTaggedEncodable for SpentList {
+    fn untagged_cbor(&self) -> CBOR {
+        CBOR::from(self.0.iter().map(|op| op.tagged_cbor()).collect::<Vec<_>>())
+    }
+}
+
+impl CBORTaggedDecodable for SpentList {
+    fn from_untagged_cbor(cbor: CBOR) -> dcbor::Result<Self> {
+        match cbor.into_case() {
+            CBORCase::Array(arr) => {
+                let inner = arr
+                    .into_iter()
+                    .map(SpentOutpoint::try_from)
+                    .collect::<Result<_, _>>()?;
+                Ok(Self(inner))
+            }
+            _ => Err(dcbor::Error::WrongType),
+        }
+    }
+}
+
+impl TryFrom<CBOR> for SpentList {
+    type Error = dcbor::Error;
+    fn try_from(value: CBOR) -> dcbor::Result<Self> {
+        Self::from_tagged_cbor(value)
     }
 }
 
