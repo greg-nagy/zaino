@@ -7,7 +7,7 @@ ARG LIGHTWALLETD_VERSION=0.4.16
 ARG ZCASH_VERSION=6.1.0
 ARG ZEBRA_VERSION=1.15.0
 
-ARG UID=10003
+ARG UID=1000
 ARG GID=${UID}
 ARG USER="zaino"
 ARG HOME="/home/zaino"
@@ -24,48 +24,21 @@ RUN git clone --branch v${LIGHTWALLETD_VERSION} --depth 1 https://github.com/zca
     make && \
     cp lightwalletd /usr/local/bin/
 
-#### 🏗️ Build zcashd and zcash-cli
-FROM rust:${RUST_VERSION}-bookworm AS zcash-builder
-ARG ZCASH_VERSION
-ARG CARGO_HOME
-ARG CARGO_TARGET_DIR
-
-ENV CARGO_HOME=${CARGO_HOME}
-ENV CARGO_TARGET_DIR=${CARGO_TARGET_DIR}
-
-WORKDIR /build
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    coreutils \
-    bsdmainutils \
-    musl-dev \
-    gcc \
-    clang \
-    llvm-dev \
-    libclang-dev \
-    libssl-dev \
-    cmake \
-    make \
-    git \
-    curl \
-    && rm -rf /var/lib/apt/lists/* /tmp/*
-
-RUN git clone --branch v${ZCASH_VERSION} --depth 1 https://github.com/zcash/zcash && \
-    cd zcash && \
-    ./zcutil/build.sh -j$(nproc) && \
-    cp src/zcashd src/zcash-cli /usr/local/bin/
-
 #### 📦 Pull Zebrad Binary
 FROM zfnd/zebra:${ZEBRA_VERSION} AS zebra-downloader
 
-#### 🚀 Final Runtime Image
-FROM rust:${RUST_VERSION}-slim-bookworm AS final
+#### 📦 Pull zcashd + zcash-cli Binaries
+FROM electriccoinco/zcashd:v${ZCASH_VERSION} AS zcashd-downloader
 
-ARG UID GID USER HOME
-ARG RUST_VERSION GO_VERSION
-ARG LIGHTWALLETD_VERSION ZCASH_VERSION ZEBRA_VERSION
+#### 🚀 Final Runtime Image
+FROM rust:${RUST_VERSION}-bookworm AS final
+
+ARG UID
+ARG GID
+ARG USER
+ARG HOME
+ARG CARGO_HOME
+ARG CARGO_TARGET_DIR
 
 LABEL maintainer="nachog00" \
     description="Image with zcashd, lightwalletd, zebrad, and cargo-nextest for CI/local testing." \
@@ -80,7 +53,13 @@ LABEL maintainer="nachog00" \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     curl \
+    libclang-dev \
+    build-essential \
     && rm -rf /var/lib/apt/lists/* /tmp/*
+
+# Install rustup (Rust toolchain manager) and set up the Rust toolchain
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+RUN rustup update stable
 
 # Setup non-root user
 RUN addgroup --quiet --gid ${GID} ${USER} && \
@@ -88,20 +67,22 @@ RUN addgroup --quiet --gid ${GID} ${USER} && \
     mkdir -p ${CARGO_HOME} ${CARGO_TARGET_DIR} && \
     chown -R ${UID}:${GID} ${HOME}
 
+USER ${USER}
+
 ENV CARGO_HOME=${CARGO_HOME}
 ENV CARGO_TARGET_DIR=${CARGO_TARGET_DIR}
 ENV PATH="/usr/local/bin:${PATH}"
+ENV CARGO_TERM_COLOR=always
 
 WORKDIR /app
 
-# Copy binaries from builders
+# Copy binaries from providers
 COPY --from=lightwalletd-builder /usr/local/bin/lightwalletd /usr/local/bin/
-COPY --from=zcash-builder /usr/local/bin/zcashd /usr/local/bin/
-COPY --from=zcash-builder /usr/local/bin/zcash-cli /usr/local/bin/
+COPY --from=zcashd-downloader /usr/bin/zcashd /usr/local/bin/
+COPY --from=zcashd-downloader /usr/bin/zcash-cli /usr/local/bin/
 COPY --from=zebra-downloader /usr/local/bin/zebrad /usr/local/bin/
 
 # Install cargo-nextest
 RUN cargo install cargo-nextest --locked --verbose
 
-USER ${USER}
 CMD ["cargo", "nextest", "run"]
