@@ -677,6 +677,11 @@ impl ZainoDB {
         Ok(stored.item)
     }
 
+    /// Create a read-only facade backed by *this* live database.
+    pub fn to_reader(&self) -> DbReader<'_> {
+        DbReader { inner: self }
+    }
+
     /// Return `true` if *height* is already known-good.
     ///
     /// O(1) look-ups: we check the tip first (fast) and only hit the DashSet
@@ -934,6 +939,94 @@ impl ZainoDB {
 
         txn.commit()?;
         Ok(())
+    }
+}
+
+/// Immutable view onto an already-running [`ZainoDB`].
+///
+/// * Carries a plain reference with the same lifetime as the parent DB,
+///   therefore:
+///   * absolutely no cloning / ARC-ing of LMDB handles,
+///   * compile-time guarantee that the reader cannot mutate state.
+pub struct DbReader<'a> {
+    inner: &'a ZainoDB,
+}
+
+impl<'a> DbReader<'a> {
+    /// Returns block header and chain indexing data for the block.
+    pub fn get_block_header_data(
+        &self,
+        id: HashOrHeight,
+    ) -> Result<BlockHeaderData, FinalisedStateError> {
+        self.inner.get_block_header_data(id)
+    }
+
+    /// Returns transaction data for the block.
+    pub fn get_block_transactions(&self, id: HashOrHeight) -> Result<TxList, FinalisedStateError> {
+        self.inner.get_block_transactions(id)
+    }
+
+    // Returns a single [`TxData`] from the block, identified by its
+    /// zero-based position within the block’s compact-transaction list.
+    pub fn get_transaction(
+        &self,
+        id: HashOrHeight,
+        idx: u32,
+    ) -> Result<TxData, FinalisedStateError> {
+        self.inner.get_transaction(id, idx)
+    }
+
+    /// Returns spend data for the block.
+    pub fn get_block_spends(&self, id: HashOrHeight) -> Result<SpentList, FinalisedStateError> {
+        self.inner.get_block_spends(id)
+    }
+
+    pub fn get_spend(
+        &self,
+        id: HashOrHeight,
+        idx: u32,
+    ) -> Result<SpentOutpoint, FinalisedStateError> {
+        self.inner.get_spend(id, idx)
+    }
+
+    /// Returns a single `SpentOutpoint` from the block, identified by its
+    /// zero-based position inside the stored spends list.
+    pub fn get_shard_roots(
+        &self,
+        start: u32,
+        end: u32,
+    ) -> Result<Vec<ShardRoot>, FinalisedStateError> {
+        self.inner.get_shard_roots(start, end)
+    }
+
+    /// Returns chain indexing data for the block.
+    pub fn get_chain_index(&self, id: HashOrHeight) -> Result<BlockIndex, FinalisedStateError> {
+        self.inner.get_chain_index(id)
+    }
+
+    /// Returns header data for the block.
+    pub fn get_block_header(&self, id: HashOrHeight) -> Result<BlockData, FinalisedStateError> {
+        self.inner.get_block_header(id)
+    }
+
+    /// Returns the **entire** [`ChainBlock`] (header/index + compact txs +
+    /// spent outpoints) identified by `hash_or_height`.
+    pub fn get_chain_block(&self, id: HashOrHeight) -> Result<ChainBlock, FinalisedStateError> {
+        self.inner.get_chain_block(id)
+    }
+
+    /// Returns a CompactBlock identified by `hash_or_height`.
+    pub fn get_compact_block(
+        &self,
+        id: HashOrHeight,
+    ) -> Result<zaino_proto::proto::compact_formats::CompactBlock, FinalisedStateError> {
+        self.inner.get_compact_block(id)
+    }
+
+    /// Convenience getter so callers (RPC, tests, CLI) can inspect the
+    /// on-disk schema version and hash.
+    pub fn get_db_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
+        self.inner.get_db_metadata()
     }
 }
 
