@@ -7,10 +7,10 @@ ARG LIGHTWALLETD_VERSION=0.4.16
 ARG ZCASH_VERSION=6.1.0
 ARG ZEBRA_VERSION=1.15.0
 
-ARG UID=1000
+ARG UID=0
 ARG GID=${UID}
-ARG USER="zaino"
-ARG HOME="/home/zaino"
+ARG USER="root"
+ARG HOME="/root"
 ARG CARGO_HOME="${HOME}/.cargo"
 ARG CARGO_TARGET_DIR="${HOME}/target"
 
@@ -61,11 +61,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 RUN rustup update stable
 
-# Setup non-root user
-RUN addgroup --quiet --gid ${GID} ${USER} && \
-    adduser --quiet --gid ${GID} --uid ${UID} --home ${HOME} ${USER} --disabled-password --gecos "" && \
-    mkdir -p ${CARGO_HOME} ${CARGO_TARGET_DIR} && \
-    chown -R ${UID}:${GID} ${HOME}
+# # Setup non-root user
+# RUN addgroup --quiet --gid ${GID} ${USER} && \
+#     adduser --quiet --gid ${GID} --uid ${UID} --home ${HOME} ${USER} --disabled-password --gecos "" && \
+#     mkdir -p ${CARGO_HOME} ${CARGO_TARGET_DIR} && \
+#     chown -R ${UID}:${GID} ${HOME}
 
 USER ${USER}
 
