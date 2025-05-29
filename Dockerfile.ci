@@ -40,9 +40,15 @@ ARG HOME
 ARG CARGO_HOME
 ARG CARGO_TARGET_DIR
 
+ARG RUST_VERSION
+ARG GO_VERSION
+ARG LIGHTWALLETD_VERSION
+ARG ZCASH_VERSION
+ARG ZEBRA_VERSION
+
 LABEL maintainer="nachog00" \
     description="Image with zcashd, lightwalletd, zebrad, and cargo-nextest for CI/local testing." \
-    usage="Run with:\n  docker run --rm -v \$PWD:/app -v \$PWD/target:/home/zaino/target -v \$HOME/.cargo:/home/zaino/.cargo -w /app zaino-ci" \
+    usage="docker run --rm -v "$PWD":/app -v "$PWD/target":/home/zaino/target -v "$PWD/docker_cargo/git":/home/zaino/.cargo/git -v "$PWD/docker_cargo/registry":/home/zaino/.cargo/registry -u zaino zingodevops/zaino-ci:latest" \
     org.zaino.rust-version="${RUST_VERSION}" \
     org.zaino.go-version="${GO_VERSION}" \
     org.zaino.lightwalletd-version="${LIGHTWALLETD_VERSION}" \
