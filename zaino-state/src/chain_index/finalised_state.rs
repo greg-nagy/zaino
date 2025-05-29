@@ -6,6 +6,8 @@ use crate::{
     TxList,
 };
 
+use dashmap::DashSet;
+use tokio::time::{interval, sleep};
 use zebra_chain::parameters::NetworkKind;
 
 use blake2::{
@@ -16,11 +18,59 @@ use dcbor::{CBORCase, CBORTagged, CBORTaggedDecodable, CBORTaggedEncodable, Tag,
 use lmdb::{
     Cursor, Database, DatabaseFlags, Environment, EnvironmentFlags, Transaction as _, WriteFlags,
 };
-use std::{fs, sync::Arc};
-use tracing::info;
+use std::{
+    fs,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
+use tracing::{debug, info, warn};
 use zebra_state::HashOrHeight;
 
 use super::types::BlockHeaderData;
+
+// ───────────────────────── Schema v1 constants ─────────────────────────
+
+/// Full V1 schema text file.
+// 1. Bring the *exact* ASCII description of the on-disk layout into the binary
+//    at compile-time.  The path is relative to this source file.
+pub const DB_SCHEMA_V1_TEXT: &str = include_str!("db_schema_v1.txt");
+
+/*
+2. Compute the checksum once, outside the code:
+
+       $ cd zaino-state/src/chain_index
+       $ b2sum -l 256 db_schema_v1.txt
+       bf9ac729a4b8a41d63698547e64072742a6967518cceaa59c5bc827ce146fe93  db_schema_v1.txt
+
+   Optional helper if you don’t have `b2sum`:
+
+       $ python - <<'PY'
+       > import hashlib, pathlib, binascii
+       > data = pathlib.Path("db_schema_v1.txt").read_bytes()
+       > print(hashlib.blake2b(data, digest_size=32).hexdigest())
+       > PY
+
+3. Turn those 64 hex digits into a Rust `[u8; 32]` literal:
+
+       echo bf9ac729a4b8a41d63698547e64072742a6967518cceaa59c5bc827ce146fe93 \
+       | sed 's/../0x&, /g' | fold -s -w48
+
+*/
+
+/// Database V1 schema hash, used for version validation.
+pub const DB_SCHEMA_V1_HASH: [u8; 32] = [
+    0xbf, 0x9a, 0xc7, 0x29, 0xa4, 0xb8, 0xa4, 0x1d, 0x63, 0x69, 0x85, 0x47, 0xe6, 0x40, 0x72, 0x74,
+    0x2a, 0x69, 0x67, 0x51, 0x8c, 0xce, 0xaa, 0x59, 0xc5, 0xbc, 0x82, 0x7c, 0xe1, 0x46, 0xfe, 0x93,
+];
+
+/// Database V1 vesrion data.
+pub const DB_SCHEMA_V1: DbVersion = DbVersion {
+    version: 1,
+    schema_hash: DB_SCHEMA_V1_HASH,
+};
 
 /// Zaino’s Finalised state.
 /// Implements a persistent LMDB-backed chain index for fast read access and verified data.
@@ -47,10 +97,24 @@ pub struct ZainoDB {
     /// Metadata: singleton entry "metadata" -> StoredEntry<DbMetadata>
     metadata_db: Database,
 
+    /// Contiguous **water-mark**: every height ≤ `validated_tip` is known-good.
+    ///
+    /// Wrapped in an `Arc` so the background validator and any foreground tasks
+    /// all see (and update) the **same** atomic.
+    validated_tip: Arc<AtomicU32>,
+    /// Heights **above** the tip that have also been validated.
+    ///
+    /// Whenever the next consecutive height is inserted we pop it
+    /// out of this set and bump `validated_tip`, so the map never
+    /// grows beyond the number of “holes” in the sequence.
+    validated_set: DashSet<u32>,
+
     /// Database handler task handle.
     db_handler: Option<tokio::task::JoinHandle<()>>,
+
     /// ZainoDB status.
     status: AtomicStatus,
+
     /// BlockCache config data.
     config: BlockCacheConfig,
 }
@@ -99,21 +163,32 @@ impl ZainoDB {
             best_chain_db,
             roots_db,
             metadata_db,
+            validated_tip: Arc::new(AtomicU32::new(0)),
+            validated_set: DashSet::new(),
             db_handler: None,
             status: AtomicStatus::new(StatusType::Spawning.into()),
             config: config.clone(),
         };
 
-        // TODO: check schema / version, perform conversions (metadata db)
+        // Validate (or initialise) the metadata entry before we touch any tables.
+        zaino_db.check_schema_version()?;
 
+        // Spawn handler task to perform background validation and trailing tx cleanup.
         zaino_db.spawn_handler().await?;
 
         Ok(zaino_db)
     }
 
-    /// Spawns a task to handle background validation and cleanup.
+    /// Spawns the background validator / maintenance task.
+    ///
+    /// *   **Startup** – runs a full‐DB validation pass (`initial_root_scan` →
+    ///     `initial_block_scan`).
+    /// *   **Steady-state** – every 5 s tries to validate the next block that
+    ///     appeared after the current `validated_tip`.  
+    ///     Every 60 s it also calls `clean_trailing()` to purge stale reader slots.
     async fn spawn_handler(&mut self) -> Result<(), FinalisedStateError> {
-        let _zaino_db = Self {
+        // Clone everything the task needs so we can move it into the async block.
+        let zaino_db = Arc::new(Self {
             env: Arc::clone(&self.env),
             headers_db: self.headers_db,
             transactions_db: self.transactions_db,
@@ -121,16 +196,117 @@ impl ZainoDB {
             best_chain_db: self.best_chain_db,
             roots_db: self.roots_db,
             metadata_db: self.metadata_db,
-            db_handler: None,
+            validated_tip: Arc::clone(&self.validated_tip),
+            validated_set: self.validated_set.clone(),
+            db_handler: None, // not used inside the task
             status: self.status.clone(),
             config: self.config.clone(),
-        };
-
-        let db_handler = tokio::spawn(async move {
-            // TODO: validate database, clean trailing transactions
         });
 
-        self.db_handler = Some(db_handler);
+        let handle = tokio::spawn({
+            let zaino_db = Arc::clone(&zaino_db);
+            async move {
+                // ────────────────────────── initial validation ─────────────────────────
+                if let Err(e) = zaino_db.initial_root_scan() {
+                    warn!("initial root scan failed: {e}");
+                    return;
+                }
+                if let Err(e) = zaino_db.initial_block_scan() {
+                    warn!("initial block scan failed: {e}");
+                    return;
+                }
+                debug!(
+                    "initial validation complete – tip={}",
+                    zaino_db.validated_tip.load(Ordering::Relaxed)
+                );
+
+                // ────────────────────────── steady-state loop ──────────────────────────
+                let mut maintenance = interval(Duration::from_secs(60));
+
+                loop {
+                    // ---------- try to validate the next consecutive block -------------
+                    let next_h = zaino_db.validated_tip.load(Ordering::Acquire) + 1;
+                    let height = match Height::try_from(next_h) {
+                        Ok(h) => h,
+                        Err(_) => {
+                            warn!("height overflow – validated_tip too large");
+                            break;
+                        }
+                    };
+
+                    // Fetch hash of `next_h` from best_chain (Option-returning helper).
+                    let hash_opt = (|| -> Option<Hash> {
+                        let ro = zaino_db.env.begin_ro_txn().ok()?;
+                        let key = height.to_ne_bytes();
+                        let val = ro.get(zaino_db.best_chain_db, &key).ok()?;
+                        let arr: [u8; 32] = val.try_into().ok()?;
+                        Some(Hash::from(arr))
+                    })();
+
+                    if let Some(hash) = hash_opt {
+                        if let Err(e) = zaino_db.validate_block(height, hash) {
+                            // Already includes “…failed validation” wording.
+                            warn!("{e}");
+                        }
+                        // Immediately loop – maybe the chain has more blocks ready.
+                        continue;
+                    }
+
+                    // ---------- nothing new yet → wait / maintenance -------------------
+                    tokio::select! {
+                        // short nap so we don’t spin-hot
+                        _ = sleep(Duration::from_secs(5)) => {},
+
+                        // fire every 60 s regardless of block arrivals
+                        _ = maintenance.tick() => {
+                            if let Err(e) = zaino_db.clean_trailing() {
+                                warn!("clean_trailing failed: {e}");
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        self.db_handler = Some(handle);
+        Ok(())
+    }
+
+    /// Validate every stored `ShardRoot` (cheap – single checksum each).
+    fn initial_root_scan(&self) -> Result<(), FinalisedStateError> {
+        let ro = self.env.begin_ro_txn()?;
+        let mut cursor = ro.open_ro_cursor(self.roots_db)?;
+
+        for (_key, val_bytes) in cursor.iter() {
+            let entry = StoredEntry::<ShardRoot>::deserialize(val_bytes)
+                .map_err(|e| FinalisedStateError::Custom(format!("corrupt root CBOR: {e}")))?;
+            if !entry.verify() {
+                return Err(FinalisedStateError::Custom(
+                    "shard-root checksum mismatch".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Scan the whole chain once at start-up and validate every block.
+    fn initial_block_scan(&self) -> Result<(), FinalisedStateError> {
+        let ro = self.env.begin_ro_txn()?;
+        let mut cursor = ro.open_ro_cursor(self.best_chain_db)?;
+
+        for (h_bytes, hash_bytes) in cursor.iter() {
+            let height_u32 = u32::from_ne_bytes(h_bytes.try_into().expect("height key is 4 bytes"));
+            let height =
+                Height::try_from(height_u32).expect("height in best_chain is always inside range");
+
+            let hash_arr: [u8; 32] = hash_bytes.try_into().expect("hash value is 32 bytes");
+            let hash = Hash::from(hash_arr);
+
+            // Will short-circuit if already done
+            if let Err(e) = self.validate_block(height, hash) {
+                return Err(e);
+            }
+        }
         Ok(())
     }
 
@@ -328,7 +504,9 @@ impl ZainoDB {
         &self,
         hash_or_height: HashOrHeight,
     ) -> Result<BlockHeaderData, FinalisedStateError> {
-        let hash_key: [u8; 32] = self.resolve_hash_or_height(hash_or_height)?.into();
+        let hash_key: [u8; 32] = self
+            .resolve_validated_hash_or_height(hash_or_height)?
+            .into();
 
         let hdr_vec: Vec<u8> = {
             let ro = self.env.begin_ro_txn()?;
@@ -344,7 +522,9 @@ impl ZainoDB {
         &self,
         hash_or_height: HashOrHeight,
     ) -> Result<TxList, FinalisedStateError> {
-        let hash_key: [u8; 32] = self.resolve_hash_or_height(hash_or_height)?.into();
+        let hash_key: [u8; 32] = self
+            .resolve_validated_hash_or_height(hash_or_height)?
+            .into();
 
         let tx_vec: Vec<u8> = {
             let ro = self.env.begin_ro_txn()?;
@@ -375,7 +555,9 @@ impl ZainoDB {
         &self,
         hash_or_height: HashOrHeight,
     ) -> Result<SpentList, FinalisedStateError> {
-        let hash_key: [u8; 32] = self.resolve_hash_or_height(hash_or_height)?.into();
+        let hash_key: [u8; 32] = self
+            .resolve_validated_hash_or_height(hash_or_height)?
+            .into();
 
         let sp_vec: Vec<u8> = {
             let ro = self.env.begin_ro_txn()?;
@@ -480,6 +662,169 @@ impl ZainoDB {
         Ok(self.get_chain_block(hash_or_height)?.to_compact_block())
     }
 
+    /// Convenience getter so callers (RPC, tests, CLI) can inspect the
+    /// on-disk schema version and hash.
+    pub fn get_db_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
+        let ro = self.env.begin_ro_txn()?;
+        let raw = ro.get(self.metadata_db, b"metadata")?;
+        let stored: StoredEntry<DbMetadata> = StoredEntry::deserialize(raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("corrupt metadata CBOR: {e}")))?;
+        if !stored.verify() {
+            return Err(FinalisedStateError::Custom(
+                "metadata checksum mismatch".into(),
+            ));
+        }
+        Ok(stored.item)
+    }
+
+    /// Return `true` if *height* is already known-good.
+    ///
+    /// O(1) look-ups: we check the tip first (fast) and only hit the DashSet
+    /// when `h > tip`.
+    fn is_validated(&self, h: u32) -> bool {
+        let tip = self.validated_tip.load(Ordering::Relaxed);
+        h <= tip || self.validated_set.contains(&h)
+    }
+
+    /// Mark *height* as validated and coalesce contiguous ranges.
+    ///
+    /// 1. Insert it into the DashSet (if it was a “hole”).
+    /// 2. While `validated_tip + 1` is now present, pop it and advance the tip.
+    fn mark_validated(&self, h: u32) {
+        let mut next = h;
+        loop {
+            let tip = self.validated_tip.load(Ordering::Acquire);
+
+            // Fast-path: extend the tip directly?
+            if next == tip + 1 {
+                // Try to claim the new tip.
+                if self
+                    .validated_tip
+                    .compare_exchange(tip, next, Ordering::AcqRel, Ordering::Acquire)
+                    .is_ok()
+                {
+                    // Successfully advanced; now look for further consecutive heights
+                    // already in the DashSet.
+                    next += 1;
+                    while self.validated_set.remove(&next).is_some() {
+                        self.validated_tip.store(next, Ordering::Release);
+                        next += 1;
+                    }
+                    break;
+                }
+                // CAS failed: someone else updated the tip – retry loop.
+            } else if next > tip {
+                // Out-of-order hole: just remember it and exit.
+                self.validated_set.insert(next);
+                break;
+            } else {
+                // Already below tip – nothing to do.
+                break;
+            }
+        }
+    }
+
+    /// Lightweight per-block validation.
+    ///
+    /// *Confirms the checksum* in each of the three per-block tables.  
+    /// TODO: Add Merkle / ZIP-243 checks.
+    fn validate_block(&self, height: Height, hash: Hash) -> Result<(), FinalisedStateError> {
+        if self.is_validated(height.into()) {
+            return Ok(());
+        }
+
+        let key: [u8; 32] = hash.into();
+        let ro = self.env.begin_ro_txn()?;
+
+        // Helper to fabricate the error.
+        let fail = |reason: &str| FinalisedStateError::InvalidBlock {
+            height: height.into(),
+            hash,
+            reason: reason.to_owned(),
+        };
+
+        // -------- header -----------------------------------------------------
+        {
+            let raw = ro.get(self.headers_db, &key)?;
+            let entry = StoredEntry::<BlockHeaderData>::deserialize(raw)
+                .map_err(|e| fail(&format!("corrupt header CBOR: {e}")))?;
+            if !entry.verify() {
+                return Err(fail("header checksum mismatch"));
+            }
+        }
+
+        // -------- transactions ----------------------------------------------
+        {
+            let raw = ro.get(self.transactions_db, &key)?;
+            let entry = StoredEntry::<TxList>::deserialize(raw)
+                .map_err(|e| fail(&format!("corrupt tx CBOR: {e}")))?;
+            if !entry.verify() {
+                return Err(fail("tx checksum mismatch"));
+            }
+        }
+
+        // -------- spent list -------------------------------------------------
+        {
+            let raw = ro.get(self.spent_db, &key)?;
+            let entry = StoredEntry::<SpentList>::deserialize(raw)
+                .map_err(|e| fail(&format!("corrupt spends CBOR: {e}")))?;
+            if !entry.verify() {
+                return Err(fail("spent checksum mismatch"));
+            }
+        }
+
+        self.mark_validated(height.into());
+        Ok(())
+    }
+
+    /// Same as `resolve_hash_or_height`, **but guarantees the block is validated**.
+    ///
+    /// * If the block hasn’t been validated yet we do it on-demand (cheap: one
+    ///   read-only LMDB txn and three checksum calculations).
+    /// * On success the block hash is returned; on any failure you get a
+    ///   `FinalisedStateError`.
+    fn resolve_validated_hash_or_height(
+        &self,
+        hash_or_height: HashOrHeight,
+    ) -> Result<Hash, FinalisedStateError> {
+        // ---------- resolve to (height, hash) ------------------------------
+        let (height, hash) = match hash_or_height {
+            // ---- caller gave us a hash ------------------------------------
+            HashOrHeight::Hash(hash) => {
+                // Convert into our local `Hash` new-type.
+                let hash: Hash = hash.into();
+                let hash_bytes: [u8; 32] = hash.into();
+
+                // We still need the *height* (to update water-mark).
+                let ro = self.env.begin_ro_txn()?;
+                let raw_bytes = ro.get(self.headers_db, &hash_bytes)?;
+                let header_entry =
+                    StoredEntry::<BlockHeaderData>::deserialize(raw_bytes).map_err(|e| {
+                        FinalisedStateError::Custom(format!("corrupt header CBOR: {e}"))
+                    })?;
+
+                let h = header_entry.item.index.height().ok_or_else(|| {
+                    FinalisedStateError::Custom("header without height (shouldn't happen)".into())
+                })?;
+
+                (h, hash)
+            }
+
+            // ---- caller gave us a height ----------------------------------
+            HashOrHeight::Height(z_height) => {
+                let my_hash = self.resolve_hash_or_height(hash_or_height)?;
+                (
+                    Height::try_from(z_height.0).expect("already checked range"),
+                    my_hash,
+                )
+            }
+        };
+
+        // ---------- ensure the block is validated --------------------------
+        self.validate_block(height, hash)?;
+        Ok(hash)
+    }
+
     /// Resolve a `HashOrHeight` to the block hash stored on disk.
     ///
     /// * Hash  ➜  returned unchanged (zero cost).  
@@ -531,6 +876,64 @@ impl ZainoDB {
                 .map_err(FinalisedStateError::LmdbError),
             Err(e) => Err(FinalisedStateError::LmdbError(e)),
         }
+    }
+
+    /// Ensure the `metadata` table contains **exactly** our `DB_SCHEMA_V1`.
+    ///
+    /// * Brand-new DB → insert the entry.
+    /// * Existing DB  → verify checksum, version, and schema hash.
+    fn check_schema_version(&self) -> Result<(), FinalisedStateError> {
+        // We only need a mutable LMDB txn; `self` itself isn’t mutated.
+        let mut txn = self.env.begin_rw_txn()?;
+
+        match txn.get(self.metadata_db, b"metadata") {
+            // ── Existing DB ────────────────────────────────────────────────
+            Ok(raw_bytes) => {
+                let stored: StoredEntry<DbMetadata> =
+                    StoredEntry::deserialize(raw_bytes).map_err(|e| {
+                        FinalisedStateError::Custom(format!("corrupt metadata CBOR: {e}"))
+                    })?;
+                if !stored.verify() {
+                    return Err(FinalisedStateError::Custom(
+                        "metadata checksum mismatch – DB corruption suspected".into(),
+                    ));
+                }
+
+                let meta = stored.item;
+
+                if meta.version.version != DB_SCHEMA_V1.version {
+                    return Err(FinalisedStateError::Custom(format!(
+                        "unsupported schema version {} (expected v{})",
+                        meta.version.version, DB_SCHEMA_V1.version
+                    )));
+                }
+                if meta.version.schema_hash != DB_SCHEMA_V1.schema_hash {
+                    return Err(FinalisedStateError::Custom(
+                        "schema hash mismatch – db_schema_v1.txt edited without bumping version"
+                            .into(),
+                    ));
+                }
+            }
+
+            // ── Fresh DB (key not found) ──────────────────────────────────
+            Err(lmdb::Error::NotFound) => {
+                let entry = StoredEntry::new(DbMetadata {
+                    version: DB_SCHEMA_V1,
+                });
+                txn.put(
+                    self.metadata_db,
+                    b"metadata",
+                    &entry.serialize(),
+                    WriteFlags::NO_OVERWRITE,
+                )?;
+            }
+
+            // ── Any other LMDB error ──────────────────────────────────────
+            Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+        }
+
+        txn.commit()?;
+        Ok(())
     }
 }
 
@@ -740,5 +1143,3 @@ impl TryFrom<CBOR> for DbVersion {
         Self::from_tagged_cbor(cbor)
     }
 }
-
-// TODO: Define v1 schema const

@@ -1,5 +1,7 @@
 //! Holds error types for Zaino-state.
 
+use crate::Hash;
+
 /// Errors related to the `StateService`.
 #[derive(Debug, thiserror::Error)]
 pub enum StateServiceError {
@@ -238,6 +240,18 @@ pub enum FinalisedStateError {
     /// Required data is missing from the non-finalised state.
     #[error("Missing data: {0}")]
     MissingData(String),
+
+    /// A block is present on disk but failed internal validation.
+    ///
+    /// *Typically means: checksum mismatch, corrupt CBOR, Merkle check
+    /// failed, etc.*  The caller should fetch the correct data and
+    /// overwrite the faulty block.
+    #[error("invalid block @ height {height} (hash {hash}): {reason}")]
+    InvalidBlock {
+        height: u32,
+        hash: Hash,
+        reason: String,
+    },
 
     /// Critical Errors, Restart Zaino.
     #[error("Critical error: {0}")]
