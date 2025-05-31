@@ -44,7 +44,6 @@ use zebra_chain::{
     parameters::{ConsensusBranchId, Network, NetworkUpgrade},
     serialization::ZcashSerialize,
     subtree::NoteCommitmentSubtreeIndex,
-    work::difficulty::{CompactDifficulty, ExpandedDifficulty},
 };
 use zebra_rpc::{
     methods::{

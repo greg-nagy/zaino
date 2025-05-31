@@ -17,10 +17,7 @@ use zebra_rpc::methods::{
 
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpsee::{
-        connector::{JsonRpSeeConnector, RpcError},
-        response::GetDifficultyResponse,
-    },
+    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
 };
 
 use zaino_proto::proto::{

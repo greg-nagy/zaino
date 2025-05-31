@@ -5,7 +5,6 @@ use async_trait::async_trait;
 
 use tokio::{sync::mpsc, time::timeout};
 use tracing::warn;
-use zaino_fetch::jsonrpsee::response::GetDifficultyResponse;
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
     service::{
@@ -16,7 +15,7 @@ use zaino_proto::proto::{
     },
 };
 use zebra_chain::{
-    block::Height, subtree::NoteCommitmentSubtreeIndex, work::difficulty::CompactDifficulty,
+    block::Height, subtree::NoteCommitmentSubtreeIndex,
 };
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
