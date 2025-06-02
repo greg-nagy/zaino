@@ -505,12 +505,12 @@ pub enum GetBlockResponse {
 
 /// Contains the hex-encoded hash of the best (tip) block of the longest chain.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct GetBestBlockHash(Hash);
+pub struct GetBestBlockHashResponse(Hash);
 
-impl TryFrom<GetBestBlockHash> for Hash {
+impl TryFrom<GetBestBlockHashResponse> for Hash {
     type Error = zebra_chain::serialization::SerializationError;
 
-    fn try_from(value: GetBestBlockHash) -> Result<Self, Self::Error> {
+    fn try_from(value: GetBestBlockHashResponse) -> Result<Self, Self::Error> {
         Ok(value.0)
     }
 }
