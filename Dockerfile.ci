@@ -5,10 +5,10 @@ ARG RUST_VERSION=1.87.0
 ARG ZCASH_VERSION=6.1.0
 ARG ZEBRA_VERSION=1.15.0
 
-ARG UID=0
+ARG UID=1000
 ARG GID=${UID}
-ARG USER="root"
-ARG HOME="/root"
+ARG USER="zaino"
+ARG HOME="/home/zaino"
 ARG CARGO_HOME="${HOME}/.cargo"
 ARG CARGO_TARGET_DIR="${HOME}/target"
 
@@ -28,15 +28,9 @@ ARG HOME
 ARG CARGO_HOME
 ARG CARGO_TARGET_DIR
 
-ARG RUST_VERSION
-ARG GO_VERSION
-ARG LIGHTWALLETD_VERSION
-ARG ZCASH_VERSION
-ARG ZEBRA_VERSION
-
 LABEL maintainer="nachog00" \
     description="Image with zcashd, lightwalletd, zebrad, and cargo-nextest for CI/local testing." \
-    usage="docker run --rm -v "$PWD":/app -v "$PWD/target":/home/zaino/target -v "$PWD/docker_cargo/git":/home/zaino/.cargo/git -v "$PWD/docker_cargo/registry":/home/zaino/.cargo/registry -u zaino zingodevops/zaino-ci:latest" \
+    usage="Run with:\n  docker run --rm -v \$PWD:/app -v \$PWD/target:/home/zaino/target -v \$HOME/.cargo:/home/zaino/.cargo -w /app zaino-ci" \
     org.zaino.rust-version="${RUST_VERSION}" \
     org.zaino.zcashd-version="${ZCASH_VERSION}" \
     org.zaino.zebra-version="${ZEBRA_VERSION}"
@@ -53,11 +47,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 RUN rustup update stable
 
-# # Setup non-root user
-# RUN addgroup --quiet --gid ${GID} ${USER} && \
-#     adduser --quiet --gid ${GID} --uid ${UID} --home ${HOME} ${USER} --disabled-password --gecos "" && \
-#     mkdir -p ${CARGO_HOME} ${CARGO_TARGET_DIR} && \
-#     chown -R ${UID}:${GID} ${HOME}
+# Setup non-root user
+RUN addgroup --quiet --gid ${GID} ${USER} && \
+    adduser --quiet --gid ${GID} --uid ${UID} --home ${HOME} ${USER} --disabled-password --gecos "" && \
+    mkdir -p ${CARGO_HOME} ${CARGO_TARGET_DIR} && \
+    chown -R ${UID}:${GID} ${HOME}
 
 USER ${USER}
 
