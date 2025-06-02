@@ -1,8 +1,12 @@
 //! Zcash RPC implementations.
 
 use zaino_state::{LightWalletIndexer, ZcashIndexer};
+// add to zebra chain for rpc
+use zebra_chain::{block::Hash, chain_tip::ChainTip};
+//fn best_tip_hash(&self) -> Option<block::Hash>;
 use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
 use zebra_rpc::methods::{
+    self,
     trees::{GetSubtrees, GetTreestate},
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
     GetBlockChainInfo, GetInfo, GetRawTransaction, SentTransactionHash,
@@ -47,6 +51,17 @@ pub trait ZcashIndexerRpc {
     /// [required for lightwalletd support.](https://github.com/zcash/lightwalletd/blob/v0.4.9/common/common.go#L72-L89)
     #[method(name = "getblockchaininfo")]
     async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, ErrorObjectOwned>;
+
+    /// Returns the hash of the best block (tip) of the longest chain.
+    /// zcashd reference: [`z_gettreestate`](https://zcash.github.io/rpc/getbestblockhash.html)
+    /// method: post
+    /// tags: blockchain
+    ///
+    /// # Notes
+    ///
+    /// The zcashd doc reference above says there are no parameters and the result is a "hex" (string) of the block hash hex encoded.
+    #[method(name = "getbestblockhash")]
+    async fn get_best_blockhash(&self) -> Result<Hash, ErrorObjectOwned>;
 
     /// Returns the total balance of a provided `addresses` in an [`AddressBalance`] instance.
     ///
