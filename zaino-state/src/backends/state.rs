@@ -1019,6 +1019,13 @@ impl ZcashIndexer for StateServiceSubscriber {
         ))
     }
 
+    // No request parameters.
+    /// Return the hex encoded hash of the best (tip) block, in the longest block chain.
+    async fn get_best_blockhash(&self) -> Result<String, Self::Error> {
+        // return should be valid hex encoded.
+        return Ok("test_return".to_string());
+    }
+
     async fn z_get_subtrees_by_index(
         &self,
         pool: String,
@@ -1267,16 +1274,6 @@ impl ZcashIndexer for StateServiceSubscriber {
             RpcError::new_from_legacycode(LegacyCode::Misc, "no blocks in chain"),
         )?;
         Ok(chain_height)
-    }
-}
-
-// No request parameters.
-#[async_trait]
-impl BlockExplorerIndexer for StateServiceSubscriber {
-    /// Return the hex encoded hash of the best (tip) block, in the longest block chain.
-    async fn get_best_blockhash(&self) -> Result<String, Self::Error> {
-        // return should be valid hex encoded.
-        return Ok("test_return".to_string());
     }
 }
 
