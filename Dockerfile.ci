@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.4
 
 #### 🔧 Global Build Arguments and User Config
-ARG RUST_VERSION=1.76.0
+ARG RUST_VERSION=1.87.0
 ARG GO_VERSION=latest
 ARG LIGHTWALLETD_VERSION=0.4.16
 ARG ZCASH_VERSION=6.1.0
