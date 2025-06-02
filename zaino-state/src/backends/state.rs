@@ -4,8 +4,7 @@ use crate::{
     config::StateServiceConfig,
     error::{BlockCacheError, StateServiceError},
     indexer::{
-        handle_raw_transaction, BlockExplorerIndexer, IndexerSubscriber, LightWalletIndexer,
-        ZcashIndexer, ZcashService,
+        handle_raw_transaction, IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService,
     },
     local_cache::{
         compact_block_to_nullifiers,
