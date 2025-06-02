@@ -3,11 +3,12 @@
 use std::num::ParseIntError;
 
 use hex::FromHex;
+use http::response;
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
 
 use zebra_chain::{
     amount::{Amount, NonNegative},
-    block::Height,
+    block::{Hash, Height},
     work::difficulty::CompactDifficulty,
 };
 use zebra_rpc::methods::{opthex, types::get_blockchain_info::Balance};
@@ -500,6 +501,18 @@ pub enum GetBlockResponse {
     Raw(#[serde(with = "hex")] SerializedBlock),
     /// The block object.
     Object(Box<BlockObject>),
+}
+
+/// Contains the hex-encoded hash of the best (tip) block of the longest chain.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct GetBestBlockHash(Hash);
+
+impl TryFrom<GetBestBlockHash> for Hash {
+    type Error = zebra_chain::serialization::SerializationError;
+
+    fn try_from(value: GetBestBlockHash) -> Result<Self, Self::Error> {
+        Ok(value.0)
+    }
 }
 
 /// A block object containing data and metadata about a block.
