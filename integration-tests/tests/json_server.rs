@@ -343,10 +343,10 @@ async fn get_raw_mempool_inner() {
 
     let recipient_ua = &clients.get_recipient_address("unified").await;
     let recipient_taddr = &clients.get_recipient_address("transparent").await;
-    from_inputs::quick_send(&mut clients.faucet, vec![(&recipient_taddr, 250_000, None)])
+    from_inputs::quick_send(&mut clients.faucet, vec![(recipient_taddr, 250_000, None)])
         .await
         .unwrap();
-    from_inputs::quick_send(&mut clients.faucet, vec![(&recipient_ua, 250_000, None)])
+    from_inputs::quick_send(&mut clients.faucet, vec![(recipient_ua, 250_000, None)])
         .await
         .unwrap();
 
@@ -378,7 +378,7 @@ async fn z_get_treestate_inner() {
     clients.faucet.sync_and_await().await.unwrap();
 
     let recipient_ua = &clients.get_recipient_address("unified").await;
-    from_inputs::quick_send(&mut clients.faucet, vec![(&recipient_ua, 250_000, None)])
+    from_inputs::quick_send(&mut clients.faucet, vec![(recipient_ua, 250_000, None)])
         .await
         .unwrap();
 
@@ -412,7 +412,7 @@ async fn z_get_subtrees_by_index_inner() {
     clients.faucet.sync_and_await().await.unwrap();
 
     let recipient_ua = &clients.get_recipient_address("unified").await;
-    from_inputs::quick_send(&mut clients.faucet, vec![(&recipient_ua, 250_000, None)])
+    from_inputs::quick_send(&mut clients.faucet, vec![(recipient_ua, 250_000, None)])
         .await
         .unwrap();
 
@@ -446,7 +446,7 @@ async fn get_raw_transaction_inner() {
     clients.faucet.sync_and_await().await.unwrap();
 
     let recipient_ua = &clients.get_recipient_address("unified").await;
-    let tx = from_inputs::quick_send(&mut clients.faucet, vec![(&recipient_ua, 250_000, None)])
+    let tx = from_inputs::quick_send(&mut clients.faucet, vec![(recipient_ua, 250_000, None)])
         .await
         .unwrap();
 

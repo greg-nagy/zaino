@@ -1934,6 +1934,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn header_to_block_commitments(
     header: &Header,
     network: &Network,
