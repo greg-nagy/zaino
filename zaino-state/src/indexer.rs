@@ -246,6 +246,16 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// tags: blockchain
     async fn get_raw_mempool(&self) -> Result<Vec<String>, Self::Error>;
 
+    /// Returns the hash of the best block (tip) of the longest chain.
+    /// zcashd reference: [`z_gettreestate`](https://zcash.github.io/rpc/getbestblockhash.html)
+    /// method: post
+    /// tags: blockexplorer
+    ///
+    /// # Notes
+    ///
+    /// The zcashd doc reference above says there are no parameters and the result is a "hex" (string) of the block hash hex encoded.
+    async fn get_best_blockhash(&self) -> Result<String, Self::Error>;
+
     /// Returns information about the given block's Sapling & Orchard tree state.
     ///
     /// zcashd reference: [`z_gettreestate`](https://zcash.github.io/rpc/z_gettreestate.html)
@@ -409,15 +419,6 @@ pub trait ZcashIndexer: Send + Sync + 'static {
         ))
         .await
     }
-}
-
-/// LightWallet RPC method signatures.
-///
-/// Doc comments taken from Zaino-Proto for consistency.
-#[async_trait]
-pub trait BlockExplorerIndexer: Send + Sync + Clone + ZcashIndexer + 'static {
-    /// Return best block (tip) hash
-    async fn get_best_blockhash(&self) -> Result<String, Self::Error>;
 }
 
 /// LightWallet RPC method signatures.
