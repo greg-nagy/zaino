@@ -1106,6 +1106,32 @@ mod zebrad {
             state_service_get_raw_transaction_testnet().await;
         }
 
+        #[tokio::test]
+        async fn block_count() {
+            let (
+                test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+            test_manager.local_net.generate_blocks(2).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let fetch_service_block_count =
+                dbg!(fetch_service_subscriber.get_block_count().await.unwrap());
+            let state_service_block_count =
+                dbg!(state_service_subscriber.get_block_count().await.unwrap());
+            assert_eq!(fetch_service_block_count, state_service_block_count);
+        }
+
         mod z {
             use super::*;
 

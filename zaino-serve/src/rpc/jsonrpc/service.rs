@@ -1,7 +1,5 @@
 //! Zcash RPC implementations.
 
-use std::fmt::Error;
-
 use zaino_state::{LightWalletIndexer, ZcashIndexer};
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::methods::{
