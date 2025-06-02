@@ -13,7 +13,7 @@ use zaino_proto::proto::{
         TxFilter,
     },
 };
-use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
+use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex, transaction::Hash};
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
@@ -254,7 +254,7 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// # Notes
     ///
     /// The zcashd doc reference above says there are no parameters and the result is a "hex" (string) of the block hash hex encoded.
-    async fn get_best_blockhash(&self) -> Result<String, Self::Error>;
+    async fn get_best_blockhash(&self) -> Result<Hash, Self::Error>;
 
     /// Returns information about the given block's Sapling & Orchard tree state.
     ///

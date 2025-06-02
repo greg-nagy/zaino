@@ -286,6 +286,20 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
             })
     }
 
+    async fn get_best_blockhash(&self) -> Result<Hash, ErrorObjectOwned> {
+        self.service_subscriber
+            .inner_ref()
+            .get_best_blockhash()
+            .await
+            .map_err(|e| {
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
+            })
+    }
+
     async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, ErrorObjectOwned> {
         self.service_subscriber
             .inner_ref()
