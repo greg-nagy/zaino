@@ -1048,6 +1048,7 @@ mod zebrad {
         }
 
         #[tokio::test]
+        #[ignore = "We no longer use chain caches. See zcashd::check_info::regtest_no_cache."]
         async fn regtest_with_cache() {
             state_service_check_info(
                 &ValidatorKind::Zebrad,

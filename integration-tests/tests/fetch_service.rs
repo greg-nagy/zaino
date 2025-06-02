@@ -1181,6 +1181,7 @@ mod zcashd {
         }
 
         #[tokio::test]
+        #[ignore = "We no longer use chain caches. See zcashd::launch::regtest_no_cache."]
         pub(crate) async fn regtest_with_cache() {
             launch_fetch_service(
                 &ValidatorKind::Zcashd,
@@ -1350,6 +1351,7 @@ mod zebrad {
         }
 
         #[tokio::test]
+        #[ignore = "We no longer use chain caches. See zebrad::launch::regtest_no_cache."]
         pub(crate) async fn regtest_with_cache() {
             launch_fetch_service(
                 &ValidatorKind::Zebrad,
