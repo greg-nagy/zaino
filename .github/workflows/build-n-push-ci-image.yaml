@@ -15,16 +15,16 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
-      
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-      
+
     - name: Log in to DockerHub
       uses: docker/login-action@v2
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
-      
+
     - name: Extract versions and git SHA
       id: versions
       run: |
@@ -62,11 +62,11 @@ jobs:
 #   - **Checkout**: The code is checked out from the repository.
 #   - **Buildx Setup**: `docker/setup-buildx-action` sets up Docker Buildx, which is suitable for building multi-platform Docker images.
 #   - **DockerHub Login**: The DockerHub login step uses Docker credentials stored as secrets in the GitHub repository (`DOCKERHUB_USERNAME` and `DOCKERHUB_ACCESS_TOKEN`) to authenticate with DockerHub.
-  
-# - **Extract Version Variables**: 
+
+# - **Extract Version Variables**:
 #   - A shell script reads the `.env.ci-dep-versions` file and exports each variable into the GitHub Action environment.
-  
-# - **Build and Push**: 
+
+# - **Build and Push**:
 #   - The `docker/build-push-action` is used to build the Docker image using the specified Dockerfile and context.
 #   - The built image is tagged and then pushed to DockerHub. Update `user/repository:latest` with your actual DockerHub repository details.
 #   - Replace variables in the Docker Build process with the extracted environment variables to inject version values correctly during the image build process.
