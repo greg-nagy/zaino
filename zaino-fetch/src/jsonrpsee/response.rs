@@ -506,11 +506,9 @@ pub enum GetBlockResponse {
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GetBlockCountResponse(Height);
 
-impl TryFrom<GetBlockCountResponse> for Height {
-    type Error = zebra_chain::serialization::SerializationError;
-
-    fn try_from(response: GetBlockCountResponse) -> Result<Self, Self::Error> {
-        Ok(response.0)
+impl From<GetBlockCountResponse> for Height {
+    fn from(value: GetBlockCountResponse) -> Self {
+        value.0
     }
 }
 

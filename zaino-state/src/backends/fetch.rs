@@ -324,7 +324,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// method: post
     /// tags: blockchain
     async fn get_block_count(&self) -> Result<Height, Self::Error> {
-        Ok(self.fetcher.get_block_count().await?.try_into()?)
+        Ok(self.fetcher.get_block_count().await?.into())
     }
 
     /// Returns all transaction ids in the memory pool, as a JSON array.
