@@ -19,10 +19,10 @@ struct NonFinalzedState {
     /// This lock should not be exposed to consumers. Rather,
     /// clone the Arc and offer that. This means we can overwrite the arc
     /// without interfering with readers, who will hold a stale copy
-    current: RwLock<Arc<BlockCacheSnapshot>>,
+    current: RwLock<Arc<NonfinalizedBlockCacheSnapshot>>,
 }
 
-pub(crate) struct BlockCacheSnapshot {
+pub(crate) struct NonfinalizedBlockCacheSnapshot {
     /// the set of all known blocks < 100 blocks old
     /// this includes all blocks on-chain, as well as
     /// all blocks known to have been on-chain before being
@@ -106,13 +106,13 @@ impl NonFinalzedState {
             }
         });
         // Need to get best hash at some point in this process
-        *self.current.write().await = Arc::new(BlockCacheSnapshot { blocks, best_tip });
+        *self.current.write().await = Arc::new(NonfinalizedBlockCacheSnapshot { blocks, best_tip });
 
         Ok(())
     }
 
     /// Get a copy of the block cache as it existed at the last [update] call
-    pub async fn get_snapshot(&self) -> Arc<BlockCacheSnapshot> {
+    pub async fn get_snapshot(&self) -> Arc<NonfinalizedBlockCacheSnapshot> {
         self.current.read().await.clone()
     }
 }

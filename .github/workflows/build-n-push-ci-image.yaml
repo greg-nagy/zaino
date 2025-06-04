@@ -1,0 +1,72 @@
+name: Docker Image CI/CD
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev
+    paths:
+      - '.env.ci-dep-versions'
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to DockerHub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+
+    - name: Extract versions and git SHA
+      id: versions
+      run: |
+        source .env.zaino-versions
+        echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+        echo "RUST_VERSION=$RUST_VERSION" >> "$GITHUB_OUTPUT"
+        echo "GO_VERSION=$GO_VERSION" >> "$GITHUB_OUTPUT"
+        echo "LIGHTWALLETD_VERSION=$LIGHTWALLETD_VERSION" >> "$GITHUB_OUTPUT"
+        echo "ZCASH_VERSION=$ZCASH_VERSION" >> "$GITHUB_OUTPUT"
+        echo "ZEBRA_VERSION=$ZEBRA_VERSION" >> "$GITHUB_OUTPUT"
+
+    - name: Build and Push Docker Image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: Dockerfile.ci
+        platforms: linux/amd64,linux/arm64
+        tags: |
+          ${{ env.IMAGE_NAME }}:latest
+          ${{ env.IMAGE_NAME }}:${{ steps.versions.outputs.sha_short }}
+          ${{ env.IMAGE_NAME }}:rust-${{ steps.versions.outputs.RUST_VERSION }}-zcash-${{ steps.versions.outputs.ZCASH_VERSION }}-zebra-${{ steps.versions.outputs.ZEBRA_VERSION }}-lwd-${{ steps.versions.outputs.LIGHTWALLETD_VERSION }}
+        push: true
+        build-args: |
+          RUST_VERSION=${{ env.RUST_VERSION }}
+          GO_VERSION=${{ env.GO_VERSION }}
+          LIGHTWALLETD_VERSION=${{ env.LIGHTWALLETD_VERSION }}
+          ZCASH_VERSION=${{ env.ZCASH_VERSION }}
+          ZEBRA_VERSION=${{ env.ZEBRA_VERSION }}
+
+# ### Explanation:
+
+# - **Event Trigger**: The workflow is triggered on a push to the `dev` branch that includes changes to `.env.ci-dep-versions`.
+
+# - **Setup Steps**:
+#   - **Checkout**: The code is checked out from the repository.
+#   - **Buildx Setup**: `docker/setup-buildx-action` sets up Docker Buildx, which is suitable for building multi-platform Docker images.
+#   - **DockerHub Login**: The DockerHub login step uses Docker credentials stored as secrets in the GitHub repository (`DOCKERHUB_USERNAME` and `DOCKERHUB_ACCESS_TOKEN`) to authenticate with DockerHub.
+
+# - **Extract Version Variables**:
+#   - A shell script reads the `.env.ci-dep-versions` file and exports each variable into the GitHub Action environment.
+
+# - **Build and Push**:
+#   - The `docker/build-push-action` is used to build the Docker image using the specified Dockerfile and context.
+#   - The built image is tagged and then pushed to DockerHub. Update `user/repository:latest` with your actual DockerHub repository details.
+#   - Replace variables in the Docker Build process with the extracted environment variables to inject version values correctly during the image build process.
