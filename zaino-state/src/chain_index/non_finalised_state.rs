@@ -36,6 +36,10 @@ pub(crate) struct NonfinalizedBlockCacheSnapshot {
 /// This is the core of the concurrent block cache.
 impl NonFinalzedState {
     /// sync to the top of the chain
+    ///
+    /// TODO: This function currently only handles sync from the case where a
+    /// NonFinalizedState already exists, and is not yet optimized for the case
+    /// where more than 100 blocks have been mined since the last sync call
     pub async fn sync(&self) {
         let best_hash = match self.source.get_tip().await {
             Ok(Some((_height, hash))) => hash,
@@ -44,23 +48,44 @@ impl NonFinalzedState {
         };
 
         let initial_state = self.get_snapshot().await;
-        let best_chain_block_at_current_height = match self
-            .source
-            .get_block(HashOrHeight::Height(zebra_chain::block::Height(
-                initial_state.best_tip.0.into(),
-            )))
-            .await
-        {
-            Ok(Some(block)) => block,
-            Ok(None) => todo!("validator behind local best chain"),
-            Err(_) => todo!(),
-        };
-        if best_chain_block_at_current_height.hash()
-            == zebra_chain::block::Hash::from(initial_state.best_tip.1)
-        {
-            todo!("no reorg")
-        } else {
-            todo!("reorg")
+        let mut new_blocks = Vec::new();
+        let mut best_tip = initial_state.best_tip.clone();
+        loop {
+            let next_block = match self
+                .source
+                .get_block(HashOrHeight::Height(zebra_chain::block::Height(
+                    u32::from(best_tip.0) + 1,
+                )))
+                .await
+            {
+                Ok(block) => block,
+                Err(_) => todo!(),
+            };
+
+            match next_block {
+                Some(block) => {
+                    // If this block is next in the chain, we sync it as normal
+                    if Hash::from(block.header.previous_block_hash) == initial_state.best_tip.1 {
+                        best_tip = (best_tip.0 + 1, block.hash().into());
+                        new_blocks.push(block);
+                    } else {
+                        // If not, there's been a reorg, and we need to adjust our best-tip
+                        let prev_hash = initial_state
+                            .blocks
+                            .values()
+                            .find(|block| block.height() == Some(best_tip.0 - 1))
+                            .map(ChainBlock::hash)
+                            .unwrap_or_else(|| todo!("handle holes in database?"));
+
+                        best_tip = (best_tip.0 - 1, *prev_hash);
+                        new_blocks.push(block);
+                    }
+                }
+                // This should probably be concurrent rather than waiting until
+                // all blocks are received
+                // TODO: send all blocks to the sender, and update
+                None => todo!(),
+            }
         }
     }
     /// Stage a block

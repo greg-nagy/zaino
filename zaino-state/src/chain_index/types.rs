@@ -602,6 +602,22 @@ impl From<Height> for u32 {
     }
 }
 
+impl std::ops::Add<u32> for Height {
+    type Output = Self;
+
+    fn add(self, rhs: u32) -> Self::Output {
+        Height(self.0 + rhs)
+    }
+}
+
+impl std::ops::Sub<u32> for Height {
+    type Output = Self;
+
+    fn sub(self, rhs: u32) -> Self::Output {
+        Height(self.0 - rhs)
+    }
+}
+
 impl std::fmt::Display for Height {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
