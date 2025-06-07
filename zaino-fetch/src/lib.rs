@@ -1,6 +1,6 @@
-//! A mempool-fetching, chain-fetching and transaction submission service that uses zebra's RPC interface.
+//! A mempool-fetching, chain-fetching and transaction submission service that uses zcashd's JsonRPC interface.
 //!
-//! Used primarily as a backup and legacy option for backwards compatibility.
+//! Used as a reference, legacy option, and for backwards compatibility.
 
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
