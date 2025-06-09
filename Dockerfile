@@ -3,9 +3,6 @@
 # Set the build arguments used across the stages.
 # Each stage must define the build arguments (ARGs) it uses.
 
-# Accept an argument to control no-tls builds
-ARG NO_TLS=false
-
 # High UID/GID (10003) to avoid overlap with host system users.
 ARG UID=10003
 ARG GID=${UID}
@@ -19,6 +16,10 @@ ARG RUST_VERSION=1.86.0
   # This stage prepares Zaino's build deps and captures build args as env vars.
 FROM rust:${RUST_VERSION}-bookworm AS deps
 SHELL ["/bin/bash", "-xo", "pipefail", "-c"]
+
+# Accept an argument to control no-tls builds
+ARG NO_TLS=false
+ENV NO_TLS=${NO_TLS:-false}
 
 # Install build deps (if any beyond Rust).
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -51,6 +52,10 @@ WORKDIR ${HOME}
 
 ARG CARGO_HOME
 ARG CARGO_TARGET_DIR
+
+# Accept an argument to control no-tls builds
+ARG NO_TLS=false
+ENV NO_TLS=${NO_TLS:-false}
 
 # Mount the root Cargo.toml/Cargo.lock and all relevant workspace members.
 RUN --mount=type=bind,source=Cargo.toml,target=Cargo.toml \
