@@ -23,9 +23,9 @@ use tracing::error;
 use crate::jsonrpsee::{
     error::JsonRpSeeConnectorError,
     response::{
-        GetBalanceResponse, GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse,
-        GetSubtreesResponse, GetTransactionResponse, GetTreestateResponse, GetUtxosResponse,
-        SendTransactionResponse, TxidsResponse,
+        GetBalanceResponse, GetBlockCountResponse, GetBlockResponse, GetBlockchainInfoResponse,
+        GetInfoResponse, GetSubtreesResponse, GetTransactionResponse, GetTreestateResponse,
+        GetUtxosResponse, SendTransactionResponse, TxidsResponse,
     },
 };
 
@@ -409,6 +409,17 @@ impl JsonRpSeeConnector {
                 .await
                 .map(GetBlockResponse::Object)
         }
+    }
+
+    /// Returns the height of the most recent block in the best valid block chain
+    /// (equivalently, the number of blocks in this chain excluding the genesis block).
+    ///
+    /// zcashd reference: [`getblockcount`](https://zcash.github.io/rpc/getblockcount.html)
+    /// method: post
+    /// tags: blockchain
+    pub async fn get_block_count(&self) -> Result<GetBlockCountResponse, JsonRpSeeConnectorError> {
+        self.send_request::<(), GetBlockCountResponse>("getblockcount", ())
+            .await
     }
 
     /// Returns all transaction ids in the memory pool, as a JSON array.
