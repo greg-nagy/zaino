@@ -309,7 +309,7 @@ impl ChainTipSubscriber {
 /// needed, there are currently no plans to do so.
 impl StateServiceSubscriber {
     /// Gets a Subscriber to any updates to the latest chain tip
-    pub async fn chaintip_update_subscriber(&self) -> ChainTipSubscriber {
+    pub fn chaintip_update_subscriber(&self) -> ChainTipSubscriber {
         ChainTipSubscriber(self.chain_tip_change.clone())
     }
     /// Returns the requested block header by hash or height, as a [`GetBlockHeader`] JSON string.
