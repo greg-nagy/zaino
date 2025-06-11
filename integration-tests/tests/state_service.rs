@@ -1050,7 +1050,7 @@ mod zebrad {
         #[tokio::test]
         async fn state_service_chaintip_update_subscriber() {
             let (
-                mut test_manager,
+                test_manager,
                 _fetch_service,
                 _fetch_service_subscriber,
                 _state_service,
