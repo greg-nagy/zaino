@@ -36,6 +36,8 @@ Documentation should be clear and accurate to your latest commit.
 
 Contributions must be [GitHub pull requests](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests). New contributors should make PRs _from a personal fork_ of the project, _to this repo, zingolabs/zaino_. Generally pull requests will be against `dev`, the development branch.
 
+Please also see our [Software Philosophy](#software-philosophy), and understand you are contribuing to a project with these principles at work.
+
 ## Bug Reports and Feature Requests
 
 If you believe you have discovered a security issue and wish to disclose it non-pubicly, please contact us at:
