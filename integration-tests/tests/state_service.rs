@@ -1067,11 +1067,7 @@ mod zebrad {
             for _ in 0..5 {
                 test_manager.generate_blocks_with_delay(1).await;
                 assert_eq!(
-                    chaintip_subscriber
-                        .next_tip_hash()
-                        .await
-                        .unwrap()
-                        .bytes_in_display_order(),
+                    chaintip_subscriber.next_tip_hash().await.unwrap().0,
                     <[u8; 32]>::try_from(
                         state_service_subscriber
                             .get_latest_block()
