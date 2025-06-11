@@ -1,0 +1,105 @@
+env_files = [".env.testing-artifacts"]
+
+[config]
+default_to_workspace = false
+
+[env]
+IMAGE_NAME = "zingodevops/zaino-ci"
+
+[tasks.base-script]
+script.pre = '''
+source "./utils/helpers.sh"
+TAG=$(./utils/get-ci-image-tag.sh)
+'''
+script.main = "err 'default main script. define a proper script to skip this one'"
+script.post = ""
+
+# -------------------------------------------------------------------
+
+[tasks.compute-image-tag]
+description = "Compute image tag from version vars"
+script = '''
+TAG=$(./utils/get-ci-image-tag.sh)
+echo "CARGO_MAKE_IMAGE_TAG=$TAG"
+export CARGO_MAKE_IMAGE_TAG=$TAG
+'''
+# -------------------------------------------------------------------
+
+[tasks.ensure-image-exists]
+description = "Check if image with current version tag exists locally"
+extend = "base-script"
+script.main = '''
+# source "./utils/helpers.sh"
+# TAG=$(./utils/get-ci-image-tag.sh)
+if ! docker image inspect ${IMAGE_NAME}:${TAG} > /dev/null 2>&1; then
+  warn "Image not found locally. Triggering build..."
+  cargo make build-image
+else
+  info "Image ${IMAGE_NAME}:${TAG} available locally"
+fi
+'''
+
+# -------------------------------------------------------------------
+
+[tasks.build-image]
+description = "Build the Docker image for testing artifacts"
+script_runner = "bash"
+extend = "base-script"
+script.main = '''
+set -euo pipefail
+
+TAG=$(./utils/get-ci-image-tag.sh)
+
+echo -e "\033[1;33m>>> Building image with tag: ${TAG}\033[0m"
+
+docker build -f Dockerfile.ci \
+  --build-arg ZCASH_VERSION=$ZCASH_VERSION \
+  --build-arg ZEBRA_VERSION=$ZEBRA_VERSION \
+  --build-arg RUST_VERSION=$RUST_VERSION \
+  -t ${IMAGE_NAME}:$TAG .
+'''
+
+# -------------------------------------------------------------------
+
+[tasks.push-image]
+description = "Push image if running in CI"
+condition = { env_set = ["CI"] }
+script_runner = "bash"
+script = '''
+set -euo pipefail
+
+TAG=$(./utils/get-ci-image-tag.sh)
+
+echo "Pushing image: ${IMAGE_NAME}:$TAG"
+
+docker push ${IMAGE_NAME}:$TAG
+'''
+
+# -------------------------------------------------------------------
+
+[tasks.test]
+clear = true
+description = "Run integration tests using the local image"
+dependencies = ["ensure-image-exists"]
+script_runner = "bash"
+extend = "base-script"
+script.main = '''
+set -euo pipefail
+
+TAG=$(./utils/get-ci-image-tag.sh)
+
+info "Running tests using image: ${IMAGE_NAME}:$TAG"
+
+docker run --rm \
+  --name zaino-testing \
+  -v "$PWD":/app \
+  -v "$PWD/target":/home/zaino/target \
+  -v "$PWD/docker_cargo/git":/home/zaino/.cargo/git \
+  -v "$PWD/docker_cargo/registry":/home/zaino/.cargo/registry \
+  -w /app \
+  "${IMAGE_NAME}:$TAG" \
+  cargo nextest run --profile ci "${@}"
+'''
+script.post = '''
+docker stop zaino-testing
+'''
