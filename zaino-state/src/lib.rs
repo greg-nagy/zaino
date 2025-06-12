@@ -24,7 +24,17 @@ pub use backends::{
     state::{StateService, StateServiceSubscriber},
 };
 
-// TODO: Rework local_cache -> ChainIndex
+// NOTE: This will replace local_cache. Currently WIP.
+pub(crate) mod chain_index;
+
+// NOTE: Should these be pub at all?
+pub use chain_index::types::{
+    BlockData, BlockIndex, ChainBlock, ChainWork, CommitmentTreeRoots, CommitmentTreeSizes,
+    CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, Hash, Height, Index,
+    SaplingCompactTx, ScriptType, ShardRoot, SpentOutpoint, TransparentCompactTx, TxData,
+    TxInCompact, TxOutCompact,
+};
+
 pub(crate) mod local_cache;
 
 pub use local_cache::mempool::{MempoolKey, MempoolValue};

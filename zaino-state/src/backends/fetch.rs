@@ -318,11 +318,21 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .try_into()?)
     }
 
+
     // No request parameters.
     /// Return the hex encoded hash of the best (tip) block, in the longest block chain.
     async fn get_best_blockhash(&self) -> Result<String, Self::Error> {
         // return should be valid hex encoded.
         return Ok("test_return".to_string());
+    }
+    
+    /// Returns the current block count in the best valid block chain.
+    ///
+    /// zcashd reference: [`getblockcount`](https://zcash.github.io/rpc/getblockcount.html)
+    /// method: post
+    /// tags: blockchain
+    async fn get_block_count(&self) -> Result<Height, Self::Error> {
+        Ok(self.fetcher.get_block_count().await?.into())
     }
 
     /// Returns all transaction ids in the memory pool, as a JSON array.

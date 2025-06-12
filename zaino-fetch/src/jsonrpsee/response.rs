@@ -503,6 +503,7 @@ pub enum GetBlockResponse {
     Object(Box<BlockObject>),
 }
 
+
 /// Contains the hex-encoded hash of the best (tip) block of the longest chain.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GetBestBlockHashResponse(Hash);
@@ -512,6 +513,15 @@ impl TryFrom<GetBestBlockHashResponse> for Hash {
 
     fn try_from(value: GetBestBlockHashResponse) -> Result<Self, Self::Error> {
         Ok(value.0)
+    }
+}
+/// Contains the height of the most recent block in the best valid block chain
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct GetBlockCountResponse(Height);
+
+impl From<GetBlockCountResponse> for Height {
+    fn from(value: GetBlockCountResponse) -> Self {
+        value.0
     }
 }
 
