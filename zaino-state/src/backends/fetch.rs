@@ -8,7 +8,10 @@ use tonic::async_trait;
 use tracing::{info, warn};
 use zebra_state::HashOrHeight;
 
-use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
+use zebra_chain::{
+    block::{Hash, Height},
+    subtree::NoteCommitmentSubtreeIndex,
+};
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
@@ -318,14 +321,13 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .try_into()?)
     }
 
-
     // No request parameters.
     /// Return the hex encoded hash of the best (tip) block, in the longest block chain.
-    async fn get_best_blockhash(&self) -> Result<String, Self::Error> {
+    async fn get_best_blockhash(&self) -> Result<Hash, Self::Error> {
         // return should be valid hex encoded.
         return Ok("test_return".to_string());
     }
-    
+
     /// Returns the current block count in the best valid block chain.
     ///
     /// zcashd reference: [`getblockcount`](https://zcash.github.io/rpc/getblockcount.html)

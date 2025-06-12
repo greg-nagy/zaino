@@ -3,7 +3,6 @@
 use std::num::ParseIntError;
 
 use hex::FromHex;
-use http::response;
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
 
 use zebra_chain::{
@@ -502,7 +501,6 @@ pub enum GetBlockResponse {
     /// The block object.
     Object(Box<BlockObject>),
 }
-
 
 /// Contains the hex-encoded hash of the best (tip) block of the longest chain.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]

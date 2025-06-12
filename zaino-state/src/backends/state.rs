@@ -36,7 +36,7 @@ use zaino_proto::proto::{
 };
 
 use zebra_chain::{
-    block::{Header, Height, SerializedBlock},
+    block::{Hash, Header, Height, SerializedBlock},
     chain_tip::NetworkChainTipHeightEstimator,
     parameters::{ConsensusBranchId, Network, NetworkUpgrade},
     serialization::ZcashSerialize,
@@ -1047,10 +1047,11 @@ impl ZcashIndexer for StateServiceSubscriber {
 
     // No request parameters.
     /// Return the hex encoded hash of the best (tip) block, in the longest block chain.
-    async fn get_best_blockhash(&self) -> Result<String, Self::Error> {
+    async fn get_best_blockhash(&self) -> Result<Hash, Self::Error> {
         // return should be valid hex encoded.
         return Ok("test_return".to_string());
     }
+
     /// Returns the current block count in the best valid block chain.
     ///
     /// zcashd reference: [`getblockcount`](https://zcash.github.io/rpc/getblockcount.html)
