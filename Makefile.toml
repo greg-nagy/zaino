@@ -46,9 +46,14 @@ extend = "base-script"
 script.main = '''
 set -euo pipefail
 
-info "Building image with tag: ${TAG}"
+TARGET=$(resolve_build_target "$ZCASH_VERSION" "$ZEBRA_VERSION")
+
+info "Building image"
+info "Tag: ${TAG}"
+info "Target: $TARGET"
 
 docker build -f Dockerfile.ci \
+  --target "$TARGET" \
   --build-arg ZCASH_VERSION=$ZCASH_VERSION \
   --build-arg ZEBRA_VERSION=$ZEBRA_VERSION \
   --build-arg RUST_VERSION=$RUST_VERSION \
@@ -59,7 +64,7 @@ docker build -f Dockerfile.ci \
 
 [tasks.push-image]
 description = "Push image if running in CI"
-condition = { env_set = ["CI"] }
+# condition = { env_set = ["CI"] }
 script_runner = "bash"
 extend = "base-script"
 script.main = '''

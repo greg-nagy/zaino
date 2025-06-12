@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENV_FILE=".env.ci-dep-versions"
+ENV_FILE=".env.testing-artifacts"
 DOCKERFILE="Dockerfile.ci"
 IMAGE_TAG="zaino-ci:local"
 
