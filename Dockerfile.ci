@@ -27,9 +27,13 @@ FROM electriccoinco/zcashd:v${ZCASH_VERSION} AS zcashd-downloader
 FROM rust:${RUST_VERSION}-bookworm AS zebra-builder
 
 ARG ZEBRA_VERSION
-RUN apt-get update && apt-get install -y git clang cmake pkg-config libssl-dev
+RUN apt-get update && apt-get install -y git clang cmake pkg-config libssl-dev protobuf-compiler
 WORKDIR /zebra
 RUN git clone --depth 1 --branch "${ZEBRA_VERSION}" https://github.com/ZcashFoundation/zebra .
+# Use persistent cache for cargo
+# RUN --mount=type=cache,target=/usr/local/cargo/registry \
+#     --mount=type=cache,target=/usr/local/cargo/git \
+#     --mount=type=cache,target=/zebra/target \
 RUN cargo build --release
 RUN cp target/release/zebrad /usr/local/bin/zebrad
 
@@ -67,8 +71,15 @@ LABEL maintainer="nachog00"
 LABEL org.zaino.test-artifacts.versions.rust="${RUST_VERSION}"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libssl-dev curl build-essential && \
-    rm -rf /var/lib/apt/lists/*
+    libssl-dev \
+    curl \
+    libclang-dev \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install rustup (Rust toolchain manager) and set up the Rust toolchain
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+RUN rustup update stable
 
 WORKDIR /app
 USER ${USER}
