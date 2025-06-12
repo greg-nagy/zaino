@@ -93,9 +93,9 @@ info "Running tests using image: ${IMAGE_NAME}:$TAG"
 docker run --rm \
   --name zaino-testing \
   -v "$PWD":/app \
-  -v "$PWD/target":/home/zaino/target \
-  -v "$PWD/docker_cargo/git":/home/zaino/.cargo/git \
-  -v "$PWD/docker_cargo/registry":/home/zaino/.cargo/registry \
+  -v "$PWD/target":/root/target \
+  -v "$PWD/docker_cargo/git":/root/.cargo/git \
+  -v "$PWD/docker_cargo/registry":/root/.cargo/registry \
   -w /app \
   "${IMAGE_NAME}:$TAG" \
   cargo nextest run --profile ci "${@}"
