@@ -44,31 +44,26 @@ fn main() -> io::Result<()> {
     let version = env::var("CARGO_PKG_VERSION").expect("Failed to get version from Cargo.toml");
     println!("cargo:rustc-env=VERSION={}", version);
     let lockfile = Lockfile::load("../Cargo.lock").expect("build script cannot load lockfile");
-    let zebrad_package = lockfile
-        .packages
-        .iter()
-        .find(|package| {
-            package.name == cargo_lock::Name::from_str("zebra-chain").unwrap()
-                && package.source.as_ref().is_some_and(|source_id| {
-                    matches!(
-                        source_id.kind(),
-                        SourceKind::Git(GitReference::Rev(_)) | SourceKind::Registry
-                    )
+    let maybe_zebra_rev = lockfile.packages.iter().find_map(|package| {
+        if package.name == cargo_lock::Name::from_str("zebra-chain").unwrap() {
+            package
+                .source
+                .as_ref()
+                .and_then(|source_id| match source_id.kind() {
+                    SourceKind::Git(GitReference::Rev(rev)) => Some(rev),
+                    _ => None,
                 })
-        })
-        .expect("Could not find revision or version based zebra dependency");
-    let zebra_version = match zebrad_package.source.as_ref().unwrap().kind() {
-        SourceKind::Git(GitReference::Rev(rev)) => Some(rev.clone()),
-        SourceKind::Registry => Some(zebrad_package.version.to_string()),
-        _ => None,
-    };
+        } else {
+            None
+        }
+    });
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("zebraversion.rs");
     fs::write(
         &dest_path,
         &format!(
             "const ZEBRA_VERSION: Option<&'static str> = {:?};",
-            zebra_version
+            maybe_zebra_rev
         ),
     )
     .unwrap();
