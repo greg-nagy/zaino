@@ -2,12 +2,11 @@
 
 use zaino_state::{LightWalletIndexer, ZcashIndexer};
 
-// add to zebra chain for rpc
-use zebra_chain::{block::Hash, block::Height, chain_tip::ChainTip, subtree::NoteCommitmentSubtreeIndex};
-//fn best_tip_hash(&self) -> Option<block::Hash>;
+use zebra_chain::{block::Hash, block::Height, subtree::NoteCommitmentSubtreeIndex};
+// TODO add to zebra chain for rpc
+// TODO fn best_tip_hash(&self) -> Option<block::Hash>;
 
 use zebra_rpc::methods::{
-    self,
     trees::{GetSubtrees, GetTreestate},
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
     GetBlockChainInfo, GetInfo, GetRawTransaction, SentTransactionHash,
@@ -71,7 +70,6 @@ pub trait ZcashIndexerRpc {
     /// tags: blockchain
     #[method(name = "getblockcount")]
     async fn get_block_count(&self) -> Result<Height, ErrorObjectOwned>;
-
 
     /// Returns the total balance of a provided `addresses` in an [`AddressBalance`] instance.
     ///

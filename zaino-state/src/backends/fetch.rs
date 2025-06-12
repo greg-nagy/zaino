@@ -325,7 +325,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// Return the hex encoded hash of the best (tip) block, in the longest block chain.
     async fn get_best_blockhash(&self) -> Result<Hash, Self::Error> {
         // return should be valid hex encoded.
-        return Ok("test_return".to_string());
+        Ok(self.fetcher.get_best_blockhash().await?.into())
     }
 
     /// Returns the current block count in the best valid block chain.
