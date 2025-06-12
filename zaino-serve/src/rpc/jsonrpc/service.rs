@@ -1,7 +1,7 @@
 //! Zcash RPC implementations.
 
 use zaino_state::{LightWalletIndexer, ZcashIndexer};
-use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
+use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
@@ -55,6 +55,14 @@ pub trait ZcashIndexerRpc {
     /// tags: blockchain
     #[method(name = "getdifficulty")]
     async fn get_difficulty(&self) -> Result<f64, ErrorObjectOwned>;
+
+    /// Returns the current block count in the best valid block chain.
+    ///
+    /// zcashd reference: [`getblockcount`](https://zcash.github.io/rpc/getblockcount.html)
+    /// method: post
+    /// tags: blockchain
+    #[method(name = "getblockcount")]
+    async fn get_block_count(&self) -> Result<Height, ErrorObjectOwned>;
 
     /// Returns the total balance of a provided `addresses` in an [`AddressBalance`] instance.
     ///
@@ -297,6 +305,20 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
         self.service_subscriber
             .inner_ref()
             .get_difficulty()
+            .await
+            .map_err(|e| {
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
+            })
+    }
+
+    async fn get_block_count(&self) -> Result<Height, ErrorObjectOwned> {
+        self.service_subscriber
+            .inner_ref()
+            .get_block_count()
             .await
             .map_err(|e| {
                 ErrorObjectOwned::owned(
