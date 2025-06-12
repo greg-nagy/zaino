@@ -156,6 +156,29 @@ impl ZcashService for StateService {
         .await?;
 
         let zebra_build_data = rpc_client.get_info().await?;
+        match crate::ZEBRA_VERSION {
+            Some(expected_zebrad_version) => {
+                if zebra_build_data.build.contains('+') {
+                    if !zebra_build_data
+                        .build
+                        .contains(&expected_zebrad_version[0..7])
+                    {
+                        return Err(StateServiceError::ZebradVersionMismatch {
+                            expected_zebrad_version: expected_zebrad_version.to_string(),
+                            connected_zebrad_version: zebra_build_data.build,
+                        });
+                    }
+                } else {
+                    if expected_zebrad_version != zebra_build_data.build {
+                        return Err(StateServiceError::ZebradVersionMismatch {
+                            expected_zebrad_version: expected_zebrad_version.to_string(),
+                            connected_zebrad_version: zebra_build_data.build,
+                        });
+                    }
+                }
+            }
+            None => (),
+        };
         let data = ServiceMetadata::new(
             get_build_info(),
             config.network.clone(),
