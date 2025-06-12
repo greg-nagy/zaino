@@ -235,6 +235,18 @@ async fn launch_json_server_check_info(enable_cookie_auth: bool) {
     test_manager.close().await;
 }
 
+async fn get_block_count_inner() {
+    let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
+        create_test_manager_and_fetch_services(false, false).await;
+
+    let zcashd_block_count = dbg!(zcashd_subscriber.get_block_count().await.unwrap());
+    let zaino_block_count = dbg!(zaino_subscriber.get_block_count().await.unwrap());
+
+    assert_eq!(zcashd_block_count, zaino_block_count);
+
+    test_manager.close().await;
+}
+
 async fn z_get_address_balance_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
         create_test_manager_and_fetch_services(false, true).await;
@@ -592,6 +604,11 @@ mod zcashd {
         #[tokio::test]
         async fn z_get_address_balance() {
             z_get_address_balance_inner().await;
+        }
+
+        #[tokio::test]
+        async fn get_block_count() {
+            get_block_count_inner().await;
         }
 
         #[tokio::test]

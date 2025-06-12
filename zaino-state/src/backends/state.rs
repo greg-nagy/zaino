@@ -110,6 +110,8 @@ pub struct StateService {
     config: StateServiceConfig,
     /// Thread-safe status indicator.
     status: AtomicStatus,
+    /// Listener for when the chain tip changes
+    chain_tip_change: zebra_state::ChainTipChange,
 }
 
 impl StateService {
@@ -163,7 +165,7 @@ impl ZcashService for StateService {
         info!("Using Zcash build: {}", data);
 
         info!("Launching Chain Syncer..");
-        let (mut read_state_service, _latest_chain_tip, _chain_tip_change, sync_task_handle) =
+        let (mut read_state_service, _latest_chain_tip, chain_tip_change, sync_task_handle) =
             init_read_state_with_syncer(
                 config.validator_config.clone(),
                 &config.network,
@@ -205,6 +207,7 @@ impl ZcashService for StateService {
         let mempool = Mempool::spawn(&rpc_client, None).await?;
 
         let state_service = Self {
+            chain_tip_change,
             read_state_service,
             sync_task_handle: Some(Arc::new(sync_task_handle)),
             rpc_client: rpc_client.clone(),
@@ -229,6 +232,7 @@ impl ZcashService for StateService {
             mempool: self.mempool.subscriber(),
             data: self.data.clone(),
             config: self.config.clone(),
+            chain_tip_change: self.chain_tip_change.clone(),
         })
     }
 
@@ -278,6 +282,25 @@ pub struct StateServiceSubscriber {
     pub data: ServiceMetadata,
     /// StateService config data.
     config: StateServiceConfig,
+    /// Listener for when the chain tip changes
+    chain_tip_change: zebra_state::ChainTipChange,
+}
+
+/// A subscriber to any chaintip updates
+#[derive(Clone)]
+pub struct ChainTipSubscriber(zebra_state::ChainTipChange);
+
+impl ChainTipSubscriber {
+    /// Waits until the tip hash has changed (relative to the last time this method
+    /// was called), then returns the best tip's block hash.
+    pub async fn next_tip_hash(
+        &mut self,
+    ) -> Result<zebra_chain::block::Hash, tokio::sync::watch::error::RecvError> {
+        self.0
+            .wait_for_tip_change()
+            .await
+            .map(|tip| tip.best_tip_hash())
+    }
 }
 
 /// Private RPC methods, which are used as helper methods by the public ones
@@ -285,6 +308,10 @@ pub struct StateServiceSubscriber {
 /// These would be simple to add to the public interface if
 /// needed, there are currently no plans to do so.
 impl StateServiceSubscriber {
+    /// Gets a Subscriber to any updates to the latest chain tip
+    pub fn chaintip_update_subscriber(&self) -> ChainTipSubscriber {
+        ChainTipSubscriber(self.chain_tip_change.clone())
+    }
     /// Returns the requested block header by hash or height, as a [`GetBlockHeader`] JSON string.
     /// If the block is not in Zebra's state,
     /// returns [error code `-8`.](https://github.com/zcash/zcash/issues/5758)
@@ -1016,6 +1043,15 @@ impl ZcashIndexer for StateServiceSubscriber {
             sapling,
             orchard,
         ))
+    }
+
+    /// Returns the current block count in the best valid block chain.
+    ///
+    /// zcashd reference: [`getblockcount`](https://zcash.github.io/rpc/getblockcount.html)
+    /// method: post
+    /// tags: blockchain
+    async fn get_block_count(&self) -> Result<Height, Self::Error> {
+        Ok(self.block_cache.get_chain_height().await?)
     }
 
     async fn z_get_subtrees_by_index(
