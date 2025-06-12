@@ -65,9 +65,7 @@ extend = "base-script"
 script.main = '''
 set -euo pipefail
 
-TAG=$(./utils/get-ci-image-tag.sh)
-
-echo "Pushing image: ${IMAGE_NAME}:$TAG"
+info "Pushing image: ${IMAGE_NAME}:$TAG"
 
 docker push ${IMAGE_NAME}:$TAG
 '''
