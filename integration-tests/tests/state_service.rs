@@ -1048,6 +1048,39 @@ mod zebrad {
         }
 
         #[tokio::test]
+        async fn state_service_chaintip_update_subscriber() {
+            let (
+                test_manager,
+                _fetch_service,
+                _fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+            let mut chaintip_subscriber = state_service_subscriber.chaintip_update_subscriber();
+            for _ in 0..5 {
+                test_manager.generate_blocks_with_delay(1).await;
+                assert_eq!(
+                    chaintip_subscriber.next_tip_hash().await.unwrap().0,
+                    <[u8; 32]>::try_from(
+                        state_service_subscriber
+                            .get_latest_block()
+                            .await
+                            .unwrap()
+                            .hash
+                    )
+                    .unwrap()
+                )
+            }
+        }
+
+        #[tokio::test]
         #[ignore = "We no longer use chain caches. See zcashd::check_info::regtest_no_cache."]
         async fn regtest_with_cache() {
             state_service_check_info(
