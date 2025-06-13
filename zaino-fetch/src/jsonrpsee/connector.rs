@@ -23,9 +23,9 @@ use tracing::error;
 use crate::jsonrpsee::{
     error::JsonRpSeeConnectorError,
     response::{
-        GetBalanceResponse, GetBestBlockHashResponse, GetBlockCountResponse, GetBlockResponse, GetBlockchainInfoResponse,
-        GetInfoResponse, GetSubtreesResponse, GetTransactionResponse, GetTreestateResponse,
-        GetUtxosResponse, SendTransactionResponse, TxidsResponse,
+        GetBalanceResponse, GetBestBlockHashResponse, GetBlockCountResponse, GetBlockResponse,
+        GetBlockchainInfoResponse, GetInfoResponse, GetSubtreesResponse, GetTransactionResponse,
+        GetTreestateResponse, GetUtxosResponse, SendTransactionResponse, TxidsResponse,
     },
 };
 
@@ -411,7 +411,6 @@ impl JsonRpSeeConnector {
         }
     }
 
-
     /// Returns the hash of the best block (tip) of the longest chain.
     /// zcashd reference: [`z_gettreestate`](https://zcash.github.io/rpc/getbestblockhash.html)
     /// method: post
@@ -424,7 +423,7 @@ impl JsonRpSeeConnector {
         &self,
     ) -> Result<GetBestBlockHashResponse, JsonRpSeeConnectorError> {
         self.send_request::<(), GetBestBlockHashResponse>("getbestblockhash", ())
-                  .await
+            .await
     }
 
     /// Returns the height of the most recent block in the best valid block chain

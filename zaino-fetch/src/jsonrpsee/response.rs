@@ -508,7 +508,7 @@ pub struct GetBestBlockHashResponse(Hash);
 
 impl From<GetBestBlockHashResponse> for Hash {
     fn from(value: GetBestBlockHashResponse) -> Self {
-        value.into()
+        value.0
     }
 }
 /// Contains the height of the most recent block in the best valid block chain
