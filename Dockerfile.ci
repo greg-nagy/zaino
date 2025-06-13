@@ -47,7 +47,7 @@ RUN apt-get update && apt-get install -y \
     libtool bsdmainutils curl
 
 WORKDIR /zcash
-RUN git clone --depth 1 --branch "${ZCASH_VERSION}" https://github.com/zcash/zcash .
+RUN git clone --depth 1 --branch "v${ZCASH_VERSION}" https://github.com/zcash/zcash .
 RUN ./zcutil/fetch-params.sh && ./zcutil/build.sh -j$(nproc)
 RUN cp src/zcashd src/zcash-cli /usr/local/bin/
 
