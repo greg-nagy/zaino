@@ -50,9 +50,9 @@ jobs:
         file: Dockerfile.ci
         platforms: linux/amd64,linux/arm64
         tags: |
-          ${{ env.IMAGE_NAME }}:latest
-          ${{ env.IMAGE_NAME }}:${{ steps.versions.outputs.sha_short }}
-          ${{ env.IMAGE_NAME }}:${{ steps.taggen.outputs.TAG }}
+          zingodevops/zaino-ci:latest
+          zingodevops/zaino-ci:${{ steps.versions.outputs.sha_short }}
+          zingodevops/zaino-ci:${{ steps.taggen.outputs.TAG }}
         push: true
         build-args: |
           RUST_VERSION=${{ env.RUST_VERSION }}
