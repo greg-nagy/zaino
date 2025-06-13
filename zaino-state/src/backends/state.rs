@@ -1082,11 +1082,7 @@ impl ZcashIndexer for StateServiceSubscriber {
         //
         // Zebra displays transaction and block hashes in big-endian byte-order,
         // following the u256 convention set by Bitcoin and zcashd.
-        Ok(self
-            .read_state_service
-            .best_tip()
-            .expect("best_tip() to unwrap")
-            .1)
+        Ok(self.block_cache.best_tip().ok_or(Self::Error)?.1)
     }
 
     /// Returns the current block count in the best valid block chain.
