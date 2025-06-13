@@ -497,14 +497,13 @@ async fn fetch_service_get_latest_block(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-async fn fetch_service_get_difficulty(validator: &ValidatorKind) {
+async fn assert_fetch_service_difficulty_matches_rpc(validator: &ValidatorKind) {
     let (test_manager, _fetch_service, fetch_service_subscriber) =
         create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
-    let fetch_service_get_difficulty =
-        dbg!(fetch_service_subscriber.get_difficulty().await.unwrap());
+    let fetch_service_get_difficulty = fetch_service_subscriber.get_difficulty().await.unwrap();
 
-    let json_service = JsonRpSeeConnector::new_with_basic_auth(
+    let jsonrpc_client = JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
             test_manager.zebrad_rpc_listen_address,
             false,
@@ -519,9 +518,9 @@ async fn fetch_service_get_difficulty(validator: &ValidatorKind) {
     )
     .unwrap();
 
-    let json_service_get_difficulty = dbg!(json_service.get_difficulty().await.unwrap());
+    let rpc_difficulty_response = jsonrpc_client.get_difficulty().await.unwrap();
 
-    assert_eq!(fetch_service_get_difficulty, json_service_get_difficulty.0);
+    assert_eq!(fetch_service_get_difficulty, rpc_difficulty_response.0);
 }
 
 async fn fetch_service_get_block(validator: &ValidatorKind) {
@@ -1284,7 +1283,7 @@ mod zcashd {
 
         #[tokio::test]
         pub(crate) async fn difficulty() {
-            fetch_service_get_difficulty(&ValidatorKind::Zcashd).await;
+            assert_fetch_service_difficulty_matches_rpc(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test]
@@ -1459,7 +1458,7 @@ mod zebrad {
 
         #[tokio::test]
         pub(crate) async fn difficulty() {
-            fetch_service_get_difficulty(&ValidatorKind::Zebrad).await;
+            assert_fetch_service_difficulty_matches_rpc(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test]

@@ -377,10 +377,10 @@ fn test_figment_env_override_toml_and_defaults() {
         let config = load_config(&temp_toml_path).expect("load_config should succeed");
 
         assert_eq!(config.network, "Mainnet");
-        assert!(config.enable_json_server);
+        assert_eq!(config.enable_json_server, true);
         assert_eq!(config.map_capacity, Some(12345));
         assert_eq!(config.cookie_dir, Some(PathBuf::from("/env/cookie/path")));
-        assert!(!config.grpc_tls);
+        assert_eq!(!config.grpc_tls, true);
         Ok(())
     });
 }

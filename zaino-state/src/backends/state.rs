@@ -803,14 +803,19 @@ impl ZcashIndexer for StateServiceSubscriber {
     }
 
     async fn get_difficulty(&self) -> Result<f64, Self::Error> {
-        match self
-            .rpc_client
-            .get_difficulty()
-            .await
-            .map_err(Self::Error::from)?
-        {
-            GetDifficultyResponse(difficulty) => Ok(difficulty),
-        }
+        chain_tip_difficulty(
+            self.config.network.clone(),
+            self.read_state_service.clone(),
+            false,
+        )
+        .await
+        .map(|difficulty| difficulty as f64)
+        .map_err(|e| {
+            StateServiceError::RpcError(RpcError::new_from_errorobject(
+                e,
+                "failed to get difficulty",
+            ))
+        })
     }
 
     async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, Self::Error> {

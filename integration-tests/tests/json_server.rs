@@ -247,26 +247,6 @@ async fn get_block_count_inner() {
     test_manager.close().await;
 }
 
-async fn get_difficulty_inner() {
-    let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
-        create_test_manager_and_fetch_services(false, false).await;
-
-    let zcashd_difficulty = dbg!(zcashd_subscriber.get_difficulty().await.unwrap());
-    let zaino_difficulty = dbg!(zaino_subscriber.get_difficulty().await.unwrap());
-
-    assert_eq!(zcashd_difficulty, zaino_difficulty);
-
-    // Generate some blocks
-    test_manager.local_net.generate_blocks(10).await.unwrap();
-
-    let zcashd_difficulty = dbg!(zcashd_subscriber.get_difficulty().await.unwrap());
-    let zaino_difficulty = dbg!(zaino_subscriber.get_difficulty().await.unwrap());
-
-    assert_eq!(zcashd_difficulty, zaino_difficulty);
-
-    test_manager.close().await;
-}
-
 async fn z_get_address_balance_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
         create_test_manager_and_fetch_services(false, true).await;
@@ -631,9 +611,32 @@ mod zcashd {
             get_block_count_inner().await;
         }
 
+        /// Checks that the difficulty is the same between zcashd and zaino.
+        ///
+        /// This tests generates blocks and checks that the difficulty is the same between zcashd and zaino
+        /// after each block is generated.
         #[tokio::test]
         async fn get_difficulty() {
-            get_difficulty_inner().await;
+            let (
+                mut test_manager,
+                _zcashd_service,
+                zcashd_subscriber,
+                _zaino_service,
+                zaino_subscriber,
+            ) = create_test_manager_and_fetch_services(false, false).await;
+
+            const BLOCK_LIMIT: i32 = 10;
+
+            for _ in 0..BLOCK_LIMIT {
+                let zcashd_difficulty = zcashd_subscriber.get_difficulty().await.unwrap();
+                let zaino_difficulty = zaino_subscriber.get_difficulty().await.unwrap();
+
+                assert_eq!(zcashd_difficulty, zaino_difficulty);
+
+                test_manager.local_net.generate_blocks(1).await.unwrap();
+            }
+
+            test_manager.close().await;
         }
 
         #[tokio::test]

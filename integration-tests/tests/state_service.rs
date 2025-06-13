@@ -1186,9 +1186,9 @@ mod zebrad {
             .await;
 
             let initial_fetch_service_difficulty =
-                dbg!(fetch_service_subscriber.get_difficulty().await.unwrap());
+                fetch_service_subscriber.get_difficulty().await.unwrap();
             let initial_state_service_difficulty =
-                dbg!(state_service_subscriber.get_difficulty().await.unwrap());
+                state_service_subscriber.get_difficulty().await.unwrap();
             assert_eq!(
                 initial_fetch_service_difficulty,
                 initial_state_service_difficulty
@@ -1198,9 +1198,9 @@ mod zebrad {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
             let final_fetch_service_difficulty =
-                dbg!(fetch_service_subscriber.get_difficulty().await.unwrap());
+                fetch_service_subscriber.get_difficulty().await.unwrap();
             let final_state_service_difficulty =
-                dbg!(state_service_subscriber.get_difficulty().await.unwrap());
+                state_service_subscriber.get_difficulty().await.unwrap();
             assert_eq!(
                 final_fetch_service_difficulty,
                 final_state_service_difficulty
