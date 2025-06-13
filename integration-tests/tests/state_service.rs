@@ -1163,7 +1163,7 @@ mod zebrad {
                 dbg!(fetch_service_subscriber.get_best_blockhash().await.unwrap());
             let state_service_bbh =
                 dbg!(state_service_subscriber.get_best_blockhash().await.unwrap());
-            assert_eq!(fetch_service_bbh, state_service_block_bbh);
+            assert_eq!(fetch_service_bbh, state_service_bbh);
         }
 
         #[tokio::test]
