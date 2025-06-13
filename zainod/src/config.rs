@@ -224,7 +224,7 @@ impl IndexerConfig {
                     canopy: Some(1),
                     nu5: Some(1),
                     nu6: Some(1),
-                    // TODO: What is network upgrade 6.1? What does a minor version NU mean?
+                    // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
                     nu6_1: None,
                     nu7: None,
                 },
