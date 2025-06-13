@@ -4,8 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - dev
-      - cargo-make-pipeline # just while testing, remove before merging
+      - '**'
     paths:
       - '.env.testing-artifacts'
 
