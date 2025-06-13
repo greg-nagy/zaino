@@ -1,11 +1,15 @@
 use std::{collections::HashMap, mem, sync::Arc};
 
-use crate::chain_index::types::{Hash, Height};
+use crate::{
+    chain_index::types::{Hash, Height},
+    BlockIndex, ChainWork,
+};
 use arc_swap::ArcSwap;
+use primitive_types::U256;
 use tokio::sync::{mpsc, RwLock};
 use tower::Service;
 use zaino_fetch::jsonrpsee::{connector::JsonRpSeeConnector, response::GetBlockResponse};
-use zebra_chain::serialization::ZcashDeserialize;
+use zebra_chain::serialization::{ZcashDeserialize, ZcashSerialize};
 use zebra_state::{HashOrHeight, ReadStateService};
 
 use crate::ChainBlock;
@@ -50,8 +54,14 @@ impl NonFinalzedState {
 
         let initial_state = self.get_snapshot().await;
         let mut new_blocks = Vec::new();
+        let mut sidechain_blocks = Vec::new();
         let mut best_tip = initial_state.best_tip.clone();
         loop {
+            // currently this only gets main-chain blocks
+            // once readstateservice supports serving sidechain data, this
+            // must be rewritten to match
+            //
+            // see https://github.com/ZcashFoundation/zebra/issues/9541
             let next_block = match self
                 .source
                 .get_block(HashOrHeight::Height(zebra_chain::block::Height(
@@ -68,7 +78,32 @@ impl NonFinalzedState {
                     // If this block is next in the chain, we sync it as normal
                     if Hash::from(block.header.previous_block_hash) == initial_state.best_tip.1 {
                         best_tip = (best_tip.0 + 1, block.hash().into());
-                        new_blocks.push(block);
+                        let block_bytes = block.zcash_serialize_to_vec().unwrap();
+                        let prev_block = initial_state
+                            .blocks
+                            .get(&best_tip.1)
+                            .expect("hole in block cache");
+                        let chainblock = ChainBlock {
+                            index: BlockIndex {
+                                hash: Hash::from(block.hash()),
+                                parent_hash: Hash::from(block.header.previous_block_hash),
+                                chainwork: prev_block.chainwork().add(&ChainWork::from(
+                                    U256::from(
+                                        block
+                                            .header
+                                            .difficulty_threshold
+                                            .to_work()
+                                            .expect("invalid block")
+                                            .as_u128(),
+                                    ),
+                                )),
+                                height: Some(best_tip.0),
+                            },
+                            data: todo!(),
+                            tx: todo!(),
+                            spent_outpoints: todo!(),
+                        };
+                        new_blocks.push(chainblock.clone());
                     } else {
                         // If not, there's been a reorg, and we need to adjust our best-tip
                         let prev_hash = initial_state
@@ -79,14 +114,17 @@ impl NonFinalzedState {
                             .unwrap_or_else(|| todo!("handle holes in database?"));
 
                         best_tip = (best_tip.0 - 1, *prev_hash);
-                        new_blocks.push(block);
+                        // We can't calculate things like chainwork until we
+                        // know the parent block
+                        sidechain_blocks.push(block);
                     }
                 }
-                // This should probably be concurrent rather than waiting until
-                // all blocks are received
-                // TODO: send all blocks to the sender, and update
-                None => todo!(),
+                None => break,
             }
+        }
+        // todo! handle sidechain blocks
+        for block in new_blocks {
+            self.staging_sender.send(block).expect("todo: senderror")
         }
     }
     /// Stage a block

@@ -49,13 +49,13 @@ impl CborTag {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct ChainBlock {
     /// Metadata and indexing information for this block.
-    index: BlockIndex,
+    pub(super) index: BlockIndex,
     /// Essential header and metadata information for the block.
-    data: BlockData,
+    pub(super) data: BlockData,
     /// Compact representations of transactions in this block.
-    tx: Vec<TxData>,
+    pub(super) tx: Vec<TxData>,
     /// Explicitly recorded UTXOs spent in this block, speeding up reorgs and delta indexing.
-    spent_outpoints: Vec<SpentOutpoint>,
+    pub(super) spent_outpoints: Vec<SpentOutpoint>,
 }
 
 impl ChainBlock {
@@ -352,13 +352,13 @@ impl TryFrom<CBOR> for ChainBlock {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct BlockIndex {
     /// The hash identifying this block uniquely.
-    hash: Hash,
+    pub(super) hash: Hash,
     /// The hash of this block's parent block (previous block in chain).
-    parent_hash: Hash,
+    pub(super) parent_hash: Hash,
     /// The cumulative proof-of-work of the blockchain up to this block, used for chain selection.
-    chainwork: ChainWork,
+    pub(super) chainwork: ChainWork,
     /// The height of this block if it's in the current best chain. None if it's part of a fork.
-    height: Option<Height>,
+    pub(super) height: Option<Height>,
 }
 
 impl BlockIndex {
