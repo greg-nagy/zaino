@@ -45,12 +45,21 @@ jobs:
         echo "ZCASH_VERSION=$ZCASH_VERSION" >> "$GITHUB_ENV"
         echo "ZEBRA_VERSION=$ZEBRA_VERSION" >> "$GITHUB_ENV"
 
+    - name: Define build target
+      id: target
+      run: |
+        set -a
+        source ./utils/helpers.sh
+        TARGET=$(resolve_build_target ${{ env.ZCASH_VERSION }} ${{ env.ZEBRA_VERSION }})
+        echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+
     - name: Build and Push Docker Image
       uses: docker/build-push-action@v5
       with:
         context: .
         file: Dockerfile.ci
         platforms: linux/amd64,linux/arm64
+        target: ${{ steps.target.outputs.target }}
         tags: |
           zingodevops/zaino-ci:latest
           zingodevops/zaino-ci:${{ steps.versions.outputs.sha_short }}
