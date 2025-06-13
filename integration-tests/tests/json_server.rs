@@ -235,6 +235,18 @@ async fn launch_json_server_check_info(enable_cookie_auth: bool) {
     test_manager.close().await;
 }
 
+async fn get_best_blockhash() {
+    let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
+        create_test_manager_and_fetch_services(false, false).await;
+
+    let zcashd_bbh = dbg!(zcashd_subscriber.get_best_blockhash().await.unwrap());
+    let zaino_bbh = dbg!(zaino_subscriber.get_best_blockhash().await.unwrap());
+
+    assert_eq!(zcashd_bbh, zaino_bbh);
+
+    test_manager.close().await;
+}
+
 async fn get_block_count_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
         create_test_manager_and_fetch_services(false, false).await;
