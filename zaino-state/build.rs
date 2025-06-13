@@ -61,7 +61,7 @@ fn main() -> io::Result<()> {
     let dest_path = Path::new(&out_dir).join("zebraversion.rs");
     fs::write(
         &dest_path,
-        &format!(
+        format!(
             "const ZEBRA_VERSION: Option<&'static str> = {:?};",
             maybe_zebra_rev
         ),
