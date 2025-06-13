@@ -58,20 +58,3 @@ jobs:
           RUST_VERSION=${{ env.RUST_VERSION }}
           ZCASH_VERSION=${{ env.ZCASH_VERSION }}
           ZEBRA_VERSION=${{ env.ZEBRA_VERSION }}
-
-# ### Explanation:
-
-# - **Event Trigger**: The workflow is triggered on a push to the `dev` branch that includes changes to `.env.testing-artifacts
-
-# - **Setup Steps**:
-#   - **Checkout**: The code is checked out from the repository.
-#   - **Buildx Setup**: `docker/setup-buildx-action` sets up Docker Buildx, which is suitable for building multi-platform Docker images.
-#   - **DockerHub Login**: The DockerHub login step uses Docker credentials stored as secrets in the GitHub repository (`DOCKERHUB_USERNAME` and `DOCKERHUB_ACCESS_TOKEN`) to authenticate with DockerHub.
-
-# - **Extract Version Variables**:
-#   - A shell script reads the `.env.testing-artifacts
-
-# - **Build and Push**:
-#   - The `docker/build-push-action` is used to build the Docker image using the specified Dockerfile and context.
-#   - The built image is tagged and then pushed to DockerHub. Update `user/repository:latest` with your actual DockerHub repository details.
-#   - Replace variables in the Docker Build process with the extracted environment variables to inject version values correctly during the image build process.
