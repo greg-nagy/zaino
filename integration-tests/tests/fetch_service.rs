@@ -1,5 +1,6 @@
 use futures::StreamExt as _;
 use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
+use zaino_fetch::jsonrpsee::response::ValidateAddressResponse;
 use zaino_proto::proto::service::{
     AddressList, BlockId, BlockRange, Exclude, GetAddressUtxosArg, GetSubtreeRootsArg,
     TransparentAddressBlockFilter, TxFilter,
@@ -543,6 +544,87 @@ async fn fetch_service_get_block_count(validator: &ValidatorKind) {
         dbg!(fetch_service_subscriber.get_block_count().await.unwrap());
 
     assert_eq!(fetch_service_get_block_count.0 as u64, block_id.height);
+
+    test_manager.close().await;
+}
+
+/// Note: Test vectors taken from https://docs.rs/zcash_client_backend/latest/zcash_client_backend/encoding/fn.encode_transparent_address.html
+///
+/// TODO: test fields that depend on zcashd's `ENABLE_WALLET` being enabled.
+/// These fields include:
+/// - `is_mine`
+/// - `is_watchonly`
+/// - `is_compressed`
+/// - `pubkey`
+/// - `account` (although it is deprecated)
+/// ...
+///
+/// // This fails when validator is `ValidatorKind::Zebrad`, because zebra does not replicate behaviour in
+/// from zcashd. To be more precise, zebra defines the response as follows:
+/// ```rust
+/// /// `validateaddress` response
+/// #[derive(Clone, Default, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+/// pub struct Response {
+///     /// Whether the address is valid.
+///     ///
+///     /// If not, this is the only property returned.
+///     #[serde(rename = "isvalid")]
+///     pub is_valid: bool,
+///     /// The zcash address that has been validated.
+///     #[serde(skip_serializing_if = "Option::is_none")]
+///     pub address: Option<String>,
+///     /// If the key is a script.
+///     #[serde(rename = "isscript")]
+///     #[serde(skip_serializing_if = "Option::is_none")]
+///     pub is_script: Option<bool>,
+/// }
+/// ```
+///
+/// Defined here: https://github.com/ZcashFoundation/zebra/blob/1e3f40bbc0997439ddc0c112e396ae9fd1790217/zebra-rpc/src/methods/types/validate_address.rs
+async fn fetch_service_validate_address(validator: &ValidatorKind) {
+    let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+        create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
+
+    let expected_validation: ValidateAddressResponse = ValidateAddressResponse {
+        is_valid: true,
+        address: Some("tm9iMLAuYMzJ6jtFLcA7rzUmfreGuKvr7Ma".to_owned()),
+        scriptpubkey: Some("76a914000000000000000000000000000000000000000088ac".to_owned()),
+        is_mine: Some(false),
+        is_script: Some(false),
+        is_watchonly: Some(false),
+        pubkey: None,
+        is_compressed: None,
+        account: None,
+    };
+
+    let fetch_service_validate_address = dbg!(fetch_service_subscriber
+        .validate_address("tm9iMLAuYMzJ6jtFLcA7rzUmfreGuKvr7Ma".to_string())
+        .await
+        .unwrap());
+
+    assert_eq!(fetch_service_validate_address, expected_validation);
+
+    let expected_validation_script: ValidateAddressResponse = ValidateAddressResponse {
+        is_valid: true,
+        address: Some("t26YoyZ1iPgiMEWL4zGUm74eVWfhyDMXzY2".to_owned()),
+        scriptpubkey: Some("a914000000000000000000000000000000000000000087".to_owned()),
+        is_mine: Some(false),
+        is_script: Some(true),
+        is_watchonly: Some(false),
+        pubkey: None,
+        is_compressed: None,
+        account: None,
+    };
+
+    let fetch_service_validate_address_script = dbg!(fetch_service_subscriber
+        .validate_address("t26YoyZ1iPgiMEWL4zGUm74eVWfhyDMXzY2".to_string())
+        .await
+        .unwrap());
+
+    assert_eq!(
+        fetch_service_validate_address_script,
+        expected_validation_script
+    );
 
     test_manager.close().await;
 }
@@ -1193,6 +1275,16 @@ mod zcashd {
         }
     }
 
+    mod validation {
+
+        use super::*;
+
+        #[tokio::test]
+        pub(crate) async fn validate_address() {
+            fetch_service_validate_address(&ValidatorKind::Zcashd).await;
+        }
+    }
+
     mod get {
 
         use super::*;
@@ -1360,6 +1452,16 @@ mod zebrad {
                 zaino_testutils::ZEBRAD_CHAIN_CACHE_DIR.clone(),
             )
             .await;
+        }
+    }
+
+    mod validation {
+
+        use super::*;
+
+        #[tokio::test]
+        pub(crate) async fn validate_address() {
+            fetch_service_validate_address(&ValidatorKind::Zebrad).await;
         }
     }
 

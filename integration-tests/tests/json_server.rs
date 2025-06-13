@@ -251,6 +251,45 @@ async fn get_block_count_inner() {
     test_manager.close().await;
 }
 
+async fn validate_address_inner() {
+    let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
+        create_test_manager_and_fetch_services(false, false).await;
+
+    // Using a testnet transparent address
+    let address_string = "tmHMBeeYRuc2eVicLNfP15YLxbQsooCA6jb";
+
+    let address_with_script = "t3TAfQ9eYmXWGe3oPae1XKhdTxm8JvsnFRL";
+
+    let zcashd_valid = dbg!(zcashd_subscriber
+        .validate_address(address_string.to_string())
+        .await
+        .unwrap());
+
+    let zaino_valid = dbg!(zaino_subscriber
+        .validate_address(address_string.to_string())
+        .await
+        .unwrap());
+
+    assert_eq!(zcashd_valid, zaino_valid, "Address should be valid");
+
+    let zcashd_valid_script = dbg!(zcashd_subscriber
+        .validate_address(address_with_script.to_string())
+        .await
+        .unwrap());
+
+    let zaino_valid_script = dbg!(zaino_subscriber
+        .validate_address(address_with_script.to_string())
+        .await
+        .unwrap());
+
+    assert_eq!(
+        zcashd_valid_script, zaino_valid_script,
+        "Address should be valid"
+    );
+
+    test_manager.close().await;
+}
+
 async fn z_get_address_balance_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
         create_test_manager_and_fetch_services(false, true).await;
@@ -613,6 +652,11 @@ mod zcashd {
         #[tokio::test]
         async fn get_block_count() {
             get_block_count_inner().await;
+        }
+
+        #[tokio::test]
+        async fn validate_address() {
+            validate_address_inner().await;
         }
 
         #[tokio::test]

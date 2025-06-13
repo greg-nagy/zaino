@@ -19,6 +19,7 @@ zaino-proto = { workspace = true }
 # LibRustZcash
 zcash_primitives = { workspace = true }
 zcash_protocol = { workspace = true }
+zcash_transparent = { workspace = true }
 
 # Zebra
 zebra-chain = { workspace = true }
@@ -50,7 +51,8 @@ jsonrpsee-core = { workspace = true }
 prost = { workspace = true }
 primitive-types = { workspace = true }
 dcbor = { workspace = true }
-nonempty = "0.11.0"
+nonempty = { workspace = true }
+zcash_address = { workspace = true }
 
 [dev-dependencies]
 zingo-infra-services = { workspace = true }

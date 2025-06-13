@@ -24,7 +24,10 @@ use nonempty::NonEmpty;
 use tokio_stream::StreamExt as _;
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
+    jsonrpsee::{
+        connector::{JsonRpSeeConnector, RpcError},
+        response::ValidateAddressResponse,
+    },
 };
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
@@ -35,6 +38,9 @@ use zaino_proto::proto::{
     },
 };
 
+use zcash_address::ZcashAddress;
+use zcash_primitives::legacy::TransparentAddress;
+use zcash_protocol::consensus::NetworkType;
 use zebra_chain::{
     block::{Header, Height, SerializedBlock},
     chain_tip::NetworkChainTipHeightEstimator,
@@ -1085,6 +1091,62 @@ impl ZcashIndexer for StateServiceSubscriber {
     /// tags: blockchain
     async fn get_block_count(&self) -> Result<Height, Self::Error> {
         Ok(self.block_cache.get_chain_height().await?)
+    }
+
+    /// TODO:
+    ///
+    /// The following fields are needed:
+    ///
+    /// - is_script: I should be able to get it from the script_pubkey
+    /// - is_watch_only: no idea
+    /// - pubkey: hex value of the raw pubkey. I should be able to get it from...
+    /// - is_compressed: ...
+    /// - account: DEPRECATED. However, I should ...
+    async fn validate_address(
+        &self,
+        address: String,
+    ) -> Result<ValidateAddressResponse, Self::Error> {
+        let addr = ZcashAddress::try_from_encoded(&address)
+            .map_err(|_| ValidateAddressResponse {
+                is_valid: false,
+                ..Default::default()
+            })
+            .unwrap();
+
+        let (taddr, script_pubkey, isscript) = match self.config.network.clone() {
+            Network::Mainnet => {
+                match addr.convert_if_network::<TransparentAddress>(NetworkType::Main) {
+                    Ok(trans_addr) => {
+                        let script = trans_addr.script();
+                        let is_script = matches!(trans_addr, TransparentAddress::ScriptHash(_));
+                        (Some(trans_addr), Some(script), Some(is_script))
+                    }
+                    Err(e) => (None, None, None),
+                }
+            }
+            Network::Testnet(_) => {
+                match addr.convert_if_network::<TransparentAddress>(NetworkType::Test) {
+                    Ok(trans_addr) => {
+                        let script = trans_addr.script();
+                        let is_script = matches!(trans_addr, TransparentAddress::ScriptHash(_));
+                        (Some(trans_addr), Some(script), Some(is_script))
+                    }
+                    Err(_) => (None, None, None),
+                }
+            }
+        };
+
+        Ok(ValidateAddressResponse {
+            is_valid: true,
+            address: Some(address.clone()),
+            is_script: isscript,
+            scriptpubkey: script_pubkey.map(|script| script.0.encode_hex()),
+            is_watchonly: Some(false),
+            pubkey: None,
+            is_compressed: None,
+            account: None,
+            is_mine: None,
+        })
     }
 
     async fn z_get_subtrees_by_index(

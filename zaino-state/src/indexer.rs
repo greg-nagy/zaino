@@ -5,6 +5,7 @@ use async_trait::async_trait;
 
 use tokio::{sync::mpsc, time::timeout};
 use tracing::warn;
+use zaino_fetch::jsonrpsee::response::ValidateAddressResponse;
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
     service::{
@@ -246,6 +247,11 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// method: post
     /// tags: blockchain
     async fn get_block_count(&self) -> Result<Height, Self::Error>;
+
+    async fn validate_address(
+        &self,
+        address: String,
+    ) -> Result<ValidateAddressResponse, Self::Error>;
 
     /// Returns all transaction ids in the memory pool, as a JSON array.
     ///

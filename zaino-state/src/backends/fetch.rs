@@ -17,7 +17,10 @@ use zebra_rpc::methods::{
 
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
+    jsonrpsee::{
+        connector::{JsonRpSeeConnector, RpcError},
+        response::ValidateAddressResponse,
+    },
 };
 
 use zaino_proto::proto::{
@@ -325,6 +328,13 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// tags: blockchain
     async fn get_block_count(&self) -> Result<Height, Self::Error> {
         Ok(self.fetcher.get_block_count().await?.into())
+    }
+
+    async fn validate_address(
+        &self,
+        address: String,
+    ) -> Result<ValidateAddressResponse, Self::Error> {
+        Ok(self.fetcher.validate_address(address).await?.into())
     }
 
     /// Returns all transaction ids in the memory pool, as a JSON array.

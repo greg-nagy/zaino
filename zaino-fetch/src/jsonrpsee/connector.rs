@@ -25,7 +25,7 @@ use crate::jsonrpsee::{
     response::{
         GetBalanceResponse, GetBlockCountResponse, GetBlockResponse, GetBlockchainInfoResponse,
         GetInfoResponse, GetSubtreesResponse, GetTransactionResponse, GetTreestateResponse,
-        GetUtxosResponse, SendTransactionResponse, TxidsResponse,
+        GetUtxosResponse, SendTransactionResponse, TxidsResponse, ValidateAddressResponse,
     },
 };
 
@@ -420,6 +420,15 @@ impl JsonRpSeeConnector {
     pub async fn get_block_count(&self) -> Result<GetBlockCountResponse, JsonRpSeeConnectorError> {
         self.send_request::<(), GetBlockCountResponse>("getblockcount", ())
             .await
+    }
+
+    /// TODO: add doc comment
+    pub async fn validate_address(
+        &self,
+        address: String,
+    ) -> Result<ValidateAddressResponse, JsonRpSeeConnectorError> {
+        let params = vec![serde_json::to_value(address)?];
+        self.send_request("validateaddress", params).await
     }
 
     /// Returns all transaction ids in the memory pool, as a JSON array.

@@ -50,7 +50,4 @@ ctrlc = { workspace = true }
 
 # Formats
 toml = { workspace = true }
-
-[dependencies.figment]
-version = "0.10"
-features = ["toml", "env", "test"]
+figment= { workspace = true, features = ["toml", "env", "test"] }
