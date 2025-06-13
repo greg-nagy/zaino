@@ -27,7 +27,8 @@ FROM electriccoinco/zcashd:v${ZCASH_VERSION} AS zcashd-downloader
 FROM rust:${RUST_VERSION}-bookworm AS zebra-builder
 
 ARG ZEBRA_VERSION
-RUN apt-get update && apt-get install -y git clang cmake pkg-config libssl-dev protobuf-compiler
+RUN apt-get update
+RUN apt-get install -y git clang cmake pkg-config libssl-dev protobuf-compiler
 WORKDIR /zebra
 RUN git clone https://github.com/ZcashFoundation/zebra .
 RUN git checkout "${ZEBRA_VERSION}" 
