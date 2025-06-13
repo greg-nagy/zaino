@@ -321,10 +321,21 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .try_into()?)
     }
 
-    // No request parameters.
+    /// Returns the hash of the best block (tip) of the longest chain.
+    /// zcashd reference: [`z_gettreestate`](https://zcash.github.io/rpc/getbestblockhash.html)
+    /// The zcashd doc reference above says there are no parameters and the result is a "hex" (string) of the block hash hex encoded.
+    /// method: post
+    /// tags: blockchain
     /// Return the hex encoded hash of the best (tip) block, in the longest block chain.
+    ///
+    /// # Parameters
+    ///
+    /// No request parameters.
+    ///
+    /// # Notes
+    ///
+    /// Return should be valid hex encoded.
     async fn get_best_blockhash(&self) -> Result<Hash, Self::Error> {
-        // return should be valid hex encoded.
         Ok(self.fetcher.get_best_blockhash().await?.into())
     }
 

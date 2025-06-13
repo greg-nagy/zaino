@@ -249,22 +249,19 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// tags: blockchain
     async fn get_block_count(&self) -> Result<Height, Self::Error>;
 
+    /// Returns the hash of the best block (tip) of the longest chain.
+    /// zcashd reference: [`z_gettreestate`](https://zcash.github.io/rpc/getbestblockhash.html)
+    /// The zcashd doc reference above says there are no parameters and the result is a "hex" (string) of the block hash hex encoded.
+    /// method: post
+    /// tags: blockchain
+    async fn get_best_blockhash(&self) -> Result<Hash, Self::Error>;
+
     /// Returns all transaction ids in the memory pool, as a JSON array.
     ///
     /// zcashd reference: [`getrawmempool`](https://zcash.github.io/rpc/getrawmempool.html)
     /// method: post
     /// tags: blockchain
     async fn get_raw_mempool(&self) -> Result<Vec<String>, Self::Error>;
-
-    /// Returns the hash of the best block (tip) of the longest chain.
-    /// zcashd reference: [`z_gettreestate`](https://zcash.github.io/rpc/getbestblockhash.html)
-    /// method: post
-    /// tags: blockchain
-    ///
-    /// # Notes
-    ///
-    /// The zcashd doc reference above says there are no parameters and the result is a "hex" (string) of the block hash hex encoded.
-    async fn get_best_blockhash(&self) -> Result<Hash, Self::Error>;
 
     /// Returns information about the given block's Sapling & Orchard tree state.
     ///

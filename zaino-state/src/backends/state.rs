@@ -1049,7 +1049,16 @@ impl ZcashIndexer for StateServiceSubscriber {
     /// Return the hex encoded hash of the best (tip) block, in the longest block chain.
     async fn get_best_blockhash(&self) -> Result<Hash, Self::Error> {
         // return should be valid hex encoded.
-        Ok(self.get_best_blockhash().await?)
+        // Hash from zebra says:
+        // Return the hash bytes in big-endian byte-order suitable for printing out byte by byte.
+        //
+        // Zebra displays transaction and block hashes in big-endian byte-order,
+        // following the u256 convention set by Bitcoin and zcashd.
+        Ok(self
+            .read_state_service
+            .best_tip()
+            .expect("best_tip() to unwrap")
+            .1)
     }
 
     /// Returns the current block count in the best valid block chain.
