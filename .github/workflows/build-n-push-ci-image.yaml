@@ -37,7 +37,7 @@ jobs:
     - name: Extract versions and git SHA
       id: versions
       run: |
-        source .env.zaino-versions
+        source .env.testing-artifacts
         echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
         echo "RUST_VERSION=$RUST_VERSION" >> "$GITHUB_OUTPUT"
         echo "ZCASH_VERSION=$ZCASH_VERSION" >> "$GITHUB_OUTPUT"
