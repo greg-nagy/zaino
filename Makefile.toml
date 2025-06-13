@@ -103,3 +103,15 @@ docker run --rm \
 script.post = '''
 docker stop zaino-testing
 '''
+
+[tasks.copy-bins]
+description = "Copy bins from image into test_binaries/bins"
+extend = "base-script"
+script.main = '''
+set -euo pipefail
+
+docker create --name my_zaino_container zingodevops/zaino-ci:"$TAG"
+docker cp my_zaino_container:/usr/local/bin ./test_binaries/
+cp -r ./test_binaries/bin ./test_binaries/bins
+docker rm my_zaino_container
+'''
