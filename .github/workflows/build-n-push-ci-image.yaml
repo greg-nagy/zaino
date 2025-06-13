@@ -7,7 +7,7 @@ on:
       - dev
       - cargo-make-pipeline # just while testing, remove before merging
     paths:
-      - '.env.ci-dep-versions'
+      - '.env.testing-artifacts'
 
 jobs:
   build-and-push:
@@ -29,7 +29,7 @@ jobs:
     - name: Compute version-based image tag
       id: taggen
       run: |
-        source .env.ci-dep-versions
+        source .env.testing-artifacts
         export RUST_VERSION ZCASH_VERSION ZEBRA_VERSION
         TAG=$(./utils/get-ci-image-tag.sh)
         echo "tag=$TAG" >> "$GITHUB_OUTPUT"
@@ -61,7 +61,7 @@ jobs:
 
 # ### Explanation:
 
-# - **Event Trigger**: The workflow is triggered on a push to the `dev` branch that includes changes to `.env.ci-dep-versions`.
+# - **Event Trigger**: The workflow is triggered on a push to the `dev` branch that includes changes to `.env.testing-artifacts
 
 # - **Setup Steps**:
 #   - **Checkout**: The code is checked out from the repository.
@@ -69,7 +69,7 @@ jobs:
 #   - **DockerHub Login**: The DockerHub login step uses Docker credentials stored as secrets in the GitHub repository (`DOCKERHUB_USERNAME` and `DOCKERHUB_ACCESS_TOKEN`) to authenticate with DockerHub.
 
 # - **Extract Version Variables**:
-#   - A shell script reads the `.env.ci-dep-versions` file and exports each variable into the GitHub Action environment.
+#   - A shell script reads the `.env.testing-artifacts
 
 # - **Build and Push**:
 #   - The `docker/build-push-action` is used to build the Docker image using the specified Dockerfile and context.
