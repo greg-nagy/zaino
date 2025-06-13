@@ -44,7 +44,7 @@ pub struct GetInfoResponse {
 
     /// The current network difficulty
     #[serde(default)]
-    pub difficulty: f64,
+    difficulty: f64,
 
     /// True if the server is running in testnet mode, false otherwise
     #[serde(default)]
