@@ -24,10 +24,7 @@ use nonempty::NonEmpty;
 use tokio_stream::StreamExt as _;
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpsee::{
-        connector::{JsonRpSeeConnector, RpcError},
-        response::GetDifficultyResponse,
-    },
+    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
 };
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
@@ -837,7 +834,6 @@ impl ZcashIndexer for StateServiceSubscriber {
             false,
         )
         .await
-        .map(|difficulty| difficulty as f64)
         .map_err(|e| {
             StateServiceError::RpcError(RpcError::new_from_errorobject(
                 e,
