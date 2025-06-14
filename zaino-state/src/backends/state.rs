@@ -20,7 +20,6 @@ use crate::{
     MempoolKey,
 };
 
-use dcbor::Error;
 use nonempty::NonEmpty;
 use tokio_stream::StreamExt as _;
 use zaino_fetch::{
@@ -1083,11 +1082,16 @@ impl ZcashIndexer for StateServiceSubscriber {
         //
         // Zebra displays transaction and block hashes in big-endian byte-order,
         // following the u256 convention set by Bitcoin and zcashd.
-        Ok(self
-            .read_state_service
-            .best_tip()
-            .expect("best tip() to unwrap")
-            .1)
+        match self.read_state_service.best_tip() {
+            Some(x) => return Ok(x.1),
+            None => {
+                return Err(StateServiceError::RpcError(RpcError {
+                    code: -1,
+                    message: "problem unwrapping .best_tip() -  None returned.".to_string(),
+                    data: None,
+                }))
+            }
+        }
     }
 
     /// Returns the current block count in the best valid block chain.
