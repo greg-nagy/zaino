@@ -39,9 +39,9 @@ zcash_primitives = "0.22"
 
 # Zebra
 # Can be updated to 2.4.0 once lands. Should be updated to crates.io releases once available.
-zebra-chain = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "8b9fdd073d822a02768927634c635e84edb4eee4" }
-zebra-state = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "8b9fdd073d822a02768927634c635e84edb4eee4" }
-zebra-rpc = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "8b9fdd073d822a02768927634c635e84edb4eee4" }
+zebra-chain = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "3b5cbf845146ffe43be2d40b3ed5e2e6ffb7f12c" }
+zebra-state = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "3b5cbf845146ffe43be2d40b3ed5e2e6ffb7f12c" }
+zebra-rpc = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "3b5cbf845146ffe43be2d40b3ed5e2e6ffb7f12c" }
 
 # Runtime
 tokio = { version = "1.38", features = ["full"] }
