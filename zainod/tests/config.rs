@@ -1,3 +1,5 @@
+#![allow(clippy::bool_assert_comparison)]
+
 use figment::Jail;
 use std::path::PathBuf;
 
