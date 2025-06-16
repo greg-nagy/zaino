@@ -2,15 +2,16 @@ use std::{collections::HashMap, mem, sync::Arc};
 
 use crate::{
     chain_index::types::{Hash, Height},
-    BlockIndex, ChainWork,
+    BlockData, BlockIndex, ChainWork,
 };
 use arc_swap::ArcSwap;
+use futures::future::join;
 use primitive_types::U256;
 use tokio::sync::{mpsc, RwLock};
-use tower::Service;
+use tower::{Service, ServiceExt};
 use zaino_fetch::jsonrpsee::{connector::JsonRpSeeConnector, response::GetBlockResponse};
 use zebra_chain::serialization::{ZcashDeserialize, ZcashSerialize};
-use zebra_state::{HashOrHeight, ReadStateService};
+use zebra_state::{HashOrHeight, ReadResponse, ReadStateService};
 
 use crate::ChainBlock;
 
@@ -83,6 +84,23 @@ impl NonFinalzedState {
                             .blocks
                             .get(&best_tip.1)
                             .expect("hole in block cache");
+                        let trees = self
+                            .source
+                            .get_commitment_tree_roots(block.hash().into())
+                            .await;
+
+                        let blockdata = BlockData {
+                            version: block.header.version,
+                            time: block.header.time.timestamp(),
+                            merkle_root: block.header.merkle_root.0,
+                            auth_data_root: <[u8; 32]>::from(block.auth_data_root()),
+                            commitment_tree_roots: todo!(),
+                            commitment_tree_size: todo!(),
+                            bits: u32::from_be_bytes(
+                                block.header.difficulty_threshold.bytes_in_display_order(),
+                            ),
+                        };
+
                         let chainblock = ChainBlock {
                             index: BlockIndex {
                                 hash: Hash::from(block.hash()),
@@ -191,7 +209,9 @@ enum BlockchainSource {
     Fetch(JsonRpSeeConnector),
 }
 
-struct BlockchainSourceError {}
+enum BlockchainSourceError {
+    ReadStateError(Box<dyn std::error::Error + Send + Sync + 'static>),
+}
 
 type BlockchainSourceResult<T> = Result<T, BlockchainSourceError>;
 
@@ -251,6 +271,51 @@ impl BlockchainSource {
                     Err(_) => todo!(),
                 }
             }
+        }
+    }
+
+    async fn get_commitment_tree_roots(
+        &self,
+        id: Hash,
+    ) -> BlockchainSourceResult<(
+        Option<zebra_chain::sapling::tree::Root>,
+        Option<zebra_chain::orchard::tree::Root>,
+    )> {
+        match self {
+            BlockchainSource::State(read_state_service) => {
+                let (sapling_tree_response, orchard_tree_response) = join(
+                    read_state_service
+                        .clone()
+                        .call(zebra_state::ReadRequest::SaplingTree(HashOrHeight::Hash(
+                            id.into(),
+                        ))),
+                    read_state_service
+                        .clone()
+                        .call(zebra_state::ReadRequest::OrchardTree(HashOrHeight::Hash(
+                            id.into(),
+                        ))),
+                )
+                .await;
+                let (sapling_tree, orchard_tree) = match (
+                    sapling_tree_response.map_err(BlockchainSourceError::ReadStateError)?,
+                    orchard_tree_response.map_err(BlockchainSourceError::ReadStateError)?,
+                ) {
+                    (ReadResponse::SaplingTree(saptree), ReadResponse::OrchardTree(orctree)) => {
+                        (saptree, orctree)
+                    }
+                    (_, _) => panic!("Bad response"),
+                };
+
+                Ok((
+                    sapling_tree
+                        .as_deref()
+                        .map(zebra_chain::sapling::tree::NoteCommitmentTree::root),
+                    orchard_tree
+                        .as_deref()
+                        .map(zebra_chain::orchard::tree::NoteCommitmentTree::root),
+                ))
+            }
+            BlockchainSource::Fetch(json_rp_see_connector) => todo!(),
         }
     }
 }

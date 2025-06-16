@@ -800,21 +800,21 @@ impl TryFrom<CBOR> for ChainWork {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct BlockData {
     /// Version number of the block format (protocol upgrades).
-    version: u32,
+    pub(super) version: u32,
     /// Unix timestamp of when the block was mined (seconds since epoch).
-    time: i64,
+    pub(super) time: i64,
     /// Merkle root hash of all transaction IDs in the block (used for quick tx inclusion proofs).
-    merkle_root: [u8; 32],
+    pub(super) merkle_root: [u8; 32],
     /// Digest representing the block-commitments Merkle root (commitment to note states).
     ///
     /// [`hashAuthDataRoot`]
-    auth_data_root: [u8; 32],
+    pub(super) auth_data_root: [u8; 32],
     /// Roots of the Sapling and Orchard note-commitment trees (for shielded tx verification).
-    commitment_tree_roots: CommitmentTreeRoots,
+    pub(super) commitment_tree_roots: CommitmentTreeRoots,
     /// Number of leaves in Sapling/Orchard note commitment trees at this block.
-    commitment_tree_size: CommitmentTreeSizes,
+    pub(super) commitment_tree_size: CommitmentTreeSizes,
     /// Compact difficulty target used for proof-of-work and difficulty calculation.
-    bits: u32,
+    pub(super) bits: u32,
 }
 
 impl BlockData {
