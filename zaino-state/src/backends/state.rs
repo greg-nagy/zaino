@@ -971,7 +971,12 @@ impl ZcashIndexer for StateServiceSubscriber {
             .ready()
             .and_then(|service| service.call(ReadRequest::AddressBalance(strings_set)))
             .await?;
-        let balance = expected_read_response!(response, AddressBalance);
+        let balance = match response {
+            ReadResponse::AddressBalance { balance, .. } => balance,
+            unexpected => {
+                unreachable!("Unexpected response from state service: {unexpected:?}")
+            }
+        };
 
         Ok(AddressBalance {
             balance: u64::from(balance),
