@@ -120,6 +120,15 @@ enum AuthMethod {
     Cookie { cookie: String },
 }
 
+pub trait ResponseToError {
+    type RpcError;
+}
+
+pub enum RpcRequestError<T> {
+    RpcSpecific(T),
+    InternalUnrecoverable,
+}
+
 /// JsonRpSee Client config data.
 #[derive(Debug, Clone)]
 pub struct JsonRpSeeConnector {
@@ -232,12 +241,12 @@ impl JsonRpSeeConnector {
     ///       This is because the node's queue can become overloaded and stop servicing RPCs.
     async fn send_request<
         T: std::fmt::Debug + Serialize,
-        R: std::fmt::Debug + for<'de> Deserialize<'de>,
+        R: std::fmt::Debug + for<'de> Deserialize<'de> + ResponseToError,
     >(
         &self,
         method: &str,
         params: T,
-    ) -> Result<R, JsonRpSeeConnectorError> {
+    ) -> Result<R, RpcRequestError<R::RpcError>> {
         let id = self.id_counter.fetch_add(1, Ordering::SeqCst);
         let req = RpcRequest {
             jsonrpc: "2.0".to_string(),
@@ -270,7 +279,7 @@ impl JsonRpSeeConnector {
             }
 
             let request_body =
-                serde_json::to_string(&req).map_err(JsonRpSeeConnectorError::SerdeJsonError)?;
+                serde_json::to_string(&req).map_err(|_| RpcRequestError::InternalUnrecoverable)?;
 
             let response = request_builder
                 .body(request_body)

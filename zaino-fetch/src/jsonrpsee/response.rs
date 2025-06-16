@@ -12,6 +12,8 @@ use zebra_chain::{
 };
 use zebra_rpc::methods::{opthex, types::get_blockchain_info::Balance};
 
+use crate::jsonrpsee::connector::ResponseToError;
+
 /// Response to a `getinfo` RPC request.
 ///
 /// This is used for the output parameter of [`JsonRpcConnector::get_info`].
@@ -70,6 +72,10 @@ pub struct GetInfoResponse {
     errors_timestamp: ErrorsTimestamp,
 }
 
+impl ResponseToError for GetInfoResponse {
+    type RpcError = GetInfoError;
+}
+
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(untagged)]
 /// A wrapper to allow both types of error timestamp
@@ -78,6 +84,10 @@ pub enum ErrorsTimestamp {
     Num(usize),
     /// Returned from zebrad, the timestamp is a string representing a timestamp
     Str(String),
+}
+
+impl ResponseToError for ErrorsTimestamp {
+    type RpcError = ErrorsTimestampError;
 }
 
 impl std::fmt::Display for ErrorsTimestamp {
@@ -186,6 +196,10 @@ pub struct GetBlockchainInfoResponse {
     commitments: u64,
 }
 
+impl ResponseToError for GetBlockchainInfoResponse {
+    type RpcError = GetBlockchainInfoError;
+}
+
 fn default_header() -> Height {
     Height(0)
 }
@@ -199,6 +213,10 @@ pub enum ChainWork {
     Str(String),
     /// Returned from zebrad, a chainwork is an integer
     Num(u64),
+}
+
+impl ResponseToError for ChainWork {
+    type RpcError = ChainWorkError;
 }
 
 impl TryFrom<ChainWork> for u64 {
@@ -221,6 +239,10 @@ impl Default for ChainWork {
 /// Wrapper struct for a Zebra [`Balance`], enabling custom deserialisation logic to handle both zebrad and zcashd.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct ChainBalance(Balance);
+
+impl ResponseToError for ChainBalance {
+    type RpcError = ChainBalanceError;
+}
 
 impl<'de> Deserialize<'de> for ChainBalance {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -293,6 +315,10 @@ pub struct GetBalanceResponse {
     pub balance: u64,
 }
 
+impl ResponseToError for GetBalanceResponse {
+    type RpcError = GetBalanceError;
+}
+
 impl From<GetBalanceResponse> for zebra_rpc::methods::AddressBalance {
     fn from(response: GetBalanceResponse) -> Self {
         zebra_rpc::methods::AddressBalance {
@@ -306,6 +332,10 @@ impl From<GetBalanceResponse> for zebra_rpc::methods::AddressBalance {
 /// This is used for the output parameter of [`JsonRpcConnector::send_raw_transaction`].
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct SendTransactionResponse(#[serde(with = "hex")] pub zebra_chain::transaction::Hash);
+
+impl ResponseToError for SendTransactionResponse {
+    type RpcError = SendTransactionError;
+}
 
 impl From<SendTransactionResponse> for zebra_rpc::methods::SentTransactionHash {
     fn from(value: SendTransactionResponse) -> Self {
@@ -321,6 +351,10 @@ impl From<SendTransactionResponse> for zebra_rpc::methods::SentTransactionHash {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(transparent)]
 pub struct GetBlockHash(#[serde(with = "hex")] pub zebra_chain::block::Hash);
+
+impl ResponseToError for GetBlockHash {
+    type RpcError = GetBlockHashError;
+}
 
 impl Default for GetBlockHash {
     fn default() -> Self {
@@ -500,6 +534,10 @@ pub enum GetBlockResponse {
     Raw(#[serde(with = "hex")] SerializedBlock),
     /// The block object.
     Object(Box<BlockObject>),
+}
+
+impl ResponseToError for GetBlockResponse {
+    type RpcError = GetBlockError;
 }
 
 /// Contains the height of the most recent block in the best valid block chain
@@ -781,6 +819,10 @@ pub enum GetTransactionResponse {
     Raw(#[serde(with = "hex")] zebra_chain::transaction::SerializedTransaction),
     /// The transaction object.
     Object(Box<zebra_rpc::methods::types::transaction::TransactionObject>),
+}
+
+impl ResponseToError for GetTransactionResponse {
+    type RpcError = GetTransactionError;
 }
 
 impl<'de> serde::Deserialize<'de> for GetTransactionResponse {
