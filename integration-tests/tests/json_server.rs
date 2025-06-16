@@ -63,6 +63,8 @@ async fn create_test_manager_and_fetch_services(
                 canopy: Some(1),
                 nu5: Some(1),
                 nu6: Some(1),
+                // TODO: What is network upgrade 6.1? What does a minor version NU mean?
+                nu6_1: None,
                 nu7: None,
             },
         ),
@@ -107,6 +109,8 @@ async fn create_test_manager_and_fetch_services(
                 canopy: Some(1),
                 nu5: Some(1),
                 nu6: Some(1),
+                // TODO: What is network upgrade 6.1? What does a minor version NU mean?
+                nu6_1: None,
                 nu7: None,
             },
         ),
