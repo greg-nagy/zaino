@@ -1,6 +1,6 @@
 name: CI checks
 
-on: 
+on:
   workflow_dispatch:
   push:
     tags:
@@ -17,14 +17,31 @@ env:
   INSECURE_CACHE: true
 
 jobs:
+  compute-tag:
+    name: Compute Docker Image Tag
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.taggen.outputs.tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Compute version-based image tag
+        id: taggen
+        run: |
+          source .env.testing-artifacts
+          export RUST_VERSION ZCASH_VERSION ZEBRA_VERSION
+          TAG=$(./utils/get-ci-image-tag.sh)
+          echo "TAG= $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
   build-test-artifacts:
     name: Build test artifacts
+    needs: compute-tag
     container:
-      image: zingodevops/zaino-ci:RUST_1.87-ZCASH_6.2.0-ZEBRA_3b5cbf8
+      image: zingodevops/zaino-ci:${{ needs.compute-tag.outputs.image-tag }}
     runs-on: arc-sh-runners
     if: github.event.pull_request.draft == false
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -74,8 +91,9 @@ jobs:
   check:
     name: Cargo Check
     runs-on: arc-sh-runners
+    needs: compute-tag
     container:
-      image: zingodevops/zaino-ci:RUST_1.87-ZCASH_6.2.0-ZEBRA_3b5cbf8
+      image: zingodevops/zaino-ci:${{ needs.compute-tag.outputs.image-tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -101,14 +119,14 @@ jobs:
 
   test:
     name: Tests
-    needs: build-test-artifacts
+    needs: [compute-tag, build-test-artifacts]
     runs-on: arc-sh-runners
     container:
-      image: zingodevops/zaino-ci:RUST_1.87-ZCASH_6.2.0-ZEBRA_3b5cbf8
+      image: zingodevops/zaino-ci:${{ needs.compute-tag.outputs.image-tag }}
     strategy:
       fail-fast: false
       matrix:
-        partition: 
+        partition:
           - "integration-tests::fetch_service"
           - "integration-tests::state_service"
           - "integration-tests::local_cache"
@@ -162,8 +180,9 @@ jobs:
   fmt:
     name: Rustfmt
     runs-on: arc-sh-runners
+    needs: compute-tag
     container:
-      image: zingodevops/zaino-ci:RUST_1.87-ZCASH_6.2.0-ZEBRA_3b5cbf8
+      image: zingodevops/zaino-ci:${{ needs.compute-tag.outputs.image-tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -190,8 +209,9 @@ jobs:
   clippy:
     name: Clippy
     runs-on: arc-sh-runners
+    needs: compute-tag
     container:
-      image: zingodevops/zaino-ci:RUST_1.87-ZCASH_6.2.0-ZEBRA_3b5cbf8
+      image: zingodevops/zaino-ci:${{ needs.compute-tag.outputs.image-tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -226,8 +246,9 @@ jobs:
   whitespace:
     name: Whitespace check
     runs-on: arc-sh-runners
+    needs: compute-tag
     container:
-      image: zingodevops/zaino-ci:RUST_1.87-ZCASH_6.2.0-ZEBRA_3b5cbf8
+      image: zingodevops/zaino-ci:${{ needs.compute-tag.outputs.image-tag }}
     steps:
       - uses: actions/checkout@v4
 
