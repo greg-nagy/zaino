@@ -23,9 +23,11 @@ use tracing::error;
 use crate::jsonrpsee::{
     error::JsonRpSeeConnectorError,
     response::{
-        GetBalanceResponse, GetBlockCountResponse, GetBlockResponse, GetBlockchainInfoResponse,
-        GetInfoResponse, GetSubtreesResponse, GetTransactionResponse, GetTreestateResponse,
-        GetUtxosResponse, SendTransactionResponse, TxidsResponse,
+        GetBalanceError, GetBalanceResponse, GetBlockCountError, GetBlockCountResponse,
+        GetBlockError, GetBlockResponse, GetBlockchainInfoError, GetBlockchainInfoResponse,
+        GetInfoError, GetInfoResponse, GetSubtreesResponse, GetTransactionResponse,
+        GetTreestateResponse, GetUtxosResponse, SendTransactionError, SendTransactionResponse,
+        TxidsResponse,
     },
 };
 
@@ -127,6 +129,7 @@ pub trait ResponseToError {
 pub enum RpcRequestError<T> {
     RpcSpecific(T),
     InternalUnrecoverable,
+    Reqwest(reqwest::Error),
 }
 
 /// JsonRpSee Client config data.
@@ -285,32 +288,34 @@ impl JsonRpSeeConnector {
                 .body(request_body)
                 .send()
                 .await
-                .map_err(JsonRpSeeConnectorError::ReqwestError)?;
+                .map_err(|e| RpcRequestError::Reqwest(e))?;
 
             let status = response.status();
 
             let body_bytes = response
                 .bytes()
                 .await
-                .map_err(JsonRpSeeConnectorError::ReqwestError)?;
+                .map_err(|e| RpcRequestError::Reqwest(e))?;
 
             let body_str = String::from_utf8_lossy(&body_bytes);
 
             if body_str.contains("Work queue depth exceeded") {
                 if attempts >= max_attempts {
-                    return Err(JsonRpSeeConnectorError::new(
-                        "Error: The node's rpc queue depth was exceeded after multiple attempts",
-                    ));
+                    // return Err(JsonRpSeeConnectorError::new(
+                    //     "Error: The node's rpc queue depth was exceeded after multiple attempts",
+                    // ));
+                    return Err(RpcRequestError::InternalUnrecoverable);
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                 continue;
             }
 
             if !status.is_success() {
-                return Err(JsonRpSeeConnectorError::new(format!(
-                    "Error: Error status from node's rpc server: {}, {}",
-                    status, body_str
-                )));
+                // return Err(JsonRpSeeConnectorError::new(format!(
+                //     "Error: Error status from node's rpc server: {}, {}",
+                //     status, body_str
+                // )));
+                return Err(RpcRequestError::InternalUnrecoverable);
             }
 
             let response: RpcResponse<R> = serde_json::from_slice(&body_bytes)
@@ -334,7 +339,7 @@ impl JsonRpSeeConnector {
     /// zcashd reference: [`getinfo`](https://zcash.github.io/rpc/getinfo.html)
     /// method: post
     /// tags: control
-    pub async fn get_info(&self) -> Result<GetInfoResponse, JsonRpSeeConnectorError> {
+    pub async fn get_info(&self) -> Result<GetInfoResponse, RpcRequestError<GetInfoError>> {
         self.send_request::<(), GetInfoResponse>("getinfo", ())
             .await
     }
@@ -346,7 +351,7 @@ impl JsonRpSeeConnector {
     /// tags: blockchain
     pub async fn get_blockchain_info(
         &self,
-    ) -> Result<GetBlockchainInfoResponse, JsonRpSeeConnectorError> {
+    ) -> Result<GetBlockchainInfoResponse, RpcRequestError<GetBlockchainInfoError>> {
         self.send_request::<(), GetBlockchainInfoResponse>("getblockchaininfo", ())
             .await
     }
@@ -364,7 +369,7 @@ impl JsonRpSeeConnector {
     pub async fn get_address_balance(
         &self,
         addresses: Vec<String>,
-    ) -> Result<GetBalanceResponse, JsonRpSeeConnectorError> {
+    ) -> Result<GetBalanceResponse, RpcRequestError<GetBalanceError>> {
         let params = vec![serde_json::json!({ "addresses": addresses })];
         self.send_request("getaddressbalance", params).await
     }
@@ -382,7 +387,7 @@ impl JsonRpSeeConnector {
     pub async fn send_raw_transaction(
         &self,
         raw_transaction_hex: String,
-    ) -> Result<SendTransactionResponse, JsonRpSeeConnectorError> {
+    ) -> Result<SendTransactionResponse, RpcRequestError<SendTransactionError>> {
         let params = vec![serde_json::to_value(raw_transaction_hex)?];
         self.send_request("sendrawtransaction", params).await
     }
@@ -403,7 +408,7 @@ impl JsonRpSeeConnector {
         &self,
         hash_or_height: String,
         verbosity: Option<u8>,
-    ) -> Result<GetBlockResponse, JsonRpSeeConnectorError> {
+    ) -> Result<GetBlockResponse, RpcRequestError<GetBlockError>> {
         let v = verbosity.unwrap_or(1);
         let params = [
             serde_json::to_value(hash_or_height)?,
@@ -426,7 +431,9 @@ impl JsonRpSeeConnector {
     /// zcashd reference: [`getblockcount`](https://zcash.github.io/rpc/getblockcount.html)
     /// method: post
     /// tags: blockchain
-    pub async fn get_block_count(&self) -> Result<GetBlockCountResponse, JsonRpSeeConnectorError> {
+    pub async fn get_block_count(
+        &self,
+    ) -> Result<GetBlockCountResponse, RpcRequestError<GetBlockCountError>> {
         self.send_request::<(), GetBlockCountResponse>("getblockcount", ())
             .await
     }
@@ -436,7 +443,9 @@ impl JsonRpSeeConnector {
     /// zcashd reference: [`getrawmempool`](https://zcash.github.io/rpc/getrawmempool.html)
     /// method: post
     /// tags: blockchain
-    pub async fn get_raw_mempool(&self) -> Result<TxidsResponse, JsonRpSeeConnectorError> {
+    pub async fn get_raw_mempool(
+        &self,
+    ) -> Result<TxidsResponse, RpcRequestError<GetRawMempoolError>> {
         self.send_request::<(), TxidsResponse>("getrawmempool", ())
             .await
     }
@@ -453,7 +462,7 @@ impl JsonRpSeeConnector {
     pub async fn get_treestate(
         &self,
         hash_or_height: String,
-    ) -> Result<GetTreestateResponse, JsonRpSeeConnectorError> {
+    ) -> Result<GetTreestateResponse, RpcRequestError<GetTreeStateError>> {
         let params = vec![serde_json::to_value(hash_or_height)?];
         self.send_request("z_gettreestate", params).await
     }
@@ -474,7 +483,7 @@ impl JsonRpSeeConnector {
         pool: String,
         start_index: u16,
         limit: Option<u16>,
-    ) -> Result<GetSubtreesResponse, JsonRpSeeConnectorError> {
+    ) -> Result<GetSubtreesResponse, RpcRequestError<GetSubtreesError>> {
         let params = match limit {
             Some(v) => vec![
                 serde_json::to_value(pool)?,
@@ -503,7 +512,7 @@ impl JsonRpSeeConnector {
         &self,
         txid_hex: String,
         verbose: Option<u8>,
-    ) -> Result<GetTransactionResponse, JsonRpSeeConnectorError> {
+    ) -> Result<GetTransactionResponse, RpcRequestError<GetRawTransactionError>> {
         let params = match verbose {
             Some(v) => vec![serde_json::to_value(txid_hex)?, serde_json::to_value(v)?],
             None => vec![serde_json::to_value(txid_hex)?, serde_json::to_value(0)?],
@@ -529,7 +538,7 @@ impl JsonRpSeeConnector {
         addresses: Vec<String>,
         start: u32,
         end: u32,
-    ) -> Result<TxidsResponse, JsonRpSeeConnectorError> {
+    ) -> Result<TxidsResponse, RpcRequestError<GetAddressTxIdsError>> {
         let params = serde_json::json!({
             "addresses": addresses,
             "start": start,
@@ -551,7 +560,7 @@ impl JsonRpSeeConnector {
     pub async fn get_address_utxos(
         &self,
         addresses: Vec<String>,
-    ) -> Result<Vec<GetUtxosResponse>, JsonRpSeeConnectorError> {
+    ) -> Result<Vec<GetUtxosResponse>, RpcRequestError<GetAddressUtxosError>> {
         let params = vec![serde_json::json!({ "addresses": addresses })];
         self.send_request("getaddressutxos", params).await
     }
