@@ -141,6 +141,8 @@ script.post = '''
 docker stop zaino-testing
 '''
 
+# -------------------------------------------------------------------
+
 [tasks.copy-bins]
 description = "Copy bins from image into test_binaries/bins"
 extend = "base-script"
@@ -151,4 +153,38 @@ docker create --name my_zaino_container zingodevops/zaino-ci:"$TAG"
 docker cp my_zaino_container:/usr/local/bin ./test_binaries/
 cp -r ./test_binaries/bin ./test_binaries/bins
 docker rm my_zaino_container
+'''
+
+# -------------------------------------------------------------------
+
+[tasks.check-matching-zebras]
+description = "Check that zebra versions in .env.testing-artifacts match what's in Cargo.toml"
+extend = "base-script"
+script_runner = "bash"
+script.main = '''
+set -euo pipefail
+
+# source .env.testing-artifacts
+
+# Normalize Cargo.toml (stripping comments, whitespace)
+cargo_toml=$(sed 's/#.*//' Cargo.toml | tr -d '[:space:]')
+
+# Check Zebra rev
+zebra_revs=$(echo "$cargo_toml" | grep -o 'zebra-[a-z]*={[^}]*rev="[^"]*"' | grep -o 'rev="[^"]*"' | cut -d'"' -f2 | sort -u)
+
+if [[ $(echo "$zebra_revs" | wc -l) -ne 1 ]]; then
+  err "❌ Multiple Zebra revs detected in Cargo.toml:"
+  echo "$zebra_revs"
+  exit 1
+fi
+
+actual_rev="$zebra_revs"
+
+# Accept short SHA from env if it matches prefix of actual
+if [[ "$actual_rev" != "$ZEBRA_VERSION" && "${actual_rev:0:${#ZEBRA_VERSION}}" != "$ZEBRA_VERSION" ]]; then
+  err "❌ Mismatch for Zebra git rev: Cargo.toml has $actual_rev, but .env.testing-artifacts has $ZEBRA_VERSION"
+  exit 1
+fi
+
+info "✅ All versions match between Cargo.toml and .env.testing-artifacts"
 '''
