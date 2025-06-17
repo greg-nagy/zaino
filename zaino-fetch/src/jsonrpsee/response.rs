@@ -695,10 +695,10 @@ pub struct GetTreestateResponse {
     pub time: u32,
 
     /// A treestate containing a Sapling note commitment tree, hex-encoded.
-    pub sapling: zebra_rpc::methods::trees::Treestate<String>,
+    pub sapling: zebra_rpc::methods::trees::Treestate,
 
     /// A treestate containing an Orchard note commitment tree, hex-encoded.
-    pub orchard: zebra_rpc::methods::trees::Treestate<String>,
+    pub orchard: zebra_rpc::methods::trees::Treestate,
 }
 
 impl<'de> serde::Deserialize<'de> for GetTreestateResponse {
@@ -719,10 +719,10 @@ impl<'de> serde::Deserialize<'de> for GetTreestateResponse {
             .ok_or_else(|| serde::de::Error::missing_field("time"))? as u32;
         let sapling_final_state = v["sapling"]["commitments"]["finalState"]
             .as_str()
-            .map(ToString::to_string);
+            .map(Vec::from);
         let orchard_final_state = v["orchard"]["commitments"]["finalState"]
             .as_str()
-            .map(ToString::to_string);
+            .map(Vec::from);
         Ok(GetTreestateResponse {
             height,
             hash,
