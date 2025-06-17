@@ -2,7 +2,7 @@ use std::{collections::HashMap, mem, sync::Arc};
 
 use crate::{
     chain_index::types::{Hash, Height},
-    BlockData, BlockIndex, ChainWork,
+    BlockData, BlockIndex, ChainWork, CommitmentTreeRoots, CommitmentTreeSizes,
 };
 use arc_swap::ArcSwap;
 use futures::future::join;
@@ -84,18 +84,32 @@ impl NonFinalzedState {
                             .blocks
                             .get(&best_tip.1)
                             .expect("hole in block cache");
-                        let trees = self
+                        let (sapling_root_and_len, orchard_root_and_len) = self
                             .source
                             .get_commitment_tree_roots(block.hash().into())
-                            .await;
+                            .await
+                            .unwrap_or_else(|_e| todo!());
+                        let ((sapling_root, sapling_size), (orchard_root, orchard_size)) = (
+                            sapling_root_and_len.unwrap_or_default(),
+                            orchard_root_and_len.unwrap_or_default(),
+                        );
 
-                        let blockdata = BlockData {
+                        //TODO: Is a default (zero) root correct?
+                        let commitment_tree_roots = CommitmentTreeRoots::new(
+                            <[u8; 32]>::from(sapling_root),
+                            <[u8; 32]>::from(orchard_root),
+                        );
+
+                        let commitment_tree_size =
+                            CommitmentTreeSizes::new(sapling_size as u32, orchard_size as u32);
+
+                        let data = BlockData {
                             version: block.header.version,
                             time: block.header.time.timestamp(),
                             merkle_root: block.header.merkle_root.0,
                             auth_data_root: <[u8; 32]>::from(block.auth_data_root()),
-                            commitment_tree_roots: todo!(),
-                            commitment_tree_size: todo!(),
+                            commitment_tree_roots,
+                            commitment_tree_size,
                             bits: u32::from_be_bytes(
                                 block.header.difficulty_threshold.bytes_in_display_order(),
                             ),
@@ -117,7 +131,7 @@ impl NonFinalzedState {
                                 )),
                                 height: Some(best_tip.0),
                             },
-                            data: todo!(),
+                            data,
                             tx: todo!(),
                             spent_outpoints: todo!(),
                         };
@@ -278,8 +292,8 @@ impl BlockchainSource {
         &self,
         id: Hash,
     ) -> BlockchainSourceResult<(
-        Option<zebra_chain::sapling::tree::Root>,
-        Option<zebra_chain::orchard::tree::Root>,
+        Option<(zebra_chain::sapling::tree::Root, u64)>,
+        Option<(zebra_chain::orchard::tree::Root, u64)>,
     )> {
         match self {
             BlockchainSource::State(read_state_service) => {
@@ -309,10 +323,10 @@ impl BlockchainSource {
                 Ok((
                     sapling_tree
                         .as_deref()
-                        .map(zebra_chain::sapling::tree::NoteCommitmentTree::root),
+                        .map(|tree| (tree.root(), tree.count())),
                     orchard_tree
                         .as_deref()
-                        .map(zebra_chain::orchard::tree::NoteCommitmentTree::root),
+                        .map(|tree| (tree.root(), tree.count())),
                 ))
             }
             BlockchainSource::Fetch(json_rp_see_connector) => todo!(),
