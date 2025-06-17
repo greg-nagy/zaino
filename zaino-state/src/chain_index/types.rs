@@ -53,7 +53,7 @@ pub struct ChainBlock {
     /// Essential header and metadata information for the block.
     pub(super) data: BlockData,
     /// Compact representations of transactions in this block.
-    pub(super) tx: Vec<TxData>,
+    pub(super) transactions: Vec<TxData>,
     /// Explicitly recorded UTXOs spent in this block, speeding up reorgs and delta indexing.
     pub(super) spent_outpoints: Vec<SpentOutpoint>,
 }
@@ -69,7 +69,7 @@ impl ChainBlock {
         Self {
             index,
             data,
-            tx,
+            transactions: tx,
             spent_outpoints,
         }
     }
@@ -86,7 +86,7 @@ impl ChainBlock {
 
     /// Returns a reference to the compact transactions in this block.
     pub fn transactions(&self) -> &[TxData] {
-        &self.tx
+        &self.transactions
     }
 
     /// Returns a reference to the spent transparent outpoints.
@@ -292,7 +292,12 @@ impl CBORTaggedEncodable for ChainBlock {
         CBOR::from(vec![
             self.index.tagged_cbor(),
             self.data.tagged_cbor(),
-            CBOR::from(self.tx.iter().map(|t| t.tagged_cbor()).collect::<Vec<_>>()),
+            CBOR::from(
+                self.transactions
+                    .iter()
+                    .map(|t| t.tagged_cbor())
+                    .collect::<Vec<_>>(),
+            ),
             CBOR::from(
                 self.spent_outpoints
                     .iter()
@@ -331,7 +336,7 @@ impl CBORTaggedDecodable for ChainBlock {
                 Ok(Self {
                     index,
                     data,
-                    tx,
+                    transactions: tx,
                     spent_outpoints,
                 })
             }
@@ -1255,23 +1260,9 @@ impl TryFrom<(u64, zaino_fetch::chain::transaction::FullTransaction)> for TxData
         let vout: Vec<TxOutCompact> = tx
             .transparent_outputs()
             .into_iter()
-            .filter_map(|(value, script_hash)| {
-                if script_hash.len() == 21 {
-                    let script_type = script_hash[0];
-                    let mut hash_bytes = [0u8; 20];
-                    hash_bytes.copy_from_slice(&script_hash[1..]);
-                    TxOutCompact::new(value, hash_bytes, script_type)
-                } else {
-                    let mut fallback = [0u8; 20];
-                    let usable_len = script_hash.len().min(20);
-                    fallback[..usable_len].copy_from_slice(&script_hash[..usable_len]);
-                    Some(TxOutCompact::new(
-                        value,
-                        fallback,
-                        ScriptType::NonStandard as u8,
-                    )?)
-                }
-            })
+            //TODO: We should error handle on these, a failure here should probably be
+            // reacted to
+            .filter_map(|(value, script_hash)| try_into_compact_txout(value, script_hash))
             .collect();
 
         let transparent = TransparentCompactTx::new(vin, vout);
@@ -1338,6 +1329,28 @@ impl TryFrom<(u64, zaino_fetch::chain::transaction::FullTransaction)> for TxData
             sapling,
             orchard,
         ))
+    }
+}
+
+pub(super) fn try_into_compact_txout(
+    value: u64,
+    script_hash: impl AsRef<[u8]>,
+) -> Option<TxOutCompact> {
+    let script_hash_ref = script_hash.as_ref();
+    if script_hash_ref.len() == 21 {
+        let script_type = script_hash_ref[0];
+        let mut hash_bytes = [0u8; 20];
+        hash_bytes.copy_from_slice(&script_hash_ref[1..]);
+        TxOutCompact::new(value, hash_bytes, script_type)
+    } else {
+        let mut fallback = [0u8; 20];
+        let usable_len = script_hash_ref.len().min(20);
+        fallback[..usable_len].copy_from_slice(&script_hash_ref[..usable_len]);
+        Some(TxOutCompact::new(
+            value,
+            fallback,
+            ScriptType::NonStandard as u8,
+        )?)
     }
 }
 

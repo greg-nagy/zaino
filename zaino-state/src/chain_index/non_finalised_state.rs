@@ -3,6 +3,7 @@ use std::{collections::HashMap, mem, sync::Arc};
 use crate::{
     chain_index::types::{Hash, Height},
     BlockData, BlockIndex, ChainWork, CommitmentTreeRoots, CommitmentTreeSizes,
+    TransparentCompactTx, TxData, TxInCompact, TxOutCompact,
 };
 use arc_swap::ArcSwap;
 use futures::future::join;
@@ -14,6 +15,8 @@ use zebra_chain::serialization::{ZcashDeserialize, ZcashSerialize};
 use zebra_state::{HashOrHeight, ReadResponse, ReadStateService};
 
 use crate::ChainBlock;
+
+use super::types::try_into_compact_txout;
 
 /// Holds the block cache
 struct NonFinalzedState {
@@ -115,6 +118,51 @@ impl NonFinalzedState {
                             ),
                         };
 
+                        let mut transactions = Vec::new();
+                        for (i, trnsctn) in block.transactions.iter().enumerate() {
+                            let transparent = TransparentCompactTx::new(
+                                trnsctn
+                                    .inputs()
+                                    .iter()
+                                    .filter_map(|input| {
+                                        input.outpoint().map(|outpoint| {
+                                            TxInCompact::new(outpoint.hash.0, outpoint.index)
+                                        })
+                                    })
+                                    .collect(),
+                                trnsctn
+                                    .outputs()
+                                    .iter()
+                                    .filter_map(|output| {
+                                        try_into_compact_txout(
+                                            u64::from(output.value),
+                                            output.lock_script.as_raw_bytes(),
+                                        )
+                                    })
+                                    .collect(),
+                            );
+
+                            let sapling = todo!();
+                            let orchard = todo!();
+
+                            let txdata = TxData::new(
+                                i as u64,
+                                trnsctn.hash().0,
+                                (
+                                    Some(
+                                        trnsctn.sapling_value_balance().sapling_amount().zatoshis(),
+                                    ),
+                                    Some(
+                                        trnsctn.orchard_value_balance().orchard_amount().zatoshis(),
+                                    ),
+                                ),
+                                transparent,
+                                sapling,
+                                orchard,
+                            );
+                            transactions.push(txdata);
+                        }
+
                         let chainblock = ChainBlock {
                             index: BlockIndex {
                                 hash: Hash::from(block.hash()),
@@ -132,7 +180,7 @@ impl NonFinalzedState {
                                 height: Some(best_tip.0),
                             },
                             data,
-                            tx: todo!(),
+                            transactions,
                             spent_outpoints: todo!(),
                         };
                         new_blocks.push(chainblock.clone());
