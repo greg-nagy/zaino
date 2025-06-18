@@ -24,7 +24,10 @@ use nonempty::NonEmpty;
 use tokio_stream::StreamExt as _;
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
+    jsonrpsee::{
+        connector::{JsonRpSeeConnector, RpcError},
+        error::JsonRpSeeConnectorError,
+    },
 };
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
@@ -155,7 +158,11 @@ impl ZcashService for StateService {
         )
         .await?;
 
-        let zebra_build_data = rpc_client.get_info().await?;
+        let zebra_build_data = rpc_client.get_info().await.map_err(|_| {
+            StateServiceError::JsonRpcConnectorError(JsonRpSeeConnectorError::JsonRpSeeClientError(
+                "Failed to get info".to_string(),
+            ))
+        })?;
 
         // This const is optional, as the build script can only
         // generate it from hash-based dependencies.
@@ -203,7 +210,17 @@ impl ZcashService for StateService {
 
         // Wait for ReadStateService to catch up to primary database:
         loop {
-            let server_height = rpc_client.get_blockchain_info().await?.blocks;
+            let server_height = rpc_client
+                .get_blockchain_info()
+                .await
+                .map_err(|_| {
+                    StateServiceError::JsonRpcConnectorError(
+                        JsonRpSeeConnectorError::JsonRpSeeClientError(
+                            "Failed to get blockchain info".to_string(),
+                        ),
+                    )
+                })?
+                .blocks;
 
             let syncer_response = read_state_service
                 .ready()
@@ -824,7 +841,7 @@ impl ZcashIndexer for StateServiceSubscriber {
             .get_info()
             .await
             .map(GetInfo::from)
-            .map_err(Self::Error::from)
+            .map_err(|e| StateServiceError::Custom(e.to_string()))
     }
 
     async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, Self::Error> {
@@ -993,7 +1010,13 @@ impl ZcashIndexer for StateServiceSubscriber {
             .send_raw_transaction(raw_transaction_hex)
             .await
             .map(SentTransactionHash::from)
-            .map_err(StateServiceError::JsonRpcConnectorError)
+            .map_err(|_| {
+                StateServiceError::JsonRpcConnectorError(
+                    JsonRpSeeConnectorError::JsonRpSeeClientError(
+                        "Failed to send raw transaction".to_string(),
+                    ),
+                )
+            })
     }
 
     async fn z_get_block(
@@ -1370,7 +1393,10 @@ impl LightWalletIndexer for StateServiceSubscriber {
             .await
         {
             Ok(block) => Ok(block),
-            Err(e) => self.error_get_block(e, height as u32).await,
+            Err(e) => {
+                self.error_get_block(BlockCacheError::Custom(e.to_string()), height as u32)
+                    .await
+            }
         }
     }
 
@@ -1393,7 +1419,10 @@ impl LightWalletIndexer for StateServiceSubscriber {
             .await
         {
             Ok(block) => Ok(block),
-            Err(e) => self.error_get_block(e, height).await,
+            Err(e) => {
+                self.error_get_block(BlockCacheError::Custom(e.to_string()), height)
+                    .await
+            }
         }
     }
 
