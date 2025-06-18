@@ -1,5 +1,12 @@
 //! Hold error types for the JsonRpSeeConnector and related functionality.
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct JsonRpcError {
+    pub code: i32,
+    pub message: String,
+    pub data: Option<serde_json::Value>,
+}
+
 /// General error type for handling JsonRpSeeConnector errors.
 #[derive(Debug, thiserror::Error)]
 pub enum JsonRpSeeConnectorError {

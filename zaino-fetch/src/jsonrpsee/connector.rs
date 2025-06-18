@@ -7,7 +7,6 @@ use base64::{engine::general_purpose, Engine};
 use http::Uri;
 use reqwest::{Client, ClientBuilder, Url};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::{
     fmt, fs,
     net::SocketAddr,
@@ -21,13 +20,13 @@ use std::{
 use tracing::error;
 
 use crate::jsonrpsee::{
-    error::JsonRpSeeConnectorError,
+    error::{JsonRpSeeConnectorError, JsonRpcError},
     response::{
         GetBalanceError, GetBalanceResponse, GetBlockCountError, GetBlockCountResponse,
         GetBlockError, GetBlockResponse, GetBlockchainInfoError, GetBlockchainInfoResponse,
-        GetInfoError, GetInfoResponse, GetSubtreesResponse, GetTransactionResponse,
-        GetTreestateResponse, GetUtxosResponse, SendTransactionError, SendTransactionResponse,
-        TxidsResponse,
+        GetInfoError, GetInfoResponse, GetSubtreesError, GetSubtreesResponse, GetTransactionError,
+        GetTransactionResponse, GetTreestateError, GetTreestateResponse, GetUtxosError,
+        GetUtxosResponse, SendTransactionError, SendTransactionResponse, TxidsError, TxidsResponse,
     },
 };
 
@@ -55,7 +54,7 @@ pub struct RpcError {
     /// Error Message.
     pub message: String,
     /// Error Data.
-    pub data: Option<Value>,
+    pub data: Option<JsonRpcError>,
 }
 
 impl RpcError {
@@ -85,7 +84,7 @@ impl RpcError {
             // If you want to store the data too:
             data: error_obj
                 .data()
-                .map(|raw| serde_json::from_str(raw.get()).unwrap_or_default()),
+                .map(|raw| serde_json::from_str(raw.get()).unwrap()),
         }
     }
 }
@@ -122,15 +121,29 @@ enum AuthMethod {
     Cookie { cookie: String },
 }
 
-pub trait ResponseToError {
-    type RpcError;
+pub trait ResponseToError: Sized {
+    type RpcError: std::fmt::Debug;
+
+    fn from_rpc_error(err: JsonRpcError) -> Self::RpcError;
 }
 
-pub enum RpcRequestError<T> {
-    RpcSpecific(T),
+#[derive(Debug, thiserror::Error)]
+pub enum RpcRequestError<MethodError> {
+    #[error("Transport error: {0}")]
+    Transport(#[from] JsonRpSeeConnectorError),
+
+    #[error("Method error: {0:?}")]
+    Method(MethodError),
+
+    #[error("Internal unrecoverable error")]
     InternalUnrecoverable,
-    Reqwest(reqwest::Error),
 }
+
+// pub enum RpcRequestError<T> {
+//     RpcSpecific(T),
+//     InternalUnrecoverable,
+//     Reqwest(reqwest::Error),
+// }
 
 /// JsonRpSee Client config data.
 #[derive(Debug, Clone)]
@@ -288,23 +301,28 @@ impl JsonRpSeeConnector {
                 .body(request_body)
                 .send()
                 .await
-                .map_err(|e| RpcRequestError::Reqwest(e))?;
+                .map_err(|e| {
+                    RpcRequestError::Transport(JsonRpSeeConnectorError::ReqwestError(e))
+                })?;
 
             let status = response.status();
 
-            let body_bytes = response
-                .bytes()
-                .await
-                .map_err(|e| RpcRequestError::Reqwest(e))?;
+            let body_bytes = response.bytes().await.map_err(|e| {
+                RpcRequestError::Transport(JsonRpSeeConnectorError::JsonRpSeeClientError(
+                    e.to_string(),
+                ))
+            })?;
 
             let body_str = String::from_utf8_lossy(&body_bytes);
 
             if body_str.contains("Work queue depth exceeded") {
                 if attempts >= max_attempts {
-                    // return Err(JsonRpSeeConnectorError::new(
-                    //     "Error: The node's rpc queue depth was exceeded after multiple attempts",
-                    // ));
-                    return Err(RpcRequestError::InternalUnrecoverable);
+                    return Err(RpcRequestError::Transport(
+                        JsonRpSeeConnectorError::JsonRpSeeClientError(
+                            "The node's rpc queue depth was exceeded after multiple attempts"
+                                .to_string(),
+                        ),
+                    ));
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                 continue;
@@ -322,14 +340,16 @@ impl JsonRpSeeConnector {
                 .map_err(JsonRpSeeConnectorError::SerdeJsonError)?;
 
             return match (response.error, response.result) {
-                (Some(error), _) => Err(JsonRpSeeConnectorError::new(format!(
-                    "Error: Error from node's rpc server: {} - {}",
-                    error.code, error.message
+                (Some(error), _) => Err(RpcRequestError::Transport(JsonRpSeeConnectorError::new(
+                    format!(
+                        "Error: Error from node's rpc server: {} - {}",
+                        error.code, error.message
+                    ),
                 ))),
                 (None, Some(result)) => Ok(result),
-                (None, None) => Err(JsonRpSeeConnectorError::new(
+                (None, None) => Err(RpcRequestError::Transport(JsonRpSeeConnectorError::new(
                     "error: no response body".to_string(),
-                )),
+                ))),
             };
         }
     }
@@ -388,7 +408,9 @@ impl JsonRpSeeConnector {
         &self,
         raw_transaction_hex: String,
     ) -> Result<SendTransactionResponse, RpcRequestError<SendTransactionError>> {
-        let params = vec![serde_json::to_value(raw_transaction_hex)?];
+        let params = vec![serde_json::to_value(raw_transaction_hex)
+            .map_err(JsonRpSeeConnectorError::from)
+            .map_err(RpcRequestError::Transport)?];
         self.send_request("sendrawtransaction", params).await
     }
 
@@ -411,9 +433,10 @@ impl JsonRpSeeConnector {
     ) -> Result<GetBlockResponse, RpcRequestError<GetBlockError>> {
         let v = verbosity.unwrap_or(1);
         let params = [
-            serde_json::to_value(hash_or_height)?,
-            serde_json::to_value(v)?,
+            serde_json::to_value(hash_or_height).map_err(JsonRpSeeConnectorError::from)?,
+            serde_json::to_value(v).map_err(JsonRpSeeConnectorError::from)?,
         ];
+
         if v == 0 {
             self.send_request("getblock", params)
                 .await
@@ -443,9 +466,7 @@ impl JsonRpSeeConnector {
     /// zcashd reference: [`getrawmempool`](https://zcash.github.io/rpc/getrawmempool.html)
     /// method: post
     /// tags: blockchain
-    pub async fn get_raw_mempool(
-        &self,
-    ) -> Result<TxidsResponse, RpcRequestError<GetRawMempoolError>> {
+    pub async fn get_raw_mempool(&self) -> Result<TxidsResponse, RpcRequestError<TxidsError>> {
         self.send_request::<(), TxidsResponse>("getrawmempool", ())
             .await
     }
@@ -462,8 +483,9 @@ impl JsonRpSeeConnector {
     pub async fn get_treestate(
         &self,
         hash_or_height: String,
-    ) -> Result<GetTreestateResponse, RpcRequestError<GetTreeStateError>> {
-        let params = vec![serde_json::to_value(hash_or_height)?];
+    ) -> Result<GetTreestateResponse, RpcRequestError<GetTreestateError>> {
+        let params =
+            vec![serde_json::to_value(hash_or_height).map_err(JsonRpSeeConnectorError::from)?];
         self.send_request("z_gettreestate", params).await
     }
 
@@ -486,13 +508,13 @@ impl JsonRpSeeConnector {
     ) -> Result<GetSubtreesResponse, RpcRequestError<GetSubtreesError>> {
         let params = match limit {
             Some(v) => vec![
-                serde_json::to_value(pool)?,
-                serde_json::to_value(start_index)?,
-                serde_json::to_value(v)?,
+                serde_json::to_value(pool).map_err(JsonRpSeeConnectorError::from)?,
+                serde_json::to_value(start_index).map_err(JsonRpSeeConnectorError::from)?,
+                serde_json::to_value(v).map_err(JsonRpSeeConnectorError::from)?,
             ],
             None => vec![
-                serde_json::to_value(pool)?,
-                serde_json::to_value(start_index)?,
+                serde_json::to_value(pool).map_err(JsonRpSeeConnectorError::from)?,
+                serde_json::to_value(start_index).map_err(JsonRpSeeConnectorError::from)?,
             ],
         };
         self.send_request("z_getsubtreesbyindex", params).await
@@ -512,10 +534,16 @@ impl JsonRpSeeConnector {
         &self,
         txid_hex: String,
         verbose: Option<u8>,
-    ) -> Result<GetTransactionResponse, RpcRequestError<GetRawTransactionError>> {
+    ) -> Result<GetTransactionResponse, RpcRequestError<GetTransactionError>> {
         let params = match verbose {
-            Some(v) => vec![serde_json::to_value(txid_hex)?, serde_json::to_value(v)?],
-            None => vec![serde_json::to_value(txid_hex)?, serde_json::to_value(0)?],
+            Some(v) => vec![
+                serde_json::to_value(txid_hex).map_err(JsonRpSeeConnectorError::from)?,
+                serde_json::to_value(v).map_err(JsonRpSeeConnectorError::from)?,
+            ],
+            None => vec![
+                serde_json::to_value(txid_hex).map_err(JsonRpSeeConnectorError::from)?,
+                serde_json::to_value(0).map_err(JsonRpSeeConnectorError::from)?,
+            ],
         };
 
         self.send_request("getrawtransaction", params).await
@@ -538,7 +566,7 @@ impl JsonRpSeeConnector {
         addresses: Vec<String>,
         start: u32,
         end: u32,
-    ) -> Result<TxidsResponse, RpcRequestError<GetAddressTxIdsError>> {
+    ) -> Result<TxidsResponse, RpcRequestError<TxidsError>> {
         let params = serde_json::json!({
             "addresses": addresses,
             "start": start,
@@ -560,7 +588,7 @@ impl JsonRpSeeConnector {
     pub async fn get_address_utxos(
         &self,
         addresses: Vec<String>,
-    ) -> Result<Vec<GetUtxosResponse>, RpcRequestError<GetAddressUtxosError>> {
+    ) -> Result<Vec<GetUtxosResponse>, RpcRequestError<GetUtxosError>> {
         let params = vec![serde_json::json!({ "addresses": addresses })];
         self.send_request("getaddressutxos", params).await
     }
