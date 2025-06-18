@@ -5,6 +5,7 @@
 
 use base64::{engine::general_purpose, Engine};
 use http::Uri;
+use jsonrpsee_types::error;
 use reqwest::{Client, ClientBuilder, Url};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -123,6 +124,10 @@ enum AuthMethod {
 
 pub trait ResponseToError: Sized {
     type RpcError: std::fmt::Debug;
+
+    fn to_error(self) -> Result<Self, Self::RpcError> {
+        Ok(self)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -327,10 +332,6 @@ impl JsonRpSeeConnector {
             }
 
             if !status.is_success() {
-                // return Err(JsonRpSeeConnectorError::new(format!(
-                //     "Error: Error status from node's rpc server: {}, {}",
-                //     status, body_str
-                // )));
                 return Err(RpcRequestError::InternalUnrecoverable);
             }
 
@@ -344,7 +345,10 @@ impl JsonRpSeeConnector {
                         error.code, error.message
                     ),
                 ))),
-                (None, Some(result)) => Ok(result),
+                (None, Some(result)) => match result.to_error() {
+                    Ok(r) => Ok(r),
+                    Err(e) => Err(RpcRequestError::Method(e)),
+                },
                 (None, None) => Err(RpcRequestError::Transport(JsonRpSeeConnectorError::new(
                     "error: no response body".to_string(),
                 ))),
