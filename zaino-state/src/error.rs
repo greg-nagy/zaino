@@ -223,14 +223,6 @@ pub enum BlockCacheError {
     TryFromIntError(#[from] std::num::TryFromIntError),
 }
 
-impl ResponseToError for BlockCacheError {
-    type RpcError = BlockCacheError;
-
-    fn from_rpc_error(err: zaino_fetch::jsonrpsee::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
-}
-
 /// Errors related to the `NonFinalisedState`.
 #[derive(Debug, thiserror::Error)]
 pub enum NonFinalisedStateError {

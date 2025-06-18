@@ -8,7 +8,7 @@ use crate::{
     status::{AtomicStatus, StatusType},
 };
 use tracing::{info, warn};
-use zaino_fetch::jsonrpsee::connector::JsonRpSeeConnector;
+use zaino_fetch::jsonrpsee::{connector::JsonRpSeeConnector, response::TxidsError};
 use zebra_chain::block::Hash;
 use zebra_rpc::methods::GetRawTransaction;
 
@@ -178,11 +178,29 @@ impl Mempool {
     ) -> Result<Vec<(MempoolKey, MempoolValue)>, MempoolError> {
         let mut transactions = Vec::new();
 
-        for txid in self.fetcher.get_raw_mempool().await?.transactions {
+        for txid in self
+            .fetcher
+            .get_raw_mempool()
+            .await
+            .map_err(|_| {
+                MempoolError::JsonRpcConnectorError(
+                    zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError::JsonRpSeeClientError(
+                        "Failed to get mempool".to_string(),
+                    ),
+                )
+            })?
+            .transactions
+        {
             let transaction = self
                 .fetcher
                 .get_raw_transaction(txid.clone(), Some(1))
-                .await?;
+                .await.map_err(|_| {
+                    MempoolError::JsonRpcConnectorError(
+                        zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError::JsonRpSeeClientError(
+                            "Failed to get mempool".to_string(),
+                        ),
+                    )
+                })?;
             transactions.push((MempoolKey(txid), MempoolValue(transaction.into())));
         }
 
