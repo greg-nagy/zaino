@@ -3,7 +3,8 @@ use std::{collections::HashMap, mem, sync::Arc};
 use crate::{
     chain_index::types::{Hash, Height},
     BlockData, BlockIndex, ChainWork, CommitmentTreeRoots, CommitmentTreeSizes,
-    TransparentCompactTx, TxData, TxInCompact, TxOutCompact,
+    CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, SaplingCompactTx,
+    SpentOutpoint, TransparentCompactTx, TxData, TxInCompact, TxOutCompact,
 };
 use arc_swap::ArcSwap;
 use futures::future::join;
@@ -142,8 +143,45 @@ impl NonFinalzedState {
                                     .collect(),
                             );
 
-                            let sapling = todo!();
-                            let orchard = todo!();
+                            let sapling = SaplingCompactTx::new(
+                                trnsctn
+                                    .sapling_nullifiers()
+                                    .map(|nf| CompactSaplingSpend::new(*nf.0))
+                                    .collect(),
+                                trnsctn
+                                    .sapling_outputs()
+                                    .map(|output| {
+                                        CompactSaplingOutput::new(
+                                            output.cm_u.to_bytes(),
+                                            <[u8; 32]>::from(output.ephemeral_key),
+                                            // This unwrap is unnecessary, but to remove it one would need to write
+                                            // a new array of [input[0], input[1]..] and enumerate all 52 elements
+                                            //
+                                            // This would be uglier than the unwrap
+                                            <[u8; 580]>::from(output.enc_ciphertext)[..52]
+                                                .try_into()
+                                                .unwrap(),
+                                        )
+                                    })
+                                    .collect(),
+                            );
+                            let orchard = trnsctn
+                                .orchard_actions()
+                                .map(|action| {
+                                    CompactOrchardAction::new(
+                                        <[u8; 32]>::from(action.nullifier),
+                                        <[u8; 32]>::from(action.cm_x),
+                                        <[u8; 32]>::from(action.ephemeral_key),
+                                        // This unwrap is unnecessary, but to remove it one would need to write
+                                        // a new array of [input[0], input[1]..] and enumerate all 52 elements
+                                        //
+                                        // This would be uglier than the unwrap
+                                        <[u8; 580]>::from(action.enc_ciphertext)[..52]
+                                            .try_into()
+                                            .unwrap(),
+                                    )
+                                })
+                                .collect();
 
                             let txdata = TxData::new(
                                 i as u64,
@@ -162,26 +200,38 @@ impl NonFinalzedState {
                             );
                             transactions.push(txdata);
                         }
+                        let spent_outpoints = transactions
+                            .iter()
+                            .flat_map(|tx| {
+                                tx.transparent().inputs().iter().map(|input| {
+                                    SpentOutpoint::new(*input.prevout_txid(), input.prevout_index())
+                                })
+                            })
+                            .collect();
 
+                        let height = Some(best_tip.0);
+                        let hash = Hash::from(block.hash());
+                        let parent_hash = Hash::from(block.header.previous_block_hash);
+                        let chainwork = prev_block.chainwork().add(&ChainWork::from(U256::from(
+                            block
+                                .header
+                                .difficulty_threshold
+                                .to_work()
+                                .expect("invalid block")
+                                .as_u128(),
+                        )));
+
+                        let index = BlockIndex {
+                            hash,
+                            parent_hash,
+                            chainwork,
+                            height,
+                        };
                         let chainblock = ChainBlock {
-                            index: BlockIndex {
-                                hash: Hash::from(block.hash()),
-                                parent_hash: Hash::from(block.header.previous_block_hash),
-                                chainwork: prev_block.chainwork().add(&ChainWork::from(
-                                    U256::from(
-                                        block
-                                            .header
-                                            .difficulty_threshold
-                                            .to_work()
-                                            .expect("invalid block")
-                                            .as_u128(),
-                                    ),
-                                )),
-                                height: Some(best_tip.0),
-                            },
+                            index,
                             data,
                             transactions,
-                            spent_outpoints: todo!(),
+                            spent_outpoints,
                         };
                         new_blocks.push(chainblock.clone());
                     } else {
