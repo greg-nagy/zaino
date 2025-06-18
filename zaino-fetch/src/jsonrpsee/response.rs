@@ -77,10 +77,6 @@ pub enum GetInfoError {}
 
 impl ResponseToError for GetInfoResponse {
     type RpcError = GetInfoError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -98,10 +94,6 @@ pub enum ErrorsTimestampError {}
 
 impl ResponseToError for ErrorsTimestamp {
     type RpcError = ErrorsTimestampError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 impl std::fmt::Display for ErrorsTimestamp {
@@ -215,10 +207,6 @@ pub enum GetBlockchainInfoError {}
 
 impl ResponseToError for GetBlockchainInfoResponse {
     type RpcError = GetBlockchainInfoError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 fn default_header() -> Height {
@@ -241,10 +229,6 @@ pub enum ChainWorkError {}
 
 impl ResponseToError for ChainWork {
     type RpcError = ChainWorkError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 impl TryFrom<ChainWork> for u64 {
@@ -273,10 +257,6 @@ pub enum ChainBalanceError {}
 
 impl ResponseToError for ChainBalance {
     type RpcError = ChainBalanceError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 impl<'de> Deserialize<'de> for ChainBalance {
@@ -355,10 +335,6 @@ pub enum GetBalanceError {}
 
 impl ResponseToError for GetBalanceResponse {
     type RpcError = GetBalanceError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 impl From<GetBalanceResponse> for zebra_rpc::methods::AddressBalance {
@@ -380,10 +356,6 @@ pub enum SendTransactionError {}
 
 impl ResponseToError for SendTransactionResponse {
     type RpcError = SendTransactionError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 impl From<SendTransactionResponse> for zebra_rpc::methods::SentTransactionHash {
@@ -406,10 +378,6 @@ pub enum GetBlockHashError {}
 
 impl ResponseToError for GetBlockHash {
     type RpcError = GetBlockHashError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 impl Default for GetBlockHash {
@@ -594,18 +562,10 @@ pub enum GetBlockResponse {
 
 impl ResponseToError for SerializedBlock {
     type RpcError = GetBlockError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 impl ResponseToError for BlockObject {
     type RpcError = GetBlockError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -616,10 +576,6 @@ pub enum GetBlockError {
 
 impl ResponseToError for GetBlockResponse {
     type RpcError = GetBlockError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 /// Contains the height of the most recent block in the best valid block chain
@@ -631,10 +587,6 @@ pub enum GetBlockCountError {}
 
 impl ResponseToError for GetBlockCountResponse {
     type RpcError = GetBlockCountError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 impl From<GetBlockCountResponse> for Height {
@@ -793,10 +745,6 @@ pub enum TxidsError {}
 
 impl ResponseToError for TxidsResponse {
     type RpcError = TxidsError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 impl<'de> serde::Deserialize<'de> for TxidsResponse {
@@ -848,10 +796,6 @@ pub enum GetTreestateError {}
 
 impl ResponseToError for GetTreestateResponse {
     type RpcError = GetTreestateError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 impl<'de> serde::Deserialize<'de> for GetTreestateResponse {
@@ -941,10 +885,6 @@ pub enum GetTransactionError {}
 
 impl ResponseToError for GetTransactionResponse {
     type RpcError = GetTransactionError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 impl<'de> serde::Deserialize<'de> for GetTransactionResponse {
@@ -1186,10 +1126,6 @@ pub enum GetSubtreesError {}
 
 impl ResponseToError for GetSubtreesResponse {
     type RpcError = GetSubtreesError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 impl From<GetSubtreesResponse> for zebra_rpc::methods::trees::GetSubtrees {
@@ -1297,18 +1233,10 @@ pub enum GetUtxosError {}
 
 impl ResponseToError for GetUtxosResponse {
     type RpcError = GetUtxosError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 impl ResponseToError for Vec<GetUtxosResponse> {
     type RpcError = GetUtxosError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }
 
 impl From<GetUtxosResponse> for zebra_rpc::methods::GetAddressUtxos {
@@ -1326,8 +1254,4 @@ impl From<GetUtxosResponse> for zebra_rpc::methods::GetAddressUtxos {
 
 impl<T: ResponseToError> ResponseToError for Box<T> {
     type RpcError = T::RpcError;
-
-    fn from_rpc_error(err: super::error::JsonRpcError) -> Self::RpcError {
-        todo!()
-    }
 }

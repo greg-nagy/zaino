@@ -123,8 +123,6 @@ enum AuthMethod {
 
 pub trait ResponseToError: Sized {
     type RpcError: std::fmt::Debug;
-
-    fn from_rpc_error(err: JsonRpcError) -> Self::RpcError;
 }
 
 #[derive(Debug, thiserror::Error)]
