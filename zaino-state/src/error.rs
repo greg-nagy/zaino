@@ -1,5 +1,7 @@
 //! Holds error types for Zaino-state.
 
+use zaino_fetch::jsonrpsee::connector::ResponseToError;
+
 /// Errors related to the `StateService`.
 #[derive(Debug, thiserror::Error)]
 pub enum StateServiceError {
@@ -219,6 +221,14 @@ pub enum BlockCacheError {
     /// Integer conversion error.
     #[error("Integer conversion error: {0}")]
     TryFromIntError(#[from] std::num::TryFromIntError),
+}
+
+impl ResponseToError for BlockCacheError {
+    type RpcError = BlockCacheError;
+
+    fn from_rpc_error(err: zaino_fetch::jsonrpsee::error::JsonRpcError) -> Self::RpcError {
+        todo!()
+    }
 }
 
 /// Errors related to the `NonFinalisedState`.

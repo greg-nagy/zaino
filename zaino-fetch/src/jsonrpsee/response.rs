@@ -609,7 +609,10 @@ impl ResponseToError for BlockObject {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum GetBlockError {}
+pub enum GetBlockError {
+    #[error("Custom error: {0}")]
+    Custom(String),
+}
 
 impl ResponseToError for GetBlockResponse {
     type RpcError = GetBlockError;
