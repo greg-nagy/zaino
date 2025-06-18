@@ -1,4 +1,5 @@
 on:
+  workflow_dispatch:
   pull_request:
     types:
       - closed
@@ -7,8 +8,8 @@ on:
 
 jobs:
   docker:
-    name: Build Docker images
-    runs-on: ziserv-2
+    name: Zaino release Docker images (build+push)
+    runs-on: ubuntu-latest
     if: ${{ github.event.pull_request.merged == true }}
     env:
       PUSH_IMAGES: true
@@ -78,7 +79,7 @@ jobs:
     needs: docker
     name: Create GitHub Release
     if: ${{ github.event.pull_request.merged == true }} && startsWith(github.ref, 'refs/tags/') && github.token != ''
-    runs-on: ziserv-2
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
