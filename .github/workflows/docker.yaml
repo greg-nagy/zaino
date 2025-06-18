@@ -30,7 +30,7 @@ jobs:
         id: meta-default
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_RELEASE_REPO || 'zaino' }}
           tags: |
             type=semver,pattern={{version}}, prefix=v
 
@@ -43,10 +43,10 @@ jobs:
           tags: ${{ steps.meta-default.outputs.tags }}
           labels: ${{ steps.meta-default.outputs.labels }}
           cache-from: |
-            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}:buildcache
+            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_RELEASE_REPO || 'zaino' }}:buildcache
             type=gha
           cache-to: |
-            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}:buildcache,mode=max
+            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_RELEASE_REPO || 'zaino' }}:buildcache,mode=max
             type=gha,mode=max
 
 
@@ -54,7 +54,7 @@ jobs:
         id: meta-no-tls
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_RELEASE_REPO || 'zaino' }}
           flavor: |
             suffix=-no-tls
           tags: |
@@ -70,10 +70,10 @@ jobs:
           tags: "${{ steps.meta-no-tls.outputs.tags }}"
           labels: ${{ steps.meta-no-tls.outputs.labels }}
           cache-from: |
-            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}:buildcache-no-tls
+            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_RELEASE_REPO || 'zaino' }}:buildcache-no-tls
             type=gha
           cache-to: |
-            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPO || 'zaino' }}:buildcache-no-tls,mode=max
+            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_RELEASE_REPO || 'zaino' }}:buildcache-no-tls,mode=max
             type=gha,mode=max
 
   create-release:
