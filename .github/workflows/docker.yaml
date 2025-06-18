@@ -1,3 +1,4 @@
+name: Zaino release
 on:
   workflow_dispatch:
   pull_request:
@@ -8,7 +9,7 @@ on:
 
 jobs:
   docker:
-    name: Zaino release Docker images (build+push)
+    name: Docker images (build+push)
     runs-on: ubuntu-latest
     if: ${{ github.event.pull_request.merged == true }}
     env:
