@@ -19,6 +19,7 @@ use std::{
     time::Duration,
 };
 use tracing::error;
+use zebra_rpc::methods::types::validate_address;
 
 use crate::jsonrpsee::{
     error::JsonRpSeeConnectorError,
@@ -426,7 +427,7 @@ impl JsonRpSeeConnector {
     pub async fn validate_address(
         &self,
         address: String,
-    ) -> Result<ValidateAddressResponse, JsonRpSeeConnectorError> {
+    ) -> Result<validate_address::Response, JsonRpSeeConnectorError> {
         let params = vec![serde_json::to_value(address)?];
         self.send_request("validateaddress", params).await
     }

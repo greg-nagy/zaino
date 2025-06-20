@@ -5,6 +5,7 @@ use zaino_state::{LightWalletIndexer, ZcashIndexer};
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
+    types::validate_address,
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
     GetBlockChainInfo, GetInfo, GetRawTransaction, SentTransactionHash,
 };
@@ -61,7 +62,7 @@ pub trait ZcashIndexerRpc {
     async fn validate_address(
         &self,
         address: String,
-    ) -> Result<ValidateAddressResponse, ErrorObjectOwned>;
+    ) -> Result<validate_address::Response, ErrorObjectOwned>;
 
     /// Returns the total balance of a provided `addresses` in an [`AddressBalance`] instance.
     ///
@@ -317,7 +318,7 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
     async fn validate_address(
         &self,
         address: String,
-    ) -> Result<ValidateAddressResponse, ErrorObjectOwned> {
+    ) -> Result<validate_address::Response, ErrorObjectOwned> {
         self.service_subscriber
             .inner_ref()
             .validate_address(address)

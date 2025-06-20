@@ -38,13 +38,11 @@ use zaino_proto::proto::{
     },
 };
 
-use zcash_address::ZcashAddress;
-use zcash_primitives::legacy::TransparentAddress;
-use zcash_protocol::consensus::NetworkType;
 use zebra_chain::{
     block::{Header, Height, SerializedBlock},
     chain_tip::NetworkChainTipHeightEstimator,
     parameters::{ConsensusBranchId, Network, NetworkUpgrade},
+    primitives,
     serialization::ZcashSerialize,
     subtree::NoteCommitmentSubtreeIndex,
 };
@@ -53,7 +51,7 @@ use zebra_rpc::{
         chain_tip_difficulty,
         hex_data::HexData,
         trees::{GetSubtrees, GetTreestate, SubtreeRpcData},
-        types::transaction::TransactionObject,
+        types::{transaction::TransactionObject, validate_address},
         AddressBalance, AddressStrings, ConsensusBranchIdHex, GetAddressTxIdsRequest,
         GetAddressUtxos, GetBlock, GetBlockChainInfo, GetBlockHash, GetBlockHeader,
         GetBlockHeaderObject, GetBlockTransaction, GetBlockTrees, GetInfo, GetRawTransaction,
@@ -1104,49 +1102,78 @@ impl ZcashIndexer for StateServiceSubscriber {
     /// - account: DEPRECATED. However, I should ...
     async fn validate_address(
         &self,
-        address: String,
-    ) -> Result<ValidateAddressResponse, Self::Error> {
-        let addr = ZcashAddress::try_from_encoded(&address)
-            .map_err(|_| ValidateAddressResponse {
-                is_valid: false,
-                ..Default::default()
-            })
-            .unwrap();
+        raw_address: String,
+    ) -> Result<validate_address::Response, Self::Error> {
+        let network = self.config.network.clone();
 
-        let (taddr, script_pubkey, isscript) = match self.config.network.clone() {
-            Network::Mainnet => {
-                match addr.convert_if_network::<TransparentAddress>(NetworkType::Main) {
-                    Ok(trans_addr) => {
-                        let script = trans_addr.script();
-                        let is_script = matches!(trans_addr, TransparentAddress::ScriptHash(_));
-                        (Some(trans_addr), Some(script), Some(is_script))
-                    }
-                    Err(e) => (None, None, None),
-                }
-            }
-            Network::Testnet(_) => {
-                match addr.convert_if_network::<TransparentAddress>(NetworkType::Test) {
-                    Ok(trans_addr) => {
-                        let script = trans_addr.script();
-                        let is_script = matches!(trans_addr, TransparentAddress::ScriptHash(_));
-                        (Some(trans_addr), Some(script), Some(is_script))
-                    }
-                    Err(_) => (None, None, None),
-                }
+        let Ok(address) = raw_address.parse::<zcash_address::ZcashAddress>() else {
+            return Ok(validate_address::Response::invalid());
+        };
+
+        let address = match address.convert::<primitives::Address>() {
+            Ok(address) => address,
+            Err(err) => {
+                tracing::debug!(?err, "conversion error");
+                return Ok(validate_address::Response::invalid());
             }
         };
 
-        Ok(ValidateAddressResponse {
-            is_valid: true,
-            address: Some(address.clone()),
-            is_script: isscript,
-            scriptpubkey: script_pubkey.map(|script| script.0.encode_hex()),
-            is_watchonly: Some(false),
-            pubkey: None,
-            is_compressed: None,
-            account: None,
-            is_mine: None,
-        })
+        // we want to match zcashd's behaviour
+        if !address.is_transparent() {
+            return Ok(validate_address::Response::invalid());
+        }
+
+        if address.network() == network.kind() {
+            Ok(validate_address::Response {
+                address: Some(raw_address),
+                is_valid: true,
+                is_script: Some(address.is_script_hash()),
+            })
+        } else {
+            Ok(validate_address::Response::invalid())
+        }
+
+        // let addr = ZcashAddress::try_from_encoded(&address)
+        //     .map_err(|_| ValidateAddressResponse {
+        //         is_valid: false,
+        //         ..Default::default()
+        //     })
+        //     .unwrap();
+
+        // let (taddr, script_pubkey, isscript) = match self.config.network.clone() {
+        //     Network::Mainnet => {
+        //         match addr.convert_if_network::<TransparentAddress>(NetworkType::Main) {
+        //             Ok(trans_addr) => {
+        //                 let script = trans_addr.script();
+        //                 let is_script = matches!(trans_addr, TransparentAddress::ScriptHash(_));
+        //                 (Some(trans_addr), Some(script), Some(is_script))
+        //             }
+        //             Err(e) => (None, None, None),
+        //         }
+        //     }
+        //     Network::Testnet(_) => {
+        //         match addr.convert_if_network::<TransparentAddress>(NetworkType::Test) {
+        //             Ok(trans_addr) => {
+        //                 let script = trans_addr.script();
+        //                 let is_script = matches!(trans_addr, TransparentAddress::ScriptHash(_));
+        //                 (Some(trans_addr), Some(script), Some(is_script))
+        //             }
+        //             Err(_) => (None, None, None),
+        //         }
+        //     }
+        // };
+
+        // Ok(ValidateAddressResponse {
+        //     is_valid: true,
+        //     address: Some(address.clone()),
+        //     is_script: isscript,
+        //     scriptpubkey: script_pubkey.map(|script| script.0.encode_hex()),
+        //     is_watchonly: Some(false),
+        //     pubkey: None,
+        //     is_compressed: None,
+        //     account: None,
+        //     is_mine: None,
+        // })
     }
 
     async fn z_get_subtrees_by_index(

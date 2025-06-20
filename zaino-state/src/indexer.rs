@@ -18,6 +18,7 @@ use zaino_proto::proto::{
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
+    types::validate_address,
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
     GetBlockChainInfo, GetInfo, GetRawTransaction, SentTransactionHash,
 };
@@ -251,7 +252,7 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     async fn validate_address(
         &self,
         address: String,
-    ) -> Result<ValidateAddressResponse, Self::Error>;
+    ) -> Result<validate_address::Response, Self::Error>;
 
     /// Returns all transaction ids in the memory pool, as a JSON array.
     ///

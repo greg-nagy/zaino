@@ -12,6 +12,7 @@ use zaino_state::{
 use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind};
 use zebra_chain::{parameters::Network, subtree::NoteCommitmentSubtreeIndex};
+use zebra_rpc::methods::types::validate_address;
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest};
 
 async fn create_test_manager_and_fetch_service(
@@ -585,16 +586,28 @@ async fn fetch_service_validate_address(validator: &ValidatorKind) {
     let (mut test_manager, _fetch_service, fetch_service_subscriber) =
         create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
-    let expected_validation: ValidateAddressResponse = ValidateAddressResponse {
+    // let expected_validation: ValidateAddressResponse = ValidateAddressResponse {
+    //     is_valid: true,
+    //     address: Some("tm9iMLAuYMzJ6jtFLcA7rzUmfreGuKvr7Ma".to_owned()),
+    //     scriptpubkey: Some("76a914000000000000000000000000000000000000000088ac".to_owned()),
+    //     is_mine: Some(false),
+    //     is_script: Some(false),
+    //     is_watchonly: Some(false),
+    //     pubkey: None,
+    //     is_compressed: None,
+    //     account: None,
+    // };
+
+    let expected_validation = validate_address::Response {
         is_valid: true,
         address: Some("tm9iMLAuYMzJ6jtFLcA7rzUmfreGuKvr7Ma".to_owned()),
-        scriptpubkey: Some("76a914000000000000000000000000000000000000000088ac".to_owned()),
-        is_mine: Some(false),
+        // scriptpubkey: Some("76a914000000000000000000000000000000000000000088ac".to_owned()),
+        // is_mine: Some(false),
         is_script: Some(false),
-        is_watchonly: Some(false),
-        pubkey: None,
-        is_compressed: None,
-        account: None,
+        // is_watchonly: Some(false),
+        // pubkey: None,
+        // is_compressed: None,
+        // account: None,
     };
 
     let fetch_service_validate_address = dbg!(fetch_service_subscriber
@@ -604,16 +617,28 @@ async fn fetch_service_validate_address(validator: &ValidatorKind) {
 
     assert_eq!(fetch_service_validate_address, expected_validation);
 
-    let expected_validation_script: ValidateAddressResponse = ValidateAddressResponse {
+    // let expected_validation_script: ValidateAddressResponse = ValidateAddressResponse {
+    //     is_valid: true,
+    //     address: Some("t26YoyZ1iPgiMEWL4zGUm74eVWfhyDMXzY2".to_owned()),
+    //     scriptpubkey: Some("a914000000000000000000000000000000000000000087".to_owned()),
+    //     is_mine: Some(false),
+    //     is_script: Some(true),
+    //     is_watchonly: Some(false),
+    //     pubkey: None,
+    //     is_compressed: None,
+    //     account: None,
+    // };
+
+    let expected_validation_script = validate_address::Response {
         is_valid: true,
         address: Some("t26YoyZ1iPgiMEWL4zGUm74eVWfhyDMXzY2".to_owned()),
-        scriptpubkey: Some("a914000000000000000000000000000000000000000087".to_owned()),
-        is_mine: Some(false),
+        // scriptpubkey: Some("a914000000000000000000000000000000000000000087".to_owned()),
+        // is_mine: Some(false),
         is_script: Some(true),
-        is_watchonly: Some(false),
-        pubkey: None,
-        is_compressed: None,
-        account: None,
+        // is_watchonly: Some(false),
+        // pubkey: None,
+        // is_compressed: None,
+        // account: None,
     };
 
     let fetch_service_validate_address_script = dbg!(fetch_service_subscriber

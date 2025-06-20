@@ -11,6 +11,7 @@ use zebra_state::HashOrHeight;
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
+    types::validate_address,
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
     GetBlockChainInfo, GetInfo, GetRawTransaction, SentTransactionHash,
 };
@@ -333,7 +334,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
     async fn validate_address(
         &self,
         address: String,
-    ) -> Result<ValidateAddressResponse, Self::Error> {
+    ) -> Result<validate_address::Response, Self::Error> {
         Ok(self.fetcher.validate_address(address).await?.into())
     }
 
