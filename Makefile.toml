@@ -5,6 +5,7 @@ default_to_workspace = false
 
 [env]
 IMAGE_NAME = "zingodevops/zaino-ci"
+TEST_BINARIES_DIR = "/usr/local/bin"
 
 [tasks.help]
 description = "List available commands and usage notes"
@@ -125,7 +126,10 @@ set -euo pipefail
 
 TAG=$(./utils/get-ci-image-tag.sh)
 
-info "Running tests using image: ${IMAGE_NAME}:$TAG"
+info "Running tests using:"
+info "-- IMAGE             = ${IMAGE_NAME}"
+info "-- TAG               = $TAG"
+# info "-- TEST_BINARIES_DIR = ${TEST_BINARIES_DIR}"
 
 docker run --rm \
   --name zaino-testing \
@@ -133,12 +137,10 @@ docker run --rm \
   -v "$PWD/target":/root/target \
   -v "$PWD/docker_cargo/git":/root/.cargo/git \
   -v "$PWD/docker_cargo/registry":/root/.cargo/registry \
+  -e "TEST_BINARIES_DIR=${TEST_BINARIES_DIR}" \
   -w /app \
   "${IMAGE_NAME}:$TAG" \
   cargo nextest run --profile ci "${@}"
-'''
-script.post = '''
-docker stop zaino-testing
 '''
 
 [tasks.copy-bins]
