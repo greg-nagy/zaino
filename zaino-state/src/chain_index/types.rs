@@ -423,8 +423,71 @@ pub struct BlockData {
     /// Equihash nonse.
     pub(super) nonse: [u8; 32],
     /// Equihash solution
-    #[cfg_attr(test, serde(with = "serde_arrays::fixed_1344"))]
-    pub(super) solution: [u8; 1344],
+    pub(super) solution: Solution,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
+pub enum Solution {
+    #[cfg_attr(test, serde(with = "serde_arrays::fixed"))]
+    NonRegtest([u8; 1344]),
+    #[cfg_attr(test, serde(with = "serde_arrays::fixed"))]
+    Regtest([u8; 36]),
+}
+
+impl From<zebra_chain::work::equihash::Solution> for Solution {
+    fn from(value: zebra_chain::work::equihash::Solution) -> Self {
+        match value {
+            zebra_chain::work::equihash::Solution::Common(array) => Self::NonRegtest(array),
+            zebra_chain::work::equihash::Solution::Regtest(array) => Self::Regtest(array),
+        }
+    }
+}
+
+pub struct BadSolution {
+    expected_len: usize,
+    actual_len: usize,
+}
+impl TryFrom<(Vec<u8>, &zebra_chain::parameters::Network)> for Solution {
+    type Error = BadSolution;
+
+    fn try_from(
+        (solution, network): (Vec<u8>, &zebra_chain::parameters::Network),
+    ) -> Result<Self, Self::Error> {
+        let solution_len = solution.len();
+        Ok(match network {
+            zebra_chain::parameters::Network::Mainnet => {
+                Solution::NonRegtest(solution.try_into().map_err(|_| BadSolution {
+                    expected_len: 1344,
+                    actual_len: solution_len,
+                })?)
+            }
+            zebra_chain::parameters::Network::Testnet(parameters)
+                if parameters.is_default_testnet() =>
+            {
+                Solution::NonRegtest(solution.try_into().map_err(|_| BadSolution {
+                    expected_len: 1344,
+                    actual_len: solution_len,
+                })?)
+            }
+            zebra_chain::parameters::Network::Testnet(_) => {
+                Solution::Regtest(solution.try_into().map_err(|_| BadSolution {
+                    expected_len: 36,
+                    actual_len: solution_len,
+                })?)
+            }
+        })
+    }
+}
+
+impl fmt::Display for BadSolution {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "solution must be {} bytes, got {}",
+            self.expected_len, self.actual_len,
+        )
+    }
 }
 
 impl BlockData {
@@ -437,7 +500,7 @@ impl BlockData {
         block_commitments: [u8; 32],
         bits: u32,
         nonse: [u8; 32],
-        solution: [u8; 1344],
+        solution: Solution,
     ) -> Self {
         Self {
             version,
@@ -524,7 +587,7 @@ impl BlockData {
     }
 
     /// Returns Equihash Nonse.
-    pub fn solution(&self) -> [u8; 1344] {
+    pub fn solution(&self) -> Solution {
         self.solution
     }
 }
@@ -753,6 +816,7 @@ impl
         [u8; 32],
         u32,
         u32,
+        &zebra_chain::parameters::Network,
     )> for ChainBlock
 {
     type Error = String;
@@ -765,6 +829,7 @@ impl
             final_orchard_root,
             parent_sapling_size,
             parent_orchard_size,
+            network,
         ): (
             zaino_fetch::chain::block::FullBlock,
             ChainWork,
@@ -772,6 +837,7 @@ impl
             [u8; 32],
             u32,
             u32,
+            &zebra_chain::parameters::Network,
         ),
     ) -> Result<Self, Self::Error> {
         // --- Block Header Info ---
@@ -809,10 +875,8 @@ impl
             .try_into()
             .map_err(|v: Vec<u8>| format!("nonse must be 32 bytes, got {}", v.len()))?;
 
-        let solution: [u8; 1344] = header
-            .solution()
-            .try_into()
-            .map_err(|v: Vec<u8>| format!("solution must be 1344 bytes, got {}", v.len()))?;
+        let solution =
+            Solution::try_from((header.solution(), network)).map_err(|e| e.to_string())?;
 
         // --- Convert transactions ---
         let mut sapling_note_count = 0;
@@ -1033,7 +1097,7 @@ impl TryFrom<(u64, zaino_fetch::chain::transaction::FullTransaction)> for Compac
             .into_iter()
             //TODO: We should error handle on these, a failure here should probably be
             // reacted to
-            .filter_map(|(value, script_hash)| try_into_compact_txout(value, script_hash))
+            .filter_map(|(value, script_hash)| TxOutCompact::try_from((value, script_hash)).ok())
             .collect();
 
         let transparent = TransparentCompactTx::new(vin, vout);
@@ -1334,7 +1398,7 @@ pub struct CompactSaplingOutput {
     /// Ephemeral public key used by receivers to detect/decrypt the note.
     ephemeral_key: [u8; 32],
     /// Encrypted note ciphertext (minimal required portion).
-    #[cfg_attr(test, serde(with = "serde_arrays::fixed_52"))]
+    #[cfg_attr(test, serde(with = "serde_arrays::fixed"))]
     ciphertext: [u8; 52],
 }
 
@@ -1405,7 +1469,7 @@ pub struct CompactOrchardAction {
     /// Ephemeral public key for detecting and decrypting Orchard notes.
     ephemeral_key: [u8; 32],
     /// Encrypted ciphertext of the Orchard note (minimal required portion).
-    #[cfg_attr(test, serde(with = "serde_arrays::fixed_52"))]
+    #[cfg_attr(test, serde(with = "serde_arrays::fixed"))]
     ciphertext: [u8; 52],
 }
 
@@ -1646,41 +1710,22 @@ impl ShardRoot {
 pub mod serde_arrays {
     use serde::{Deserialize, Deserializer, Serializer};
 
-    pub mod fixed_52 {
+    pub mod fixed {
         use super::*;
-        pub fn serialize<S>(val: &[u8; 52], s: S) -> Result<S::Ok, S::Error>
+        pub fn serialize<const N: usize, S>(val: &[u8; N], s: S) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
         {
             s.serialize_bytes(val)
         }
 
-        pub fn deserialize<'de, D>(d: D) -> Result<[u8; 52], D::Error>
+        pub fn deserialize<'de, const N: usize, D>(d: D) -> Result<[u8; N], D::Error>
         where
             D: Deserializer<'de>,
         {
             let v: &[u8] = Deserialize::deserialize(d)?;
             v.try_into()
-                .map_err(|_| serde::de::Error::custom("invalid length for [u8; 52]"))
-        }
-    }
-
-    pub mod fixed_1344 {
-        use super::*;
-        pub fn serialize<S>(val: &[u8; 1344], s: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            s.serialize_bytes(val)
-        }
-
-        pub fn deserialize<'de, D>(d: D) -> Result<[u8; 1344], D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            let v: &[u8] = Deserialize::deserialize(d)?;
-            v.try_into()
-                .map_err(|_| serde::de::Error::custom("invalid length for [u8; 1344]"))
+                .map_err(|_| serde::de::Error::custom(format!("invalid length for [u8; {N}]")))
         }
     }
 }

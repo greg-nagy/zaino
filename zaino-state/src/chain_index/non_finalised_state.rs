@@ -2,7 +2,7 @@ use std::{collections::HashMap, mem, sync::Arc};
 
 use crate::{
     chain_index::types::{Hash, Height},
-    BlockData, BlockIndex, ChainWork, CommitmentTreeRoots, CommitmentTreeSizes,
+    BlockData, BlockIndex, ChainWork, CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes,
     CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactTxData,
     OrchardCompactTx, Outpoint, SaplingCompactTx, TransparentCompactTx, TxInCompact, TxOutCompact,
 };
@@ -12,7 +12,10 @@ use primitive_types::U256;
 use tokio::sync::{mpsc, RwLock};
 use tower::{Service, ServiceExt};
 use zaino_fetch::jsonrpsee::{connector::JsonRpSeeConnector, response::GetBlockResponse};
-use zebra_chain::serialization::{ZcashDeserialize, ZcashSerialize};
+use zebra_chain::{
+    parameters::Network,
+    serialization::{ZcashDeserialize, ZcashSerialize},
+};
 use zebra_state::{HashOrHeight, ReadResponse, ReadStateService};
 
 use crate::ChainBlock;
@@ -28,6 +31,8 @@ struct NonFinalzedState {
     /// clone the Arc and offer that. This means we can overwrite the arc
     /// without interfering with readers, who will hold a stale copy
     current: ArcSwap<NonfinalizedBlockCacheSnapshot>,
+    /// Used mostly to determine activation heights
+    network: Network,
 }
 
 pub(crate) struct NonfinalizedBlockCacheSnapshot {
@@ -99,28 +104,25 @@ impl NonFinalzedState {
                             orchard_root_and_len.unwrap_or_default(),
                         );
 
-                        //TODO: Is a default (zero) root correct?
-                        let commitment_tree_roots = CommitmentTreeRoots::new(
-                            <[u8; 32]>::from(sapling_root),
-                            <[u8; 32]>::from(orchard_root),
-                        );
-
-                        let commitment_tree_size =
-                            CommitmentTreeSizes::new(sapling_size as u32, orchard_size as u32);
-
                         let data = BlockData {
                             version: block.header.version,
                             time: block.header.time.timestamp(),
                             merkle_root: block.header.merkle_root.0,
-                            // auth_data_root: <[u8; 32]>::from(block.auth_data_root()),
-                            // commitment_tree_roots,
-                            // commitment_tree_size,
                             bits: u32::from_be_bytes(
                                 block.header.difficulty_threshold.bytes_in_display_order(),
                             ),
-                            block_commitments: todo!(),
-                            nonse: todo!(),
-                            solution: todo!(),
+                            block_commitments: match block
+                                .commitment(&self.network)
+                                .map_err(|_| NonFinalizedStateSyncError::InvalidZebraData)? {
+                                    zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
+                                    zebra_chain::block::Commitment::FinalSaplingRoot(root) => root.into(),
+                                    zebra_chain::block::Commitment::ChainHistoryActivationReserved => [0; 32],
+                                    zebra_chain::block::Commitment::ChainHistoryRoot(chain_history_mmr_root_hash) => chain_history_mmr_root_hash.bytes_in_serialized_order(),
+                                    zebra_chain::block::Commitment::ChainHistoryBlockTxAuthCommitment(chain_history_block_tx_auth_commitment_hash) => chain_history_block_tx_auth_commitment_hash.bytes_in_serialized_order(),
+                                },
+
+                            nonse: *block.header.nonce,
+                            solution: block.header.solution.into(),
                         };
 
                         let mut transactions = Vec::new();
@@ -228,12 +230,25 @@ impl NonFinalzedState {
                             chainwork,
                             height,
                         };
+
+                        //TODO: Is a default (zero) root correct?
+                        let commitment_tree_roots = CommitmentTreeRoots::new(
+                            <[u8; 32]>::from(sapling_root),
+                            <[u8; 32]>::from(orchard_root),
+                        );
+
+                        let commitment_tree_size =
+                            CommitmentTreeSizes::new(sapling_size as u32, orchard_size as u32);
+
+                        let commitment_tree_data =
+                            CommitmentTreeData::new(commitment_tree_roots, commitment_tree_size);
+
                         let chainblock = ChainBlock {
                             index,
                             data,
                             transactions,
                             spent_outpoints,
-                            commitment_tree_data: todo!(),
+                            commitment_tree_data,
                         };
                         new_blocks.push(chainblock.clone());
                     } else {
