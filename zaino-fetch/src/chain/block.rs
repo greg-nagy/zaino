@@ -8,6 +8,7 @@ use crate::chain::{
 use sha2::{Digest, Sha256};
 use std::io::Cursor;
 use zaino_proto::proto::compact_formats::{ChainMetadata, CompactBlock};
+use zebra_rpc::methods::GetBlockTransaction;
 
 /// A block header, containing metadata about a block.
 ///
@@ -429,4 +430,45 @@ impl FullBlock {
 
         Ok(height_num as i32)
     }
+}
+
+impl serde::Serialize for FullTransaction {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        todo!()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for FullTransaction {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        todo!()
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct BlockDeltas {
+    pub hash: Vec<u8>,
+    pub confirmations: i64,
+    pub size: i64,
+    pub height: u32,
+    pub version: u32,
+
+    pub merkle_root: Vec<u8>,
+
+    /// TODO: double check that `FullTransaction` is the correct type
+    pub deltas: Vec<GetBlockTransaction>,
+    pub time: i64,
+    pub mediantime: i64,
+    pub nonce: Vec<u8>,
+    pub bits: Vec<u8>,
+    pub difficulty: f64,
+    // `chainwork` would be here, but Zebra does not plan to support it
+    // pub chainwork: Vec<u8>,
+    pub previousblockhash: Vec<u8>,
+    pub nextblockhash: Vec<u8>,
 }

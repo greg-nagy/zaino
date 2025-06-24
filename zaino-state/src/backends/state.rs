@@ -23,7 +23,7 @@ use crate::{
 use nonempty::NonEmpty;
 use tokio_stream::StreamExt as _;
 use zaino_fetch::{
-    chain::{transaction::FullTransaction, utils::ParseFromSlice},
+    chain::{block::BlockDeltas, transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
 };
 use zaino_proto::proto::{
@@ -1010,6 +1010,65 @@ impl ZcashIndexer for StateServiceSubscriber {
             verbosity,
         )
         .await
+    }
+
+    async fn get_block_deltas(&self, hash: String) -> Result<BlockDeltas, Self::Error> {
+        let zblock = self.z_get_block(hash, None).await?;
+
+        match zblock {
+            GetBlock::Object {
+                hash,
+                confirmations,
+                size,
+                height,
+                version,
+                merkle_root,
+                block_commitments,
+                final_sapling_root,
+                final_orchard_root,
+                tx,
+                time,
+                nonce,
+                solution,
+                bits,
+                difficulty,
+                trees,
+                previous_block_hash,
+                next_block_hash,
+            } => {
+                Ok(BlockDeltas {
+                    hash: hash.0.zcash_serialize_to_vec()?,
+                    confirmations: confirmations,
+                    size: size.expect("size should be present"),
+                    height: height.expect("height should be present").0,
+                    version: version.expect("version should be present"),
+                    merkle_root: merkle_root
+                        .expect("merkle_root should be present")
+                        .0
+                        .to_vec(),
+                    deltas: tx,
+                    time: time.expect("time should be present"),
+
+                    // TODO: Implement
+                    mediantime: time.expect("time should be present"),
+                    nonce: nonce.expect("nonce should be present").to_vec(),
+                    bits: bits
+                        .expect("bits should be present")
+                        .bytes_in_display_order()
+                        .to_vec(),
+                    difficulty: difficulty.expect("difficulty should be present"),
+                    previousblockhash: previous_block_hash
+                        .expect("previousblockhash should be present")
+                        .0
+                        .zcash_serialize_to_vec()?,
+                    nextblockhash: next_block_hash
+                        .expect("nextblockhash should be present")
+                        .0
+                        .zcash_serialize_to_vec()?,
+                })
+            }
+            GetBlock::Raw(serialized_block) => todo!(),
+        }
     }
 
     async fn get_raw_mempool(&self) -> Result<Vec<String>, Self::Error> {

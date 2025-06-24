@@ -20,12 +20,15 @@ use std::{
 };
 use tracing::error;
 
-use crate::jsonrpsee::{
-    error::JsonRpSeeConnectorError,
-    response::{
-        GetBalanceResponse, GetBlockCountResponse, GetBlockResponse, GetBlockchainInfoResponse,
-        GetInfoResponse, GetSubtreesResponse, GetTransactionResponse, GetTreestateResponse,
-        GetUtxosResponse, SendTransactionResponse, TxidsResponse,
+use crate::{
+    chain::block::BlockDeltas,
+    jsonrpsee::{
+        error::JsonRpSeeConnectorError,
+        response::{
+            GetBalanceResponse, GetBlockCountResponse, GetBlockResponse, GetBlockchainInfoResponse,
+            GetInfoResponse, GetSubtreesResponse, GetTransactionResponse, GetTreestateResponse,
+            GetUtxosResponse, SendTransactionResponse, TxidsResponse,
+        },
     },
 };
 
@@ -409,6 +412,19 @@ impl JsonRpSeeConnector {
                 .await
                 .map(GetBlockResponse::Object)
         }
+    }
+
+    /// Returns information about the given block and its transactions.
+    ///
+    /// zcashd reference: [`getblockdeltas`](https://zcash.github.io/rpc/getblockdeltas.html)
+    /// method: post
+    /// tags: blockchain
+    pub async fn get_block_deltas(
+        &self,
+        hash: String,
+    ) -> Result<BlockDeltas, JsonRpSeeConnectorError> {
+        let params = vec![serde_json::to_value(hash)?];
+        self.send_request("getblockdeltas", params).await
     }
 
     /// Returns the height of the most recent block in the best valid block chain

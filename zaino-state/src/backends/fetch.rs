@@ -16,7 +16,7 @@ use zebra_rpc::methods::{
 };
 
 use zaino_fetch::{
-    chain::{transaction::FullTransaction, utils::ParseFromSlice},
+    chain::{block::BlockDeltas, transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
 };
 
@@ -316,6 +316,15 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_block(hash_or_height, verbosity)
             .await?
             .try_into()?)
+    }
+
+    /// Returns information about the given block and its transactions.
+    ///
+    /// zcashd reference: [`getblockdeltas`](https://zcash.github.io/rpc/getblockdeltas.html)
+    /// method: post
+    /// tags: blockchain
+    async fn get_block_deltas(&self, hash: String) -> Result<BlockDeltas, Self::Error> {
+        Ok(self.fetcher.get_block_deltas(hash).await?.into())
     }
 
     /// Returns the current block count in the best valid block chain.
