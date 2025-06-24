@@ -3,8 +3,8 @@ use std::{collections::HashMap, mem, sync::Arc};
 use crate::{
     chain_index::types::{Hash, Height},
     BlockData, BlockIndex, ChainWork, CommitmentTreeRoots, CommitmentTreeSizes,
-    CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, SaplingCompactTx,
-    SpentOutpoint, TransparentCompactTx, TxData, TxInCompact, TxOutCompact,
+    CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactTxData,
+    OrchardCompactTx, Outpoint, SaplingCompactTx, TransparentCompactTx, TxInCompact, TxOutCompact,
 };
 use arc_swap::ArcSwap;
 use futures::future::join;
@@ -16,8 +16,6 @@ use zebra_chain::serialization::{ZcashDeserialize, ZcashSerialize};
 use zebra_state::{HashOrHeight, ReadResponse, ReadStateService};
 
 use crate::ChainBlock;
-
-use super::types::try_into_compact_txout;
 
 /// Holds the block cache
 struct NonFinalzedState {
@@ -43,6 +41,9 @@ pub(crate) struct NonfinalizedBlockCacheSnapshot {
     best_tip: (Height, Hash),
 }
 
+pub enum NonFinalizedStateSyncError {
+    InvalidZebraData,
+}
 /// This is the core of the concurrent block cache.
 impl NonFinalzedState {
     /// sync to the top of the chain
@@ -50,7 +51,7 @@ impl NonFinalzedState {
     /// TODO: This function currently only handles sync from the case where a
     /// NonFinalizedState already exists, and is not yet optimized for the case
     /// where more than 100 blocks have been mined since the last sync call
-    pub async fn sync(&self) {
+    pub async fn sync(&self) -> Result<(), NonFinalizedStateSyncError> {
         let best_hash = match self.source.get_tip().await {
             Ok(Some((_height, hash))) => hash,
             Ok(None) => todo!(),
@@ -111,12 +112,15 @@ impl NonFinalzedState {
                             version: block.header.version,
                             time: block.header.time.timestamp(),
                             merkle_root: block.header.merkle_root.0,
-                            auth_data_root: <[u8; 32]>::from(block.auth_data_root()),
-                            commitment_tree_roots,
-                            commitment_tree_size,
+                            // auth_data_root: <[u8; 32]>::from(block.auth_data_root()),
+                            // commitment_tree_roots,
+                            // commitment_tree_size,
                             bits: u32::from_be_bytes(
                                 block.header.difficulty_threshold.bytes_in_display_order(),
                             ),
+                            block_commitments: todo!(),
+                            nonse: todo!(),
+                            solution: todo!(),
                         };
 
                         let mut transactions = Vec::new();
@@ -135,15 +139,17 @@ impl NonFinalzedState {
                                     .outputs()
                                     .iter()
                                     .filter_map(|output| {
-                                        try_into_compact_txout(
+                                        TxOutCompact::try_from((
                                             u64::from(output.value),
                                             output.lock_script.as_raw_bytes(),
-                                        )
+                                        ))
+                                        .ok()
                                     })
                                     .collect(),
                             );
 
                             let sapling = SaplingCompactTx::new(
+                                Some(i64::from(trnsctn.sapling_value_balance().sapling_amount())),
                                 trnsctn
                                     .sapling_nullifiers()
                                     .map(|nf| CompactSaplingSpend::new(*nf.0))
@@ -165,35 +171,30 @@ impl NonFinalzedState {
                                     })
                                     .collect(),
                             );
-                            let orchard = trnsctn
-                                .orchard_actions()
-                                .map(|action| {
-                                    CompactOrchardAction::new(
-                                        <[u8; 32]>::from(action.nullifier),
-                                        <[u8; 32]>::from(action.cm_x),
-                                        <[u8; 32]>::from(action.ephemeral_key),
-                                        // This unwrap is unnecessary, but to remove it one would need to write
-                                        // a new array of [input[0], input[1]..] and enumerate all 52 elements
-                                        //
-                                        // This would be uglier than the unwrap
-                                        <[u8; 580]>::from(action.enc_ciphertext)[..52]
-                                            .try_into()
-                                            .unwrap(),
-                                    )
-                                })
-                                .collect();
+                            let orchard = OrchardCompactTx::new(
+                                Some(i64::from(trnsctn.orchard_value_balance().orchard_amount())),
+                                trnsctn
+                                    .orchard_actions()
+                                    .map(|action| {
+                                        CompactOrchardAction::new(
+                                            <[u8; 32]>::from(action.nullifier),
+                                            <[u8; 32]>::from(action.cm_x),
+                                            <[u8; 32]>::from(action.ephemeral_key),
+                                            // This unwrap is unnecessary, but to remove it one would need to write
+                                            // a new array of [input[0], input[1]..] and enumerate all 52 elements
+                                            //
+                                            // This would be uglier than the unwrap
+                                            <[u8; 580]>::from(action.enc_ciphertext)[..52]
+                                                .try_into()
+                                                .unwrap(),
+                                        )
+                                    })
+                                    .collect(),
+                            );
 
-                            let txdata = TxData::new(
+                            let txdata = CompactTxData::new(
                                 i as u64,
                                 trnsctn.hash().0,
-                                (
-                                    Some(
-                                        trnsctn.sapling_value_balance().sapling_amount().zatoshis(),
-                                    ),
-                                    Some(
-                                        trnsctn.orchard_value_balance().orchard_amount().zatoshis(),
-                                    ),
-                                ),
                                 transparent,
                                 sapling,
                                 orchard,
@@ -204,7 +205,7 @@ impl NonFinalzedState {
                             .iter()
                             .flat_map(|tx| {
                                 tx.transparent().inputs().iter().map(|input| {
-                                    SpentOutpoint::new(*input.prevout_txid(), input.prevout_index())
+                                    Outpoint::new(*input.prevout_txid(), input.prevout_index())
                                 })
                             })
                             .collect();
@@ -232,6 +233,7 @@ impl NonFinalzedState {
                             data,
                             transactions,
                             spent_outpoints,
+                            commitment_tree_data: todo!(),
                         };
                         new_blocks.push(chainblock.clone());
                     } else {
@@ -256,6 +258,8 @@ impl NonFinalzedState {
         for block in new_blocks {
             self.staging_sender.send(block).expect("todo: senderror")
         }
+
+        Ok(())
     }
     /// Stage a block
     pub fn stage(&self, block: ChainBlock) -> Result<(), mpsc::error::SendError<ChainBlock>> {

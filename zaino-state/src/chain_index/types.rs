@@ -297,13 +297,13 @@ impl Outpoint {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct BlockIndex {
     /// The hash identifying this block uniquely.
-    hash: Hash,
+    pub(super) hash: Hash,
     /// The hash of this block's parent block (previous block in chain).
-    parent_hash: Hash,
+    pub(super) parent_hash: Hash,
     /// The cumulative proof-of-work of the blockchain up to this block, used for chain selection.
-    chainwork: ChainWork,
+    pub(super) chainwork: ChainWork,
     /// The height of this block if it's in the current best chain. None if it's part of a fork.
-    height: Option<Height>,
+    pub(super) height: Option<Height>,
 }
 
 impl BlockIndex {
@@ -417,14 +417,14 @@ pub struct BlockData {
     /// Digest representing the block-commitments Merkle root (commitment to note states).
     /// - < V4: [`hashFinalSaplingRoot`] - Sapling note commitment tree root.
     /// - => V4: [`hashBlockCommitments`] - digest over hashLightClientRoot and hashAuthDataRoot.``
-    block_commitments: [u8; 32],
+    pub(super) block_commitments: [u8; 32],
     /// Compact difficulty target used for proof-of-work and difficulty calculation.
-    bits: u32,
+    pub(super) bits: u32,
     /// Equihash nonse.
-    nonse: [u8; 32],
+    pub(super) nonse: [u8; 32],
     /// Equihash solution
     #[cfg_attr(test, serde(with = "serde_arrays::fixed_1344"))]
-    solution: [u8; 1344],
+    pub(super) solution: [u8; 1344],
 }
 
 impl BlockData {
@@ -618,16 +618,16 @@ impl CommitmentTreeSizes {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct ChainBlock {
     /// Metadata and indexing information for this block.
-    index: BlockIndex,
+    pub(super) index: BlockIndex,
     /// Essential header and metadata information for the block.
-    data: BlockData,
+    pub(super) data: BlockData,
     /// Compact representations of transactions in this block.
-    tx: Vec<CompactTxData>,
+    pub(super) transactions: Vec<CompactTxData>,
     /// Sapling and orchard commitment tree data for the chain
     /// *after this block has been applied.
-    commitment_tree_data: CommitmentTreeData,
+    pub(super) commitment_tree_data: CommitmentTreeData,
     /// Explicitly recorded UTXOs spent in this block, speeding up reorgs and delta indexing.
-    spent_outpoints: Vec<Outpoint>,
+    pub(super) spent_outpoints: Vec<Outpoint>,
 }
 
 impl ChainBlock {
@@ -642,7 +642,7 @@ impl ChainBlock {
         Self {
             index,
             data,
-            tx,
+            transactions: tx,
             commitment_tree_data,
             spent_outpoints,
         }
@@ -660,7 +660,7 @@ impl ChainBlock {
 
     /// Returns a reference to the compact transactions in this block.
     pub fn transactions(&self) -> &[CompactTxData] {
-        &self.tx
+        &self.transactions
     }
 
     ///
@@ -1241,6 +1241,25 @@ impl TxOutCompact {
     /// Returns script type Enum.
     pub fn script_type_enum(&self) -> Option<ScriptType> {
         ScriptType::try_from(self.script_type).ok()
+    }
+}
+
+impl<T: AsRef<[u8]>> TryFrom<(u64, T)> for TxOutCompact {
+    type Error = ();
+
+    fn try_from((value, script_hash): (u64, T)) -> Result<Self, Self::Error> {
+        let script_hash_ref = script_hash.as_ref();
+        if script_hash_ref.len() == 21 {
+            let script_type = script_hash_ref[0];
+            let mut hash_bytes = [0u8; 20];
+            hash_bytes.copy_from_slice(&script_hash_ref[1..]);
+            TxOutCompact::new(value, hash_bytes, script_type).ok_or(())
+        } else {
+            let mut fallback = [0u8; 20];
+            let usable_len = script_hash_ref.len().min(20);
+            fallback[..usable_len].copy_from_slice(&script_hash_ref[..usable_len]);
+            TxOutCompact::new(value, fallback, ScriptType::NonStandard as u8).ok_or(())
+        }
     }
 }
 
