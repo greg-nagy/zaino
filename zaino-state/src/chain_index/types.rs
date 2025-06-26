@@ -182,8 +182,6 @@ impl TryFrom<zcash_protocol::consensus::BlockHeight> for Height {
 pub struct Index(pub u32);
 
 /// 20-byte hash (RIPEMD-160 or Blake2b-160) of a transparent output script.
-///
-/// DCBOR encoding: raw 20-byte byte-string wrapped with tag 74244.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct AddrScript([u8; 20]);
@@ -242,9 +240,6 @@ impl From<AddrScript> for [u8; 20] {
 }
 
 /// Reference to a spent transparent UTXO.
-///
-/// DCBOR encoding (tag 74243):  
-/// `[ <byte-string 32>, <uint32> ]`
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct Outpoint {
@@ -565,9 +560,6 @@ impl<'a> TryFrom<&'a [u8]> for EquihashSolution {
 
 /// Pair of commitment-tree roots and their corresponding leaf counts
 /// after the current block has been applied.
-///
-/// *tag 74248*  
-/// `[ CommitmentTreeRoots, CommitmentTreeSizes ]`
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct CommitmentTreeData {
@@ -1376,9 +1368,6 @@ impl CompactSaplingOutput {
 }
 
 /// Compact summary of all shielded activity in a transaction.
-///
-/// *Encoding*  
-/// `[ sapling_value | null, orchard_value | null, SaplingCompactTx, Vec<CompactOrchardAction> ]`
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct OrchardCompactTx {
