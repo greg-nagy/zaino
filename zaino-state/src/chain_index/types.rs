@@ -407,8 +407,7 @@ pub struct BlockData {
     /// Equihash nonse.
     nonse: [u8; 32],
     /// Equihash solution
-    #[cfg_attr(test, serde(with = "serde_arrays::fixed_1344"))]
-    solution: [u8; 1344],
+    solution: EquihashSolution,
 }
 
 impl BlockData {
@@ -421,7 +420,7 @@ impl BlockData {
         block_commitments: [u8; 32],
         bits: u32,
         nonse: [u8; 32],
-        solution: [u8; 1344],
+        solution: EquihashSolution,
     ) -> Self {
         Self {
             version,
@@ -508,8 +507,59 @@ impl BlockData {
     }
 
     /// Returns Equihash Nonse.
-    pub fn solution(&self) -> [u8; 1344] {
+    pub fn solution(&self) -> EquihashSolution {
         self.solution
+    }
+}
+
+/// Equihash solution as it appears in a block header.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
+// NOTE: if memory usage becomes too large we could move this data to the heap.
+#[allow(clippy::large_enum_variant)]
+pub enum EquihashSolution {
+    /// 200-9 solution (mainnet / testnet).
+    #[cfg_attr(test, serde(with = "serde_arrays::fixed_1344"))]
+    Standard([u8; 1344]),
+    /// 48-5 solution (regtest).
+    Regtest([u8; 32]),
+}
+
+impl EquihashSolution {
+    /// Return a slice view (convenience).
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            Self::Standard(b) => b,
+            Self::Regtest(b) => b,
+        }
+    }
+}
+
+impl TryFrom<Vec<u8>> for EquihashSolution {
+    type Error = &'static str;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(bytes.as_slice())
+    }
+}
+
+impl<'a> TryFrom<&'a [u8]> for EquihashSolution {
+    type Error = &'static str;
+
+    fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
+        match bytes.len() {
+            1344 => {
+                let mut arr = [0u8; 1344];
+                arr.copy_from_slice(bytes);
+                Ok(EquihashSolution::Standard(arr))
+            }
+            32 => {
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(bytes);
+                Ok(EquihashSolution::Regtest(arr))
+            }
+            _ => Err("invalid Equihash solution length (expected 32 or 1344 bytes)"),
+        }
     }
 }
 
@@ -610,8 +660,6 @@ pub struct ChainBlock {
     /// Sapling and orchard commitment tree data for the chain
     /// *after this block has been applied.
     commitment_tree_data: CommitmentTreeData,
-    /// Explicitly recorded UTXOs spent in this block, speeding up reorgs and delta indexing.
-    spent_outpoints: Vec<Outpoint>,
 }
 
 impl ChainBlock {
@@ -621,14 +669,12 @@ impl ChainBlock {
         data: BlockData,
         tx: Vec<CompactTxData>,
         commitment_tree_data: CommitmentTreeData,
-        spent_outpoints: Vec<Outpoint>,
     ) -> Self {
         Self {
             index,
             data,
             tx,
             commitment_tree_data,
-            spent_outpoints,
         }
     }
 
@@ -647,14 +693,9 @@ impl ChainBlock {
         &self.tx
     }
 
-    ///
+    /// Returns the commitment tree data for this block.
     pub fn commitment_tree_data(&self) -> &CommitmentTreeData {
         &self.commitment_tree_data
-    }
-
-    /// Returns a reference to the spent transparent outpoints.
-    pub fn spent_outpoints(&self) -> &[Outpoint] {
-        &self.spent_outpoints
     }
 
     /// Returns the block hash.
@@ -793,10 +834,12 @@ impl
             .try_into()
             .map_err(|v: Vec<u8>| format!("nonse must be 32 bytes, got {}", v.len()))?;
 
-        let solution: [u8; 1344] = header
-            .solution()
-            .try_into()
-            .map_err(|v: Vec<u8>| format!("solution must be 1344 bytes, got {}", v.len()))?;
+        let solution = EquihashSolution::try_from(header.solution()).map_err(|_| {
+            format!(
+                "solution must be 32 or 1344 bytes, got {}",
+                header.solution().len()
+            )
+        })?;
 
         // --- Convert transactions ---
         let mut sapling_note_count = 0;
@@ -804,7 +847,6 @@ impl
 
         let full_transactions = full_block.transactions();
         let mut tx = Vec::with_capacity(full_transactions.len());
-        let mut spent_outpoints = Vec::new();
 
         for (i, ftx) in full_transactions.into_iter().enumerate() {
             let txdata = CompactTxData::try_from((i as u64, ftx))
@@ -812,10 +854,6 @@ impl
 
             sapling_note_count += txdata.sapling().outputs().len();
             orchard_note_count += txdata.orchard().actions().len();
-
-            for input in txdata.transparent().inputs() {
-                spent_outpoints.push(Outpoint::new(*input.prevout_txid(), input.prevout_index()));
-            }
 
             tx.push(txdata);
         }
@@ -853,13 +891,7 @@ impl
             Some(height),
         );
 
-        Ok(ChainBlock::new(
-            index,
-            block_data,
-            tx,
-            commitment_tree_data,
-            spent_outpoints,
-        ))
+        Ok(ChainBlock::new(index, block_data, tx, commitment_tree_data))
     }
 }
 
@@ -1556,7 +1588,7 @@ impl AddrEventBytes {
 
     /// Create an [`AddrHistRecord`] from an [`AddrEventBytes`].
     #[allow(dead_code)]
-    pub(crate) fn to_record(&self) -> AddrHistRecord {
+    pub(crate) fn as_record(&self) -> AddrHistRecord {
         use byteorder::{BigEndian, ByteOrder, LittleEndian};
         let b = &self.0;
         AddrHistRecord {
