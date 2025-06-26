@@ -24,10 +24,7 @@ use nonempty::NonEmpty;
 use tokio_stream::StreamExt as _;
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpsee::{
-        connector::{JsonRpSeeConnector, RpcError},
-        response::ValidateAddressResponse,
-    },
+    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
 };
 use zaino_proto::proto::{
     compact_formats::CompactBlock,

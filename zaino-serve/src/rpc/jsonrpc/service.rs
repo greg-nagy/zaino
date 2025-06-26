@@ -1,6 +1,5 @@
 //! Zcash RPC implementations.
 
-use zaino_fetch::jsonrpsee::response::ValidateAddressResponse;
 use zaino_state::{LightWalletIndexer, ZcashIndexer};
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::methods::{
@@ -58,6 +57,14 @@ pub trait ZcashIndexerRpc {
     #[method(name = "getblockcount")]
     async fn get_block_count(&self) -> Result<Height, ErrorObjectOwned>;
 
+    /// Return information about the given Zcash address.
+    ///
+    /// # Parameters
+    /// - `address`: (string, required, example="tmHMBeeYRuc2eVicLNfP15YLxbQsooCA6jb") The Zcash transparent address to validate.
+    ///
+    /// zcashd reference: [`validateaddress`](https://zcash.github.io/rpc/validateaddress.html)
+    /// method: post
+    /// tags: blockchain
     #[method(name = "validateaddress")]
     async fn validate_address(
         &self,

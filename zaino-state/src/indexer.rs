@@ -5,7 +5,6 @@ use async_trait::async_trait;
 
 use tokio::{sync::mpsc, time::timeout};
 use tracing::warn;
-use zaino_fetch::jsonrpsee::response::ValidateAddressResponse;
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
     service::{
@@ -249,6 +248,14 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// tags: blockchain
     async fn get_block_count(&self) -> Result<Height, Self::Error>;
 
+    /// Return information about the given Zcash address.
+    ///
+    /// # Parameters
+    /// - `address`: (string, required, example="tmHMBeeYRuc2eVicLNfP15YLxbQsooCA6jb") The Zcash transparent address to validate.
+    ///
+    /// zcashd reference: [`validateaddress`](https://zcash.github.io/rpc/validateaddress.html)
+    /// method: post
+    /// tags: blockchain
     async fn validate_address(
         &self,
         address: String,
