@@ -10,7 +10,7 @@ use arc_swap::ArcSwap;
 use futures::future::join;
 use primitive_types::U256;
 use tokio::sync::{mpsc, RwLock};
-use tower::{Service, ServiceExt};
+use tower::Service;
 use zaino_fetch::jsonrpsee::{connector::JsonRpSeeConnector, response::GetBlockResponse};
 use zebra_chain::{
     parameters::Network,
@@ -203,14 +203,6 @@ impl NonFinalzedState {
                             );
                             transactions.push(txdata);
                         }
-                        let spent_outpoints = transactions
-                            .iter()
-                            .flat_map(|tx| {
-                                tx.transparent().inputs().iter().map(|input| {
-                                    Outpoint::new(*input.prevout_txid(), input.prevout_index())
-                                })
-                            })
-                            .collect();
 
                         let height = Some(best_tip.0);
                         let hash = Hash::from(block.hash());
@@ -247,7 +239,6 @@ impl NonFinalzedState {
                             index,
                             data,
                             transactions,
-                            spent_outpoints,
                             commitment_tree_data,
                         };
                         new_blocks.push(chainblock.clone());

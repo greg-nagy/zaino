@@ -198,8 +198,6 @@ impl TryFrom<zcash_protocol::consensus::BlockHeight> for Height {
 pub struct Index(pub u32);
 
 /// 20-byte hash (RIPEMD-160 or Blake2b-160) of a transparent output script.
-///
-/// DCBOR encoding: raw 20-byte byte-string wrapped with tag 74244.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct AddrScript([u8; 20]);
@@ -258,9 +256,6 @@ impl From<AddrScript> for [u8; 20] {
 }
 
 /// Reference to a spent transparent UTXO.
-///
-/// DCBOR encoding (tag 74243):  
-/// `[ <byte-string 32>, <uint32> ]`
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct Outpoint {
@@ -423,71 +418,7 @@ pub struct BlockData {
     /// Equihash nonse.
     pub(super) nonse: [u8; 32],
     /// Equihash solution
-    pub(super) solution: Solution,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub enum Solution {
-    #[cfg_attr(test, serde(with = "serde_arrays::fixed"))]
-    NonRegtest([u8; 1344]),
-    #[cfg_attr(test, serde(with = "serde_arrays::fixed"))]
-    Regtest([u8; 36]),
-}
-
-impl From<zebra_chain::work::equihash::Solution> for Solution {
-    fn from(value: zebra_chain::work::equihash::Solution) -> Self {
-        match value {
-            zebra_chain::work::equihash::Solution::Common(array) => Self::NonRegtest(array),
-            zebra_chain::work::equihash::Solution::Regtest(array) => Self::Regtest(array),
-        }
-    }
-}
-
-pub struct BadSolution {
-    expected_len: usize,
-    actual_len: usize,
-}
-impl TryFrom<(Vec<u8>, &zebra_chain::parameters::Network)> for Solution {
-    type Error = BadSolution;
-
-    fn try_from(
-        (solution, network): (Vec<u8>, &zebra_chain::parameters::Network),
-    ) -> Result<Self, Self::Error> {
-        let solution_len = solution.len();
-        Ok(match network {
-            zebra_chain::parameters::Network::Mainnet => {
-                Solution::NonRegtest(solution.try_into().map_err(|_| BadSolution {
-                    expected_len: 1344,
-                    actual_len: solution_len,
-                })?)
-            }
-            zebra_chain::parameters::Network::Testnet(parameters)
-                if parameters.is_default_testnet() =>
-            {
-                Solution::NonRegtest(solution.try_into().map_err(|_| BadSolution {
-                    expected_len: 1344,
-                    actual_len: solution_len,
-                })?)
-            }
-            zebra_chain::parameters::Network::Testnet(_) => {
-                Solution::Regtest(solution.try_into().map_err(|_| BadSolution {
-                    expected_len: 36,
-                    actual_len: solution_len,
-                })?)
-            }
-        })
-    }
-}
-
-impl fmt::Display for BadSolution {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "solution must be {} bytes, got {}",
-            self.expected_len, self.actual_len,
-        )
-    }
+    pub(super) solution: EquihashSolution,
 }
 
 impl BlockData {
@@ -500,7 +431,7 @@ impl BlockData {
         block_commitments: [u8; 32],
         bits: u32,
         nonse: [u8; 32],
-        solution: Solution,
+        solution: EquihashSolution,
     ) -> Self {
         Self {
             version,
@@ -587,16 +518,74 @@ impl BlockData {
     }
 
     /// Returns Equihash Nonse.
-    pub fn solution(&self) -> Solution {
+    pub fn solution(&self) -> EquihashSolution {
         self.solution
+    }
+}
+
+/// Equihash solution as it appears in a block header.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
+// NOTE: if memory usage becomes too large we could move this data to the heap.
+#[allow(clippy::large_enum_variant)]
+pub enum EquihashSolution {
+    /// 200-9 solution (mainnet / testnet).
+    #[cfg_attr(test, serde(with = "serde_arrays::fixed"))]
+    Standard([u8; 1344]),
+    /// 48-5 solution (regtest).
+    #[cfg_attr(test, serde(with = "serde_arrays::fixed"))]
+    Regtest([u8; 36]),
+}
+
+impl From<zebra_chain::work::equihash::Solution> for EquihashSolution {
+    fn from(value: zebra_chain::work::equihash::Solution) -> Self {
+        match value {
+            zebra_chain::work::equihash::Solution::Common(array) => Self::Standard(array),
+            zebra_chain::work::equihash::Solution::Regtest(array) => Self::Regtest(array),
+        }
+    }
+}
+
+impl EquihashSolution {
+    /// Return a slice view (convenience).
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            Self::Standard(b) => b,
+            Self::Regtest(b) => b,
+        }
+    }
+}
+
+impl TryFrom<Vec<u8>> for EquihashSolution {
+    type Error = &'static str;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(bytes.as_slice())
+    }
+}
+
+impl<'a> TryFrom<&'a [u8]> for EquihashSolution {
+    type Error = &'static str;
+
+    fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
+        match bytes.len() {
+            1344 => {
+                let mut arr = [0u8; 1344];
+                arr.copy_from_slice(bytes);
+                Ok(EquihashSolution::Standard(arr))
+            }
+            32 => {
+                let mut arr = [0u8; 36];
+                arr.copy_from_slice(bytes);
+                Ok(EquihashSolution::Regtest(arr))
+            }
+            _ => Err("invalid Equihash solution length (expected 36 or 1344 bytes)"),
+        }
     }
 }
 
 /// Pair of commitment-tree roots and their corresponding leaf counts
 /// after the current block has been applied.
-///
-/// *tag 74248*  
-/// `[ CommitmentTreeRoots, CommitmentTreeSizes ]`
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct CommitmentTreeData {
@@ -689,8 +678,6 @@ pub struct ChainBlock {
     /// Sapling and orchard commitment tree data for the chain
     /// *after this block has been applied.
     pub(super) commitment_tree_data: CommitmentTreeData,
-    /// Explicitly recorded UTXOs spent in this block, speeding up reorgs and delta indexing.
-    pub(super) spent_outpoints: Vec<Outpoint>,
 }
 
 impl ChainBlock {
@@ -700,14 +687,12 @@ impl ChainBlock {
         data: BlockData,
         tx: Vec<CompactTxData>,
         commitment_tree_data: CommitmentTreeData,
-        spent_outpoints: Vec<Outpoint>,
     ) -> Self {
         Self {
             index,
             data,
             transactions: tx,
             commitment_tree_data,
-            spent_outpoints,
         }
     }
 
@@ -726,14 +711,9 @@ impl ChainBlock {
         &self.transactions
     }
 
-    ///
+    /// Returns the commitment tree data for this block.
     pub fn commitment_tree_data(&self) -> &CommitmentTreeData {
         &self.commitment_tree_data
-    }
-
-    /// Returns a reference to the spent transparent outpoints.
-    pub fn spent_outpoints(&self) -> &[Outpoint] {
-        &self.spent_outpoints
     }
 
     /// Returns the block hash.
@@ -875,8 +855,12 @@ impl
             .try_into()
             .map_err(|v: Vec<u8>| format!("nonse must be 32 bytes, got {}", v.len()))?;
 
-        let solution =
-            Solution::try_from((header.solution(), network)).map_err(|e| e.to_string())?;
+        let solution = EquihashSolution::try_from(header.solution()).map_err(|_| {
+            format!(
+                "solution must be 32 or 1344 bytes, got {}",
+                header.solution().len()
+            )
+        })?;
 
         // --- Convert transactions ---
         let mut sapling_note_count = 0;
@@ -884,7 +868,6 @@ impl
 
         let full_transactions = full_block.transactions();
         let mut tx = Vec::with_capacity(full_transactions.len());
-        let mut spent_outpoints = Vec::new();
 
         for (i, ftx) in full_transactions.into_iter().enumerate() {
             let txdata = CompactTxData::try_from((i as u64, ftx))
@@ -892,10 +875,6 @@ impl
 
             sapling_note_count += txdata.sapling().outputs().len();
             orchard_note_count += txdata.orchard().actions().len();
-
-            for input in txdata.transparent().inputs() {
-                spent_outpoints.push(Outpoint::new(*input.prevout_txid(), input.prevout_index()));
-            }
 
             tx.push(txdata);
         }
@@ -933,13 +912,7 @@ impl
             Some(height),
         );
 
-        Ok(ChainBlock::new(
-            index,
-            block_data,
-            tx,
-            commitment_tree_data,
-            spent_outpoints,
-        ))
+        Ok(ChainBlock::new(index, block_data, tx, commitment_tree_data))
     }
 }
 
@@ -1429,9 +1402,6 @@ impl CompactSaplingOutput {
 }
 
 /// Compact summary of all shielded activity in a transaction.
-///
-/// *Encoding*  
-/// `[ sapling_value | null, orchard_value | null, SaplingCompactTx, Vec<CompactOrchardAction> ]`
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct OrchardCompactTx {
@@ -1641,7 +1611,7 @@ impl AddrEventBytes {
 
     /// Create an [`AddrHistRecord`] from an [`AddrEventBytes`].
     #[allow(dead_code)]
-    pub(crate) fn to_record(&self) -> AddrHistRecord {
+    pub(crate) fn as_record(&self) -> AddrHistRecord {
         use byteorder::{BigEndian, ByteOrder, LittleEndian};
         let b = &self.0;
         AddrHistRecord {
