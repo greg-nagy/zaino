@@ -30,38 +30,38 @@ pub mod version {
 /// * `Self::VERSION` = the tag **this build *writes***.
 /// * On **read**, we peek at the tag:
 ///   * if it equals `Self::VERSION` call `decode_latest`;
-///   * otherwise fall back to the relevant `decode_vN` helper  
+///   * otherwise fall back to the relevant `decode_vN` helper
 ///     (defaults to “unsupported” unless overwritten).
 ///
 /// ## Update guide.
 ///
 /// ### Initial release (`VERSION = 1`)
-/// 1. `pub struct TxV1 { … }`   // layout frozen forever  
-/// 2. `impl ZainoVersionedSerialise for TxV1`  
-///    * `const VERSION = 1`  
-///    * `encode_body` – **v1** layout  
-///    * `decode_latest` – parses **v1** bytes  
+/// 1. `pub struct TxV1 { … }`   // layout frozen forever
+/// 2. `impl ZainoVersionedSerialise for TxV1`
+///    * `const VERSION = 1`
+///    * `encode_body` – **v1** layout
+///    * `decode_latest` – parses **v1** bytes
 ///    * (optional) `decode_v1 = Self::decode_latest`
 ///
 /// ### Bump to v2
-/// 1. `pub struct TxV2 { … }`   // new “current” layout  
-/// 2. `impl From<TxV1> for TxV2` // loss-less upgrade path  
-/// 3. `impl ZainoVersionedSerialise for TxV2`  
-///    * `const VERSION = 2`  
-///    * `encode_body` – **v2** layout  
-///    * `decode_latest` – parses **v2** bytes  
+/// 1. `pub struct TxV2 { … }`   // new “current” layout
+/// 2. `impl From<TxV1> for TxV2` // loss-less upgrade path
+/// 3. `impl ZainoVersionedSerialise for TxV2`
+///    * `const VERSION = 2`
+///    * `encode_body` – **v2** layout
+///    * `decode_latest` – parses **v2** bytes
 ///    * `decode_v1` – `TxV1::decode_latest(r).map(Self::from)`
 ///    * (optional) `decode_v2 = Self::decode_latest`
 ///
 /// ### Next bumps (v3, v4, …)
-/// * Set `const VERSION = N`.  
-/// * Implement `decode_latest` for N’s layout.  
+/// * Set `const VERSION = N`.
+/// * Implement `decode_latest` for N’s layout.
 /// * Add `decode_v(N-1)` (and older).
 /// * Extend the `match` table inside **this trait** when a brand-new tag first appears.
 ///
 /// ## Mandatory items per implementation
-/// * `const VERSION`  
-/// * `encode_body`  
+/// * `const VERSION`
+/// * `encode_body`
 /// * `decode_latest` — **must** parse `Self::VERSION` bytes.
 ///
 /// Historical helpers (`decode_v1`, `decode_v2`, …) must be implemented
