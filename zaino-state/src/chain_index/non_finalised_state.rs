@@ -7,9 +7,9 @@ use crate::{
     OrchardCompactTx, SaplingCompactTx, TransparentCompactTx, TxInCompact, TxOutCompact,
 };
 use arc_swap::ArcSwap;
-use futures::future::join;
+use futures::{future::join, lock::Mutex};
 use primitive_types::U256;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::mpsc;
 use tower::Service;
 use zaino_fetch::jsonrpsee::{connector::JsonRpSeeConnector, response::GetBlockResponse};
 use zebra_chain::{parameters::Network, serialization::ZcashDeserialize};
@@ -22,8 +22,8 @@ struct NonFinalzedState {
     /// We need access to the validator's best block hash, as well
     /// as a source of blocks
     source: BlockchainSource,
-    staged: RwLock<mpsc::UnboundedReceiver<ChainBlock>>,
-    staging_sender: mpsc::UnboundedSender<ChainBlock>,
+    staged: Mutex<mpsc::Receiver<ChainBlock>>,
+    staging_sender: mpsc::Sender<ChainBlock>,
     /// This lock should not be exposed to consumers. Rather,
     /// clone the Arc and offer that. This means we can overwrite the arc
     /// without interfering with readers, who will hold a stale copy
@@ -43,17 +43,50 @@ pub(crate) struct NonfinalizedBlockCacheSnapshot {
     best_tip: (Height, Hash),
 }
 
-pub enum NonFinalizedStateSyncError {
+pub enum SyncError {
+    /// The backing validator node returned corrupt, invalid, or incomplete data
     InvalidZebraData,
+    /// The channel used to store new blocks has been closed. This should only happen
+    /// during shutdown.
+    StagingChannelClosed,
+    /// Sync has been called multiple times in parallel, or another process has
+    /// written to the block snapshot.
+    CompetingSyncProcess,
 }
+
+impl From<UpdateError> for SyncError {
+    fn from(value: UpdateError) -> Self {
+        match value {
+            UpdateError::ReceiverDisconnected => SyncError::StagingChannelClosed,
+            UpdateError::StaleSnapshot => SyncError::CompetingSyncProcess,
+        }
+    }
+}
+
+pub enum InitError {}
+
 /// This is the core of the concurrent block cache.
 impl NonFinalzedState {
-    /// sync to the top of the chain
+    /// Create a nonfinalized state, in a coherent initial state
     ///
-    /// TODO: This function currently only handles sync from the case where a
-    /// NonFinalizedState already exists, and is not yet optimized for the case
-    /// where more than 100 blocks have been mined since the last sync call
-    pub async fn sync(&self) -> Result<(), NonFinalizedStateSyncError> {
+    /// TODO: Currently, we can't initate without an snapshot, we need to create a cache
+    /// of at least one block. Should this be tied to the instantiation of the data structure
+    /// itself?
+    pub async fn initialize(source: BlockchainSource, network: Network) -> Result<Self, InitError> {
+        // TODO: Consider arbitrary buffer length
+        let (staging_sender, staging_receiver) = mpsc::channel(100);
+        let staged = Mutex::new(staging_receiver);
+        Ok(Self {
+            source,
+            staged,
+            staging_sender,
+            current: todo!(),
+            network,
+        })
+    }
+
+    /// sync to the top of the chain
+    pub async fn sync(&self) -> Result<(), SyncError> {
         let initial_state = self.get_snapshot().await;
         let mut new_blocks = Vec::new();
         let mut sidechain_blocks = Vec::new();
@@ -70,7 +103,7 @@ impl NonFinalzedState {
                 u32::from(best_tip.0) + 1,
             )))
             .await
-            .map_err(|_| NonFinalizedStateSyncError::InvalidZebraData)?
+            .map_err(|_| SyncError::InvalidZebraData)?
         {
             // If this block is next in the chain, we sync it as normal
             if Hash::from(block.header.previous_block_hash) == best_tip.1 {
@@ -98,7 +131,7 @@ impl NonFinalzedState {
                     ),
                     block_commitments: match block
                         .commitment(&self.network)
-                        .map_err(|_| NonFinalizedStateSyncError::InvalidZebraData)?
+                        .map_err(|_| SyncError::InvalidZebraData)?
                     {
                         zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
                         zebra_chain::block::Commitment::FinalSaplingRoot(root) => root.into(),
@@ -252,26 +285,53 @@ impl NonFinalzedState {
 
         // todo! handle sidechain blocks
         for block in new_blocks {
-            self.staging_sender.send(block).expect("todo: senderror")
+            if let Err(e) = self.sync_stage_update_loop(block).await {
+                return Err(e.into());
+            }
         }
 
         Ok(())
     }
+
+    async fn sync_stage_update_loop(&self, block: ChainBlock) -> Result<(), UpdateError> {
+        if let Err(e) = self.stage(block.clone()) {
+            match e {
+                mpsc::error::TrySendError::Full(_) => {
+                    // TODO: connect to finalized state to determine where to truncate
+                    self.update(
+                        block
+                            .index
+                            .height
+                            .expect("TODO: fix when handling sidechain blocks")
+                            - 100,
+                    )
+                    .await?;
+                    Box::pin(self.sync_stage_update_loop(block)).await?;
+                }
+                mpsc::error::TrySendError::Closed(_block) => {
+                    return Err(UpdateError::ReceiverDisconnected)
+                }
+            }
+        }
+        Ok(())
+    }
     /// Stage a block
-    pub fn stage(&self, block: ChainBlock) -> Result<(), mpsc::error::SendError<ChainBlock>> {
-        self.staging_sender.send(block)
+    pub fn stage(&self, block: ChainBlock) -> Result<(), mpsc::error::TrySendError<ChainBlock>> {
+        self.staging_sender.try_send(block)
     }
     /// Add all blocks from the staging area, and save a new cache snapshot
-    pub async fn update(&self, finalized_height: Height) -> Result<(), ()> {
+    pub async fn update(&self, finalized_height: Height) -> Result<(), UpdateError> {
         let mut new = HashMap::<Hash, ChainBlock>::new();
-        let mut staged = self.staged.write().await;
+        let mut staged = self.staged.lock().await;
         loop {
             match staged.try_recv() {
                 Ok(chain_block) => {
                     new.insert(*chain_block.index().hash(), chain_block);
                 }
                 Err(mpsc::error::TryRecvError::Empty) => break,
-                Err(mpsc::error::TryRecvError::Disconnected) => return Err(()),
+                Err(mpsc::error::TryRecvError::Disconnected) => {
+                    return Err(UpdateError::ReceiverDisconnected)
+                }
             }
         }
         // at this point, we've collected everything in the staging area
@@ -300,18 +360,30 @@ impl NonFinalzedState {
             }
         });
         // Need to get best hash at some point in this process
-        self.current.store(Arc::new(NonfinalizedBlockCacheSnapshot {
-            blocks,
-            best_tip,
-        }));
-
-        Ok(())
+        let stored = self.current.compare_and_swap(
+            &snapshot,
+            Arc::new(NonfinalizedBlockCacheSnapshot { blocks, best_tip }),
+        );
+        if Arc::ptr_eq(&stored, &snapshot) {
+            Ok(())
+        } else {
+            Err(UpdateError::StaleSnapshot)
+        }
     }
 
     /// Get a copy of the block cache as it existed at the last [update] call
     pub async fn get_snapshot(&self) -> Arc<NonfinalizedBlockCacheSnapshot> {
         self.current.load_full()
     }
+}
+
+/// Errors that occur during a snapshot update
+pub enum UpdateError {
+    /// The block reciever disconnected. This should only happen during shutdown.
+    ReceiverDisconnected,
+    /// The snapshot was already updated by a different process, between when this update started
+    /// and when it completed.
+    StaleSnapshot,
 }
 
 /// A connection to a validator.
@@ -327,6 +399,7 @@ enum BlockchainSourceError {
 
 type BlockchainSourceResult<T> = Result<T, BlockchainSourceError>;
 
+/// Methods that will dispatch to a ReadStateService or JsonRpSeeConnector
 impl BlockchainSource {
     async fn get_tip(
         &self,
