@@ -2,9 +2,19 @@
 //!
 //! Held here to ensure serialisation consistency for ZainoDB.
 
+use core2::io::{self, Read, Write};
 use hex::{FromHex, ToHex};
 use primitive_types::U256;
 use std::fmt;
+
+use crate::chain_index::encoding::{
+    read_fixed_le, version, write_fixed_le, ZainoVersionedSerialise,
+};
+
+use super::encoding::{
+    read_i64_le, read_option, read_u16_le, read_u32_be, read_u32_le, read_u64_le, read_vec,
+    write_i64_le, write_option, write_u16_le, write_u32_be, write_u32_le, write_u64_le, write_vec,
+};
 
 // *** Key Objects ***
 
@@ -103,6 +113,23 @@ impl From<zcash_primitives::block::BlockHash> for Hash {
     }
 }
 
+impl ZainoVersionedSerialise for Hash {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        write_fixed_le::<32, _>(w, &self.0)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let bytes = read_fixed_le::<32, _>(r)?;
+        Ok(Hash(bytes))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
 /// Block height.
 ///
 /// NOTE: Encoded as 4-byte big-endian byte-string to ensure height ordering
@@ -173,6 +200,24 @@ impl TryFrom<zcash_protocol::consensus::BlockHeight> for Height {
     }
 }
 
+impl ZainoVersionedSerialise for Height {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        // Height must sort lexicographically - write **big-endian**
+        write_u32_be(w, self.0)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let raw = read_u32_be(r)?;
+        Height::try_from(raw).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
 /// Numerical index of subtree / shard roots.
 ///
 /// NOTE: Encoded as 4-byte big-endian byte-string to ensure height ordering
@@ -180,6 +225,24 @@ impl TryFrom<zcash_protocol::consensus::BlockHeight> for Height {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct Index(pub u32);
+
+impl ZainoVersionedSerialise for Index {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        // Index must sort lexicographically - write **big-endian**
+        write_u32_be(w, self.0)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let raw = read_u32_be(r)?;
+        Ok(Index(raw))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
 
 /// 20-byte hash (RIPEMD-160 or Blake2b-160) of a transparent output script.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -239,6 +302,23 @@ impl From<AddrScript> for [u8; 20] {
     }
 }
 
+impl ZainoVersionedSerialise for AddrScript {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        write_fixed_le::<20, _>(w, &self.0)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let bytes = read_fixed_le::<20, _>(r)?;
+        Ok(AddrScript(bytes))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
 /// Reference to a spent transparent UTXO.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
@@ -266,6 +346,27 @@ impl Outpoint {
     /// Returns the outpoint index withing the transaction.
     pub fn prev_index(&self) -> u32 {
         self.prev_index
+    }
+}
+
+impl ZainoVersionedSerialise for Outpoint {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut w = w;
+        write_fixed_le::<32, _>(&mut w, &self.prev_txid)?;
+        write_u32_le(&mut w, self.prev_index)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+        let txid = read_fixed_le::<32, _>(&mut r)?;
+        let index = read_u32_le(&mut r)?;
+        Ok(Outpoint::new(txid, index))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
     }
 }
 
@@ -327,6 +428,37 @@ impl BlockIndex {
     }
 }
 
+impl ZainoVersionedSerialise for BlockIndex {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut w = w;
+
+        self.hash.serialize(&mut w)?;
+        self.parent_hash.serialize(&mut w)?;
+        self.chainwork.serialize(&mut w)?;
+
+        write_option(&mut w, &self.height, |w, h| h.serialize(w))
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+
+        let hash = Hash::deserialize(&mut r)?;
+        let parent_hash = Hash::deserialize(&mut r)?;
+        let chainwork = ChainWork::deserialize(&mut r)?;
+
+        let height = read_option(&mut r, |r| Height::deserialize(r))?;
+
+        Ok(BlockIndex::new(hash, parent_hash, chainwork, height))
+    }
+
+    /*──────── historic v1 helper ────────*/
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
 /// Cumulative proof-of-work of the chain,
 /// stored as a **big-endian** 256-bit unsigned integer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -376,6 +508,23 @@ impl From<ChainWork> for U256 {
 impl fmt::Display for ChainWork {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.to_u256().fmt(f)
+    }
+}
+
+impl ZainoVersionedSerialise for ChainWork {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        write_fixed_le::<32, _>(w, &self.0)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let bytes = read_fixed_le::<32, _>(r)?;
+        Ok(ChainWork(bytes))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
     }
 }
 
@@ -507,6 +656,54 @@ impl BlockData {
     }
 }
 
+impl ZainoVersionedSerialise for BlockData {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut w = w; // re-borrow
+
+        write_u32_le(&mut w, self.version)?;
+        write_i64_le(&mut w, self.time)?;
+
+        write_fixed_le::<32, _>(&mut w, &self.merkle_root)?;
+        write_fixed_le::<32, _>(&mut w, &self.block_commitments)?;
+
+        write_u32_le(&mut w, self.bits)?;
+        write_fixed_le::<32, _>(&mut w, &self.nonse)?;
+
+        self.solution.serialize(&mut w)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+
+        let version = read_u32_le(&mut r)?;
+        let time = read_i64_le(&mut r)?;
+
+        let merkle_root = read_fixed_le::<32, _>(&mut r)?;
+        let block_commitments = read_fixed_le::<32, _>(&mut r)?;
+
+        let bits = read_u32_le(&mut r)?;
+        let nonse = read_fixed_le::<32, _>(&mut r)?;
+
+        let solution = EquihashSolution::deserialize(&mut r)?;
+
+        Ok(BlockData::new(
+            version,
+            time,
+            merkle_root,
+            block_commitments,
+            bits,
+            nonse,
+            solution,
+        ))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
 /// Equihash solution as it appears in a block header.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
@@ -558,6 +755,50 @@ impl<'a> TryFrom<&'a [u8]> for EquihashSolution {
     }
 }
 
+impl ZainoVersionedSerialise for EquihashSolution {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut w = w;
+
+        match self {
+            Self::Standard(bytes) => {
+                w.write_all(&[0])?;
+                write_fixed_le::<1344, _>(&mut w, bytes)
+            }
+            Self::Regtest(bytes) => {
+                w.write_all(&[1])?;
+                write_fixed_le::<32, _>(&mut w, bytes)
+            }
+        }
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+
+        let mut tag = [0u8; 1];
+        r.read_exact(&mut tag)?;
+        match tag[0] {
+            0 => {
+                let bytes = read_fixed_le::<1344, _>(&mut r)?;
+                Ok(EquihashSolution::Standard(bytes))
+            }
+            1 => {
+                let bytes = read_fixed_le::<32, _>(&mut r)?;
+                Ok(EquihashSolution::Regtest(bytes))
+            }
+            other => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unknown Equihash variant tag {other}"),
+            )),
+        }
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
 /// Pair of commitment-tree roots and their corresponding leaf counts
 /// after the current block has been applied.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -581,6 +822,27 @@ impl CommitmentTreeData {
     /// Returns the commitment tree sizes for the block.
     pub fn sizes(&self) -> &CommitmentTreeSizes {
         &self.sizes
+    }
+}
+
+impl ZainoVersionedSerialise for CommitmentTreeData {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut w = w;
+        self.roots.serialize(&mut w)?; // carries its own tag
+        self.sizes.serialize(&mut w)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+        let roots = CommitmentTreeRoots::deserialize(&mut r)?;
+        let sizes = CommitmentTreeSizes::deserialize(&mut r)?;
+        Ok(CommitmentTreeData::new(roots, sizes))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
     }
 }
 
@@ -611,6 +873,27 @@ impl CommitmentTreeRoots {
     }
 }
 
+impl ZainoVersionedSerialise for CommitmentTreeRoots {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut w = w;
+        write_fixed_le::<32, _>(&mut w, &self.sapling)?;
+        write_fixed_le::<32, _>(&mut w, &self.orchard)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+        let sapling = read_fixed_le::<32, _>(&mut r)?;
+        let orchard = read_fixed_le::<32, _>(&mut r)?;
+        Ok(CommitmentTreeRoots::new(sapling, orchard))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
 /// Sizes of commitment trees, indicating total number of shielded notes created.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
@@ -635,6 +918,27 @@ impl CommitmentTreeSizes {
     /// Returns orchard commitment tree size
     pub fn orchard(&self) -> u32 {
         self.orchard
+    }
+}
+
+impl ZainoVersionedSerialise for CommitmentTreeSizes {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut w = w;
+        write_u32_le(&mut w, self.sapling)?;
+        write_u32_le(&mut w, self.orchard)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+        let sapling = read_u32_le(&mut r)?;
+        let orchard = read_u32_le(&mut r)?;
+        Ok(CommitmentTreeSizes::new(sapling, orchard))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
     }
 }
 
@@ -1136,6 +1440,30 @@ pub struct TransparentCompactTx {
     vout: Vec<TxOutCompact>,
 }
 
+impl ZainoVersionedSerialise for TransparentCompactTx {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut w = w;
+
+        write_vec(&mut w, &self.vin, |w, txin| txin.serialize(w))?;
+        write_vec(&mut w, &self.vout, |w, txout| txout.serialize(w))
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+
+        let vin = read_vec(&mut r, |r| TxInCompact::deserialize(r))?;
+        let vout = read_vec(&mut r, |r| TxOutCompact::deserialize(r))?;
+
+        Ok(TransparentCompactTx::new(vin, vout))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
 impl TransparentCompactTx {
     /// Creates a new TransparentCompactTx instance.
     pub fn new(vin: Vec<TxInCompact>, vout: Vec<TxOutCompact>) -> Self {
@@ -1183,6 +1511,27 @@ impl TxInCompact {
     }
 }
 
+impl ZainoVersionedSerialise for TxInCompact {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut w = w;
+        write_fixed_le::<32, _>(&mut w, &self.prevout_txid)?;
+        write_u32_le(&mut w, self.prevout_index)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+        let txid = read_fixed_le::<32, _>(&mut r)?;
+        let idx = read_u32_le(&mut r)?;
+        Ok(TxInCompact::new(txid, idx))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
 /// Identifies the type of transparent transaction output script.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
@@ -1216,6 +1565,25 @@ impl ScriptType {
             ScriptType::P2SH => "P2SH",
             ScriptType::NonStandard => "NonStandard",
         }
+    }
+}
+
+impl ZainoVersionedSerialise for ScriptType {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        w.write_all(&[*self as u8])
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut b = [0u8; 1];
+        r.read_exact(&mut b)?;
+        ScriptType::try_from(b[0])
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "unknown ScriptType"))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
     }
 }
 
@@ -1266,6 +1634,32 @@ impl TxOutCompact {
     }
 }
 
+impl ZainoVersionedSerialise for TxOutCompact {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut w = w;
+        write_u64_le(&mut w, self.value)?;
+        write_fixed_le::<20, _>(&mut w, &self.script_hash)?;
+        w.write_all(&[self.script_type])
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+        let value = read_u64_le(&mut r)?;
+        let script_hash = read_fixed_le::<20, _>(&mut r)?;
+
+        let mut b = [0u8; 1];
+        r.read_exact(&mut b)?;
+        TxOutCompact::new(value, script_hash, b[0])
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid script_type"))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
 /// Compact representation of Sapling shielded transaction data for wallet scanning.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
@@ -1308,6 +1702,32 @@ impl SaplingCompactTx {
     }
 }
 
+impl ZainoVersionedSerialise for SaplingCompactTx {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut w = w;
+
+        write_option(&mut w, &self.value, |w, v| write_i64_le(w, *v))?;
+        write_vec(&mut w, &self.spends, |w, s| s.serialize(w))?;
+        write_vec(&mut w, &self.outputs, |w, o| o.serialize(w))
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+
+        let value = read_option(&mut r, |r| read_i64_le(r))?;
+        let spends = read_vec(&mut r, |r| CompactSaplingSpend::deserialize(r))?;
+        let outputs = read_vec(&mut r, |r| CompactSaplingOutput::deserialize(r))?;
+
+        Ok(SaplingCompactTx::new(value, spends, outputs))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
 /// Compact representation of a Sapling shielded spend (consuming a previous shielded note).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
@@ -1325,6 +1745,22 @@ impl CompactSaplingSpend {
     /// Returns sapling nullifier.
     pub fn nullifier(&self) -> &[u8; 32] {
         &self.nf
+    }
+}
+
+impl ZainoVersionedSerialise for CompactSaplingSpend {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        write_fixed_le::<32, _>(w, &self.nf)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Ok(CompactSaplingSpend::new(read_fixed_le::<32, _>(r)?))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
     }
 }
 
@@ -1367,6 +1803,29 @@ impl CompactSaplingOutput {
     }
 }
 
+impl ZainoVersionedSerialise for CompactSaplingOutput {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut w = w;
+        write_fixed_le::<32, _>(&mut w, &self.cmu)?;
+        write_fixed_le::<32, _>(&mut w, &self.ephemeral_key)?;
+        write_fixed_le::<52, _>(&mut w, &self.ciphertext)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+        let cmu = read_fixed_le::<32, _>(&mut r)?;
+        let epk = read_fixed_le::<32, _>(&mut r)?;
+        let ciphertext = read_fixed_le::<52, _>(&mut r)?;
+        Ok(CompactSaplingOutput::new(cmu, epk, ciphertext))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
 /// Compact summary of all shielded activity in a transaction.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
@@ -1391,6 +1850,30 @@ impl OrchardCompactTx {
     /// Returns the orchard actions in this transaction.
     pub fn actions(&self) -> &[CompactOrchardAction] {
         &self.actions
+    }
+}
+
+impl ZainoVersionedSerialise for OrchardCompactTx {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut w = w;
+
+        write_option(&mut w, &self.value, |w, v| write_i64_le(w, *v))?;
+        write_vec(&mut w, &self.actions, |w, a| a.serialize(w))
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+
+        let value = read_option(&mut r, |r| read_i64_le(r))?;
+        let actions = read_vec(&mut r, |r| CompactOrchardAction::deserialize(r))?;
+
+        Ok(OrchardCompactTx::new(value, actions))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
     }
 }
 
@@ -1446,6 +1929,31 @@ impl CompactOrchardAction {
     }
 }
 
+impl ZainoVersionedSerialise for CompactOrchardAction {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut w = w;
+        write_fixed_le::<32, _>(&mut w, &self.nullifier)?;
+        write_fixed_le::<32, _>(&mut w, &self.cmx)?;
+        write_fixed_le::<32, _>(&mut w, &self.ephemeral_key)?;
+        write_fixed_le::<52, _>(&mut w, &self.ciphertext)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+        let nf = read_fixed_le::<32, _>(&mut r)?;
+        let cmx = read_fixed_le::<32, _>(&mut r)?;
+        let epk = read_fixed_le::<32, _>(&mut r)?;
+        let ctxt = read_fixed_le::<52, _>(&mut r)?;
+        Ok(CompactOrchardAction::new(nf, cmx, epk, ctxt))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
 /// Identifies a transaction by its (block_position, tx_position) pair,
 /// used to locate transactions within Zaino's internal DB.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -1474,6 +1982,27 @@ impl TxIndex {
     /// Returns the transaction index held in the TxIndex.
     pub fn tx_index(&self) -> u16 {
         self.tx_index
+    }
+}
+
+impl ZainoVersionedSerialise for TxIndex {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut w = w;
+        write_u32_le(&mut w, self.block_index)?;
+        write_u16_le(&mut w, self.tx_index)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+        let blk = read_u32_le(&mut r)?;
+        let tx = read_u16_le(&mut r)?;
+        Ok(TxIndex::new(blk, tx))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
     }
 }
 
@@ -1544,6 +2073,35 @@ impl AddrHistRecord {
     }
 }
 
+impl ZainoVersionedSerialise for AddrHistRecord {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut w = w;
+
+        self.tx_index.serialize(&mut w)?;
+        write_u16_le(&mut w, self.out_index)?;
+        write_u64_le(&mut w, self.value)?;
+        w.write_all(&[self.flags])
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+        let tx_index = TxIndex::deserialize(&mut r)?;
+        let out_index = read_u16_le(&mut r)?;
+        let value = read_u64_le(&mut r)?;
+
+        let mut flag = [0u8; 1];
+        r.read_exact(&mut flag)?;
+
+        Ok(AddrHistRecord::new(tx_index, out_index, value, flag[0]))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
 /// AddrHistRecord database byte array.
 ///
 /// EXACTLY 17 bytes – duplicate value in `addr_hist` DBI.
@@ -1598,6 +2156,22 @@ impl AddrEventBytes {
     }
 }
 
+impl ZainoVersionedSerialise for AddrEventBytes {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        write_fixed_le::<17, _>(w, &self.0)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Ok(AddrEventBytes(read_fixed_le::<17, _>(r)?))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
 // *** Sharding ***
 
 /// Root commitment for a state shard.
@@ -1635,6 +2209,29 @@ impl ShardRoot {
     /// Returns the Height of the final block in this shard.
     pub fn final_block_height(&self) -> u32 {
         self.final_block_height
+    }
+}
+
+impl ZainoVersionedSerialise for ShardRoot {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut w = w;
+        write_fixed_le::<32, _>(&mut w, &self.hash)?;
+        write_fixed_le::<32, _>(&mut w, &self.final_block_hash)?;
+        write_u32_le(&mut w, self.final_block_height)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+        let hash = read_fixed_le::<32, _>(&mut r)?;
+        let final_block_hash = read_fixed_le::<32, _>(&mut r)?;
+        let final_block_height = read_u32_le(&mut r)?;
+        Ok(ShardRoot::new(hash, final_block_hash, final_block_height))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
     }
 }
 
