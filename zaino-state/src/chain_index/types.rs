@@ -1306,25 +1306,23 @@ impl TryFrom<(u64, zaino_fetch::chain::transaction::FullTransaction)> for TxData
         let vout: Vec<TxOutCompact> = tx
             .transparent_outputs()
             .into_iter()
-            .map(|(value, script_hash)| {
+            .filter_map(|(value, script_hash)| {
                 if script_hash.len() == 21 {
                     let script_type = script_hash[0];
                     let mut hash_bytes = [0u8; 20];
                     hash_bytes.copy_from_slice(&script_hash[1..]);
                     TxOutCompact::new(value, hash_bytes, script_type)
                 } else {
-                    // Fallback: non-standard
-                    let mut fallback_hash = [0u8; 20];
+                    let mut fallback = [0u8; 20];
                     let usable_len = script_hash.len().min(20);
-                    fallback_hash[..usable_len].copy_from_slice(&script_hash[..usable_len]);
+                    fallback[..usable_len].copy_from_slice(&script_hash[..usable_len]);
                     Some(TxOutCompact::new(
                         value,
-                        fallback_hash,
+                        fallback,
                         ScriptType::NonStandard as u8,
                     )?)
                 }
             })
-            .flatten() // to handle Option<Option<TxOutCompact>>
             .collect();
 
         let transparent = TransparentCompactTx::new(vin, vout);

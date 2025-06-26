@@ -23,9 +23,9 @@ use tracing::error;
 use crate::jsonrpsee::{
     error::JsonRpSeeConnectorError,
     response::{
-        GetBalanceResponse, GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse,
-        GetSubtreesResponse, GetTransactionResponse, GetTreestateResponse, GetUtxosResponse,
-        SendTransactionResponse, TxidsResponse,
+        GetBalanceResponse, GetBlockCountResponse, GetBlockResponse, GetBlockchainInfoResponse,
+        GetInfoResponse, GetSubtreesResponse, GetTransactionResponse, GetTreestateResponse,
+        GetUtxosResponse, SendTransactionResponse, TxidsResponse,
     },
 };
 
@@ -41,7 +41,7 @@ struct RpcRequest<T> {
 struct RpcResponse<T> {
     id: i64,
     jsonrpc: Option<String>,
-    result: T,
+    result: Option<T>,
     error: Option<RpcError>,
 }
 
@@ -307,12 +307,15 @@ impl JsonRpSeeConnector {
             let response: RpcResponse<R> = serde_json::from_slice(&body_bytes)
                 .map_err(JsonRpSeeConnectorError::SerdeJsonError)?;
 
-            return match response.error {
-                Some(error) => Err(JsonRpSeeConnectorError::new(format!(
+            return match (response.error, response.result) {
+                (Some(error), _) => Err(JsonRpSeeConnectorError::new(format!(
                     "Error: Error from node's rpc server: {} - {}",
                     error.code, error.message
                 ))),
-                None => Ok(response.result),
+                (None, Some(result)) => Ok(result),
+                (None, None) => Err(JsonRpSeeConnectorError::new(
+                    "error: no response body".to_string(),
+                )),
             };
         }
     }
@@ -406,6 +409,17 @@ impl JsonRpSeeConnector {
                 .await
                 .map(GetBlockResponse::Object)
         }
+    }
+
+    /// Returns the height of the most recent block in the best valid block chain
+    /// (equivalently, the number of blocks in this chain excluding the genesis block).
+    ///
+    /// zcashd reference: [`getblockcount`](https://zcash.github.io/rpc/getblockcount.html)
+    /// method: post
+    /// tags: blockchain
+    pub async fn get_block_count(&self) -> Result<GetBlockCountResponse, JsonRpSeeConnectorError> {
+        self.send_request::<(), GetBlockCountResponse>("getblockcount", ())
+            .await
     }
 
     /// Returns all transaction ids in the memory pool, as a JSON array.

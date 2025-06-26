@@ -209,6 +209,7 @@ pub struct BlockCacheConfig {
 
 impl BlockCacheConfig {
     /// Returns a new instance of [`FetchServiceConfig`].
+    #[allow(dead_code)]
     pub fn new(
         map_capacity: Option<usize>,
         map_shard_amount: Option<usize>,
