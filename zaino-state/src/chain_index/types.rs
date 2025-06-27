@@ -769,7 +769,7 @@ impl ZainoVersionedSerialise for EquihashSolution {
             }
             Self::Regtest(bytes) => {
                 w.write_all(&[1])?;
-                write_fixed_le::<32, _>(&mut w, bytes)
+                write_fixed_le::<36, _>(&mut w, bytes)
             }
         }
     }
@@ -785,7 +785,7 @@ impl ZainoVersionedSerialise for EquihashSolution {
                 Ok(EquihashSolution::Standard(bytes))
             }
             1 => {
-                let bytes = read_fixed_le::<32, _>(&mut r)?;
+                let bytes = read_fixed_le::<36, _>(&mut r)?;
                 Ok(EquihashSolution::Regtest(bytes))
             }
             other => Err(io::Error::new(
