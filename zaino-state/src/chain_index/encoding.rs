@@ -5,8 +5,6 @@ use core::iter::FromIterator;
 use core2::io::{self, Read, Write};
 
 /// Wire-format version tags.
-/// `pub(crate)` → visible everywhere inside *this* crate,
-/// not re-exported to downstream users.
 pub mod version {
     /// Tag byte for data encoded with *v1* layout.
     pub const V1: u8 = 1;
@@ -129,11 +127,6 @@ pub trait ZainoVersionedSerialise: Sized {
 }
 
 /* ──────────────────────────── CompactSize helpers ────────────────────────────── */
-/*Namespace for functions for compact encoding of integers.
-
-This codec requires integers to be in the range `0x0..=0x02000000`, for compatibility
-with Zcash consensus rules. */
-
 pub struct CompactSize;
 
 pub const MAX_COMPACT_SIZE: u32 = 0x0200_0000;
@@ -392,15 +385,12 @@ where
 }
 
 /* ──────────────────────────── Vec<T> helpers ────────────────────────────── */
-/* Uses Bitcoin/Zcash “CompactSize” for the length field, capped at 0x02000000.
-If you prefer a raw u32 length, swap the two small helpers.                */
-
 pub(crate) fn write_vec<W, T, F>(mut w: W, vec: &[T], mut f: F) -> io::Result<()>
 where
     W: Write,
     F: FnMut(&mut W, &T) -> io::Result<()>,
 {
-    CompactSize::write(&mut w, vec.len())?; // <── uses your codec
+    CompactSize::write(&mut w, vec.len())?;
     for item in vec {
         f(&mut w, item)?
     }
@@ -412,7 +402,7 @@ where
     R: Read,
     F: FnMut(&mut R) -> io::Result<T>,
 {
-    let len = CompactSize::read(&mut r)? as usize; // <── uses your codec
+    let len = CompactSize::read(&mut r)? as usize;
     let mut v = Vec::with_capacity(len);
     for _ in 0..len {
         v.push(f(&mut r)?);
@@ -428,6 +418,6 @@ where
     F: FnMut(&mut R) -> io::Result<T>,
     C: FromIterator<T>,
 {
-    let len = CompactSize::read(&mut r)? as usize; // <── uses your codec
+    let len = CompactSize::read(&mut r)? as usize;
     (0..len).map(|_| f(&mut r)).collect()
 }
