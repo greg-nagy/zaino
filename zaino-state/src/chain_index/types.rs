@@ -2238,6 +2238,219 @@ impl ZainoVersionedSerialise for ShardRoot {
 
 // *** Wrapper Objects ***
 
+/// Holds full block header data,
+/// split into chain indexeing data and additional header data.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
+pub struct BlockHeaderData {
+    /// Chain indexing data
+    index: BlockIndex,
+    /// Block header data
+    data: BlockData,
+}
+
+impl BlockHeaderData {
+    /// Constructs a new `BlockHeaderData`.
+    pub fn new(index: BlockIndex, data: BlockData) -> Self {
+        Self { index, data }
+    }
+
+    /// Returns the stored [`BlockIndex`].
+    pub fn index(&self) -> &BlockIndex {
+        &self.index
+    }
+
+    /// Returns the stored [`BlockData`].
+    pub fn data(&self) -> &BlockData {
+        &self.data
+    }
+}
+
+impl ZainoVersionedSerialise for BlockHeaderData {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        self.index.serialize(w)?;
+        self.data.serialize(w)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let index = BlockIndex::deserialize(r)?;
+        let data = BlockData::deserialize(r)?;
+        Ok(BlockHeaderData::new(index, data))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
+/// Database wrapper for Vec<Txid>.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
+pub struct TxidList {
+    /// Txids.
+    tx: Vec<Hash>,
+}
+
+impl TxidList {
+    /// Creates a new `TxidList`.
+    pub fn new(tx: Vec<Hash>) -> Self {
+        Self { tx }
+    }
+
+    /// Returns a slice of the contained txids.
+    pub fn tx(&self) -> &[Hash] {
+        &self.tx
+    }
+}
+
+impl ZainoVersionedSerialise for TxidList {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        write_vec(w, &self.tx, |w, h| h.serialize(w))
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let tx = read_vec(r, |r| Hash::deserialize(r))?;
+        Ok(TxidList::new(tx))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
+/// Wrapper for the list of transparent components of each transaction.
+///
+/// Each entry is `Some(TransparentCompactTx)` when the transaction **has**
+/// a transparent part, and `None` when it does not.
+///
+/// This ensures 1-to-1 indexing with `TxidList`: element *i* matches txid *i*.
+/// `None` keeps the index when the tx lacks this pool.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
+pub struct TransparentTxList {
+    /// Transparent transaction data.
+    tx: Vec<Option<TransparentCompactTx>>,
+}
+
+impl TransparentTxList {
+    /// Creates a new `TransparentTxList`.
+    pub fn new(tx: Vec<Option<TransparentCompactTx>>) -> Self {
+        Self { tx }
+    }
+
+    /// Returns the slice of optional transparent tx fragments.
+    pub fn tx(&self) -> &[Option<TransparentCompactTx>] {
+        &self.tx
+    }
+}
+
+impl ZainoVersionedSerialise for TransparentTxList {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        write_vec(w, &self.tx, |w, opt| {
+            write_option(w, opt, |w, t| t.serialize(w))
+        })
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let tx = read_vec(r, |r| {
+            read_option(r, |r| TransparentCompactTx::deserialize(r))
+        })?;
+        Ok(TransparentTxList::new(tx))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
+/// List of the Sapling component (if any) of every transaction in a block.
+///
+/// * Each element is `Some(SaplingCompactTx)` when that transaction **does**
+///   contain Sapling data, or `None` when it does not.
+///
+/// This ensures 1-to-1 indexing with `TxidList`: element *i* matches txid *i*.
+/// `None` keeps the index when the tx lacks this pool.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
+pub struct SaplingTxList {
+    tx: Vec<Option<SaplingCompactTx>>,
+}
+
+impl SaplingTxList {
+    pub fn new(tx: Vec<Option<SaplingCompactTx>>) -> Self {
+        Self { tx }
+    }
+    pub fn tx(&self) -> &[Option<SaplingCompactTx>] {
+        &self.tx
+    }
+}
+
+impl ZainoVersionedSerialise for SaplingTxList {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        write_vec(w, &self.tx, |w, opt| {
+            write_option(w, opt, |w, t| t.serialize(w))
+        })
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let tx = read_vec(r, |r| read_option(r, |r| SaplingCompactTx::deserialize(r)))?;
+        Ok(SaplingTxList::new(tx))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
+/// List of the Orchard component (if any) of every transaction in a block.
+///
+/// * Each element is `Some(OrchardCompactTx)` when that transaction **does**
+///   contain Sapling data, or `None` when it does not.
+///
+/// This ensures 1-to-1 indexing with `TxidList`: element *i* matches txid *i*.
+/// `None` keeps the index when the tx lacks this pool.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
+pub struct OrchardTxList {
+    tx: Vec<Option<OrchardCompactTx>>,
+}
+
+impl OrchardTxList {
+    pub fn new(tx: Vec<Option<OrchardCompactTx>>) -> Self {
+        Self { tx }
+    }
+    pub fn tx(&self) -> &[Option<OrchardCompactTx>] {
+        &self.tx
+    }
+}
+
+impl ZainoVersionedSerialise for OrchardTxList {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        write_vec(w, &self.tx, |w, opt| {
+            write_option(w, opt, |w, t| t.serialize(w))
+        })
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let tx = read_vec(r, |r| read_option(r, |r| OrchardCompactTx::deserialize(r)))?;
+        Ok(OrchardTxList::new(tx))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
 // *** Custom serde based debug serialisation ***
 
 #[cfg(test)]
