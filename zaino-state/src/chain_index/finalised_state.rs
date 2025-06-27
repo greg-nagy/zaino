@@ -14,7 +14,6 @@ use blake2::{
     digest::{Update, VariableOutput},
     Blake2bVar,
 };
-use dcbor::{CBORCase, CBORTagged, CBORTaggedDecodable, CBORTaggedEncodable, Tag, CBOR};
 use lmdb::{
     Cursor, Database, DatabaseFlags, Environment, EnvironmentFlags, Transaction as _, WriteFlags,
 };
@@ -1030,25 +1029,6 @@ impl<'a> DbReader<'a> {
     }
 }
 
-/// DCBOR serialisation schema tags.
-///
-/// All structs in this module should be included in this enum.
-///
-/// Items should use the range 500 - 509 (510 - 599 are reserved for chain structs).
-#[repr(u64)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DbSchemaTag {
-    StoredEntry = 500,
-    DbMetadata = 501,
-    DbVersion = 502,
-}
-
-impl DbSchemaTag {
-    pub fn tag(self) -> dcbor::Tag {
-        dcbor::Tag::with_value(self as u64)
-    }
-}
-
 /// Wrapper around a CBOR-tagged item and its BLAKE2b checksum.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredEntry<T>
@@ -1101,55 +1081,6 @@ where
     }
 }
 
-impl<T> CBORTagged for StoredEntry<T>
-where
-    T: CBORTaggedEncodable + CBORTaggedDecodable + CBORTagged,
-{
-    fn cbor_tags() -> Vec<Tag> {
-        vec![DbSchemaTag::StoredEntry.tag()]
-    }
-}
-
-impl<T: CBORTaggedEncodable> CBORTaggedEncodable for StoredEntry<T>
-where
-    T: CBORTaggedEncodable + CBORTaggedDecodable + CBORTagged,
-{
-    fn untagged_cbor(&self) -> CBOR {
-        CBOR::from(vec![
-            self.item.tagged_cbor(),
-            CBOR::from(&self.checksum[..]),
-        ])
-    }
-}
-
-impl<T: CBORTaggedDecodable> CBORTaggedDecodable for StoredEntry<T>
-where
-    T: CBORTaggedEncodable + CBORTaggedDecodable + CBORTagged,
-{
-    fn from_untagged_cbor(cbor: CBOR) -> dcbor::Result<Self> {
-        match cbor.into_case() {
-            CBORCase::Array(arr) if arr.len() == 2 => {
-                let item = T::from_tagged_cbor(arr[0].clone())?;
-                let bytes: Vec<u8> = arr[1].clone().try_into()?;
-                let checksum: [u8; 32] = bytes.try_into().map_err(|_| dcbor::Error::WrongType)?;
-                Ok(Self { item, checksum })
-            }
-            _ => Err(dcbor::Error::WrongType),
-        }
-    }
-}
-
-impl<T: CBORTaggedDecodable> TryFrom<CBOR> for StoredEntry<T>
-where
-    T: CBORTaggedEncodable + CBORTaggedDecodable + CBORTagged,
-{
-    type Error = dcbor::Error;
-
-    fn try_from(cbor: CBOR) -> Result<Self, Self::Error> {
-        Self::from_tagged_cbor(cbor)
-    }
-}
-
 /// Top-level database metadata entry, storing the current schema version.
 ///
 /// Stored under the fixed key `"metadata"` in the LMDB metadata database.
@@ -1157,33 +1088,6 @@ where
 pub struct DbMetadata {
     /// Encodes the version and schema hash.
     pub version: DbVersion,
-}
-
-impl CBORTagged for DbMetadata {
-    fn cbor_tags() -> Vec<dcbor::Tag> {
-        vec![DbSchemaTag::DbMetadata.tag()]
-    }
-}
-
-impl CBORTaggedEncodable for DbMetadata {
-    fn untagged_cbor(&self) -> CBOR {
-        self.version.tagged_cbor()
-    }
-}
-
-impl CBORTaggedDecodable for DbMetadata {
-    fn from_untagged_cbor(cbor: CBOR) -> dcbor::Result<Self> {
-        Ok(Self {
-            version: DbVersion::from_tagged_cbor(cbor)?,
-        })
-    }
-}
-
-impl TryFrom<CBOR> for DbMetadata {
-    type Error = dcbor::Error;
-    fn try_from(cbor: CBOR) -> dcbor::Result<Self> {
-        Self::from_tagged_cbor(cbor)
-    }
 }
 
 /// Database schema version information.
@@ -1195,44 +1099,4 @@ pub struct DbVersion {
     pub version: u32,
     /// BLAKE2b-256 hash of the schema definition (includes struct layout, types, etc.)
     pub schema_hash: [u8; 32],
-}
-
-impl CBORTagged for DbVersion {
-    fn cbor_tags() -> Vec<dcbor::Tag> {
-        vec![DbSchemaTag::DbVersion.tag()]
-    }
-}
-
-impl CBORTaggedEncodable for DbVersion {
-    fn untagged_cbor(&self) -> CBOR {
-        CBOR::from(vec![
-            CBOR::from(self.version),
-            CBOR::from(&self.schema_hash[..]),
-        ])
-    }
-}
-
-impl CBORTaggedDecodable for DbVersion {
-    fn from_untagged_cbor(cbor: CBOR) -> dcbor::Result<Self> {
-        match cbor.into_case() {
-            CBORCase::Array(arr) if arr.len() == 2 => {
-                let version = arr[0].clone().try_into()?;
-                let hash_vec: Vec<u8> = arr[1].clone().try_into()?;
-                let schema_hash: [u8; 32] =
-                    hash_vec.try_into().map_err(|_| dcbor::Error::WrongType)?;
-                Ok(Self {
-                    version,
-                    schema_hash,
-                })
-            }
-            _ => Err(dcbor::Error::WrongType),
-        }
-    }
-}
-
-impl TryFrom<CBOR> for DbVersion {
-    type Error = dcbor::Error;
-    fn try_from(cbor: CBOR) -> dcbor::Result<Self> {
-        Self::from_tagged_cbor(cbor)
-    }
 }
