@@ -1,4 +1,4 @@
-name: CI checks
+name: CI check
 
 on:
   workflow_dispatch:
