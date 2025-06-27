@@ -109,7 +109,7 @@ impl From<zcash_primitives::block::BlockHash> for Hash {
 /// for keys in Lexicographically sorted B-Tree.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub struct Height(u32);
+pub struct Height(pub(crate) u32);
 
 impl TryFrom<u32> for Height {
     type Error = &'static str;
