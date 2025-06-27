@@ -2,8 +2,7 @@
 
 use crate::{
     config::BlockCacheConfig, error::FinalisedStateError, AtomicStatus, BlockData, BlockIndex,
-    ChainBlock, Hash, Height, Index, ShardRoot, SpentList, SpentOutpoint, StatusType, TxData,
-    TxList,
+    ChainBlock, Hash, Height, Index, ShardRoot, StatusType,
 };
 
 use dashmap::DashSet;
@@ -14,6 +13,7 @@ use blake2::{
     digest::{Update, VariableOutput},
     Blake2bVar,
 };
+use core2::io::{self, Read, Write};
 use lmdb::{
     Cursor, Database, DatabaseFlags, Environment, EnvironmentFlags, Transaction as _, WriteFlags,
 };
@@ -28,7 +28,13 @@ use std::{
 use tracing::{debug, info, warn};
 use zebra_state::HashOrHeight;
 
-use super::types::BlockHeaderData;
+use super::{
+    encoding::{
+        read_fixed_le, read_u32_le, version, write_fixed_le, write_u32_le, CompactSize,
+        FixedEncodedLen, ZainoVersionedSerialise,
+    },
+    types::BlockHeaderData,
+};
 
 // ───────────────────────── Schema v1 constants ─────────────────────────
 
@@ -59,7 +65,7 @@ pub const DB_SCHEMA_V1_TEXT: &str = include_str!("db_schema_v1.txt");
 
 */
 
-/// Database V1 schema hash, used for version validation.
+/// Database V1 schema hash, used for version validation. WARNING: THIS IS WRONG!
 pub const DB_SCHEMA_V1_HASH: [u8; 32] = [
     0xbf, 0x9a, 0xc7, 0x29, 0xa4, 0xb8, 0xa4, 0x1d, 0x63, 0x69, 0x85, 0x47, 0xe6, 0x40, 0x72, 0x74,
     0x2a, 0x69, 0x67, 0x51, 0x8c, 0xce, 0xaa, 0x59, 0xc5, 0xbc, 0x82, 0x7c, 0xe1, 0x46, 0xfe, 0x93,
@@ -941,136 +947,149 @@ impl ZainoDB {
     }
 }
 
-/// Immutable view onto an already-running [`ZainoDB`].
+// /// Immutable view onto an already-running [`ZainoDB`].
+// ///
+// /// * Carries a plain reference with the same lifetime as the parent DB,
+// ///   therefore:
+// ///   * absolutely no cloning / ARC-ing of LMDB handles,
+// ///   * compile-time guarantee that the reader cannot mutate state.
+// pub struct DbReader<'a> {
+//     inner: &'a ZainoDB,
+// }
+
+// impl<'a> DbReader<'a> {
+//     /// Returns block header and chain indexing data for the block.
+//     pub fn get_block_header_data(
+//         &self,
+//         id: HashOrHeight,
+//     ) -> Result<BlockHeaderData, FinalisedStateError> {
+//         self.inner.get_block_header_data(id)
+//     }
+
+//     /// Returns transaction data for the block.
+//     pub fn get_block_transactions(&self, id: HashOrHeight) -> Result<TxList, FinalisedStateError> {
+//         self.inner.get_block_transactions(id)
+//     }
+
+//     // Returns a single [`TxData`] from the block, identified by its
+//     /// zero-based position within the block’s compact-transaction list.
+//     pub fn get_transaction(
+//         &self,
+//         id: HashOrHeight,
+//         idx: u32,
+//     ) -> Result<TxData, FinalisedStateError> {
+//         self.inner.get_transaction(id, idx)
+//     }
+
+//     /// Returns spend data for the block.
+//     pub fn get_block_spends(&self, id: HashOrHeight) -> Result<SpentList, FinalisedStateError> {
+//         self.inner.get_block_spends(id)
+//     }
+
+//     pub fn get_spend(
+//         &self,
+//         id: HashOrHeight,
+//         idx: u32,
+//     ) -> Result<SpentOutpoint, FinalisedStateError> {
+//         self.inner.get_spend(id, idx)
+//     }
+
+//     /// Returns a single `SpentOutpoint` from the block, identified by its
+//     /// zero-based position inside the stored spends list.
+//     pub fn get_shard_roots(
+//         &self,
+//         start: u32,
+//         end: u32,
+//     ) -> Result<Vec<ShardRoot>, FinalisedStateError> {
+//         self.inner.get_shard_roots(start, end)
+//     }
+
+//     /// Returns chain indexing data for the block.
+//     pub fn get_chain_index(&self, id: HashOrHeight) -> Result<BlockIndex, FinalisedStateError> {
+//         self.inner.get_chain_index(id)
+//     }
+
+//     /// Returns header data for the block.
+//     pub fn get_block_header(&self, id: HashOrHeight) -> Result<BlockData, FinalisedStateError> {
+//         self.inner.get_block_header(id)
+//     }
+
+//     /// Returns the **entire** [`ChainBlock`] (header/index + compact txs +
+//     /// spent outpoints) identified by `hash_or_height`.
+//     pub fn get_chain_block(&self, id: HashOrHeight) -> Result<ChainBlock, FinalisedStateError> {
+//         self.inner.get_chain_block(id)
+//     }
+
+//     /// Returns a CompactBlock identified by `hash_or_height`.
+//     pub fn get_compact_block(
+//         &self,
+//         id: HashOrHeight,
+//     ) -> Result<zaino_proto::proto::compact_formats::CompactBlock, FinalisedStateError> {
+//         self.inner.get_compact_block(id)
+//     }
+
+//     /// Convenience getter so callers (RPC, tests, CLI) can inspect the
+//     /// on-disk schema version and hash.
+//     pub fn get_db_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
+//         self.inner.get_db_metadata()
+//     }
+// }
+
+// *** DB validation and varification ***
+
+/// A fixed length database entry.
+/// This is an important distinction for correct usage of DUP_SORT and DUP_FIXED
+/// LMDB database flags.
 ///
-/// * Carries a plain reference with the same lifetime as the parent DB,
-///   therefore:
-///   * absolutely no cloning / ARC-ing of LMDB handles,
-///   * compile-time guarantee that the reader cannot mutate state.
-pub struct DbReader<'a> {
-    inner: &'a ZainoDB,
-}
-
-impl<'a> DbReader<'a> {
-    /// Returns block header and chain indexing data for the block.
-    pub fn get_block_header_data(
-        &self,
-        id: HashOrHeight,
-    ) -> Result<BlockHeaderData, FinalisedStateError> {
-        self.inner.get_block_header_data(id)
-    }
-
-    /// Returns transaction data for the block.
-    pub fn get_block_transactions(&self, id: HashOrHeight) -> Result<TxList, FinalisedStateError> {
-        self.inner.get_block_transactions(id)
-    }
-
-    // Returns a single [`TxData`] from the block, identified by its
-    /// zero-based position within the block’s compact-transaction list.
-    pub fn get_transaction(
-        &self,
-        id: HashOrHeight,
-        idx: u32,
-    ) -> Result<TxData, FinalisedStateError> {
-        self.inner.get_transaction(id, idx)
-    }
-
-    /// Returns spend data for the block.
-    pub fn get_block_spends(&self, id: HashOrHeight) -> Result<SpentList, FinalisedStateError> {
-        self.inner.get_block_spends(id)
-    }
-
-    pub fn get_spend(
-        &self,
-        id: HashOrHeight,
-        idx: u32,
-    ) -> Result<SpentOutpoint, FinalisedStateError> {
-        self.inner.get_spend(id, idx)
-    }
-
-    /// Returns a single `SpentOutpoint` from the block, identified by its
-    /// zero-based position inside the stored spends list.
-    pub fn get_shard_roots(
-        &self,
-        start: u32,
-        end: u32,
-    ) -> Result<Vec<ShardRoot>, FinalisedStateError> {
-        self.inner.get_shard_roots(start, end)
-    }
-
-    /// Returns chain indexing data for the block.
-    pub fn get_chain_index(&self, id: HashOrHeight) -> Result<BlockIndex, FinalisedStateError> {
-        self.inner.get_chain_index(id)
-    }
-
-    /// Returns header data for the block.
-    pub fn get_block_header(&self, id: HashOrHeight) -> Result<BlockData, FinalisedStateError> {
-        self.inner.get_block_header(id)
-    }
-
-    /// Returns the **entire** [`ChainBlock`] (header/index + compact txs +
-    /// spent outpoints) identified by `hash_or_height`.
-    pub fn get_chain_block(&self, id: HashOrHeight) -> Result<ChainBlock, FinalisedStateError> {
-        self.inner.get_chain_block(id)
-    }
-
-    /// Returns a CompactBlock identified by `hash_or_height`.
-    pub fn get_compact_block(
-        &self,
-        id: HashOrHeight,
-    ) -> Result<zaino_proto::proto::compact_formats::CompactBlock, FinalisedStateError> {
-        self.inner.get_compact_block(id)
-    }
-
-    /// Convenience getter so callers (RPC, tests, CLI) can inspect the
-    /// on-disk schema version and hash.
-    pub fn get_db_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
-        self.inner.get_db_metadata()
-    }
-}
-
-/// Wrapper around a CBOR-tagged item and its BLAKE2b checksum.
+/// Encoded Format:
+///
+/// ┌─────── byte 0 ───────┬───── byte 1 ─────┬───── T::raw_len() bytes ──────┬─── 32 bytes ────┐
+/// │ StoredEntry version  │  Record version  │             Body              │ B2B256 hash     │
+/// └──────────────────────┴──────────────────┴───────────────────────────────┴─────────────────┘
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StoredEntry<T>
-where
-    T: CBORTaggedEncodable + CBORTaggedDecodable + CBORTagged,
-{
-    /// The inner tagged item being stored.
+pub struct StoredEntryFixed<T: ZainoVersionedSerialise + FixedEncodedLen> {
     pub item: T,
-    /// The BLAKE2b-256 checksum of the canonical dCBOR encoding of `item`.
     pub checksum: [u8; 32],
 }
 
-impl<T> StoredEntry<T>
-where
-    T: CBORTaggedEncodable + CBORTaggedDecodable + CBORTagged,
-{
-    /// Construct a new `StoredEntry` from an item, computing its checksum.
-    pub fn new(item: T) -> Self {
-        let encoded = item.tagged_cbor().to_cbor_data();
-        let checksum = Self::compute_blake2b_256(&encoded);
+impl<T: ZainoVersionedSerialise + FixedEncodedLen> StoredEntryFixed<T> {
+    /// Create a new entry, hashing `key || encoded_item`.
+    pub fn new<K: AsRef<[u8]>>(key: K, item: T) -> Self {
+        let body = {
+            let mut v = Vec::with_capacity(T::versioned_len());
+            item.serialize(&mut v).unwrap();
+            v
+        };
+        let checksum = Self::blake2b256(&[key.as_ref(), &body].concat());
         Self { item, checksum }
     }
 
-    /// Verifies the checksum matches the current item's encoding.
-    pub fn verify(&self) -> bool {
-        let encoded = self.item.tagged_cbor().to_cbor_data();
-        self.checksum == Self::compute_blake2b_256(&encoded)
+    /// Verify checksum given the DB key.
+    /// Returns `true` if `self.checksum == blake2b256(key || item.serialize())`.
+    pub fn verify<K: AsRef<[u8]>>(&self, key: K) -> bool {
+        let body = {
+            let mut v = Vec::with_capacity(T::versioned_len());
+            self.item.serialize(&mut v).unwrap();
+            v
+        };
+        let candidate = Self::blake2b256(&[key.as_ref(), &body].concat());
+        candidate == self.checksum
     }
 
-    /// Serializes the entry into canonical dCBOR.
-    pub fn serialize(&self) -> Vec<u8> {
-        self.tagged_cbor().to_cbor_data()
+    /// Convert to bytes using versioned serialise.
+    pub fn to_bytes(&self) -> io::Result<Vec<u8>> {
+        let mut v = Vec::new();
+        self.serialize(&mut v)?;
+        Ok(v)
     }
 
-    /// Deserializes a `StoredEntry<T>` from canonical dCBOR bytes.
-    pub fn deserialize(bytes: &[u8]) -> dcbor::Result<Self> {
-        let cbor = CBOR::try_from_data(bytes)?;
-        Self::from_tagged_cbor(cbor)
+    /// Read from bytes using versioned deserialise.
+    pub fn from_bytes(bytes: &[u8]) -> io::Result<Self> {
+        Self::deserialize(bytes)
     }
 
     /// Computes a BLAKE2b-256 checksum.
-    fn compute_blake2b_256(data: &[u8]) -> [u8; 32] {
+    fn blake2b256(data: &[u8]) -> [u8; 32] {
         let mut hasher = Blake2bVar::new(32).expect("Failed to create hasher");
         hasher.update(data);
         let mut output = [0u8; 32];
@@ -1078,6 +1097,112 @@ where
             .finalize_variable(&mut output)
             .expect("Failed to finalize hash");
         output
+    }
+}
+
+impl<T: ZainoVersionedSerialise + FixedEncodedLen> ZainoVersionedSerialise for StoredEntryFixed<T> {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        self.item.serialize(&mut *w)?;
+        write_fixed_le::<32, _>(&mut *w, &self.checksum)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut body = vec![0u8; T::versioned_len()];
+        r.read_exact(&mut body)?;
+        let item = T::deserialize(&body[..])?;
+
+        let checksum = read_fixed_le::<32, _>(r)?;
+        Ok(Self { item, checksum })
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
+/*──────────────────────────── StoredEntryVar ────────────────────────────*/
+/// Variable-length database value.
+/// Layout (little-endian unless noted):
+///
+/// ┌────── byte 0 ───────┬─────── CompactSize(len) ─────┬──── 1 byte ────┬── len - 1 bytes ───┬─ 32 bytes ─┐
+/// │ StoredEntry version │ (length of item.serialize()) │ Record version │        Body        │    Hash    │
+/// └─────────────────────┴──────────────────────────────┴────────────────┴────────────────────┴────────────┘
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredEntryVar<T: ZainoVersionedSerialise> {
+    pub item: T,
+    pub checksum: [u8; 32],
+}
+
+impl<T: ZainoVersionedSerialise> StoredEntryVar<T> {
+    /// Create a new entry, hashing `key || encoded_item`.
+    pub fn new<K: AsRef<[u8]>>(key: K, item: T) -> Self {
+        let mut body = Vec::new();
+        item.serialize(&mut body).unwrap();
+
+        let checksum = Self::blake2b256(&[key.as_ref(), &body].concat());
+        Self { item, checksum }
+    }
+
+    /// Verify checksum given the DB key.
+    /// Returns `true` if `self.checksum == blake2b256(key || item.serialize())`.
+    pub fn verify<K: AsRef<[u8]>>(&self, key: K) -> bool {
+        let mut body = Vec::new();
+        self.item.serialize(&mut body).unwrap();
+        let candidate = Self::blake2b256(&[key.as_ref(), &body].concat());
+        candidate == self.checksum
+    }
+
+    /// Convert to bytes using versioned serialise.
+    pub fn to_bytes(&self) -> io::Result<Vec<u8>> {
+        let mut v = Vec::new();
+        self.serialize(&mut v)?;
+        Ok(v)
+    }
+
+    /// Read from bytes using versioned deserialise.
+    pub fn from_bytes(bytes: &[u8]) -> io::Result<Self> {
+        Self::deserialize(bytes)
+    }
+
+    /// Computes a BLAKE2b-256 checksum.
+    fn blake2b256(data: &[u8]) -> [u8; 32] {
+        let mut hasher = Blake2bVar::new(32).expect("Failed to create hasher");
+        hasher.update(data);
+        let mut output = [0u8; 32];
+        hasher
+            .finalize_variable(&mut output)
+            .expect("Failed to finalize hash");
+        output
+    }
+}
+
+impl<T: ZainoVersionedSerialise> ZainoVersionedSerialise for StoredEntryVar<T> {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let mut body = Vec::new();
+        self.item.serialize(&mut body)?;
+
+        CompactSize::write(&mut *w, body.len())?;
+        w.write_all(&body)?;
+        write_fixed_le::<32, _>(&mut *w, &self.checksum)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let len = CompactSize::read(&mut *r)? as usize;
+
+        let mut body = vec![0u8; len];
+        r.read_exact(&mut body)?;
+        let item = T::deserialize(&body[..])?;
+
+        let checksum = read_fixed_le::<32, _>(r)?;
+        Ok(Self { item, checksum })
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
     }
 }
 
@@ -1090,6 +1215,28 @@ pub struct DbMetadata {
     pub version: DbVersion,
 }
 
+impl ZainoVersionedSerialise for DbMetadata {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        self.version.serialize(&mut *w) // DbVersion carries its own tag
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let version = DbVersion::deserialize(&mut *r)?;
+        Ok(DbMetadata { version })
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
+/* DbMetadata: its body is one *versioned* DbVersion (36 + 1 tag) = 37 */
+impl FixedEncodedLen for DbMetadata {
+    const ENCODED_LEN: usize = DbVersion::ENCODED_LEN + 1;
+}
+
 /// Database schema version information.
 ///
 /// This is used for schema migration safety and compatibility checks.
@@ -1099,4 +1246,31 @@ pub struct DbVersion {
     pub version: u32,
     /// BLAKE2b-256 hash of the schema definition (includes struct layout, types, etc.)
     pub schema_hash: [u8; 32],
+}
+
+impl ZainoVersionedSerialise for DbVersion {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        write_u32_le(&mut *w, self.version)?;
+        write_fixed_le::<32, _>(&mut *w, &self.schema_hash)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        let version = read_u32_le(&mut *r)?;
+        let schema_hash = read_fixed_le::<32, _>(&mut *r)?;
+        Ok(DbVersion {
+            version,
+            schema_hash,
+        })
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
+/* DbVersion: body = 4-byte u32 + 32-byte hash - 36 bytes */
+impl FixedEncodedLen for DbVersion {
+    const ENCODED_LEN: usize = 4 + 32;
 }

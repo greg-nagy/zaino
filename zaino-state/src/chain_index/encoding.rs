@@ -16,7 +16,7 @@ pub mod version {
     // pub const V3: u8 = 3;
 }
 
-/* ────────────────────────── Zaino Serialiser Trait ─────────────────────────── */
+/* ────────────────────────── Zaino Serialiser Traits ─────────────────────────── */
 /// # Zaino wire-format: one-byte version tag
 ///
 /// ## Quick summary
@@ -123,6 +123,21 @@ pub trait ZainoVersionedSerialise: Sized {
         let mut tag = [0u8; 1];
         r.read_exact(&mut tag)?;
         Self::decode_body(&mut r, tag[0])
+    }
+}
+
+/// Defines the fixed encoded length of a database record *not* incuding the version byte.
+pub trait FixedEncodedLen {
+    const ENCODED_LEN: usize;
+
+    /// Returns the length of the record *exluding* the version byte.
+    fn raw_len() -> usize {
+        Self::ENCODED_LEN
+    }
+
+    /// Returns the length of the record *including* the version byte.
+    fn versioned_len() -> usize {
+        Self::ENCODED_LEN + 1
     }
 }
 
