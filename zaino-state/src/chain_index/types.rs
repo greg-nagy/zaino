@@ -714,7 +714,8 @@ pub enum EquihashSolution {
     #[cfg_attr(test, serde(with = "serde_arrays::fixed_1344"))]
     Standard([u8; 1344]),
     /// 48-5 solution (regtest).
-    Regtest([u8; 32]),
+    #[cfg_attr(test, serde(with = "serde_arrays::fixed_36"))]
+    Regtest([u8; 36]),
 }
 
 impl EquihashSolution {
@@ -745,8 +746,8 @@ impl<'a> TryFrom<&'a [u8]> for EquihashSolution {
                 arr.copy_from_slice(bytes);
                 Ok(EquihashSolution::Standard(arr))
             }
-            32 => {
-                let mut arr = [0u8; 32];
+            36 => {
+                let mut arr = [0u8; 36];
                 arr.copy_from_slice(bytes);
                 Ok(EquihashSolution::Regtest(arr))
             }
@@ -2242,6 +2243,25 @@ impl ZainoVersionedSerialise for ShardRoot {
 #[cfg(test)]
 pub mod serde_arrays {
     use serde::{Deserialize, Deserializer, Serializer};
+
+    pub mod fixed_36 {
+        use super::*;
+        pub fn serialize<S>(val: &[u8; 36], s: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            s.serialize_bytes(val)
+        }
+
+        pub fn deserialize<'de, D>(d: D) -> Result<[u8; 36], D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            let v: &[u8] = Deserialize::deserialize(d)?;
+            v.try_into()
+                .map_err(|_| serde::de::Error::custom("invalid length for [u8; 36]"))
+        }
+    }
 
     pub mod fixed_52 {
         use super::*;
