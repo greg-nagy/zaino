@@ -88,9 +88,7 @@ impl From<StateServiceError> for tonic::Status {
             StateServiceError::TryFromIntError(err) => {
                 tonic::Status::internal(format!("Integer conversion error: {err}"))
             }
-            StateServiceError::IoError(err) => {
-                tonic::Status::internal(format!("IO error: {err}"))
-            }
+            StateServiceError::IoError(err) => tonic::Status::internal(format!("IO error: {err}")),
             StateServiceError::Generic(err) => {
                 tonic::Status::internal(format!("Generic error: {err}"))
             }

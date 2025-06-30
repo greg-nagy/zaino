@@ -327,9 +327,7 @@ fn fetch_socket_addr_from_hostname(address: &str) -> Result<SocketAddr, IndexerE
     address.parse::<SocketAddr>().or_else(|_| {
         let addrs: Vec<_> = address
             .to_socket_addrs()
-            .map_err(|e| {
-                IndexerError::ConfigError(format!("Invalid address '{address}': {e}"))
-            })?
+            .map_err(|e| IndexerError::ConfigError(format!("Invalid address '{address}': {e}")))?
             .collect();
         if let Some(ipv4_addr) = addrs.iter().find(|addr| addr.is_ipv4()) {
             Ok(*ipv4_addr)

@@ -557,9 +557,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                     {
                         Err(FetchServiceError::TonicStatusError(tonic::Status::unknown(
-                            format!(
-                                "Error: Failed to retrieve block from node. Server Error: {e}",
-                            ),
+                            format!("Error: Failed to retrieve block from node. Server Error: {e}",),
                         )))
                     }
                 }
@@ -598,9 +596,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                 } else {
                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                     Err(FetchServiceError::TonicStatusError(tonic::Status::unknown(
-                        format!(
-                            "Error: Failed to retrieve block from node. Server Error: {e}",
-                        ),
+                        format!("Error: Failed to retrieve block from node. Server Error: {e}",),
                     )))
                 }
             }
@@ -1266,9 +1262,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             Err(e) => {
                 // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                 Err(FetchServiceError::TonicStatusError(tonic::Status::unknown(
-                    format!(
-                        "Error: Failed to retrieve treestate from node. Server Error: {e}",
-                    ),
+                    format!("Error: Failed to retrieve treestate from node. Server Error: {e}",),
                 )))
             }
         }
@@ -1295,9 +1289,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             Err(e) => {
                 // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                 Err(FetchServiceError::TonicStatusError(tonic::Status::unknown(
-                    format!(
-                        "Error: Failed to retrieve treestate from node. Server Error: {e}",
-                    ),
+                    format!("Error: Failed to retrieve treestate from node. Server Error: {e}",),
                 )))
             }
         }
