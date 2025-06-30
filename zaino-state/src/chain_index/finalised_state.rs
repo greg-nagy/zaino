@@ -38,7 +38,7 @@ use super::{
 
 // ───────────────────────── Schema v1 constants ─────────────────────────
 
-/// Full V1 schema text file.
+/// Full V1 schema text file. WARNING: THIS IS WRONG!
 // 1. Bring the *exact* ASCII description of the on-disk layout into the binary
 //    at compile-time.  The path is relative to this source file.
 pub const DB_SCHEMA_V1_TEXT: &str = include_str!("db_schema_v1.txt");
@@ -83,24 +83,46 @@ pub struct ZainoDB {
     /// Shared LMDB environment.
     env: Arc<Environment>,
 
-    /// Block headers: Hash -> StoredEntry<BlockHeaderData>
-    headers_db: Database,
-    /// Transactions: Hash -> StoredEntry<Vec<TxData>>
+    /// Block headers: Height -> StoredEntry<BlockHeaderData>
     ///
     /// Stored per-block, in order.
-    transactions_db: Database,
-    /// Spent outpoints: Hash -> StoredEntry<Vec<SpentOutpoint>>
+    headers: Database,
+    /// Txids: Height -> StoredEntry<TxidList>
     ///
-    /// Stored per-block
-    spent_db: Database,
-    /// Best chain index: Height -> Hash
+    /// Stored per-block, in order.
+    txids: Database,
+    /// Transparent: Height -> StoredEntry<Vec<TransparentTxList>>
     ///
-    /// Used for height based fetch of the best chain.
-    best_chain_db: Database,
+    /// Stored per-block, in order.
+    transparent: Database,
+    /// Sapling: Height -> StoredEntry<Vec<TxData>>
+    ///
+    /// Stored per-block, in order.
+    sapling: Database,
+    /// Orchard: Height -> StoredEntry<Vec<TxData>>
+    ///
+    /// Stored per-block, in order.
+    orchard: Database,
+    /// Block commitment tree data: Height -> StoredEntry<Vec<CommitmentTreeData>>
+    ///
+    /// Stored per-block, in order.
+    commitment_tree_data: Database,
+    /// Hashes: Hash -> Height
+    ///
+    /// Used for hash based fetch of the best chain (random access).
+    hashes: Database,
+    /// Spent outpoints: Outpoint -> StoredEntry<Vec<TxIndex>>
+    ///
+    /// TODO: Add doc!
+    spent: Database,
+    /// Transparent address history: AddrScript -> StoredEntry<AddrEventBytes>
+    ///
+    /// TODO: add doc!
+    addrhist: Database,
     /// Subtree roots: Index -> StoredEntry<ShardRoot>
-    roots_db: Database,
+    shard_roots: Database,
     /// Metadata: singleton entry "metadata" -> StoredEntry<DbMetadata>
-    metadata_db: Database,
+    metadata: Database,
 
     /// Contiguous **water-mark**: every height ≤ `validated_tip` is known-good.
     ///
@@ -133,6 +155,8 @@ impl ZainoDB {
     /// - config: ChainIndexConfig.
     pub async fn spawn(config: &BlockCacheConfig) -> Result<Self, FinalisedStateError> {
         info!("Launching ZainoDB");
+
+        // Prepare database details and path.
         let db_size = config.db_size.unwrap_or(128);
         let db_size_bytes = db_size * 1024 * 1024 * 1024;
         let db_path_dir = match config.network.kind() {
@@ -145,29 +169,53 @@ impl ZainoDB {
             fs::create_dir_all(&db_path)?;
         }
 
+        // Check system rescources to set max db reeaders, clamped between 256 and 1024.
+        let cpu_cnt = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4);
+        let max_readers = u32::try_from((cpu_cnt * 4).clamp(256, 1024))
+            .expect("max_readers was clamped to fit in u32");
+
+        // Open LMDB environment and set environmental details.
         let env = Environment::new()
-            .set_max_dbs(6)
+            .set_max_dbs(12)
             .set_map_size(db_size_bytes)
-            .set_flags(EnvironmentFlags::NO_TLS)
+            .set_max_readers(max_readers)
+            .set_flags(EnvironmentFlags::NO_TLS | EnvironmentFlags::NO_READAHEAD)
             .open(&db_path)?;
 
-        let headers_db = Self::open_or_create_db(&env, "headers", DatabaseFlags::empty())?;
-        let transactions_db =
-            Self::open_or_create_db(&env, "transactions", DatabaseFlags::empty())?;
-        let spent_db = Self::open_or_create_db(&env, "spent", DatabaseFlags::empty())?;
-        let best_chain_db =
-            Self::open_or_create_db(&env, "best_chain", DatabaseFlags::INTEGER_KEY)?;
-        let roots_db = Self::open_or_create_db(&env, "roots", DatabaseFlags::INTEGER_KEY)?;
-        let metadata_db = Self::open_or_create_db(&env, "metadata", DatabaseFlags::empty())?;
+        // Open individual LMDB DBs.
+        let headers = Self::open_or_create_db(&env, "headers", DatabaseFlags::INTEGER_KEY)?;
+        let txids = Self::open_or_create_db(&env, "txids", DatabaseFlags::INTEGER_KEY)?;
+        let transparent = Self::open_or_create_db(&env, "transparent", DatabaseFlags::INTEGER_KEY)?;
+        let sapling = Self::open_or_create_db(&env, "sapling", DatabaseFlags::INTEGER_KEY)?;
+        let orchard = Self::open_or_create_db(&env, "orchard", DatabaseFlags::INTEGER_KEY)?;
+        let commitment_tree_data =
+            Self::open_or_create_db(&env, "commitment_tree_data", DatabaseFlags::INTEGER_KEY)?;
+        let hashes = Self::open_or_create_db(&env, "hashes", DatabaseFlags::empty())?;
+        let spent = Self::open_or_create_db(&env, "spent", DatabaseFlags::empty())?;
+        let addrhist = Self::open_or_create_db(
+            &env,
+            "addrhist",
+            DatabaseFlags::DUP_SORT | DatabaseFlags::DUP_FIXED,
+        )?;
+        let shard_roots = Self::open_or_create_db(&env, "shard_roots", DatabaseFlags::INTEGER_KEY)?;
+        let metadata = Self::open_or_create_db(&env, "metadata", DatabaseFlags::empty())?;
 
+        // Create ZainoDB
         let mut zaino_db = Self {
             env: Arc::new(env),
-            headers_db,
-            transactions_db,
-            spent_db,
-            best_chain_db,
-            roots_db,
-            metadata_db,
+            headers,
+            txids,
+            transparent,
+            sapling,
+            orchard,
+            commitment_tree_data,
+            hashes,
+            spent,
+            addrhist,
+            shard_roots,
+            metadata,
             validated_tip: Arc::new(AtomicU32::new(0)),
             validated_set: DashSet::new(),
             db_handler: None,
@@ -193,23 +241,28 @@ impl ZainoDB {
     ///     Every 60 s it also calls `clean_trailing()` to purge stale reader slots.
     async fn spawn_handler(&mut self) -> Result<(), FinalisedStateError> {
         // Clone everything the task needs so we can move it into the async block.
-        let zaino_db = Arc::new(Self {
+        let mut zaino_db = Self {
             env: Arc::clone(&self.env),
-            headers_db: self.headers_db,
-            transactions_db: self.transactions_db,
-            spent_db: self.spent_db,
-            best_chain_db: self.best_chain_db,
-            roots_db: self.roots_db,
-            metadata_db: self.metadata_db,
+            headers: self.headers,
+            txids: self.txids,
+            transparent: self.transparent,
+            sapling: self.sapling,
+            orchard: self.orchard,
+            commitment_tree_data: self.commitment_tree_data,
+            hashes: self.hashes,
+            spent: self.spent,
+            addrhist: self.addrhist,
+            shard_roots: self.shard_roots,
+            metadata: self.metadata,
             validated_tip: Arc::clone(&self.validated_tip),
             validated_set: self.validated_set.clone(),
             db_handler: None, // not used inside the task
             status: self.status.clone(),
             config: self.config.clone(),
-        });
+        };
 
         let handle = tokio::spawn({
-            let zaino_db = Arc::clone(&zaino_db);
+            let zaino_db = zaino_db;
             async move {
                 // ────────────────────────── initial validation ─────────────────────────
                 if let Err(e) = zaino_db.initial_root_scan() {
@@ -231,7 +284,7 @@ impl ZainoDB {
                 loop {
                     // ---------- try to validate the next consecutive block -------------
                     let next_h = zaino_db.validated_tip.load(Ordering::Acquire) + 1;
-                    let height = match Height::try_from(next_h) {
+                    let next_height = match Height::try_from(next_h) {
                         Ok(h) => h,
                         Err(_) => {
                             warn!("height overflow – validated_tip too large");
@@ -239,25 +292,23 @@ impl ZainoDB {
                         }
                     };
 
-                    // Fetch hash of `next_h` from best_chain (Option-returning helper).
-                    let hash_opt = (|| -> Option<Hash> {
-                        let ro = zaino_db.env.begin_ro_txn().ok()?;
-                        let key = height.to_ne_bytes();
-                        let val = ro.get(zaino_db.best_chain_db, &key).ok()?;
-                        let arr: [u8; 32] = val.try_into().ok()?;
-                        Some(Hash::from(arr))
-                    })();
+                    // // Fetch hash of `next_h` from best_chain.
+                    // let hash_opt = (|| -> Option<Hash> {
+                    //     let ro = zaino_db.env.begin_ro_txn().ok()?;
+                    //     let key = next_height.to_ne_bytes();
+                    //     let val = ro.get(zaino_db.best_chain_db, &key).ok()?;
+                    //     let arr: [u8; 32] = val.try_into().ok()?;
+                    //     Some(Hash::from(arr))
+                    // })();
 
-                    if let Some(hash) = hash_opt {
-                        if let Err(e) = zaino_db.validate_block(height, hash) {
-                            // Already includes “…failed validation” wording.
-                            warn!("{e}");
-                        }
-                        // Immediately loop – maybe the chain has more blocks ready.
-                        continue;
-                    }
+                    // if let Some(hash) = hash_opt {
+                    //     if let Err(e) = zaino_db.validate_block(next_height, hash) {
+                    //         warn!("{e}");
+                    //     }
+                    //     // Immediately loop – maybe the chain has more blocks ready.
+                    //     continue;
+                    // }
 
-                    // ---------- nothing new yet → wait / maintenance -------------------
                     tokio::select! {
                         // short nap so we don’t spin-hot
                         _ = sleep(Duration::from_secs(5)) => {},
@@ -1122,7 +1173,6 @@ impl<T: ZainoVersionedSerialise + FixedEncodedLen> ZainoVersionedSerialise for S
     }
 }
 
-/*──────────────────────────── StoredEntryVar ────────────────────────────*/
 /// Variable-length database value.
 /// Layout (little-endian unless noted):
 ///
@@ -1219,7 +1269,7 @@ impl ZainoVersionedSerialise for DbMetadata {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        self.version.serialize(&mut *w) // DbVersion carries its own tag
+        self.version.serialize(&mut *w)
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {

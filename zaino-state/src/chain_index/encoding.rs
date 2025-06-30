@@ -126,8 +126,9 @@ pub trait ZainoVersionedSerialise: Sized {
     }
 }
 
-/// Defines the fixed encoded length of a database record *not* incuding the version byte.
+/// Defines the fixed encoded length of a database record.
 pub trait FixedEncodedLen {
+    /// `the fixed encoded length of a database record *not* incuding the version byte.
     const ENCODED_LEN: usize;
 
     /// Returns the length of the record *exluding* the version byte.

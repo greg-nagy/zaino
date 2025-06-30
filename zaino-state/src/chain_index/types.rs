@@ -5,15 +5,16 @@
 use core2::io::{self, Read, Write};
 use hex::{FromHex, ToHex};
 use primitive_types::U256;
-use std::fmt;
+use std::{fmt, io::Cursor};
 
 use crate::chain_index::encoding::{
     read_fixed_le, version, write_fixed_le, ZainoVersionedSerialise,
 };
 
 use super::encoding::{
-    read_i64_le, read_option, read_u16_le, read_u32_be, read_u32_le, read_u64_le, read_vec,
-    write_i64_le, write_option, write_u16_le, write_u32_be, write_u32_le, write_u64_le, write_vec,
+    read_i64_le, read_option, read_u16_be, read_u32_be, read_u32_le, read_u64_le, read_vec,
+    write_i64_le, write_option, write_u16_be, write_u32_be, write_u32_le, write_u64_le, write_vec,
+    FixedEncodedLen,
 };
 
 // *** Key Objects ***
@@ -130,6 +131,12 @@ impl ZainoVersionedSerialise for Hash {
     }
 }
 
+/// Hash = 32-byte body.
+impl FixedEncodedLen for Hash {
+    /// 32 bytes, LE
+    const ENCODED_LEN: usize = 32;
+}
+
 /// Block height.
 ///
 /// NOTE: Encoded as 4-byte big-endian byte-string to ensure height ordering
@@ -218,6 +225,12 @@ impl ZainoVersionedSerialise for Height {
     }
 }
 
+/// Height = 4-byte big-endian body.
+impl FixedEncodedLen for Height {
+    /// 4 bytes, BE
+    const ENCODED_LEN: usize = 4;
+}
+
 /// Numerical index of subtree / shard roots.
 ///
 /// NOTE: Encoded as 4-byte big-endian byte-string to ensure height ordering
@@ -242,6 +255,12 @@ impl ZainoVersionedSerialise for Index {
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         Self::decode_latest(r)
     }
+}
+
+/// Index = 4-byte big-endian body.
+impl FixedEncodedLen for Index {
+    /// 4 bytes (BE u32)
+    const ENCODED_LEN: usize = 4;
 }
 
 /// 20-byte hash (RIPEMD-160 or Blake2b-160) of a transparent output script.
@@ -319,6 +338,12 @@ impl ZainoVersionedSerialise for AddrScript {
     }
 }
 
+/// AddrScript = 20 bytes of body data.
+impl FixedEncodedLen for AddrScript {
+    /// 20 bytes, LE
+    const ENCODED_LEN: usize = 20;
+}
+
 /// Reference to a spent transparent UTXO.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
@@ -368,6 +393,12 @@ impl ZainoVersionedSerialise for Outpoint {
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         Self::decode_latest(r)
     }
+}
+
+/// Outpoint = 32‐byte txid + 4-byte LE u32 index = 36 bytes
+impl FixedEncodedLen for Outpoint {
+    /// 32 byte txid + 4 byte tx index.
+    const ENCODED_LEN: usize = 32 + 4;
 }
 
 // *** Block Level Objects ***
@@ -526,6 +557,12 @@ impl ZainoVersionedSerialise for ChainWork {
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         Self::decode_latest(r)
     }
+}
+
+/// 32 byte body.
+impl FixedEncodedLen for ChainWork {
+    /// 32 bytes, LE
+    const ENCODED_LEN: usize = 32;
 }
 
 /// Essential block header fields required for chain validation and serving block header data.
@@ -847,6 +884,14 @@ impl ZainoVersionedSerialise for CommitmentTreeData {
     }
 }
 
+/// CommitmentTreeData: 74 bytes total
+impl FixedEncodedLen for CommitmentTreeData {
+    // 1 byte tag + 64 body for roots
+    // + 1 byte tag +  8 body for sizes
+    const ENCODED_LEN: usize =
+        (CommitmentTreeRoots::ENCODED_LEN + 1) + (CommitmentTreeSizes::ENCODED_LEN + 1);
+}
+
 /// Commitment tree roots for shielded transactions, enabling shielded wallet synchronization.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
@@ -895,6 +940,12 @@ impl ZainoVersionedSerialise for CommitmentTreeRoots {
     }
 }
 
+/// CommitmentTreeRoots: 64 bytes total
+impl FixedEncodedLen for CommitmentTreeRoots {
+    /// 32 byte hash + 32 byte hash.
+    const ENCODED_LEN: usize = 32 + 32;
+}
+
 /// Sizes of commitment trees, indicating total number of shielded notes created.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
@@ -941,6 +992,12 @@ impl ZainoVersionedSerialise for CommitmentTreeSizes {
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         Self::decode_latest(r)
     }
+}
+
+/// CommitmentTreeSizes: 8 bytes total
+impl FixedEncodedLen for CommitmentTreeSizes {
+    /// 4 byte LE int32 + 4 byte LE int32
+    const ENCODED_LEN: usize = 4 + 4;
 }
 
 /// Represents the indexing data of a single compact Zcash block used internally by Zaino.
@@ -1533,6 +1590,12 @@ impl ZainoVersionedSerialise for TxInCompact {
     }
 }
 
+/// TxInCompact = 36 bytes
+impl FixedEncodedLen for TxInCompact {
+    /// 32-byte txid + 4-byte LE index
+    const ENCODED_LEN: usize = 32 + 4;
+}
+
 /// Identifies the type of transparent transaction output script.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
@@ -1586,6 +1649,12 @@ impl ZainoVersionedSerialise for ScriptType {
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         Self::decode_latest(r)
     }
+}
+
+/// ScriptType = 1 byte
+impl FixedEncodedLen for ScriptType {
+    /// 1 byte
+    const ENCODED_LEN: usize = 1;
 }
 
 /// Compact representation of a transparent output, optimized for indexing and efficient querying.
@@ -1659,6 +1728,12 @@ impl ZainoVersionedSerialise for TxOutCompact {
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         Self::decode_latest(r)
     }
+}
+
+/// TxOutCompact = 29 bytes
+impl FixedEncodedLen for TxOutCompact {
+    /// 8-byte LE value + 20-byte script hash + 1-byte type
+    const ENCODED_LEN: usize = 8 + 20 + 1;
 }
 
 /// Compact representation of Sapling shielded transaction data for wallet scanning.
@@ -1765,6 +1840,12 @@ impl ZainoVersionedSerialise for CompactSaplingSpend {
     }
 }
 
+/// 32-byte nullifier
+impl FixedEncodedLen for CompactSaplingSpend {
+    /// 32 bytes
+    const ENCODED_LEN: usize = 32;
+}
+
 /// Compact representation of a newly created Sapling shielded note output.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
@@ -1825,6 +1906,12 @@ impl ZainoVersionedSerialise for CompactSaplingOutput {
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         Self::decode_latest(r)
     }
+}
+
+/// 116 bytes
+impl FixedEncodedLen for CompactSaplingOutput {
+    /// 32-byte cmu + 32-byte ephemeral_key + 52-byte ciphertext
+    const ENCODED_LEN: usize = 32 + 32 + 52;
 }
 
 /// Compact summary of all shielded activity in a transaction.
@@ -1955,6 +2042,12 @@ impl ZainoVersionedSerialise for CompactOrchardAction {
     }
 }
 
+// CompactOrchardAction = 148 bytes
+impl FixedEncodedLen for CompactOrchardAction {
+    /// 32-byte nullifier + 32-byte cmx + 32-byte ephemeral_key + 52-byte ciphertext
+    const ENCODED_LEN: usize = 32 + 32 + 32 + 52;
+}
+
 /// Identifies a transaction by its (block_position, tx_position) pair,
 /// used to locate transactions within Zaino's internal DB.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -1990,21 +2083,25 @@ impl ZainoVersionedSerialise for TxIndex {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        let mut w = w;
-        write_u32_le(&mut w, self.block_index)?;
-        write_u16_le(&mut w, self.tx_index)
+        write_u32_be(&mut *w, self.block_index)?;
+        write_u16_be(&mut *w, self.tx_index)
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let mut r = r;
-        let blk = read_u32_le(&mut r)?;
-        let tx = read_u16_le(&mut r)?;
+        let blk = read_u32_be(&mut *r)?;
+        let tx = read_u16_be(&mut *r)?;
         Ok(TxIndex::new(blk, tx))
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         Self::decode_latest(r)
     }
+}
+
+/// 6 bytes, BE encoded.
+impl FixedEncodedLen for TxIndex {
+    /// 4-byte big-endian block_index + 2-byte big-endian tx_index
+    const ENCODED_LEN: usize = 4 + 2;
 }
 
 /// Single transparent-address activity record (input or output).
@@ -2078,20 +2175,16 @@ impl ZainoVersionedSerialise for AddrHistRecord {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        let mut w = w;
-
-        self.tx_index.serialize(&mut w)?;
-        write_u16_le(&mut w, self.out_index)?;
-        write_u64_le(&mut w, self.value)?;
+        self.tx_index.serialize(&mut *w)?;
+        write_u16_be(&mut *w, self.out_index)?;
+        write_u64_le(&mut *w, self.value)?;
         w.write_all(&[self.flags])
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let mut r = r;
-        let tx_index = TxIndex::deserialize(&mut r)?;
-        let out_index = read_u16_le(&mut r)?;
-        let value = read_u64_le(&mut r)?;
-
+        let tx_index = TxIndex::deserialize(&mut *r)?;
+        let out_index = read_u16_be(&mut *r)?;
+        let value = read_u64_le(&mut *r)?;
         let mut flag = [0u8; 1];
         r.read_exact(&mut flag)?;
 
@@ -2101,6 +2194,17 @@ impl ZainoVersionedSerialise for AddrHistRecord {
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         Self::decode_latest(r)
     }
+}
+
+/// 18 byte total
+impl FixedEncodedLen for AddrHistRecord {
+    ///  1 byte:  TxIndex tag
+    /// +6 bytes: TxIndex body (4 BE block_index + 2 BE tx_index)
+    /// +2 bytes: out_index (BE)
+    /// +8 bytes: value     (LE)
+    /// +1 byte : flags
+    /// =18 bytes
+    const ENCODED_LEN: usize = (TxIndex::ENCODED_LEN + 1) + 2 + 8 + 1;
 }
 
 /// AddrHistRecord database byte array.
@@ -2120,40 +2224,41 @@ pub(crate) struct AddrEventBytes([u8; 17]);
 impl AddrEventBytes {
     const LEN: usize = 17;
 
-    /// Create an [`AddrEventBytes`] from an [`AddrHistRecord`].
+    /// Create an [`AddrEventBytes`] from an [`AddrHistRecord`],
+    /// returning an I/O error if any write fails.
     #[allow(dead_code)]
-    pub(crate) fn from_record(rec: &AddrHistRecord) -> Self {
-        use byteorder::{BigEndian, ByteOrder, LittleEndian};
-
+    pub(crate) fn from_record(rec: &AddrHistRecord) -> io::Result<Self> {
         let mut buf = [0u8; Self::LEN];
-        BigEndian::write_u32(&mut buf[0..4], rec.tx_index.block_index);
-        BigEndian::write_u16(&mut buf[4..6], rec.tx_index.tx_index);
-        BigEndian::write_u16(&mut buf[6..8], rec.out_index);
-        buf[8] = rec.flags;
-        LittleEndian::write_u64(&mut buf[9..17], rec.value);
-        Self(buf)
+        let mut c = Cursor::new(&mut buf[..]);
+
+        write_u32_be(&mut c, rec.tx_index.block_index)?;
+        write_u16_be(&mut c, rec.tx_index.tx_index)?;
+        write_u16_be(&mut c, rec.out_index)?;
+        c.write_all(&[rec.flags])?;
+        write_u64_le(&mut c, rec.value)?;
+
+        Ok(AddrEventBytes(buf))
     }
 
-    /// Create an [`AddrHistRecord`] from an [`AddrEventBytes`].
+    /// Create an [`AddrHistRecord`] from an [`AddrEventBytes`],
+    /// returning an I/O error if any read fails or data is invalid.
     #[allow(dead_code)]
-    pub(crate) fn as_record(&self) -> AddrHistRecord {
-        use byteorder::{BigEndian, ByteOrder, LittleEndian};
-        let b = &self.0;
-        AddrHistRecord {
-            tx_index: TxIndex {
-                block_index: BigEndian::read_u32(&b[0..4]),
-                tx_index: BigEndian::read_u16(&b[4..6]),
-            },
-            out_index: BigEndian::read_u16(&b[6..8]),
-            flags: b[8],
-            value: LittleEndian::read_u64(&b[9..17]),
-        }
-    }
+    pub(crate) fn as_record(&self) -> io::Result<AddrHistRecord> {
+        let mut c = Cursor::new(&self.0[..]);
 
-    /// Borrow the raw bytes.
-    #[allow(dead_code)]
-    pub(crate) fn as_bytes(&self) -> &[u8; Self::LEN] {
-        &self.0
+        let block_index = read_u32_be(&mut c)?;
+        let tx_index = read_u16_be(&mut c)?;
+        let out_index = read_u16_be(&mut c)?;
+        let mut flag = [0u8; 1];
+        c.read_exact(&mut flag)?;
+        let value = read_u64_le(&mut c)?;
+
+        Ok(AddrHistRecord::new(
+            TxIndex::new(block_index, tx_index),
+            out_index,
+            value,
+            flag[0],
+        ))
     }
 }
 
@@ -2171,6 +2276,16 @@ impl ZainoVersionedSerialise for AddrEventBytes {
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         Self::decode_latest(r)
     }
+}
+
+/// 17 byte body
+impl FixedEncodedLen for AddrEventBytes {
+    /// [0..4]   block_height (BE u32) | Block height
+    /// [4..6]   tx_index     (BE u16) | Transaction index within block
+    /// [6..8]   vout         (BE u16) | Output index within transaction
+    /// [8]      flags        ( u8 )   | Bitflags (mined/spent/input masks)
+    /// [9..17]  value        (LE u64) | Amount in zatoshi, little-endian
+    const ENCODED_LEN: usize = 17;
 }
 
 // *** Sharding ***
@@ -2236,6 +2351,12 @@ impl ZainoVersionedSerialise for ShardRoot {
     }
 }
 
+/// 68 byte body.
+impl FixedEncodedLen for ShardRoot {
+    /// 32 byte hash + 32 byte hash + 4 byte block height
+    const ENCODED_LEN: usize = 32 + 32 + 4;
+}
+
 // *** Wrapper Objects ***
 
 /// Holds full block header data,
@@ -2270,12 +2391,12 @@ impl ZainoVersionedSerialise for BlockHeaderData {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        self.index.serialize(w)?;
+        self.index.serialize(&mut *w)?;
         self.data.serialize(w)
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let index = BlockIndex::deserialize(r)?;
+        let index = BlockIndex::deserialize(&mut *r)?;
         let data = BlockData::deserialize(r)?;
         Ok(BlockHeaderData::new(index, data))
     }
