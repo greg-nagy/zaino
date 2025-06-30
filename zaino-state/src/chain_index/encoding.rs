@@ -146,8 +146,11 @@ pub trait FixedEncodedLen {
     /// the fixed encoded length of a database record *not* incuding the version byte.
     const ENCODED_LEN: usize;
 
+    /// Length of version tag in bytes.
+    const VERSION_TAG_LEN: usize = 1;
+
     /// the fixed encoded length of a database record *incuding* the version byte.
-    const VERSIONED_LEN: usize = Self::ENCODED_LEN + 1;
+    const VERSIONED_LEN: usize = Self::ENCODED_LEN + Self::VERSION_TAG_LEN;
 }
 
 /* ──────────────────────────── CompactSize helpers ────────────────────────────── */
