@@ -450,7 +450,7 @@ impl<'de> serde::Deserialize<'de> for FullTransaction {
     }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct BlockDeltas {
     pub hash: Vec<u8>,
     pub confirmations: i64,

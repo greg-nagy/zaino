@@ -593,6 +593,8 @@ mod zcashd {
     use super::*;
 
     pub(crate) mod zcash_indexer {
+        use zaino_state::LightWalletIndexer;
+
         use super::*;
 
         #[tokio::test]
@@ -636,6 +638,42 @@ mod zcashd {
                 let zaino_difficulty = zaino_subscriber.get_difficulty().await.unwrap();
 
                 assert_eq!(zcashd_difficulty, zaino_difficulty);
+
+                test_manager.local_net.generate_blocks(1).await.unwrap();
+            }
+
+            test_manager.close().await;
+        }
+
+        #[tokio::test]
+        async fn get_block_deltas() {
+            let (
+                mut test_manager,
+                _zcashd_service,
+                zcashd_subscriber,
+                _zaino_service,
+                zaino_subscriber,
+            ) = create_test_manager_and_fetch_services(false, false).await;
+
+            const BLOCK_LIMIT: i32 = 10;
+
+            for _ in 0..BLOCK_LIMIT {
+                let current_block = zcashd_subscriber.get_latest_block().await.unwrap();
+
+                let block_hash: [u8; 32] = current_block.hash.as_slice().try_into().unwrap();
+
+                let block_hash = zebra_chain::block::Hash::from(block_hash);
+
+                let zcashd_deltas = zcashd_subscriber
+                    .get_block_deltas(block_hash.to_string())
+                    .await
+                    .unwrap();
+                let zaino_deltas = zaino_subscriber
+                    .get_block_deltas(block_hash.to_string())
+                    .await
+                    .unwrap();
+
+                assert_eq!(zcashd_deltas, zaino_deltas);
 
                 test_manager.local_net.generate_blocks(1).await.unwrap();
             }

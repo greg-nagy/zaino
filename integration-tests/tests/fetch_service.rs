@@ -525,6 +525,40 @@ async fn assert_fetch_service_difficulty_matches_rpc(validator: &ValidatorKind) 
     assert_eq!(fetch_service_get_difficulty, rpc_difficulty_response.0);
 }
 
+async fn fetch_service_block_deltas_matches_rpc(validator: &ValidatorKind) {
+    let (test_manager, _fetch_service, fetch_service_subscriber) =
+        create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
+
+    // Note: we need an 'expected' block hash in order to query its deltas.
+    // Having a predictable or test vector chain is the way to go here.
+    let fetch_service_block_deltas = fetch_service_subscriber
+        .get_block_deltas("TODO".to_string())
+        .await
+        .unwrap();
+
+    let jsonrpc_client = JsonRpSeeConnector::new_with_basic_auth(
+        test_node_and_return_url(
+            test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
+            Some("xxxxxx".to_string()),
+            Some("xxxxxx".to_string()),
+        )
+        .await
+        .unwrap(),
+        "xxxxxx".to_string(),
+        "xxxxxx".to_string(),
+    )
+    .unwrap();
+
+    let rpc_block_deltas = jsonrpc_client
+        .get_block_deltas("TODO".to_string())
+        .await
+        .unwrap();
+
+    assert_eq!(fetch_service_block_deltas, rpc_block_deltas);
+}
+
 async fn fetch_service_get_block(validator: &ValidatorKind) {
     let (mut test_manager, _fetch_service, fetch_service_subscriber) =
         create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
@@ -1289,6 +1323,11 @@ mod zcashd {
         }
 
         #[tokio::test]
+        pub(crate) async fn block_deltas() {
+            fetch_service_block_deltas_matches_rpc(&ValidatorKind::Zcashd).await;
+        }
+
+        #[tokio::test]
         pub(crate) async fn block_count() {
             fetch_service_get_block_count(&ValidatorKind::Zcashd).await;
         }
@@ -1461,6 +1500,11 @@ mod zebrad {
         #[tokio::test]
         pub(crate) async fn difficulty() {
             assert_fetch_service_difficulty_matches_rpc(&ValidatorKind::Zebrad).await;
+        }
+
+        #[tokio::test]
+        pub(crate) async fn block_deltas() {
+            fetch_service_block_deltas_matches_rpc(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test]
