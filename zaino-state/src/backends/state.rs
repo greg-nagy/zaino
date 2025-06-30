@@ -124,7 +124,7 @@ impl StateService {
                 std::task::Poll::Ready(StatusType::Ready)
             }
             std::task::Poll::Ready(Err(e)) => {
-                eprintln!("Service readiness error: {:?}", e);
+                eprintln!("Service readiness error: {e:?}");
                 self.status.store(StatusType::CriticalError.into());
                 std::task::Poll::Ready(StatusType::CriticalError)
             }
@@ -553,10 +553,9 @@ impl StateServiceSubscriber {
                             Err(e) => {
                                 if end >= chain_height {
                                     Err(tonic::Status::out_of_range(format!(
-                                        "Error: Height out of range [{}]. Height \
+                                        "Error: Height out of range [{end}]. Height \
                                             requested is greater than the best \
-                                            chain tip [{}].",
-                                        end, chain_height,
+                                            chain tip [{chain_height}].",
                                     )))
                                 } else {
                                     Err(tonic::Status::unknown(e.to_string()))
@@ -591,9 +590,8 @@ impl StateServiceSubscriber {
                                     let height = end - (i - start);
                                     if height >= chain_height {
                                         Err(tonic::Status::out_of_range(format!(
-                                            "Error: Height out of range [{}]. Height requested \
-                                            is greater than the best chain tip [{}].",
-                                            height, chain_height,
+                                            "Error: Height out of range [{height}]. Height requested \
+                                            is greater than the best chain tip [{chain_height}].",
                                         )))
                                     } else {
                                         Err(tonic::Status::unknown(e.to_string()))
@@ -638,16 +636,14 @@ impl StateServiceSubscriber {
         let chain_height = self.block_cache.get_chain_height().await?.0;
         Err(if height >= chain_height {
             StateServiceError::TonicStatusError(tonic::Status::out_of_range(format!(
-                "Error: Height out of range [{}]. Height requested \
-                                is greater than the best chain tip [{}].",
-                height, chain_height,
+                "Error: Height out of range [{height}]. Height requested \
+                                is greater than the best chain tip [{chain_height}].",
             )))
         } else {
             // TODO: Hide server error from clients before release.
             // Currently useful for dev purposes.
             StateServiceError::TonicStatusError(tonic::Status::unknown(format!(
-                "Error: Failed to retrieve block from node. Server Error: {}",
-                e,
+                "Error: Failed to retrieve block from node. Server Error: {e}",
             )))
         })
     }
@@ -1585,7 +1581,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
                 while let Some(address_result) = request.next().await {
                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                     let address = address_result.map_err(|e| {
-                        tonic::Status::unknown(format!("Failed to read from stream: {}", e))
+                        tonic::Status::unknown(format!("Failed to read from stream: {e}"))
                     })?;
                     if channel_tx.send(address.address).await.is_err() {
                         // TODO: Hide server error from clients before release. Currently useful for dev purposes.
@@ -1632,7 +1628,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
             Ok(Err(e)) => Err(StateServiceError::TonicStatusError(e)),
             // TODO: Hide server error from clients before release. Currently useful for dev purposes.
             Err(e) => Err(StateServiceError::TonicStatusError(tonic::Status::unknown(
-                format!("Fetcher Task failed: {}", e),
+                format!("Fetcher Task failed: {e}"),
             ))),
         }
     }
@@ -1816,8 +1812,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
                             Err(e) => {
                                 channel_tx
                                     .send(Err(tonic::Status::internal(format!(
-                                        "Error in mempool stream: {:?}",
-                                        e
+                                        "Error in mempool stream: {e:?}"
                                     ))))
                                     .await
                                     .ok();
