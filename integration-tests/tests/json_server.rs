@@ -660,9 +660,9 @@ mod zcashd {
             for _ in 0..BLOCK_LIMIT {
                 let current_block = zcashd_subscriber.get_latest_block().await.unwrap();
 
-                let block_hash: [u8; 32] = current_block.hash.as_slice().try_into().unwrap();
+                let block_hash_bytes: [u8; 32] = current_block.hash.as_slice().try_into().unwrap();
 
-                let block_hash = zebra_chain::block::Hash::from(block_hash);
+                let block_hash = zebra_chain::block::Hash::from(block_hash_bytes);
 
                 let zcashd_deltas = zcashd_subscriber
                     .get_block_deltas(block_hash.to_string())

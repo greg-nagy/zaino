@@ -1,5 +1,6 @@
 //! Zcash RPC implementations.
 
+use zaino_fetch::chain::block::BlockDeltas;
 use zaino_state::{LightWalletIndexer, ZcashIndexer};
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::methods::{
@@ -55,6 +56,10 @@ pub trait ZcashIndexerRpc {
     /// tags: blockchain
     #[method(name = "getdifficulty")]
     async fn get_difficulty(&self) -> Result<f64, ErrorObjectOwned>;
+
+    /// TODO
+    #[method(name = "getblockdeltas")]
+    async fn get_block_deltas(&self, hash: String) -> Result<BlockDeltas, ErrorObjectOwned>;
 
     /// Returns the current block count in the best valid block chain.
     ///
@@ -305,6 +310,20 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
         self.service_subscriber
             .inner_ref()
             .get_difficulty()
+            .await
+            .map_err(|e| {
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
+            })
+    }
+
+    async fn get_block_deltas(&self, hash: String) -> Result<BlockDeltas, ErrorObjectOwned> {
+        self.service_subscriber
+            .inner_ref()
+            .get_block_deltas(hash)
             .await
             .map_err(|e| {
                 ErrorObjectOwned::owned(

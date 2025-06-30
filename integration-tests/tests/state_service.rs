@@ -1211,6 +1211,45 @@ mod zebrad {
             test_manager.close().await;
         }
 
+        #[tokio::test]
+        async fn block_deltas() {
+            let (
+                mut test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+
+            test_manager.local_net.generate_blocks(2).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let current_block = fetch_service_subscriber.get_latest_block().await.unwrap();
+
+            let block_hash_bytes: [u8; 32] = current_block.hash.as_slice().try_into().unwrap();
+
+            let block_hash = zebra_chain::block::Hash::from(block_hash_bytes);
+
+            let fetch_service_block_deltas = fetch_service_subscriber
+                .get_block_deltas(block_hash.to_string())
+                .await
+                .unwrap();
+            let state_service_block_deltas = state_service_subscriber
+                .get_block_deltas(block_hash.to_string())
+                .await
+                .unwrap();
+            assert_eq!(fetch_service_block_deltas, state_service_block_deltas);
+
+            test_manager.close().await;
+        }
+
         mod z {
             use super::*;
 

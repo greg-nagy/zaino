@@ -529,10 +529,16 @@ async fn fetch_service_block_deltas_matches_rpc(validator: &ValidatorKind) {
     let (test_manager, _fetch_service, fetch_service_subscriber) =
         create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
+    let current_block = fetch_service_subscriber.get_latest_block().await.unwrap();
+
+    let block_hash_bytes: [u8; 32] = current_block.hash.as_slice().try_into().unwrap();
+
+    let block_hash = zebra_chain::block::Hash::from(block_hash_bytes);
+
     // Note: we need an 'expected' block hash in order to query its deltas.
     // Having a predictable or test vector chain is the way to go here.
     let fetch_service_block_deltas = fetch_service_subscriber
-        .get_block_deltas("TODO".to_string())
+        .get_block_deltas(block_hash.to_string())
         .await
         .unwrap();
 
@@ -552,7 +558,7 @@ async fn fetch_service_block_deltas_matches_rpc(validator: &ValidatorKind) {
     .unwrap();
 
     let rpc_block_deltas = jsonrpc_client
-        .get_block_deltas("TODO".to_string())
+        .get_block_deltas(block_hash.to_string())
         .await
         .unwrap();
 
