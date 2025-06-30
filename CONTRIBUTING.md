@@ -51,7 +51,7 @@ Documentation should be clear and accurate to your latest commit. This includes 
 Contributions must be [GitHub pull requests](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests). New contributors should make PRs _from a personal fork_ of the project, _to this repo, zingolabs/zaino_. Generally pull requests will be against `dev`, the development branch.
 
 When code or documentation is still being developed and is not intended for review, the PR should be in the `Draft` state.
-`Draft` pull requests cannot be merged: an `Open` PR is a PR that is "ready for review." The `Draft` state should be set as a default when working with GitHub on the web.
+`Draft` pull requests cannot be merged: an `Open` PR is a PR that is "ready for review." The `Draft` state should be set as a default when working with GitHub on the web, and can be changed to `Open` status later, marking the PR as ready for review.
 
 All CI checks (remote testing and lints) must pass.
 
