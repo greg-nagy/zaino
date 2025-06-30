@@ -50,6 +50,15 @@ Documentation should be clear and accurate to your latest commit.
 
 Contributions must be [GitHub pull requests](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests). New contributors should make PRs _from a personal fork_ of the project, _to this repo, zingolabs/zaino_. Generally pull requests will be against `dev`, the development branch.
 
+When code or documentation is still being developed and is not intended for review, the PR should be in the `Draft` state.
+`Draft` pull requests cannot be merged: an `Open` PR is a PR that is "ready for review."
+
+This is an evloving document, merge requirements are intended to be constrained to the specific case of implementations of Block Explorer RPCs.
+
+`.unwrap()` and `.expect()` are strongly discouraged in non-test code. 
+
+Running `cargo update` may be considered as a requirement for some releases.
+
 Finally, see our [Software Philosophy](#software-philosophy), and understand you are contribuing to a project with these principles at work.
 
 ## Local Testing
