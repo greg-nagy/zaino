@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem, sync::Arc};
+use std::{collections::HashMap, mem, sync::Arc, u64};
 
 use crate::{
     chain_index::types::{Hash, Height},
@@ -11,14 +11,18 @@ use futures::{future::join, lock::Mutex};
 use primitive_types::U256;
 use tokio::sync::mpsc;
 use tower::Service;
-use zaino_fetch::jsonrpsee::{connector::JsonRpSeeConnector, response::GetBlockResponse};
+use zaino_fetch::jsonrpsee::{
+    connector::JsonRpSeeConnector,
+    error::JsonRpSeeConnectorError,
+    response::{GetBlockResponse, GetTreestateResponse},
+};
 use zebra_chain::{parameters::Network, serialization::ZcashDeserialize};
-use zebra_state::{HashOrHeight, ReadResponse, ReadStateService};
+use zebra_state::{FromDisk, HashOrHeight, ReadResponse, ReadStateService};
 
 use crate::ChainBlock;
 
 /// Holds the block cache
-struct NonFinalzedState {
+pub struct NonFinalizedState {
     /// We need access to the validator's best block hash, as well
     /// as a source of blocks
     source: BlockchainSource,
@@ -32,7 +36,8 @@ struct NonFinalzedState {
     network: Network,
 }
 
-pub(crate) struct NonfinalizedBlockCacheSnapshot {
+#[derive(Debug)]
+pub struct NonfinalizedBlockCacheSnapshot {
     /// the set of all known blocks < 100 blocks old
     /// this includes all blocks on-chain, as well as
     /// all blocks known to have been on-chain before being
@@ -43,6 +48,7 @@ pub(crate) struct NonfinalizedBlockCacheSnapshot {
     best_tip: (Height, Hash),
 }
 
+#[derive(Debug)]
 pub enum SyncError {
     /// The backing validator node returned corrupt, invalid, or incomplete data
     /// TODO: This may not be correctly disambibuated from temporary network issues
@@ -65,12 +71,13 @@ impl From<UpdateError> for SyncError {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum InitError {
     InvalidZebraData,
 }
 
 /// This is the core of the concurrent block cache.
-impl NonFinalzedState {
+impl NonFinalizedState {
     /// Create a nonfinalized state, in a coherent initial state
     ///
     /// TODO: Currently, we can't initate without an snapshot, we need to create a cache
@@ -258,7 +265,7 @@ impl NonFinalzedState {
 
     /// sync to the top of the chain
     pub async fn sync(&self) -> Result<(), SyncError> {
-        let initial_state = self.get_snapshot().await;
+        let initial_state = self.get_snapshot();
         let mut new_blocks = Vec::new();
         let mut sidechain_blocks = Vec::new();
         let mut best_tip = initial_state.best_tip.clone();
@@ -508,7 +515,7 @@ impl NonFinalzedState {
         // at this point, we've collected everything in the staging area
         // we can drop the stage lock, and more blocks can be staged while we finish setting current
         mem::drop(staged);
-        let snapshot = self.get_snapshot().await;
+        let snapshot = self.get_snapshot();
         new.extend(
             snapshot
                 .blocks
@@ -543,7 +550,7 @@ impl NonFinalzedState {
     }
 
     /// Get a copy of the block cache as it existed at the last [update] call
-    pub async fn get_snapshot(&self) -> Arc<NonfinalizedBlockCacheSnapshot> {
+    pub fn get_snapshot(&self) -> Arc<NonfinalizedBlockCacheSnapshot> {
         self.current.load_full()
     }
 }
@@ -559,13 +566,14 @@ pub enum UpdateError {
 
 /// A connection to a validator.
 #[derive(Clone)]
-enum BlockchainSource {
+pub enum BlockchainSource {
     State(ReadStateService),
     Fetch(JsonRpSeeConnector),
 }
 
 enum BlockchainSourceError {
     ReadStateError(Box<dyn std::error::Error + Send + Sync + 'static>),
+    FetchServiceError(JsonRpSeeConnectorError),
 }
 
 type BlockchainSourceResult<T> = Result<T, BlockchainSourceError>;
@@ -671,7 +679,69 @@ impl BlockchainSource {
                         .map(|tree| (tree.root(), tree.count())),
                 ))
             }
-            BlockchainSource::Fetch(json_rp_see_connector) => todo!(),
+            BlockchainSource::Fetch(json_rp_see_connector) => {
+                let trees = json_rp_see_connector
+                    .get_treestate(id.to_string())
+                    .await
+                    .map_err(BlockchainSourceError::FetchServiceError)?;
+                let GetTreestateResponse {
+                    sapling, orchard, ..
+                } = trees;
+
+                let sap_commitments: Vec<zebra_chain::sapling::tree::NoteCommitmentUpdate> =
+                    sapling
+                        .inner()
+                        .inner()
+                        .iter()
+                        .map(|commitment| -> Result<_, _> {
+                            dbg!(commitment.len());
+                            let commitment_bytes = <[u8; 32]>::try_from(commitment.as_slice())?;
+
+                            let scalar =
+                                zebra_chain::sapling::tree::NoteCommitmentUpdate::from_bytes(
+                                    &commitment_bytes,
+                                )
+                                .unwrap();
+                            Ok::<_, std::array::TryFromSliceError>(scalar)
+                        })
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(|_| todo!())?;
+                let sap_tree =
+                    zebra_chain::sapling::tree::NoteCommitmentTree::from(sap_commitments);
+
+                let orchard_commitments: Vec<zebra_chain::orchard::tree::NoteCommitmentUpdate> =
+                    orchard
+                        .inner()
+                        .inner()
+                        .iter()
+                        .map(|commitment| -> Result<_, _> {
+                            let commitment_bytes = <[u8; 32]>::try_from(commitment.as_slice())?;
+                            fn convert(data: &[u8; 32]) -> [u64; 4] {
+                                let mut res = [0; 4];
+                                for i in 0..4 {
+                                    res[i] = u64::from_le_bytes(
+                                        data[i * 8..(i * 8) + 8]
+                                            .try_into()
+                                            .expect("there to be the rign number of bytes"),
+                                    )
+                                }
+                                res
+                            }
+
+                            let scalar = zebra_chain::orchard::tree::NoteCommitmentUpdate::from_raw(
+                                convert(&commitment_bytes),
+                            );
+                            Ok::<_, std::array::TryFromSliceError>(scalar)
+                        })
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(|_| todo!())?;
+                let orchard_tree =
+                    zebra_chain::orchard::tree::NoteCommitmentTree::from(orchard_commitments);
+                Ok((
+                    Some((sap_tree.root(), sap_tree.count())),
+                    Some((orchard_tree.root(), orchard_tree.count())),
+                ))
+            }
         }
     }
 }
