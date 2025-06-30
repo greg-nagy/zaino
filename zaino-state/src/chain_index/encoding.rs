@@ -73,12 +73,6 @@ pub trait ZainoVersionedSerialise: Sized {
     /// Encode **only** the body (no tag).
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()>;
 
-    #[inline]
-    fn serialize<W: Write>(&self, mut w: W) -> io::Result<()> {
-        w.write_all(&[Self::VERSION])?;
-        self.encode_body(&mut w)
-    }
-
     /*──────────── mandatory decoder for *this* version ────────────*/
 
     /// Parses a body whose tag equals `Self::VERSION`.
@@ -116,7 +110,13 @@ pub trait ZainoVersionedSerialise: Sized {
         }
     }
 
-    /*──────────── convenience entry point ────────────*/
+    /*──────────── User entry points ────────────*/
+
+    #[inline]
+    fn serialize<W: Write>(&self, mut w: W) -> io::Result<()> {
+        w.write_all(&[Self::VERSION])?;
+        self.encode_body(&mut w)
+    }
 
     #[inline]
     fn deserialize<R: Read>(mut r: R) -> io::Result<Self> {
@@ -124,22 +124,30 @@ pub trait ZainoVersionedSerialise: Sized {
         r.read_exact(&mut tag)?;
         Self::decode_body(&mut r, tag[0])
     }
+
+    /// Serialize into a `Vec<u8>` (tag + body).
+    #[inline]
+    fn to_bytes(&self) -> io::Result<Vec<u8>> {
+        let mut buf = Vec::new();
+        self.serialize(&mut buf)?;
+        Ok(buf)
+    }
+
+    /// Reconstruct from a `&[u8]` (expects tag + body).
+    #[inline]
+    fn from_bytes(data: &[u8]) -> io::Result<Self> {
+        let mut cursor = core2::io::Cursor::new(data);
+        Self::deserialize(&mut cursor)
+    }
 }
 
 /// Defines the fixed encoded length of a database record.
 pub trait FixedEncodedLen {
-    /// `the fixed encoded length of a database record *not* incuding the version byte.
+    /// the fixed encoded length of a database record *not* incuding the version byte.
     const ENCODED_LEN: usize;
 
-    /// Returns the length of the record *exluding* the version byte.
-    fn raw_len() -> usize {
-        Self::ENCODED_LEN
-    }
-
-    /// Returns the length of the record *including* the version byte.
-    fn versioned_len() -> usize {
-        Self::ENCODED_LEN + 1
-    }
+    /// the fixed encoded length of a database record *incuding* the version byte.
+    const VERSIONED_LEN: usize = Self::ENCODED_LEN + 1;
 }
 
 /* ──────────────────────────── CompactSize helpers ────────────────────────────── */
