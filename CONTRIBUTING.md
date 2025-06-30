@@ -57,7 +57,13 @@ This is an evloving document: the following merge requirements are intended to b
 
 `.unwrap()` and `.expect()` are discouraged in non-test code. When used in code, an explicit comment is required explaining why the particular use of expect is okay, (eg matching on a known enum variant).
 
+Error handling must be included and expose underlying information as much as and wherever possible, to assist developers and users.
+
+All CI checks (remote tests and lints) must pass.
+
 Running `cargo update` may be considered as a requirement for some releases.
+
+Certain situations may arise where experienced Zaino developers might bypass the merge-constraints, on a case-by-case basis.
 
 Finally, see our [Software Philosophy](#software-philosophy), and understand you are contribuing to a project with these principles at work.
 
