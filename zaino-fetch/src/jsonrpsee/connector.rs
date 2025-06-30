@@ -436,7 +436,8 @@ impl JsonRpSeeConnector {
         hash: String,
     ) -> Result<BlockDeltas, JsonRpSeeConnectorError> {
         let params = vec![serde_json::to_value(hash)?];
-        self.send_request("getblockdeltas", params).await
+        let result = self.send_request("getblockdeltas", params).await;
+        result
     }
 
     /// Returns the height of the most recent block in the best valid block chain

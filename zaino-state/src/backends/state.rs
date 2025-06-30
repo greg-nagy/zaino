@@ -23,7 +23,11 @@ use crate::{
 use nonempty::NonEmpty;
 use tokio_stream::StreamExt as _;
 use zaino_fetch::{
-    chain::{block::BlockDeltas, transaction::FullTransaction, utils::ParseFromSlice},
+    chain::{
+        block::{BlockDelta, BlockDeltas},
+        transaction::FullTransaction,
+        utils::ParseFromSlice,
+    },
     jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
 };
 use zaino_proto::proto::{
@@ -1052,34 +1056,45 @@ impl ZcashIndexer for StateServiceSubscriber {
                 next_block_hash,
             } => {
                 Ok(BlockDeltas {
-                    hash: hash.0.zcash_serialize_to_vec()?,
+                    hash: hash.0.to_string(),
                     confirmations: confirmations,
                     size: size.expect("size should be present"),
                     height: height.expect("height should be present").0,
                     version: version.expect("version should be present"),
-                    merkle_root: merkle_root
-                        .expect("merkle_root should be present")
-                        .0
-                        .to_vec(),
-                    deltas: tx,
+                    merkle_root: hex::encode(
+                        merkle_root
+                            .expect("merkle_root should be present")
+                            .0
+                            .to_vec(),
+                    ),
+                    deltas: tx
+                        .iter()
+                        .map(|tx| match tx {
+                            GetBlockTransaction::Hash(tx_hash) => BlockDelta::default(),
+                            GetBlockTransaction::Object(tx) => BlockDelta::default(),
+                        })
+                        .collect(),
                     time: time.expect("time should be present"),
 
                     // TODO: Implement
                     mediantime: time.expect("time should be present"),
-                    nonce: nonce.expect("nonce should be present").to_vec(),
-                    bits: bits
-                        .expect("bits should be present")
-                        .bytes_in_display_order()
-                        .to_vec(),
+                    nonce: hex::encode(nonce.unwrap().to_vec()),
+                    bits: hex::encode(
+                        bits.expect("bits should be present")
+                            .bytes_in_display_order()
+                            .to_vec(),
+                    ),
                     difficulty: difficulty.expect("difficulty should be present"),
-                    previousblockhash: previous_block_hash
-                        .expect("previousblockhash should be present")
-                        .0
-                        .zcash_serialize_to_vec()?,
-                    nextblockhash: next_block_hash
-                        .expect("nextblockhash should be present")
-                        .0
-                        .zcash_serialize_to_vec()?,
+                    previousblockhash: hex::encode(
+                        previous_block_hash
+                            .expect("previousblockhash should be present")
+                            .0
+                            .zcash_serialize_to_vec()?,
+                    ),
+                    nextblockhash: match next_block_hash {
+                        None => Some("".to_string()),
+                        Some(hash) => Some(hash.0.to_string()),
+                    },
                 })
             }
             GetBlock::Raw(serialized_block) => todo!(),

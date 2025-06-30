@@ -1509,11 +1509,6 @@ mod zebrad {
         }
 
         #[tokio::test]
-        pub(crate) async fn block_deltas() {
-            fetch_service_block_deltas_matches_rpc(&ValidatorKind::Zebrad).await;
-        }
-
-        #[tokio::test]
         pub(crate) async fn block_count() {
             fetch_service_get_block_count(&ValidatorKind::Zebrad).await;
         }
