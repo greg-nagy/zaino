@@ -16,10 +16,22 @@ To get started using Zaino, please see our [use cases document](./docs/use_cases
 
 We welcome and appreciate contributions in the form of code, documentation, bug reports and feature requests. We also generally enjoy feedback and outreach efforts.
 
+## Bug Reports and Feature Requests
+
+If you believe you have discovered a security issue and wish to disclose it non-pubicly, please contact us at:
+zingodisclosure@proton.me
+
+Bug reports and feature requests can best be opened as [issues](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/creating-an-issue) on this GitHub repo. To do so you will need a [GitHub account](https://docs.github.com/en/account-and-profile). Especially for bug reports, any details you can offer will help us understand the issue better. Such details include versions or commits used in exposing the bug, what operating system is being used, and so on.
+
+Bug reports and feature requests can also be registered via other [communication channels](#communication-channels), but will be accepted in this way without guarantees of visibility to project software developers.
+
+## Communication Channels
+In addition to GitHub, there is a ZingoLabs [Matrix](https://matrix.org/) channel that can be reached through [this web link](https://matrix.to/#/!cVsptZxBgWgmxWlHYB:matrix.org). Our primary languages are English and Spanish.
+
+Other channels where you may be able to reach Zingolabs developers that include the [Zcash Community Forum](https://forum.zcashcommunity.com/) website, Bluesky, Telegram and Twitter/X (English and Spanish), Instagram (Spanish), and Zcash related Discord.
+
 ## How to Contribute
 Code and documentation are very helpful and the lifeblood of Free Software. To merge in code to this repo, one will have to have a [GitHub account](https://docs.github.com/en/account-and-profile).
-
-Verified commits are encouraged. The best way to verify is using a GPG signature. See [this document about commit signature verification.](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification)
 
 Code, being Rust, should be formatted using `rustfmt` and applying the `clippy` suggestions.
 For convenience, there are two scripts included in the `utils` directory which run these tools and remove trailing whitespaces. From the project's workspace root, you can run `./utils/precommit-check.sh`
@@ -27,6 +39,8 @@ For convenience, there are two scripts included in the `utils` directory which r
 In general, PRs should be opened against [the `dev` branch](https://github.com/zingolabs/zaino/tree/dev).
 
 All tests must pass, see [Local Testing](#local-testing).
+
+Verified commits are encouraged. The best way to verify is using a GPG signature. See [this document about commit signature verification.](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification)
 
 Code should be as complex as it needs to be, but no more.
 
@@ -37,15 +51,6 @@ Documentation should be clear and accurate to your latest commit.
 Contributions must be [GitHub pull requests](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests). New contributors should make PRs _from a personal fork_ of the project, _to this repo, zingolabs/zaino_. Generally pull requests will be against `dev`, the development branch.
 
 Finally, see our [Software Philosophy](#software-philosophy), and understand you are contribuing to a project with these principles at work.
-
-## Bug Reports and Feature Requests
-
-If you believe you have discovered a security issue and wish to disclose it non-pubicly, please contact us at:
-zingodisclosure@proton.me
-
-Bug reports and feature requests can best be opened as [issues](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/creating-an-issue) on this GitHub repo. To do so you will need a [GitHub account](https://docs.github.com/en/account-and-profile). Especially for bug reports, any details you can offer will help us understand the issue better. Such details include versions or commits used in exposing the bug, what operating system is being used, and so on.
-
-Bug reports and feature requests can also be registered via other [communication channels](#communication-channels), but will be accepted in this way without guarantees of visibility to project software developers.
 
 ## Local Testing
 Local testing requires a system with ample resources, particularly RAM.
@@ -61,11 +66,6 @@ Zaino uses [`cargo nextest`](https://nexte.st/). On the linux command line, with
 After installing this crate, all tests can be run locally with `cargo nextest run`.
 
 For more details see our [testing document](./docs/testing.md).
-
-## Communication Channels
-In addition to GitHub, there is a ZingoLabs [Matrix](https://matrix.org/) channel that can be reached through [this web link](https://matrix.to/#/!cVsptZxBgWgmxWlHYB:matrix.org). Our primary languages are English and Spanish.
-
-Other channels where you may be able to reach Zingolabs developers that include the [Zcash Community Forum](https://forum.zcashcommunity.com/) website, Bluesky, Telegram and Twitter/X (English and Spanish), Instagram (Spanish), and Zcash related Discord.
 
 ## More Documentation
 
