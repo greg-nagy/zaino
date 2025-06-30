@@ -33,8 +33,8 @@ Other channels where you may be able to reach Zingolabs developers that include 
 ## How to Contribute
 Code and documentation are very helpful and the lifeblood of Free Software. To merge in code to this repo, one will have to have a [GitHub account](https://docs.github.com/en/account-and-profile).
 
-Code, being Rust, should be formatted using `rustfmt` and applying the `clippy` suggestions.
-For convenience, there are two scripts included in the `utils` directory which run these tools and remove trailing whitespaces. From the project's workspace root, you can run `./utils/precommit-check.sh`
+Code, being Rust, must be formatted using `rustfmt` and applying the `clippy` suggestions.
+For convenience, there are scripts included in the `utils` directory which run these tools and remove trailing whitespaces. From the project's workspace root, you can run `./utils/precommit-check.sh`
 
 In general, PRs should be opened against [the `dev` branch](https://github.com/zingolabs/zaino/tree/dev).
 
@@ -53,19 +53,31 @@ Contributions must be [GitHub pull requests](https://docs.github.com/en/pull-req
 When code or documentation is still being developed and is not intended for review, the PR should be in the `Draft` state.
 `Draft` pull requests cannot be merged: an `Open` PR is a PR that is "ready for review." The `Draft` state should be set as a default when working with GitHub on the web.
 
-This is an evloving document: the following merge requirements are intended to be constrained to the specific case of implementations of Block Explorer RPCs.
-
-`.unwrap()` and `.expect()` are discouraged in non-test code. When used in code, an explicit comment is required explaining why the particular use of expect is okay, (eg matching on a known enum variant).
-
-Error handling must be included and expose underlying information as much as and wherever possible, to assist developers and users.
-
-All CI checks (remote tests and lints) must pass.
+All CI checks (remote testing and lints) must pass.
 
 Running `cargo update` may be considered as a requirement for some releases.
+
+PRs should be written by one developer, have a detailed review performed by a second developer, and be checked over and merged by a third.
 
 Certain situations may arise where experienced Zaino developers might bypass the merge-constraints, on a case-by-case basis.
 
 Finally, see our [Software Philosophy](#software-philosophy), and understand you are contribuing to a project with these principles at work.
+
+## Block Explorer Merge Requirements
+This is an evloving document: the following merge requirements are intended to be constrained to the specific case of implementations of Block Explorer RPCs.
+
+Any use of `TODO`s makes a PR invalid for merging into `dev`.
+
+Use of `.unwrap()` and `.expect()` are discouraged in non-test code. When used in code, an explicit comment is required explaining why the particular use of expect is okay, (eg matching on a known enum variant).
+In test code, `.unwrap()` is wrong when a helper function might fail with insufficient information.
+
+Doc-tested doc-comments should be used to avoid stale docs, and skew from the underlying code. Quality doc-comments should include a doc-test, and with `pub` interface doc-comments should be considered nearly as a requirement.
+
+Error handling must be included and expose underlying information as much as and wherever possible, to assist developers and users.
+
+Merges must minimally reflect the zcash RPC spec and include a link to the relevant zcash C++ implementation (URLs that point at the analogous logic), OR reflect the C++ implementation.
+
+Tests are encouraged that show parity bewteen responses from `zcash-cli` + `zcashd` and `zaino`+ a `zebra` backend, and the local cache.
 
 ## Local Testing
 Local testing requires a system with ample resources, particularly RAM.
