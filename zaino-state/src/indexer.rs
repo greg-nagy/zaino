@@ -584,8 +584,7 @@ pub trait LightWalletIndexer: Send + Sync + Clone + ZcashIndexer + 'static {
                                     Err(e) => {
                                         match channel_tx
                                             .send(Err(tonic::Status::unknown(format!(
-                                                "Error: Failed to hex decode root hash: {}.",
-                                                e
+                                                "Error: Failed to hex decode root hash: {e}."
                                             ))))
                                             .await
                                         {

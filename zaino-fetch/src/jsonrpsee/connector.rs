@@ -301,8 +301,7 @@ impl JsonRpSeeConnector {
 
             if !status.is_success() {
                 return Err(JsonRpSeeConnectorError::new(format!(
-                    "Error: Error status from node's rpc server: {}, {}",
-                    status, body_str
+                    "Error: Error status from node's rpc server: {status}, {body_str}"
                 )));
             }
 
