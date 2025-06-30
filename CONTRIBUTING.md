@@ -46,16 +46,16 @@ Code should be as complex as it needs to be, but no more.
 
 All code will be reviewed in public, as conversations on the pull request. It is very possible there will be requested changes or questions. This is not a sign of disrespect, but is necessary to keep code quality high in an important piece of software in the Zcash ecosystem.
 
-Documentation should be clear and accurate to your latest commit.
+Documentation should be clear and accurate to your latest commit. This includes sensible and understandable doc comments.
 
 Contributions must be [GitHub pull requests](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests). New contributors should make PRs _from a personal fork_ of the project, _to this repo, zingolabs/zaino_. Generally pull requests will be against `dev`, the development branch.
 
 When code or documentation is still being developed and is not intended for review, the PR should be in the `Draft` state.
-`Draft` pull requests cannot be merged: an `Open` PR is a PR that is "ready for review."
+`Draft` pull requests cannot be merged: an `Open` PR is a PR that is "ready for review." The `Draft` state should be set as a default when working with GitHub on the web.
 
-This is an evloving document, merge requirements are intended to be constrained to the specific case of implementations of Block Explorer RPCs.
+This is an evloving document: the following merge requirements are intended to be constrained to the specific case of implementations of Block Explorer RPCs.
 
-`.unwrap()` and `.expect()` are strongly discouraged in non-test code. 
+`.unwrap()` and `.expect()` are discouraged in non-test code. When used in code, an explicit comment is required explaining why the particular use of expect is okay, (eg matching on a known enum variant).
 
 Running `cargo update` may be considered as a requirement for some releases.
 
