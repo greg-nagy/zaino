@@ -16,7 +16,10 @@ use zaino_fetch::jsonrpsee::{
     error::JsonRpSeeConnectorError,
     response::{GetBlockResponse, GetTreestateResponse},
 };
-use zebra_chain::{parameters::Network, serialization::ZcashDeserialize};
+use zcash_primitives::merkle_tree::read_commitment_tree;
+use zebra_chain::{
+    parameters::Network, sapling::tree::NoteCommitmentTree, serialization::ZcashDeserialize,
+};
 use zebra_state::{FromDisk, HashOrHeight, ReadResponse, ReadStateService};
 
 use crate::ChainBlock;
@@ -51,8 +54,13 @@ pub struct NonfinalizedBlockCacheSnapshot {
 
 #[derive(Debug)]
 pub enum ZebradConnectionError {
+    /// The Uri provided was invalid
     BadUri(String),
+    /// Could not connect to the zebrad.
+    /// This is a network issue.
     ConnectionFailure(reqwest::Error),
+    /// The Zebrad provided invalid or corrupt data. Something has gone wrong
+    /// and we need to shut down.
     UnrecoverableError,
 }
 
@@ -109,7 +117,7 @@ impl NonFinalizedState {
         let (sapling_root_and_len, orchard_root_and_len) = source
             .get_commitment_tree_roots(genesis_block.hash().into())
             .await
-            .unwrap_or_else(|_e| todo!());
+            .unwrap_or_else(|e| todo!("{e:?}"));
         let ((sapling_root, sapling_size), (orchard_root, orchard_size)) = (
             sapling_root_and_len.unwrap_or_default(),
             orchard_root_and_len.unwrap_or_default(),
@@ -291,7 +299,10 @@ impl NonFinalizedState {
                 u32::from(best_tip.0) + 1,
             )))
             .await
-            .map_err(|_| SyncError::ZebradConnectionError)?
+            .map_err(|_| {
+                /// TODO: Check error. Determine what kind of error to return, this may be recoverable
+                SyncError::ZebradConnectionError(ZebradConnectionError::UnrecoverableError)
+            })?
         {
             // If this block is next in the chain, we sync it as normal
             if Hash::from(block.header.previous_block_hash) == best_tip.1 {
@@ -317,10 +328,12 @@ impl NonFinalizedState {
                     bits: u32::from_be_bytes(
                         block.header.difficulty_threshold.bytes_in_display_order(),
                     ),
-                    block_commitments: match block
-                        .commitment(&self.network)
-                        .map_err(|_| SyncError::ZebradConnectionError)?
-                    {
+                    block_commitments: match block.commitment(&self.network).map_err(|_| {
+                        // Currently, this can only fail when the zebra provides unvalid data.
+                        // Sidechain blocks will fail, however, and when we incorporate them
+                        // we must adapt this to match
+                        SyncError::ZebradConnectionError(ZebradConnectionError::UnrecoverableError)
+                    })? {
                         zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
                         zebra_chain::block::Commitment::FinalSaplingRoot(root) => root.into(),
                         zebra_chain::block::Commitment::ChainHistoryActivationReserved => [0; 32],
@@ -581,9 +594,11 @@ pub enum BlockchainSource {
     Fetch(JsonRpSeeConnector),
 }
 
+#[derive(Debug)]
 enum BlockchainSourceError {
     ReadStateError(Box<dyn std::error::Error + Send + Sync + 'static>),
     FetchServiceError(JsonRpSeeConnectorError),
+    Unrecoverable(String),
 }
 
 type BlockchainSourceResult<T> = Result<T, BlockchainSourceError>;
@@ -629,7 +644,10 @@ impl BlockchainSource {
                 .await
             {
                 Ok(zebra_state::ReadResponse::Block(block)) => Ok(block),
-                Ok(_) => todo!(),
+                Ok(otherwise) => panic!(
+                    "Read Request of Block returned Read Response of {otherwise:#?} \n\
+                    This should be deterministically unreachable"
+                ),
                 Err(_) => todo!(),
             },
             BlockchainSource::Fetch(json_rp_see_connector) => {
@@ -690,7 +708,48 @@ impl BlockchainSource {
                 ))
             }
             BlockchainSource::Fetch(json_rp_see_connector) => {
-                todo!()
+                let tree_responses = json_rp_see_connector
+                    .get_treestate(id.to_string())
+                    .await
+                    .map_err(BlockchainSourceError::FetchServiceError)?;
+                let GetTreestateResponse {
+                    sapling, orchard, ..
+                } = tree_responses;
+                let sapling_frontier = sapling
+                    .inner()
+                    .inner()
+                    .as_ref()
+                    .map(Vec::as_slice)
+                    .map(read_commitment_tree::<zebra_chain::sapling::tree::Node, _, 32>);
+                let orchard_frontier = orchard
+                    .inner()
+                    .inner()
+                    .as_ref()
+                    .map(Vec::as_slice)
+                    .map(read_commitment_tree::<zebra_chain::orchard::tree::Node, _, 32>);
+                let sapling_root = sapling_frontier
+                    .map(|frontier| {
+                        frontier.map(|tree| {
+                            zebra_chain::sapling::tree::Root::try_from(*tree.root().as_ref())
+                                .map(|root| (root, tree.size() as u64))
+                        })
+                    })
+                    .transpose()
+                    .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?
+                    .transpose()
+                    .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?;
+                let orchard_root = orchard_frontier
+                    .map(|frontier| {
+                        frontier.map(|tree| {
+                            zebra_chain::orchard::tree::Root::try_from(tree.root().to_repr())
+                                .map(|root| (root, tree.size() as u64))
+                        })
+                    })
+                    .transpose()
+                    .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?
+                    .transpose()
+                    .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?;
+                Ok((sapling_root, orchard_root))
             }
         }
     }

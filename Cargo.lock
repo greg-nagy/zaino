@@ -5823,6 +5823,7 @@ dependencies = [
  "nonempty",
  "primitive-types 0.13.1",
  "prost",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
