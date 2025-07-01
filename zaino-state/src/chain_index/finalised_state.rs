@@ -413,6 +413,7 @@ impl ZainoDB {
     }
 
     // *** DB write / delete methods ***
+    // These should only ever be used in a single DB control task.
 
     /// Writes a given (finalised) [`ChainBlock`] to ZainoDB.
     pub fn write_block(&self, block: ChainBlock) -> Result<(), FinalisedStateError> {
@@ -608,7 +609,7 @@ impl ZainoDB {
                 )?;
                 if record.is_input() {
                     // mark corresponding output as spent
-                    let _updated = self.mark_addr_hist_record_spent(
+                    let _updated = self.mark_addr_hist_record_spent_txn(
                         &mut txn,
                         &addr_script,
                         record.tx_index(),
@@ -718,9 +719,96 @@ impl ZainoDB {
             }
         };
 
-        // Delete block in single transaction.
+        // Reconstruct transaction index state to remove
+        let block_height = Height::from_bytes(&height_bytes)?;
+        let ro = self.env.begin_ro_txn()?;
+        let transparent_bytes = self.block_transparent_raw_txn(&ro, &height_bytes)?;
+        let transparent_entry = StoredEntryVar::<TransparentTxList>::from_bytes(&transparent_bytes)
+            .map_err(|e| {
+                FinalisedStateError::Custom(format!("transparent CBOR decode error: {e:?}"))
+            })?;
+        let transparent = transparent_entry.inner().tx();
+
+        let mut addrhist_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
+        let mut spent_outpoints: Vec<Outpoint> = Vec::new();
+
+        for (tx_index, tx_opt) in transparent.iter().enumerate() {
+            let tx_index = TxIndex::new(block_height.0, tx_index as u16);
+            if let Some(tx) = tx_opt {
+                for input in tx.inputs() {
+                    let prev_outpoint = Outpoint::new(*input.prevout_txid(), input.prevout_index());
+                    spent_outpoints.push(prev_outpoint);
+
+                    if let Ok(prev_output) = self.get_previous_output(prev_outpoint) {
+                        let addr_script = AddrScript::new(*prev_output.script_hash());
+                        let hist_record = AddrHistRecord::new(
+                            tx_index,
+                            input.prevout_index() as u16,
+                            prev_output.value(),
+                            AddrHistRecord::FLAG_IS_INPUT,
+                        );
+                        match addrhist_map.entry(addr_script) {
+                            Entry::Occupied(mut entry) => entry.get_mut().push(hist_record),
+                            Entry::Vacant(entry) => {
+                                entry.insert(vec![hist_record]);
+                            }
+                        }
+                    }
+                }
+                for (vout, output) in tx.outputs().iter().enumerate() {
+                    let addr_script = AddrScript::new(*output.script_hash());
+                    let hist_record = AddrHistRecord::new(
+                        tx_index,
+                        vout as u16,
+                        output.value(),
+                        AddrHistRecord::FLAG_MINED,
+                    );
+                    match addrhist_map.entry(addr_script) {
+                        Entry::Occupied(mut entry) => entry.get_mut().push(hist_record),
+                        Entry::Vacant(entry) => {
+                            entry.insert(vec![hist_record]);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Delete data from db.
         let mut txn = self.env.begin_rw_txn()?;
 
+        // Delete spent data
+        for outpoint in &spent_outpoints {
+            let outpoint_bytes = &outpoint.to_bytes()?;
+            match txn.del(self.spent, outpoint_bytes, None) {
+                Ok(()) | Err(lmdb::Error::NotFound) => {}
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            }
+        }
+
+        // Delete addrhist data and mark old outputs spent in this block as unspent
+        for (addr_script, records) in &addrhist_map {
+            let addr_bytes = &addr_script.to_bytes()?;
+            for record in records {
+                let packed_record = AddrEventBytes::from_record(record).map_err(|e| {
+                    FinalisedStateError::Custom(format!("AddrEventBytes pack error: {e:?}"))
+                })?;
+                let record_entry_bytes =
+                    StoredEntryFixed::new(addr_bytes, packed_record).to_bytes()?;
+                match txn.del(self.addrhist, addr_bytes, Some(&record_entry_bytes)) {
+                    Ok(()) | Err(lmdb::Error::NotFound) => {}
+                    Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+                }
+                if record.is_input() {
+                    let _updated = self.mark_addr_hist_record_unspent_txn(
+                        &mut txn,
+                        addr_script,
+                        record.tx_index(),
+                    )?;
+                }
+            }
+        }
+
+        // Delete block data
         for &db in &[
             self.headers,
             self.txids,
@@ -739,8 +827,6 @@ impl ZainoDB {
             Ok(()) | Err(lmdb::Error::NotFound) => {}
             Err(e) => return Err(FinalisedStateError::LmdbError(e)),
         }
-
-        // TODO: Delete transactions indexes!
 
         txn.commit()?;
         Ok(())
@@ -769,7 +855,373 @@ impl ZainoDB {
         }
     }
 
-    // *** Internal fetcher methods ***
+    // **** Internal LMDB transaction methods ****
+
+    /// Headers: Height -> StoredEntryVar<BlockHeaderData>
+    ///
+    /// Returns slice of data holding serialised entry.
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    fn block_header_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        height_bytes: &Vec<u8>,
+    ) -> Result<Vec<u8>, FinalisedStateError> {
+        let bytes = txn.get(self.headers, height_bytes)?;
+        Ok(bytes.to_vec())
+    }
+
+    /// Headers: Height -> StoredEntry<BlockHeaderData>
+    ///
+    /// Returns a Vec of serialized entries, for a byte range [start_height, end_height].
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    ///
+    /// Uses cursor search for efficient range lookup.
+    fn block_range_header_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        start_height_bytes: &Vec<u8>,
+        end_height_bytes: &Vec<u8>,
+    ) -> Result<Vec<Vec<u8>>, FinalisedStateError> {
+        let mut results = Vec::new();
+        let mut cursor = txn.open_ro_cursor(self.headers)?;
+        for (k, v) in cursor.iter_from(&start_height_bytes[..]) {
+            if k > &end_height_bytes[..] {
+                break;
+            }
+            results.push(v.to_vec());
+        }
+        Ok(results)
+    }
+
+    /// Txids: Height -> StoredEntryVar<TxidList>
+    ///
+    /// Returns slice of data holding serialised entry.
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    fn block_txids_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        height_bytes: &Vec<u8>,
+    ) -> Result<Vec<u8>, FinalisedStateError> {
+        let bytes = txn.get(self.txids, height_bytes)?;
+        Ok(bytes.to_vec())
+    }
+
+    /// Txids: Height -> StoredEntryVar<TxidList>
+    ///
+    /// Returns a Vec of serialized entries, for a byte range [start_height, end_height].
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    ///
+    /// Uses cursor search for efficient range lookup.
+    fn block_range_txids_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        start_height_bytes: &Vec<u8>,
+        end_height_bytes: &Vec<u8>,
+    ) -> Result<Vec<Vec<u8>>, FinalisedStateError> {
+        let mut results = Vec::new();
+        let mut cursor = txn.open_ro_cursor(self.txids)?;
+        for (k, v) in cursor.iter_from(&start_height_bytes[..]) {
+            if k > &end_height_bytes[..] {
+                break;
+            }
+            results.push(v.to_vec());
+        }
+        Ok(results)
+    }
+
+    /// Transparent: Height -> StoredEntryVar<TransparentTxList>
+    ///
+    /// Returns slice of data holding serialised entry.
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    fn block_transparent_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        height_bytes: &Vec<u8>,
+    ) -> Result<Vec<u8>, FinalisedStateError> {
+        let bytes = txn.get(self.transparent, height_bytes)?;
+        Ok(bytes.to_vec())
+    }
+
+    /// Transparent: Height -> StoredEntryVar<TransparentTxList>
+    ///
+    /// Returns a Vec of serialized entries, for a byte range [start_height, end_height].
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    ///
+    /// Uses cursor search for efficient range lookup.
+    fn block_range_transparent_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        start_height_bytes: &Vec<u8>,
+        end_height_bytes: &Vec<u8>,
+    ) -> Result<Vec<Vec<u8>>, FinalisedStateError> {
+        let mut results = Vec::new();
+        let mut cursor = txn.open_ro_cursor(self.transparent)?;
+        for (k, v) in cursor.iter_from(&start_height_bytes[..]) {
+            if k > &end_height_bytes[..] {
+                break;
+            }
+            results.push(v.to_vec());
+        }
+        Ok(results)
+    }
+
+    /// Sapling: Height -> StoredEntryVar<SaplingTxList>
+    ///
+    /// Returns slice of data holding serialised entry.
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    fn block_sapling_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        height_bytes: &Vec<u8>,
+    ) -> Result<Vec<u8>, FinalisedStateError> {
+        let bytes = txn.get(self.sapling, height_bytes)?;
+        Ok(bytes.to_vec())
+    }
+
+    /// Sapling: Height -> StoredEntryVar<SaplingTxList>
+    ///
+    /// Returns a Vec of serialized entries, for a byte range [start_height, end_height].
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    ///
+    /// Uses cursor search for efficient range lookup.
+    fn block_range_sapling_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        start_height_bytes: &Vec<u8>,
+        end_height_bytes: &Vec<u8>,
+    ) -> Result<Vec<Vec<u8>>, FinalisedStateError> {
+        let mut results = Vec::new();
+        let mut cursor = txn.open_ro_cursor(self.sapling)?;
+        for (k, v) in cursor.iter_from(&start_height_bytes[..]) {
+            if k > &end_height_bytes[..] {
+                break;
+            }
+            results.push(v.to_vec());
+        }
+        Ok(results)
+    }
+
+    /// Orchard: Height -> StoredEntryVar<OrchardTxList>
+    ///
+    /// Returns slice of data holding serialised entry.
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    fn block_orchard_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        height_bytes: &Vec<u8>,
+    ) -> Result<Vec<u8>, FinalisedStateError> {
+        let bytes = txn.get(self.orchard, height_bytes)?;
+        Ok(bytes.to_vec())
+    }
+
+    /// Orchard: Height -> StoredEntryVar<OrchardTxList>
+    ///
+    /// Returns a Vec of serialized entries, for a byte range [start_height, end_height].
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    ///
+    /// Uses cursor search for efficient range lookup.
+    fn block_range_orchard_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        start_height_bytes: &Vec<u8>,
+        end_height_bytes: &Vec<u8>,
+    ) -> Result<Vec<Vec<u8>>, FinalisedStateError> {
+        let mut results = Vec::new();
+        let mut cursor = txn.open_ro_cursor(self.orchard)?;
+        for (k, v) in cursor.iter_from(&start_height_bytes[..]) {
+            if k > &end_height_bytes[..] {
+                break;
+            }
+            results.push(v.to_vec());
+        }
+        Ok(results)
+    }
+
+    /// Commitment tree data: Height -> StoredEntryFixed<Vec<CommitmentTreeData>>
+    ///
+    /// Returns slice of data holding serialised entry.
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    fn block_commitment_tree_data_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        height_bytes: &Vec<u8>,
+    ) -> Result<Vec<u8>, FinalisedStateError> {
+        let bytes = txn.get(self.commitment_tree_data, height_bytes)?;
+        Ok(bytes.to_vec())
+    }
+
+    /// Commitment tree data: Height -> StoredEntryFixed<Vec<CommitmentTreeData>>
+    ///
+    /// Returns a Vec of serialized entries, for a byte range [start_height, end_height].
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    ///
+    /// Uses cursor search for efficient range lookup.
+    fn block_range_commitment_tree_data_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        start_height_bytes: &Vec<u8>,
+        end_height_bytes: &Vec<u8>,
+    ) -> Result<Vec<Vec<u8>>, FinalisedStateError> {
+        let mut results = Vec::new();
+        let mut cursor = txn.open_ro_cursor(self.commitment_tree_data)?;
+        for (k, v) in cursor.iter_from(&start_height_bytes[..]) {
+            if k > &end_height_bytes[..] {
+                break;
+            }
+            results.push(v.to_vec());
+        }
+        Ok(results)
+    }
+
+    /// Mark a specific AddrHistRecord as spent in the addrhist DB.
+    /// Looks up a record by script and tx_index, sets FLAG_SPENT, and updates it in place.
+    ///
+    /// Returns Ok(true) if a record was updated, Ok(false) if not found, or Err on DB error.
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    pub fn mark_addr_hist_record_spent_txn(
+        &self,
+        txn: &mut lmdb::RwTransaction,
+        addr_script: &AddrScript,
+        tx_index: TxIndex,
+    ) -> Result<bool, FinalisedStateError> {
+        let addr_bytes = addr_script.to_bytes()?;
+        let mut cur = txn.open_rw_cursor(self.addrhist)?;
+        // Iterate all values for this addr_script
+        for (key, val) in cur.iter_dup_of(&addr_bytes)? {
+            if key.len() != AddrScript::VERSIONED_LEN {
+                break;
+            }
+            // + 1 for StoredEntryFixed tag
+            if val.len() != AddrEventBytes::VERSIONED_LEN + 1 {
+                break;
+            }
+            // TODO: Update to include checksum!!!!!
+            let mut hist_record = [0u8; AddrEventBytes::VERSIONED_LEN + 1];
+            hist_record.copy_from_slice(val);
+
+            // Parse the tx_index out of arr (see layout:
+            // - [0] StoredEntry tag
+            // - [1] record tag
+            // - [2..5] height
+            // - [6..7] tx_index
+            // - [8..9] vout
+            // - [10] flags
+            // - [11..18] value)
+            let block_index = u32::from_be_bytes([
+                hist_record[2],
+                hist_record[3],
+                hist_record[4],
+                hist_record[5],
+            ]);
+            let t_idx = u16::from_be_bytes([hist_record[6], hist_record[7]]);
+            // let out_index = u16::from_be_bytes([arr[8], arr[9]]);
+            // let flags = arr[10];
+            // let value = u64::from_le_bytes([arr[11], arr[12], arr[13], arr[14], arr[15], arr[16], arr[17], arr[18]]);
+
+            if block_index == tx_index.block_index() && t_idx == tx_index.tx_index() {
+                if hist_record[10] & AddrHistRecord::FLAG_SPENT != 0 {
+                    continue;
+                }
+                // Mark as spent (set the flag)
+                hist_record[10] |= AddrHistRecord::FLAG_SPENT;
+
+                // Overwrite in place
+                cur.put(&addr_bytes, &hist_record, WriteFlags::CURRENT)?;
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// Mark a specific AddrHistRecord as unspent in the addrhist DB.
+    /// Looks up a record by script and tx_index, sets FLAG_SPENT, and updates it in place.
+    ///
+    /// Returns Ok(true) if a record was updated, Ok(false) if not found, or Err on DB error.
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    pub fn mark_addr_hist_record_unspent_txn(
+        &self,
+        txn: &mut lmdb::RwTransaction,
+        addr_script: &AddrScript,
+        tx_index: TxIndex,
+    ) -> Result<bool, FinalisedStateError> {
+        let addr_bytes = addr_script.to_bytes()?;
+        let mut cur = txn.open_rw_cursor(self.addrhist)?;
+        // Iterate all values for this addr_script
+        for (key, val) in cur.iter_dup_of(&addr_bytes)? {
+            if key.len() != AddrScript::VERSIONED_LEN {
+                break;
+            }
+            // + 1 for StoredEntryFixed tag
+            if val.len() != AddrEventBytes::VERSIONED_LEN + 1 {
+                break;
+            }
+            // TODO: Update to include checksum!!!!!
+            let mut hist_record = [0u8; AddrEventBytes::VERSIONED_LEN + 1];
+            hist_record.copy_from_slice(val);
+
+            // Parse the tx_index out of arr (see layout:
+            // - [0] StoredEntry tag
+            // - [1] record tag
+            // - [2..5] height
+            // - [6..7] tx_index
+            // - [8..9] vout
+            // - [10] flags
+            // - [11..18] value)
+            let block_index = u32::from_be_bytes([
+                hist_record[2],
+                hist_record[3],
+                hist_record[4],
+                hist_record[5],
+            ]);
+            let t_idx = u16::from_be_bytes([hist_record[6], hist_record[7]]);
+            // let out_index = u16::from_be_bytes([arr[8], arr[9]]);
+            // let flags = arr[10];
+            // let value = u64::from_le_bytes([arr[11], arr[12], arr[13], arr[14], arr[15], arr[16], arr[17], arr[18]]);
+
+            if block_index == tx_index.block_index() && t_idx == tx_index.tx_index() {
+                if hist_record[10] & AddrHistRecord::FLAG_SPENT != 0 {
+                    continue;
+                }
+                // Mark as unspent (unset the flag)
+                hist_record[10] &= !AddrHistRecord::FLAG_SPENT;
+
+                // Overwrite in place
+                cur.put(&addr_bytes, &hist_record, WriteFlags::CURRENT)?;
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    // *** Internal DB methods ***
 
     /// Fetches the previous transparent output for the given outpoint.
     /// Returns `TxOutCompact` or an explicit error if not found or invalid.
@@ -958,122 +1410,6 @@ impl ZainoDB {
             }
         }
         None
-    }
-
-    /// Mark a specific AddrHistRecord as spent in the addrhist DB.
-    /// Looks up a record by script and tx_index, sets FLAG_SPENT, and updates it in place.
-    ///
-    /// Returns Ok(true) if a record was updated, Ok(false) if not found, or Err on DB error.
-    pub fn mark_addr_hist_record_spent(
-        &self,
-        txn: &mut lmdb::RwTransaction,
-        addr_script: &AddrScript,
-        tx_index: TxIndex,
-    ) -> Result<bool, FinalisedStateError> {
-        let addr_bytes = addr_script.to_bytes()?;
-        let mut cur = txn.open_rw_cursor(self.addrhist)?;
-        // Iterate all values for this addr_script
-        for (key, val) in cur.iter_dup_of(&addr_bytes)? {
-            if key.len() != AddrScript::VERSIONED_LEN {
-                break;
-            }
-            // + 1 for StoredEntryFixed tag
-            if val.len() != AddrEventBytes::VERSIONED_LEN + 1 {
-                break;
-            }
-            let mut hist_record = [0u8; AddrEventBytes::VERSIONED_LEN + 1];
-            hist_record.copy_from_slice(val);
-
-            // Parse the tx_index out of arr (see layout:
-            // - [0] StoredEntry tag
-            // - [1] record tag
-            // - [2..5] height
-            // - [6..7] tx_index
-            // - [8..9] vout
-            // - [10] flags
-            // - [11..18] value)
-            let block_index = u32::from_be_bytes([
-                hist_record[2],
-                hist_record[3],
-                hist_record[4],
-                hist_record[5],
-            ]);
-            let t_idx = u16::from_be_bytes([hist_record[6], hist_record[7]]);
-            // let out_index = u16::from_be_bytes([arr[8], arr[9]]);
-            // let flags = arr[10];
-            // let value = u64::from_le_bytes([arr[11], arr[12], arr[13], arr[14], arr[15], arr[16], arr[17], arr[18]]);
-
-            if block_index == tx_index.block_index() && t_idx == tx_index.tx_index() {
-                if hist_record[10] & AddrHistRecord::FLAG_SPENT != 0 {
-                    continue;
-                }
-                // Mark as spent (set the flag)
-                hist_record[10] |= AddrHistRecord::FLAG_SPENT;
-
-                // Overwrite in place
-                cur.put(&addr_bytes, &hist_record, WriteFlags::CURRENT)?;
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
-    /// Mark a specific AddrHistRecord as unspent in the addrhist DB.
-    /// Looks up a record by script and tx_index, sets FLAG_SPENT, and updates it in place.
-    ///
-    /// Returns Ok(true) if a record was updated, Ok(false) if not found, or Err on DB error.
-    pub fn mark_addr_hist_record_unspent(
-        &self,
-        txn: &mut lmdb::RwTransaction,
-        addr_script: &AddrScript,
-        tx_index: TxIndex,
-    ) -> Result<bool, FinalisedStateError> {
-        let addr_bytes = addr_script.to_bytes()?;
-        let mut cur = txn.open_rw_cursor(self.addrhist)?;
-        // Iterate all values for this addr_script
-        for (key, val) in cur.iter_dup_of(&addr_bytes)? {
-            if key.len() != AddrScript::VERSIONED_LEN {
-                break;
-            }
-            // + 1 for StoredEntryFixed tag
-            if val.len() != AddrEventBytes::VERSIONED_LEN + 1 {
-                break;
-            }
-            let mut hist_record = [0u8; AddrEventBytes::VERSIONED_LEN + 1];
-            hist_record.copy_from_slice(val);
-
-            // Parse the tx_index out of arr (see layout:
-            // - [0] StoredEntry tag
-            // - [1] record tag
-            // - [2..5] height
-            // - [6..7] tx_index
-            // - [8..9] vout
-            // - [10] flags
-            // - [11..18] value)
-            let block_index = u32::from_be_bytes([
-                hist_record[2],
-                hist_record[3],
-                hist_record[4],
-                hist_record[5],
-            ]);
-            let t_idx = u16::from_be_bytes([hist_record[6], hist_record[7]]);
-            // let out_index = u16::from_be_bytes([arr[8], arr[9]]);
-            // let flags = arr[10];
-            // let value = u64::from_le_bytes([arr[11], arr[12], arr[13], arr[14], arr[15], arr[16], arr[17], arr[18]]);
-
-            if block_index == tx_index.block_index() && t_idx == tx_index.tx_index() {
-                if hist_record[10] & AddrHistRecord::FLAG_SPENT != 0 {
-                    continue;
-                }
-                // Mark as unspent (unset the flag)
-                hist_record[10] &= !AddrHistRecord::FLAG_SPENT;
-
-                // Overwrite in place
-                cur.put(&addr_bytes, &hist_record, WriteFlags::CURRENT)?;
-                return Ok(true);
-            }
-        }
-        Ok(false)
     }
 
     // *** Public fetcher methods ***

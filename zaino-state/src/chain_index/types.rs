@@ -2105,6 +2105,8 @@ impl FixedEncodedLen for TxIndex {
 }
 
 /// Single transparent-address activity record (input or output).
+///
+/// Note when flag is set to IS_INPUT, out_index is actually the index of the input event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct AddrHistRecord {
@@ -2217,6 +2219,8 @@ impl FixedEncodedLen for AddrHistRecord {
 /// [6..8]  vout
 /// [8]     flags
 /// [9..17] value  (little-endian, matches Zcashd)
+///
+/// Note when flag is set to IS_INPUT, vout is actually the index of the input event.
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
 pub(crate) struct AddrEventBytes([u8; 17]);
@@ -2282,7 +2286,7 @@ impl ZainoVersionedSerialise for AddrEventBytes {
 impl FixedEncodedLen for AddrEventBytes {
     /// [0..4]   block_height (BE u32) | Block height
     /// [4..6]   tx_index     (BE u16) | Transaction index within block
-    /// [6..8]   vout         (BE u16) | Output index within transaction
+    /// [6..8]   vout         (BE u16) | Input/output index within transaction
     /// [8]      flags        ( u8 )   | Bitflags (mined/spent/input masks)
     /// [9..17]  value        (LE u64) | Amount in zatoshi, little-endian
     const ENCODED_LEN: usize = 17;
