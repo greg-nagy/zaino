@@ -440,7 +440,7 @@ impl NonFinalisedStateSubscriber {
             .get(&hash)
             .map(|block| block.as_ref().clone())
             .ok_or_else(|| {
-                NonFinalisedStateError::MissingData(format!("Block not found for hash: {}", hash))
+                NonFinalisedStateError::MissingData(format!("Block not found for hash: {hash}"))
             })
     }
 

@@ -574,7 +574,7 @@ impl<'a> TryFrom<&'a [u8]> for EquihashSolution {
                 arr.copy_from_slice(bytes);
                 Ok(EquihashSolution::Standard(arr))
             }
-            32 => {
+            36 => {
                 let mut arr = [0u8; 36];
                 arr.copy_from_slice(bytes);
                 Ok(EquihashSolution::Regtest(arr))
@@ -871,7 +871,7 @@ impl
 
         for (i, ftx) in full_transactions.into_iter().enumerate() {
             let txdata = CompactTxData::try_from((i as u64, ftx))
-                .map_err(|e| format!("TxData conversion failed at index {}: {e}", i))?;
+                .map_err(|e| format!("TxData conversion failed at index {i}: {e}"))?;
 
             sapling_note_count += txdata.sapling().outputs().len();
             orchard_note_count += txdata.orchard().actions().len();
