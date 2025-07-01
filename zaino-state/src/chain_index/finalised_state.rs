@@ -1097,12 +1097,118 @@ impl ZainoDB {
         Ok(results)
     }
 
+    /// Spent: Outpoint -> StoredEntryFixed<TxIndex>
+    ///
+    /// Returns the raw bytes for the stored TxIndex of a spent output.
+    ///
+    /// This method takes an *open* read-only LMDB transaction.
+    /// so multiple calls can be chained internally.
+    fn spent_tx_index_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        outpoint_bytes: &Vec<u8>,
+    ) -> Result<Vec<u8>, FinalisedStateError> {
+        let value = txn.get(self.spent, &outpoint_bytes)?;
+        Ok(value.to_vec())
+    }
+
+    /// AddrHist: AddrScript -> StoredEntryFixed<AddrEventBytes> (DUP_SORT + DUP_FIXED)
+    ///
+    /// Returns a cursor over all records in the db.
+    ///
+    /// The caller is responsible for finding the correct key / record.
+    ///
+    /// The caller must close the cursor before committing the transaction.
+    fn addr_hist_cursor<'txn>(
+        &self,
+        txn: &'txn lmdb::RoTransaction,
+    ) -> Result<lmdb::RoCursor<'txn>, FinalisedStateError> {
+        let cursor = txn.open_ro_cursor(self.addrhist)?;
+        Ok(cursor)
+    }
+
+    /// Returns all raw AddrHist records for a given AddrScript.
+    ///
+    /// Returns a Vec of serialized entries, for given addr_script.
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    ///
+    /// Uses cursor search for efficient range lookup.
+    fn addr_hist_records_by_addr_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        addr_script_bytes: &Vec<u8>,
+    ) -> Result<Vec<Vec<u8>>, FinalisedStateError> {
+        let mut cursor = txn.open_ro_cursor(self.addrhist)?;
+        let mut records = Vec::new();
+
+        for (key, val) in cursor.iter_dup_of(&addr_script_bytes)? {
+            if key.len() != AddrScript::VERSIONED_LEN {
+                break;
+            }
+            if val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN {
+                break;
+            }
+            records.push(val.to_vec());
+        }
+        Ok(records)
+    }
+
+    /// Returns all raw AddrHist records for a given AddrScript and TxIndex.
+    ///
+    /// Returns a Vec of serialized entries, for given addr_script and ix_index.
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    ///
+    /// Efficiently filters by matching block + tx index bytes in-place.
+    fn addr_hist_records_by_addr_and_index_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        addr_script_bytes: &Vec<u8>,
+        tx_index: TxIndex,
+    ) -> Result<Vec<Vec<u8>>, FinalisedStateError> {
+        let mut cursor = txn.open_ro_cursor(self.addrhist)?;
+        let mut results = Vec::new();
+
+        for (key, val) in cursor.iter_dup_of(&addr_script_bytes)? {
+            if key.len() != AddrScript::VERSIONED_LEN {
+                // TODO: Return error?
+                break;
+            }
+            if val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN {
+                // TODO: Return error?
+                break;
+            }
+
+            // Check tx_index match without deserializing
+            // - [0] StoredEntry tag
+            // - [1] record tag
+            // - [2..5] height
+            // - [6..7] tx_index
+            // - [8..9] vout
+            // - [10] flags
+            // - [11..18] value
+            // - [19..50] checksum
+
+            let block_index = u32::from_be_bytes([val[2], val[3], val[4], val[5]]);
+            let tx_idx = u16::from_be_bytes([val[6], val[7]]);
+
+            if block_index == tx_index.block_index() && tx_idx == tx_index.tx_index() {
+                results.push(val.to_vec());
+            }
+        }
+
+        Ok(results)
+    }
+
     /// Mark a specific AddrHistRecord as spent in the addrhist DB.
     /// Looks up a record by script and tx_index, sets FLAG_SPENT, and updates it in place.
     ///
     /// Returns Ok(true) if a record was updated, Ok(false) if not found, or Err on DB error.
     ///
-    /// This method takes an *open* read only LMDB transaction
+    /// This method takes an *open* read/write LMDB transaction
     /// so multiple calls can be chained internally.
     pub fn mark_addr_hist_record_spent_txn(
         &self,
@@ -1112,27 +1218,29 @@ impl ZainoDB {
     ) -> Result<bool, FinalisedStateError> {
         let addr_bytes = addr_script.to_bytes()?;
         let mut cur = txn.open_rw_cursor(self.addrhist)?;
-        // Iterate all values for this addr_script
+
         for (key, val) in cur.iter_dup_of(&addr_bytes)? {
             if key.len() != AddrScript::VERSIONED_LEN {
+                // TODO: Return error?
                 break;
             }
-            // + 1 for StoredEntryFixed tag
-            if val.len() != AddrEventBytes::VERSIONED_LEN + 1 {
+            if val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN {
+                // TODO: Return error?
                 break;
             }
-            // TODO: Update to include checksum!!!!!
-            let mut hist_record = [0u8; AddrEventBytes::VERSIONED_LEN + 1];
+            let mut hist_record = [0u8; StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN];
             hist_record.copy_from_slice(val);
 
-            // Parse the tx_index out of arr (see layout:
+            // Parse the tx_index out of arr:
             // - [0] StoredEntry tag
             // - [1] record tag
             // - [2..5] height
             // - [6..7] tx_index
             // - [8..9] vout
             // - [10] flags
-            // - [11..18] value)
+            // - [11..18] value
+            // - [19..50] checksum
+
             let block_index = u32::from_be_bytes([
                 hist_record[2],
                 hist_record[3],
@@ -1140,9 +1248,6 @@ impl ZainoDB {
                 hist_record[5],
             ]);
             let t_idx = u16::from_be_bytes([hist_record[6], hist_record[7]]);
-            // let out_index = u16::from_be_bytes([arr[8], arr[9]]);
-            // let flags = arr[10];
-            // let value = u64::from_le_bytes([arr[11], arr[12], arr[13], arr[14], arr[15], arr[16], arr[17], arr[18]]);
 
             if block_index == tx_index.block_index() && t_idx == tx_index.tx_index() {
                 if hist_record[10] & AddrHistRecord::FLAG_SPENT != 0 {
@@ -1150,6 +1255,12 @@ impl ZainoDB {
                 }
                 // Mark as spent (set the flag)
                 hist_record[10] |= AddrHistRecord::FLAG_SPENT;
+
+                // Update checksum
+                let checksum = StoredEntryFixed::<AddrEventBytes>::blake2b256(
+                    &[&addr_bytes, &hist_record[1..19]].concat(),
+                );
+                hist_record[19..51].copy_from_slice(&checksum);
 
                 // Overwrite in place
                 cur.put(&addr_bytes, &hist_record, WriteFlags::CURRENT)?;
@@ -1164,7 +1275,7 @@ impl ZainoDB {
     ///
     /// Returns Ok(true) if a record was updated, Ok(false) if not found, or Err on DB error.
     ///
-    /// This method takes an *open* read only LMDB transaction
+    /// This method takes an *open* read/write LMDB transaction
     /// so multiple calls can be chained internally.
     pub fn mark_addr_hist_record_unspent_txn(
         &self,
@@ -1174,27 +1285,29 @@ impl ZainoDB {
     ) -> Result<bool, FinalisedStateError> {
         let addr_bytes = addr_script.to_bytes()?;
         let mut cur = txn.open_rw_cursor(self.addrhist)?;
-        // Iterate all values for this addr_script
+
         for (key, val) in cur.iter_dup_of(&addr_bytes)? {
             if key.len() != AddrScript::VERSIONED_LEN {
+                // TODO: Return error?
                 break;
             }
-            // + 1 for StoredEntryFixed tag
-            if val.len() != AddrEventBytes::VERSIONED_LEN + 1 {
+            if val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN {
+                // TODO: Return error?
                 break;
             }
-            // TODO: Update to include checksum!!!!!
-            let mut hist_record = [0u8; AddrEventBytes::VERSIONED_LEN + 1];
+            let mut hist_record = [0u8; StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN];
             hist_record.copy_from_slice(val);
 
-            // Parse the tx_index out of arr (see layout:
+            // Parse the tx_index out of arr:
             // - [0] StoredEntry tag
             // - [1] record tag
             // - [2..5] height
             // - [6..7] tx_index
             // - [8..9] vout
             // - [10] flags
-            // - [11..18] value)
+            // - [11..18] value
+            // - [19..50] checksum
+
             let block_index = u32::from_be_bytes([
                 hist_record[2],
                 hist_record[3],
@@ -1202,9 +1315,6 @@ impl ZainoDB {
                 hist_record[5],
             ]);
             let t_idx = u16::from_be_bytes([hist_record[6], hist_record[7]]);
-            // let out_index = u16::from_be_bytes([arr[8], arr[9]]);
-            // let flags = arr[10];
-            // let value = u64::from_le_bytes([arr[11], arr[12], arr[13], arr[14], arr[15], arr[16], arr[17], arr[18]]);
 
             if block_index == tx_index.block_index() && t_idx == tx_index.tx_index() {
                 if hist_record[10] & AddrHistRecord::FLAG_SPENT != 0 {
@@ -1212,6 +1322,12 @@ impl ZainoDB {
                 }
                 // Mark as unspent (unset the flag)
                 hist_record[10] &= !AddrHistRecord::FLAG_SPENT;
+
+                // Update checksum
+                let checksum = StoredEntryFixed::<AddrEventBytes>::blake2b256(
+                    &[&addr_bytes, &hist_record[1..19]].concat(),
+                );
+                hist_record[19..51].copy_from_slice(&checksum);
 
                 // Overwrite in place
                 cur.put(&addr_bytes, &hist_record, WriteFlags::CURRENT)?;
@@ -2086,7 +2202,7 @@ impl<T: ZainoVersionedSerialise + FixedEncodedLen> ZainoVersionedSerialise for S
 }
 
 impl<T: ZainoVersionedSerialise + FixedEncodedLen> FixedEncodedLen for StoredEntryFixed<T> {
-    const ENCODED_LEN: usize = T::VERSIONED_LEN;
+    const ENCODED_LEN: usize = T::VERSIONED_LEN + 32;
 }
 
 /// Variable-length database value.
