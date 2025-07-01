@@ -115,11 +115,11 @@ pub struct ZainoDB {
     heights: Database,
     /// Spent outpoints: Outpoint -> StoredEntry<Vec<TxIndex>>
     ///
-    /// TODO: Add doc!
+    /// Used to check spent status of given outpoints, retuning spending tx.
     spent: Database,
     /// Transparent address history: AddrScript -> StoredEntry<AddrEventBytes>
     ///
-    /// TODO: add doc!
+    /// Used to search all transparent address indexes (txids, utxos, balances, deltas)
     addrhist: Database,
     /// Subtree roots: Index -> StoredEntry<ShardRoot>
     shard_roots: Database,
@@ -269,19 +269,27 @@ impl ZainoDB {
             let zaino_db = zaino_db;
             async move {
                 // ────────────────────────── initial validation ─────────────────────────
-                // TODO: Run this in background!
-                if let Err(e) = zaino_db.initial_root_scan() {
-                    error!("initial root scan failed: {e}");
-                    zaino_db.status.store(StatusType::CriticalError.into());
-                    // TODO: Handle corrupt db better!
-                    return;
+                let (r1, r2, r3, r4) = tokio::join!(
+                    async { zaino_db.initial_root_scan() },
+                    async { zaino_db.initial_spent_scan() },
+                    async { zaino_db.initial_addrhist_scan() },
+                    async { zaino_db.initial_block_scan() },
+                );
+
+                for (desc, result) in [
+                    ("root scan", r1),
+                    ("spent scan", r2),
+                    ("addrhist scan", r3),
+                    ("block scan", r4),
+                ] {
+                    if let Err(e) = result {
+                        error!("initial {desc} failed: {e}");
+                        zaino_db.status.store(StatusType::CriticalError.into());
+                        // TODO: Handle error better?
+                        return;
+                    }
                 }
-                if let Err(e) = zaino_db.initial_block_scan() {
-                    error!("initial block scan failed: {e}");
-                    zaino_db.status.store(StatusType::CriticalError.into());
-                    // TODO: Handle corrupt db better!
-                    return;
-                }
+
                 info!(
                     "initial validation complete – tip={}",
                     zaino_db.validated_tip.load(Ordering::Relaxed)
@@ -370,6 +378,48 @@ impl ZainoDB {
         Ok(())
     }
 
+    /// Validate every stored `TxIndex` (cheap – single checksum each).
+    pub fn initial_spent_scan(&self) -> Result<(), FinalisedStateError> {
+        let ro = self.env.begin_ro_txn()?;
+        let mut cursor = ro.open_ro_cursor(self.spent)?;
+
+        for (key_bytes, val_bytes) in cursor.iter() {
+            // 1) Deserialize the StoredEntryFixed<TxIndex> from the raw bytes
+            let entry = StoredEntryFixed::<TxIndex>::from_bytes(val_bytes)
+                .map_err(|e| FinalisedStateError::Custom(format!("corrupt spent entry: {e}")))?;
+
+            // 2) Verify the checksum against the *same* key bytes
+            if !entry.verify(key_bytes) {
+                return Err(FinalisedStateError::Custom(
+                    "spent record checksum mismatch".into(),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate every stored `AddrEventBytes` (cheap – single checksum each).
+    pub fn initial_addrhist_scan(&self) -> Result<(), FinalisedStateError> {
+        let ro = self.env.begin_ro_txn()?;
+        let mut cursor = ro.open_ro_cursor(self.addrhist)?;
+
+        for (addr_bytes, record_bytes) in cursor.iter() {
+            // 1) Deserialize the StoredEntryFixed<AddrEventBytes> from the raw bytes
+            let entry = StoredEntryFixed::<AddrEventBytes>::from_bytes(record_bytes)
+                .map_err(|e| FinalisedStateError::Custom(format!("corrupt addrhist entry: {e}")))?;
+
+            // 2) Verify the checksum against the *same* key bytes
+            if !entry.verify(addr_bytes) {
+                return Err(FinalisedStateError::Custom(
+                    "spent record checksum mismatch".into(),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
     /// Scan the whole chain once at start-up and validate every block.
     fn initial_block_scan(&self) -> Result<(), FinalisedStateError> {
         let ro = self.env.begin_ro_txn()?;
@@ -377,18 +427,18 @@ impl ZainoDB {
 
         for (hash_bytes, height_entry_bytes) in cursor.iter() {
             let hash = Hash::from_bytes(hash_bytes)?;
+            // 1) Deserialize the StoredEntryFixed<Height> from the raw bytes
             let height = *StoredEntryFixed::<Height>::from_bytes(height_entry_bytes)
                 .map_err(|e| FinalisedStateError::Custom(format!("corrupt height entry: {e}")))?
                 .inner();
 
+            // 3) Validate block.
             if let Err(e) = self.validate_block(height, hash) {
                 return Err(e);
             }
         }
         Ok(())
     }
-
-    // TODO: Add transaction index scan!
 
     /// Clears stale reader slots by opening and closing a read transaction.
     fn clean_trailing(&self) -> Result<(), FinalisedStateError> {
@@ -1814,16 +1864,15 @@ impl ZainoDB {
         }
 
         // *** transparent ***
-        {
-            let raw = ro
-                .get(self.transparent, &height_key)
-                .map_err(|e| FinalisedStateError::LmdbError(e))?;
+        let transparent_tx_list = {
+            let raw = ro.get(self.transparent, &height_key)?;
             let entry = StoredEntryVar::<TransparentTxList>::from_bytes(raw)
                 .map_err(|e| fail(&format!("transparent corrupt CBOR: {e}")))?;
             if !entry.verify(&height_key) {
                 return Err(fail("transparent checksum mismatch"));
             }
-        }
+            entry
+        };
 
         // *** sapling ***
         {
@@ -1876,7 +1925,87 @@ impl ZainoDB {
             }
         }
 
-        // TODO: Add transaction index validation!
+        // *** spent + addrhist validation ***
+        let tx_list = transparent_tx_list.inner().tx();
+
+        for (tx_index, tx_opt) in tx_list.iter().enumerate() {
+            let tx_index = tx_index as u16;
+            let txid_index = TxIndex::new(height.0, tx_index);
+
+            let Some(tx) = tx_opt else { continue };
+
+            // Inputs: check spent + addrhist input record
+            for input in tx.inputs() {
+                // Check spent record
+                let outpoint = Outpoint::new(*input.prevout_txid(), input.prevout_index());
+                let outpoint_bytes = outpoint.to_bytes()?;
+                let val = ro.get(self.spent, &outpoint_bytes).map_err(|_| {
+                    fail(&format!("missing spent index for outpoint {:?}", outpoint))
+                })?;
+                let entry = StoredEntryFixed::<TxIndex>::from_bytes(val)
+                    .map_err(|e| fail(&format!("corrupt spent entry: {e}")))?;
+                if !entry.verify(&outpoint_bytes) {
+                    return Err(fail("spent entry checksum mismatch"));
+                }
+                if entry.inner() != &txid_index {
+                    return Err(fail("spent entry has wrong TxIndex"));
+                }
+
+                // Check addrhist input record
+                let prev_output = self.get_previous_output(outpoint)?;
+                let addr_bytes = AddrScript::new(*prev_output.script_hash()).to_bytes()?;
+                let rec_bytes =
+                    self.addr_hist_records_by_addr_and_index_raw_txn(&ro, &addr_bytes, txid_index)?;
+
+                let matched = rec_bytes.iter().any(|val| {
+                    // avoid deserialization: check IS_INPUT + correct vout
+                    // - [0] StoredEntry tag
+                    // - [1] record tag
+                    // - [2..5] height
+                    // - [6..7] tx_index
+                    // - [8..9] vout
+                    // - [10] flags
+                    // - [11..18] value
+                    // - [19..50] checksum
+
+                    let flags = val[10];
+                    let vout = u16::from_be_bytes([val[8], val[9]]);
+                    (flags & AddrEventBytes::FLAG_IS_INPUT) != 0
+                        && vout == input.prevout_index() as u16
+                });
+
+                if !matched {
+                    return Err(fail("missing addrhist input record"));
+                }
+            }
+
+            // Outputs: check addrhist mined record
+            for (vout, output) in tx.outputs().iter().enumerate() {
+                let addr_bytes = AddrScript::new(*output.script_hash()).to_bytes()?;
+                let rec_bytes =
+                    self.addr_hist_records_by_addr_and_index_raw_txn(&ro, &addr_bytes, txid_index)?;
+
+                let matched = rec_bytes.iter().any(|val| {
+                    // avoid deserialization: check IS_MINED + correct vout
+                    // - [0] StoredEntry tag
+                    // - [1] record tag
+                    // - [2..5] height
+                    // - [6..7] tx_index
+                    // - [8..9] vout
+                    // - [10] flags
+                    // - [11..18] value
+                    // - [19..50] checksum
+
+                    let flags = val[10];
+                    let vout_rec = u16::from_be_bytes([val[8], val[9]]);
+                    (flags & AddrEventBytes::FLAG_MINED) != 0 && vout_rec as usize == vout
+                });
+
+                if !matched {
+                    return Err(fail("missing addrhist mined output record"));
+                }
+            }
+        }
 
         self.mark_validated(height.into());
         Ok(())

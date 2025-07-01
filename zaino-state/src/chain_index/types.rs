@@ -2211,8 +2211,6 @@ impl FixedEncodedLen for AddrHistRecord {
 
 /// AddrHistRecord database byte array.
 ///
-/// EXACTLY 17 bytes – duplicate value in `addr_hist` DBI.
-///
 /// Layout (all big-endian except `value`):
 /// [0..4]  height
 /// [4..6]  tx_index
@@ -2227,6 +2225,15 @@ pub(crate) struct AddrEventBytes([u8; 17]);
 
 impl AddrEventBytes {
     const LEN: usize = 17;
+
+    /// Flag mask for is_mined.
+    pub const FLAG_MINED: u8 = 0x01;
+
+    /// Flag mask for is_spent.
+    pub const FLAG_SPENT: u8 = 0x02;
+
+    /// Flag mask for is_input.
+    pub const FLAG_IS_INPUT: u8 = 0x04;
 
     /// Create an [`AddrEventBytes`] from an [`AddrHistRecord`],
     /// returning an I/O error if any write fails.
