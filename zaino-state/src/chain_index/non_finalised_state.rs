@@ -37,6 +37,7 @@ pub struct NonFinalizedState {
 }
 
 #[derive(Debug)]
+/// A snapshot of the nonfinalized state as it existed when this was created.
 pub struct NonfinalizedBlockCacheSnapshot {
     /// the set of all known blocks < 100 blocks old
     /// this includes all blocks on-chain, as well as
@@ -49,11 +50,19 @@ pub struct NonfinalizedBlockCacheSnapshot {
 }
 
 #[derive(Debug)]
+pub enum ZebradConnectionError {
+    BadUri(String),
+    ConnectionFailure(reqwest::Error),
+    UnrecoverableError,
+}
+
+#[derive(Debug)]
+/// An error occurred during sync of the NonFinalized State.
 pub enum SyncError {
     /// The backing validator node returned corrupt, invalid, or incomplete data
     /// TODO: This may not be correctly disambibuated from temporary network issues
     /// in the fetchservice case.
-    InvalidZebraData,
+    ZebradConnectionError(ZebradConnectionError),
     /// The channel used to store new blocks has been closed. This should only happen
     /// during shutdown.
     StagingChannelClosed,
@@ -72,6 +81,7 @@ impl From<UpdateError> for SyncError {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+/// An error occured during initial creation of the NonFinalizedState
 pub enum InitError {
     InvalidZebraData,
 }
@@ -281,7 +291,7 @@ impl NonFinalizedState {
                 u32::from(best_tip.0) + 1,
             )))
             .await
-            .map_err(|_| SyncError::InvalidZebraData)?
+            .map_err(|_| SyncError::ZebradConnectionError)?
         {
             // If this block is next in the chain, we sync it as normal
             if Hash::from(block.header.previous_block_hash) == best_tip.1 {
@@ -309,7 +319,7 @@ impl NonFinalizedState {
                     ),
                     block_commitments: match block
                         .commitment(&self.network)
-                        .map_err(|_| SyncError::InvalidZebraData)?
+                        .map_err(|_| SyncError::ZebradConnectionError)?
                     {
                         zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
                         zebra_chain::block::Commitment::FinalSaplingRoot(root) => root.into(),
@@ -680,67 +690,7 @@ impl BlockchainSource {
                 ))
             }
             BlockchainSource::Fetch(json_rp_see_connector) => {
-                let trees = json_rp_see_connector
-                    .get_treestate(id.to_string())
-                    .await
-                    .map_err(BlockchainSourceError::FetchServiceError)?;
-                let GetTreestateResponse {
-                    sapling, orchard, ..
-                } = trees;
-
-                let sap_commitments: Vec<zebra_chain::sapling::tree::NoteCommitmentUpdate> =
-                    sapling
-                        .inner()
-                        .inner()
-                        .iter()
-                        .map(|commitment| -> Result<_, _> {
-                            dbg!(commitment.len());
-                            let commitment_bytes = <[u8; 32]>::try_from(commitment.as_slice())?;
-
-                            let scalar =
-                                zebra_chain::sapling::tree::NoteCommitmentUpdate::from_bytes(
-                                    &commitment_bytes,
-                                )
-                                .unwrap();
-                            Ok::<_, std::array::TryFromSliceError>(scalar)
-                        })
-                        .collect::<Result<Vec<_>, _>>()
-                        .map_err(|_| todo!())?;
-                let sap_tree =
-                    zebra_chain::sapling::tree::NoteCommitmentTree::from(sap_commitments);
-
-                let orchard_commitments: Vec<zebra_chain::orchard::tree::NoteCommitmentUpdate> =
-                    orchard
-                        .inner()
-                        .inner()
-                        .iter()
-                        .map(|commitment| -> Result<_, _> {
-                            let commitment_bytes = <[u8; 32]>::try_from(commitment.as_slice())?;
-                            fn convert(data: &[u8; 32]) -> [u64; 4] {
-                                let mut res = [0; 4];
-                                for i in 0..4 {
-                                    res[i] = u64::from_le_bytes(
-                                        data[i * 8..(i * 8) + 8]
-                                            .try_into()
-                                            .expect("there to be the rign number of bytes"),
-                                    )
-                                }
-                                res
-                            }
-
-                            let scalar = zebra_chain::orchard::tree::NoteCommitmentUpdate::from_raw(
-                                convert(&commitment_bytes),
-                            );
-                            Ok::<_, std::array::TryFromSliceError>(scalar)
-                        })
-                        .collect::<Result<Vec<_>, _>>()
-                        .map_err(|_| todo!())?;
-                let orchard_tree =
-                    zebra_chain::orchard::tree::NoteCommitmentTree::from(orchard_commitments);
-                Ok((
-                    Some((sap_tree.root(), sap_tree.count())),
-                    Some((orchard_tree.root(), orchard_tree.count())),
-                ))
+                todo!()
             }
         }
     }
