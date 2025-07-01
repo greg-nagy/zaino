@@ -69,32 +69,30 @@ impl From<StateServiceError> for tonic::Status {
         match error {
             StateServiceError::Custom(message) => tonic::Status::internal(message),
             StateServiceError::JoinError(err) => {
-                tonic::Status::internal(format!("Join error: {}", err))
+                tonic::Status::internal(format!("Join error: {err}"))
             }
             StateServiceError::JsonRpcConnectorError(err) => {
-                tonic::Status::internal(format!("JsonRpcConnector error: {}", err))
+                tonic::Status::internal(format!("JsonRpcConnector error: {err}"))
             }
             StateServiceError::RpcError(err) => {
-                tonic::Status::internal(format!("RPC error: {:?}", err))
+                tonic::Status::internal(format!("RPC error: {err:?}"))
             }
             StateServiceError::BlockCacheError(err) => {
-                tonic::Status::internal(format!("BlockCache error: {:?}", err))
+                tonic::Status::internal(format!("BlockCache error: {err:?}"))
             }
             StateServiceError::MempoolError(err) => {
-                tonic::Status::internal(format!("Mempool error: {:?}", err))
+                tonic::Status::internal(format!("Mempool error: {err:?}"))
             }
             StateServiceError::TonicStatusError(err) => err,
             StateServiceError::SerializationError(err) => {
-                tonic::Status::internal(format!("Serialization error: {}", err))
+                tonic::Status::internal(format!("Serialization error: {err}"))
             }
             StateServiceError::TryFromIntError(err) => {
-                tonic::Status::internal(format!("Integer conversion error: {}", err))
+                tonic::Status::internal(format!("Integer conversion error: {err}"))
             }
-            StateServiceError::IoError(err) => {
-                tonic::Status::internal(format!("IO error: {}", err))
-            }
+            StateServiceError::IoError(err) => tonic::Status::internal(format!("IO error: {err}")),
             StateServiceError::Generic(err) => {
-                tonic::Status::internal(format!("Generic error: {}", err))
+                tonic::Status::internal(format!("Generic error: {err}"))
             }
             ref err @ StateServiceError::ZebradVersionMismatch { .. } => {
                 tonic::Status::internal(err.to_string())
@@ -140,20 +138,20 @@ impl From<FetchServiceError> for tonic::Status {
         match error {
             FetchServiceError::Critical(message) => tonic::Status::internal(message),
             FetchServiceError::JsonRpcConnectorError(err) => {
-                tonic::Status::internal(format!("JsonRpcConnector error: {}", err))
+                tonic::Status::internal(format!("JsonRpcConnector error: {err}"))
             }
             FetchServiceError::BlockCacheError(err) => {
-                tonic::Status::internal(format!("BlockCache error: {}", err))
+                tonic::Status::internal(format!("BlockCache error: {err}"))
             }
             FetchServiceError::MempoolError(err) => {
-                tonic::Status::internal(format!("Mempool error: {}", err))
+                tonic::Status::internal(format!("Mempool error: {err}"))
             }
             FetchServiceError::RpcError(err) => {
-                tonic::Status::internal(format!("RPC error: {:?}", err))
+                tonic::Status::internal(format!("RPC error: {err:?}"))
             }
             FetchServiceError::TonicStatusError(err) => err,
             FetchServiceError::SerializationError(err) => {
-                tonic::Status::internal(format!("Serialization error: {}", err))
+                tonic::Status::internal(format!("Serialization error: {err}"))
             }
         }
     }

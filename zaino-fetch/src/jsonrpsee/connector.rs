@@ -323,7 +323,9 @@ impl JsonRpSeeConnector {
             }
 
             if !status.is_success() {
-                return Err(RpcRequestError::InternalUnrecoverable);
+                return Err(RpcRequestError::Transport(TransportError::new(format!(
+                    "Error: Error status from node's rpc server: {status}, {body_str}"
+                ))));
             }
 
             let response: RpcResponse<R> =
