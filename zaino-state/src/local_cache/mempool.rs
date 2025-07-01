@@ -184,7 +184,7 @@ impl Mempool {
             .await
             .map_err(|_| {
                 MempoolError::JsonRpcConnectorError(
-                    zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError::JsonRpSeeClientError(
+                    zaino_fetch::jsonrpsee::error::TransportError::JsonRpSeeClientError(
                         "Failed to get mempool".to_string(),
                     ),
                 )
@@ -194,9 +194,10 @@ impl Mempool {
             let transaction = self
                 .fetcher
                 .get_raw_transaction(txid.clone(), Some(1))
-                .await.map_err(|_| {
+                .await
+                .map_err(|_| {
                     MempoolError::JsonRpcConnectorError(
-                        zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError::JsonRpSeeClientError(
+                        zaino_fetch::jsonrpsee::error::TransportError::JsonRpSeeClientError(
                             "Failed to get mempool".to_string(),
                         ),
                     )

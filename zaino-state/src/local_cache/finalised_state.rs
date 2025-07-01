@@ -399,7 +399,7 @@ impl FinalisedState {
             .await
             .map_err(|_| {
                 FinalisedStateError::JsonRpcConnectorError(
-                    zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError::JsonRpSeeClientError(
+                    zaino_fetch::jsonrpsee::error::TransportError::JsonRpSeeClientError(
                         "Failed to get block".to_string(),
                     ),
                 )
@@ -438,7 +438,7 @@ impl FinalisedState {
                 .get_block(reorg_height.0.to_string(), Some(1))
                 .await.map_err(|_| {
                     FinalisedStateError::JsonRpcConnectorError(
-                        zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError::JsonRpSeeClientError(
+                        zaino_fetch::jsonrpsee::error::TransportError::JsonRpSeeClientError(
                             "Failed to get block".to_string(),
                         ),
                     )
@@ -460,7 +460,7 @@ impl FinalisedState {
             .await
             .map_err(|e| {
                 FinalisedStateError::JsonRpcConnectorError(
-                    zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError::JsonRpSeeClientError(
+                    zaino_fetch::jsonrpsee::error::TransportError::JsonRpSeeClientError(
                         e.to_string(),
                     ),
                 )
@@ -507,7 +507,7 @@ impl FinalisedState {
             loop {
                 let blockchain_info = self.fetcher.get_blockchain_info().await.map_err(|e| {
                     FinalisedStateError::JsonRpcConnectorError(
-                        zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError::JsonRpSeeClientError(
+                        zaino_fetch::jsonrpsee::error::TransportError::JsonRpSeeClientError(
                             e.to_string(),
                         ),
                     )

@@ -26,7 +26,7 @@ use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
-        error::JsonRpSeeConnectorError,
+        error::TransportError,
     },
 };
 use zaino_proto::proto::{
@@ -159,7 +159,7 @@ impl ZcashService for StateService {
         .await?;
 
         let zebra_build_data = rpc_client.get_info().await.map_err(|_| {
-            StateServiceError::JsonRpcConnectorError(JsonRpSeeConnectorError::JsonRpSeeClientError(
+            StateServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
                 "Failed to get info".to_string(),
             ))
         })?;
@@ -214,11 +214,9 @@ impl ZcashService for StateService {
                 .get_blockchain_info()
                 .await
                 .map_err(|_| {
-                    StateServiceError::JsonRpcConnectorError(
-                        JsonRpSeeConnectorError::JsonRpSeeClientError(
-                            "Failed to get blockchain info".to_string(),
-                        ),
-                    )
+                    StateServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
+                        "Failed to get blockchain info".to_string(),
+                    ))
                 })?
                 .blocks;
 
@@ -1011,11 +1009,9 @@ impl ZcashIndexer for StateServiceSubscriber {
             .await
             .map(SentTransactionHash::from)
             .map_err(|_| {
-                StateServiceError::JsonRpcConnectorError(
-                    JsonRpSeeConnectorError::JsonRpSeeClientError(
-                        "Failed to send raw transaction".to_string(),
-                    ),
-                )
+                StateServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
+                    "Failed to send raw transaction".to_string(),
+                ))
             })
     }
 

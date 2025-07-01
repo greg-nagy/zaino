@@ -222,7 +222,7 @@ impl NonFinalisedState {
             .await
             .map_err(|_| {
                 NonFinalisedStateError::JsonRpcConnectorError(
-                    zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError::JsonRpSeeClientError(
+                    zaino_fetch::jsonrpsee::error::TransportError::JsonRpSeeClientError(
                         "Failed to get block".to_string(),
                     ),
                 )
@@ -263,7 +263,7 @@ impl NonFinalisedState {
                 .await
                 .map_err(|_| {
                     NonFinalisedStateError::JsonRpcConnectorError(
-                        zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError::JsonRpSeeClientError(
+                        zaino_fetch::jsonrpsee::error::TransportError::JsonRpSeeClientError(
                             "Failed to get block".to_string(),
                         ),
                     )

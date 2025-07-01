@@ -19,7 +19,7 @@ use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
-        error::JsonRpSeeConnectorError,
+        error::TransportError,
     },
 };
 
@@ -90,7 +90,7 @@ impl ZcashService for FetchService {
         .await?;
 
         let zebra_build_data = fetcher.get_info().await.map_err(|_| {
-            FetchServiceError::JsonRpcConnectorError(JsonRpSeeConnectorError::JsonRpSeeClientError(
+            FetchServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
                 "Failed to get info".to_string(),
             ))
         })?;
@@ -207,9 +207,9 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_info()
             .await
             .map_err(|_| {
-                FetchServiceError::JsonRpcConnectorError(
-                    JsonRpSeeConnectorError::JsonRpSeeClientError("Failed to get info".to_string()),
-                )
+                FetchServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
+                    "Failed to get info".to_string(),
+                ))
             })?
             .into())
     }
@@ -230,11 +230,9 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_blockchain_info()
             .await
             .map_err(|_| {
-                FetchServiceError::JsonRpcConnectorError(
-                    JsonRpSeeConnectorError::JsonRpSeeClientError(
-                        "Failed to get blockchain info".to_string(),
-                    ),
-                )
+                FetchServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
+                    "Failed to get blockchain info".to_string(),
+                ))
             })?
             .try_into()
             .map_err(|_e| {
@@ -283,11 +281,9 @@ impl ZcashIndexer for FetchServiceSubscriber {
             })?)
             .await
             .map_err(|_| {
-                FetchServiceError::JsonRpcConnectorError(
-                    JsonRpSeeConnectorError::JsonRpSeeClientError(
-                        "Failed to get address balance".to_string(),
-                    ),
-                )
+                FetchServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
+                    "Failed to get address balance".to_string(),
+                ))
             })?
             .into())
     }
@@ -316,11 +312,9 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .send_raw_transaction(raw_transaction_hex)
             .await
             .map_err(|_| {
-                FetchServiceError::JsonRpcConnectorError(
-                    JsonRpSeeConnectorError::JsonRpSeeClientError(
-                        "Failed to send raw transaction".to_string(),
-                    ),
-                )
+                FetchServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
+                    "Failed to send raw transaction".to_string(),
+                ))
             })?
             .into())
     }
@@ -359,11 +353,9 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_block(hash_or_height, verbosity)
             .await
             .map_err(|_| {
-                FetchServiceError::JsonRpcConnectorError(
-                    JsonRpSeeConnectorError::JsonRpSeeClientError(
-                        "Failed to get block".to_string(),
-                    ),
-                )
+                FetchServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
+                    "Failed to get block".to_string(),
+                ))
             })?
             .try_into()?)
     }
@@ -379,11 +371,9 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_block_count()
             .await
             .map_err(|_| {
-                FetchServiceError::JsonRpcConnectorError(
-                    JsonRpSeeConnectorError::JsonRpSeeClientError(
-                        "Failed to get block count".to_string(),
-                    ),
-                )
+                FetchServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
+                    "Failed to get block count".to_string(),
+                ))
             })?
             .into())
     }
@@ -426,11 +416,9 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_treestate(hash_or_height)
             .await
             .map_err(|_| {
-                FetchServiceError::JsonRpcConnectorError(
-                    JsonRpSeeConnectorError::JsonRpSeeClientError(
-                        "Failed to get treestate".to_string(),
-                    ),
-                )
+                FetchServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
+                    "Failed to get treestate".to_string(),
+                ))
             })?
             .try_into()?)
     }
@@ -464,11 +452,9 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_subtrees_by_index(pool, start_index.0, limit.map(|limit_index| limit_index.0))
             .await
             .map_err(|_| {
-                FetchServiceError::JsonRpcConnectorError(
-                    JsonRpSeeConnectorError::JsonRpSeeClientError(
-                        "Failed to get subtrees by index".to_string(),
-                    ),
-                )
+                FetchServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
+                    "Failed to get subtrees by index".to_string(),
+                ))
             })?
             .into())
     }
@@ -502,11 +488,9 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_raw_transaction(txid_hex, verbose)
             .await
             .map_err(|_| {
-                FetchServiceError::JsonRpcConnectorError(
-                    JsonRpSeeConnectorError::JsonRpSeeClientError(
-                        "Failed to get raw transaction".to_string(),
-                    ),
-                )
+                FetchServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
+                    "Failed to get raw transaction".to_string(),
+                ))
             })?
             .into())
     }
@@ -541,11 +525,9 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_address_txids(addresses, start, end)
             .await
             .map_err(|_| {
-                FetchServiceError::JsonRpcConnectorError(
-                    JsonRpSeeConnectorError::JsonRpSeeClientError(
-                        "Failed to get address txids".to_string(),
-                    ),
-                )
+                FetchServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
+                    "Failed to get address txids".to_string(),
+                ))
             })?
             .transactions)
     }
@@ -579,11 +561,9 @@ impl ZcashIndexer for FetchServiceSubscriber {
             })?)
             .await
             .map_err(|_| {
-                FetchServiceError::JsonRpcConnectorError(
-                    JsonRpSeeConnectorError::JsonRpSeeClientError(
-                        "Failed to get address utxos".to_string(),
-                    ),
-                )
+                FetchServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
+                    "Failed to get address utxos".to_string(),
+                ))
             })?
             .into_iter()
             .map(|utxos| utxos.into())
@@ -601,11 +581,9 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             .get_compact_block(latest_height.0.to_string())
             .await
             .map_err(|_| {
-                FetchServiceError::JsonRpcConnectorError(
-                    JsonRpSeeConnectorError::JsonRpSeeClientError(
-                        "Failed to get latest block".to_string(),
-                    ),
-                )
+                FetchServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
+                    "Failed to get latest block".to_string(),
+                ))
             })?
             .hash;
 

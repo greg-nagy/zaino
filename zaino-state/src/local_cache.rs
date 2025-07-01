@@ -15,7 +15,7 @@ use zaino_fetch::{
     chain::block::FullBlock,
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcRequestError},
-        error::JsonRpSeeConnectorError,
+        error::TransportError,
         response::{GetBlockError, GetBlockResponse},
     },
 };
@@ -136,7 +136,7 @@ impl BlockCacheSubscriber {
         hash_or_height: String,
     ) -> Result<CompactBlock, RpcRequestError<BlockCacheError>> {
         let hash_or_height: HashOrHeight = hash_or_height.parse().map_err(|_| {
-            RpcRequestError::Transport(JsonRpSeeConnectorError::JsonRpSeeClientError(
+            RpcRequestError::Transport(TransportError::JsonRpSeeClientError(
                 "Could not parse hash or height".to_string(),
             ))
         })?;

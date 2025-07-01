@@ -15,7 +15,7 @@ pub enum StateServiceError {
 
     /// Error from JsonRpcConnector.
     #[error("JsonRpcConnector error: {0}")]
-    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError),
+    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpsee::error::TransportError),
 
     /// RPC error in compatibility with zcashd.
     #[error("RPC error: {0:?}")]
@@ -112,7 +112,7 @@ pub enum FetchServiceError {
 
     /// Error from JsonRpcConnector.
     #[error("JsonRpcConnector error: {0}")]
-    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError),
+    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpsee::error::TransportError),
 
     /// Error from the block cache.
     #[error("Mempool error: {0}")]
@@ -168,7 +168,7 @@ pub enum MempoolError {
 
     /// Error from JsonRpcConnector.
     #[error("JsonRpcConnector error: {0}")]
-    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError),
+    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpsee::error::TransportError),
 
     /// Error from a Tokio Watch Receiver.
     #[error("Join error: {0}")]
@@ -200,7 +200,7 @@ pub enum BlockCacheError {
 
     /// Error from JsonRpcConnector.
     #[error("JsonRpcConnector error: {0}")]
-    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError),
+    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpsee::error::TransportError),
 
     /// Chain parse error.
     #[error("Chain parse error: {0}")]
@@ -240,7 +240,7 @@ pub enum NonFinalisedStateError {
 
     /// Error from JsonRpcConnector.
     #[error("JsonRpcConnector error: {0}")]
-    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError),
+    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpsee::error::TransportError),
 
     /// Unexpected status-related error.
     #[error("Status error: {0:?}")]
@@ -276,7 +276,7 @@ pub enum FinalisedStateError {
 
     /// Error from JsonRpcConnector.
     #[error("JsonRpcConnector error: {0}")]
-    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpsee::error::JsonRpSeeConnectorError),
+    JsonRpcConnectorError(#[from] zaino_fetch::jsonrpsee::error::TransportError),
 
     /// std::io::Error
     #[error("IO error: {0}")]
