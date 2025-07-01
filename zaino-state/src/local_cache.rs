@@ -21,7 +21,7 @@ use zaino_fetch::{
 };
 use zaino_proto::proto::compact_formats::{ChainMetadata, CompactBlock, CompactOrchardAction};
 use zebra_chain::{
-    block::{Block, Hash, Height},
+    block::{Hash, Height},
     parameters::Network,
 };
 use zebra_rpc::methods::{GetBlock, GetBlockTransaction};

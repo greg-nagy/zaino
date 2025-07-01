@@ -123,25 +123,33 @@ enum AuthMethod {
     Cookie { cookie: String },
 }
 
+/// Trait to convert a JSON-RPC response to an error.
 pub trait ResponseToError: Sized {
+    /// The error type.
     type RpcError: std::fmt::Debug;
 
+    /// Converts a JSON-RPC response to an error.
     fn to_error(self) -> Result<Self, Self::RpcError> {
         Ok(self)
     }
 }
 
+/// Error type for JSON-RPC requests.
 #[derive(Debug, thiserror::Error)]
 pub enum RpcRequestError<MethodError> {
+    /// Error variant for errors related to the transport layer.
     #[error("Transport error: {0}")]
     Transport(#[from] TransportError),
 
+    /// Error variant for errors related to the JSON-RPC method being called.
     #[error("Method error: {0:?}")]
     Method(MethodError),
 
+    /// Error variant for errors related to the internal JSON-RPC library.
     #[error("JSON-RPC error: {0:?}")]
     JsonRpc(serde_json::Error),
 
+    /// Internal unrecoverable error.
     #[error("Internal unrecoverable error")]
     InternalUnrecoverable,
 }
@@ -415,7 +423,7 @@ impl JsonRpSeeConnector {
     ) -> Result<SendTransactionResponse, RpcRequestError<SendTransactionError>> {
         let params =
             vec![serde_json::to_value(raw_transaction_hex)
-                .map_err(|e| RpcRequestError::JsonRpc(e))?];
+                .map_err(RpcRequestError::JsonRpc)?];
         self.send_request("sendrawtransaction", params).await
     }
 
@@ -438,8 +446,8 @@ impl JsonRpSeeConnector {
     ) -> Result<GetBlockResponse, RpcRequestError<GetBlockError>> {
         let v = verbosity.unwrap_or(1);
         let params = [
-            serde_json::to_value(hash_or_height).map_err(|e| RpcRequestError::JsonRpc(e))?,
-            serde_json::to_value(v).map_err(|e| RpcRequestError::JsonRpc(e))?,
+            serde_json::to_value(hash_or_height).map_err(RpcRequestError::JsonRpc)?,
+            serde_json::to_value(v).map_err(RpcRequestError::JsonRpc)?,
         ];
 
         if v == 0 {
@@ -490,7 +498,7 @@ impl JsonRpSeeConnector {
         hash_or_height: String,
     ) -> Result<GetTreestateResponse, RpcRequestError<GetTreestateError>> {
         let params =
-            vec![serde_json::to_value(hash_or_height).map_err(|e| RpcRequestError::JsonRpc(e))?];
+            vec![serde_json::to_value(hash_or_height).map_err(RpcRequestError::JsonRpc)?];
         self.send_request("z_gettreestate", params).await
     }
 
@@ -513,13 +521,13 @@ impl JsonRpSeeConnector {
     ) -> Result<GetSubtreesResponse, RpcRequestError<GetSubtreesError>> {
         let params = match limit {
             Some(v) => vec![
-                serde_json::to_value(pool).map_err(|e| RpcRequestError::JsonRpc(e))?,
-                serde_json::to_value(start_index).map_err(|e| RpcRequestError::JsonRpc(e))?,
-                serde_json::to_value(v).map_err(|e| RpcRequestError::JsonRpc(e))?,
+                serde_json::to_value(pool).map_err(RpcRequestError::JsonRpc)?,
+                serde_json::to_value(start_index).map_err(RpcRequestError::JsonRpc)?,
+                serde_json::to_value(v).map_err(RpcRequestError::JsonRpc)?,
             ],
             None => vec![
-                serde_json::to_value(pool).map_err(|e| RpcRequestError::JsonRpc(e))?,
-                serde_json::to_value(start_index).map_err(|e| RpcRequestError::JsonRpc(e))?,
+                serde_json::to_value(pool).map_err(RpcRequestError::JsonRpc)?,
+                serde_json::to_value(start_index).map_err(RpcRequestError::JsonRpc)?,
             ],
         };
         self.send_request("z_getsubtreesbyindex", params).await
@@ -542,12 +550,12 @@ impl JsonRpSeeConnector {
     ) -> Result<GetTransactionResponse, RpcRequestError<GetTransactionError>> {
         let params = match verbose {
             Some(v) => vec![
-                serde_json::to_value(txid_hex).map_err(|e| RpcRequestError::JsonRpc(e))?,
-                serde_json::to_value(v).map_err(|e| RpcRequestError::JsonRpc(e))?,
+                serde_json::to_value(txid_hex).map_err(RpcRequestError::JsonRpc)?,
+                serde_json::to_value(v).map_err(RpcRequestError::JsonRpc)?,
             ],
             None => vec![
-                serde_json::to_value(txid_hex).map_err(|e| RpcRequestError::JsonRpc(e))?,
-                serde_json::to_value(0).map_err(|e| RpcRequestError::JsonRpc(e))?,
+                serde_json::to_value(txid_hex).map_err(RpcRequestError::JsonRpc)?,
+                serde_json::to_value(0).map_err(RpcRequestError::JsonRpc)?,
             ],
         };
 
@@ -631,7 +639,7 @@ async fn test_node_connection(url: Url, auth_method: AuthMethod) -> Result<(), T
     let response = request_builder
         .send()
         .await
-        .map_err(|e| TransportError::ReqwestError(e))?;
+        .map_err(TransportError::ReqwestError)?;
     let body_bytes = response
         .bytes()
         .await

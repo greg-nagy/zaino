@@ -1,7 +1,5 @@
 //! Holds error types for Zaino-state.
 
-use zaino_fetch::jsonrpsee::connector::ResponseToError;
-
 /// Errors related to the `StateService`.
 #[derive(Debug, thiserror::Error)]
 pub enum StateServiceError {

@@ -8,7 +8,7 @@ use crate::{
     status::{AtomicStatus, StatusType},
 };
 use tracing::{info, warn};
-use zaino_fetch::jsonrpsee::{connector::JsonRpSeeConnector, response::TxidsError};
+use zaino_fetch::jsonrpsee::connector::JsonRpSeeConnector;
 use zebra_chain::block::Hash;
 use zebra_rpc::methods::GetRawTransaction;
 

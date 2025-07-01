@@ -1,9 +1,15 @@
 //! Hold error types for the JsonRpSeeConnector and related functionality.
 
+/// Error type for JSON-RPC responses.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct JsonRpcError {
+    /// The JSON-RPC error code
     pub code: i32,
+
+    /// The JSON-RPC error message
     pub message: String,
+
+    /// The JSON-RPC error data
     pub data: Option<serde_json::Value>,
 }
 
