@@ -267,8 +267,7 @@ impl NonFinalisedState {
                             "Failed to get block".to_string(),
                         ),
                     )
-                })?
-            {
+                })? {
                 zaino_fetch::jsonrpsee::response::GetBlockResponse::Object(block) => block.hash.0,
                 _ => {
                     return Err(NonFinalisedStateError::Custom(

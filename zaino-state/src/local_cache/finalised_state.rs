@@ -435,14 +435,14 @@ impl FinalisedState {
             check_hash = match self
                 .fetcher
                 .get_block(reorg_height.0.to_string(), Some(1))
-                .await.map_err(|_| {
+                .await
+                .map_err(|_| {
                     FinalisedStateError::JsonRpcConnectorError(
                         zaino_fetch::jsonrpsee::error::TransportError::JsonRpSeeClientError(
                             "Failed to get block".to_string(),
                         ),
                     )
-                })?
-            {
+                })? {
                 zaino_fetch::jsonrpsee::response::GetBlockResponse::Object(block) => block.hash.0,
                 _ => {
                     return Err(FinalisedStateError::Custom(

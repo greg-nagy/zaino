@@ -422,8 +422,7 @@ impl JsonRpSeeConnector {
         raw_transaction_hex: String,
     ) -> Result<SendTransactionResponse, RpcRequestError<SendTransactionError>> {
         let params =
-            vec![serde_json::to_value(raw_transaction_hex)
-                .map_err(RpcRequestError::JsonRpc)?];
+            vec![serde_json::to_value(raw_transaction_hex).map_err(RpcRequestError::JsonRpc)?];
         self.send_request("sendrawtransaction", params).await
     }
 
@@ -497,8 +496,7 @@ impl JsonRpSeeConnector {
         &self,
         hash_or_height: String,
     ) -> Result<GetTreestateResponse, RpcRequestError<GetTreestateError>> {
-        let params =
-            vec![serde_json::to_value(hash_or_height).map_err(RpcRequestError::JsonRpc)?];
+        let params = vec![serde_json::to_value(hash_or_height).map_err(RpcRequestError::JsonRpc)?];
         self.send_request("z_gettreestate", params).await
     }
 
