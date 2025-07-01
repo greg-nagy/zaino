@@ -79,6 +79,13 @@ impl ResponseToError for GetInfoResponse {
     type RpcError = GetInfoError;
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum GetDifficultyError {}
+
+impl ResponseToError for GetDifficultyResponse {
+    type RpcError = GetDifficultyError;
+}
+
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(untagged)]
 /// A wrapper to allow both types of error timestamp
@@ -208,6 +215,9 @@ pub enum GetBlockchainInfoError {}
 impl ResponseToError for GetBlockchainInfoResponse {
     type RpcError = GetBlockchainInfoError;
 }
+/// Response to a `getdifficulty` RPC request.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct GetDifficultyResponse(pub f64);
 
 fn default_header() -> Height {
     Height(0)

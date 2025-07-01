@@ -842,6 +842,21 @@ impl ZcashIndexer for StateServiceSubscriber {
             .map_err(|e| StateServiceError::Custom(e.to_string()))
     }
 
+    async fn get_difficulty(&self) -> Result<f64, Self::Error> {
+        chain_tip_difficulty(
+            self.config.network.clone(),
+            self.read_state_service.clone(),
+            false,
+        )
+        .await
+        .map_err(|e| {
+            StateServiceError::RpcError(RpcError::new_from_errorobject(
+                e,
+                "failed to get difficulty",
+            ))
+        })
+    }
+
     async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, Self::Error> {
         let mut state = self.read_state_service.clone();
 

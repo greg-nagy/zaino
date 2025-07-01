@@ -24,11 +24,14 @@ use crate::jsonrpsee::{
     response::{
         GetBalanceError, GetBalanceResponse, GetBlockCountError, GetBlockCountResponse,
         GetBlockError, GetBlockResponse, GetBlockchainInfoError, GetBlockchainInfoResponse,
-        GetInfoError, GetInfoResponse, GetSubtreesError, GetSubtreesResponse, GetTransactionError,
-        GetTransactionResponse, GetTreestateError, GetTreestateResponse, GetUtxosError,
-        GetUtxosResponse, SendTransactionError, SendTransactionResponse, TxidsError, TxidsResponse,
+        GetDifficultyError, GetInfoError, GetInfoResponse, GetSubtreesError, GetSubtreesResponse,
+        GetTransactionError, GetTransactionResponse, GetTreestateError, GetTreestateResponse,
+        GetUtxosError, GetUtxosResponse, SendTransactionError, SendTransactionResponse, TxidsError,
+        TxidsResponse,
     },
 };
+
+use super::response::GetDifficultyResponse;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RpcRequest<T> {
@@ -361,6 +364,18 @@ impl JsonRpSeeConnector {
         &self,
     ) -> Result<GetBlockchainInfoResponse, RpcRequestError<GetBlockchainInfoError>> {
         self.send_request::<(), GetBlockchainInfoResponse>("getblockchaininfo", ())
+            .await
+    }
+
+    /// Returns the proof-of-work difficulty as a multiple of the minimum difficulty.
+    ///
+    /// zcashd reference: [`getdifficulty`](https://zcash.github.io/rpc/getdifficulty.html)
+    /// method: post
+    /// tags: blockchain
+    pub async fn get_difficulty(
+        &self,
+    ) -> Result<GetDifficultyResponse, RpcRequestError<GetDifficultyError>> {
+        self.send_request::<(), GetDifficultyResponse>("getdifficulty", ())
             .await
     }
 
