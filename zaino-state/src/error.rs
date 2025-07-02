@@ -1,5 +1,14 @@
 //! Holds error types for Zaino-state.
 
+use zaino_fetch::jsonrpsee::{
+    connector::RpcRequestError, error::TransportError, response::GetInfoError,
+};
+
+impl<T> From<RpcRequestError<T>> for StateServiceError {
+    fn from(value: RpcRequestError<T>) -> Self {
+        todo!()
+    }
+}
 /// Errors related to the `StateService`.
 #[derive(Debug, thiserror::Error)]
 pub enum StateServiceError {
@@ -99,6 +108,12 @@ impl From<StateServiceError> for tonic::Status {
     }
 }
 
+impl<T> From<RpcRequestError<T>> for FetchServiceError {
+    fn from(value: RpcRequestError<T>) -> Self {
+        todo!()
+    }
+}
+
 /// Errors related to the `FetchService`.
 #[derive(Debug, thiserror::Error)]
 pub enum FetchServiceError {
@@ -152,6 +167,11 @@ impl From<FetchServiceError> for tonic::Status {
                 tonic::Status::internal(format!("Serialization error: {err}"))
             }
         }
+    }
+}
+impl<T> From<RpcRequestError<T>> for MempoolError {
+    fn from(value: RpcRequestError<T>) -> Self {
+        todo!()
     }
 }
 
@@ -218,6 +238,11 @@ pub enum BlockCacheError {
     #[error("Integer conversion error: {0}")]
     TryFromIntError(#[from] std::num::TryFromIntError),
 }
+impl<T> From<RpcRequestError<T>> for NonFinalisedStateError {
+    fn from(value: RpcRequestError<T>) -> Self {
+        todo!()
+    }
+}
 
 /// Errors related to the `NonFinalisedState`.
 #[derive(Debug, thiserror::Error)]
@@ -243,6 +268,11 @@ pub enum NonFinalisedStateError {
     StatusError(StatusError),
 }
 
+impl<T> From<RpcRequestError<T>> for FinalisedStateError {
+    fn from(value: RpcRequestError<T>) -> Self {
+        todo!()
+    }
+}
 /// Errors related to the `FinalisedState`.
 #[derive(Debug, thiserror::Error)]
 pub enum FinalisedStateError {
