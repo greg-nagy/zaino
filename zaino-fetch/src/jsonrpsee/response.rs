@@ -73,7 +73,9 @@ pub struct GetInfoResponse {
 }
 
 /// Error type for the `getinfo` RPC request.
-/// TODO: check for variants
+///
+/// No variants needed. This RPC should either succeed or fail with
+/// an [`RpcRequestError::JsonRpc`] or [`RpcRequestError::Transport`] error.
 #[derive(Debug, thiserror::Error)]
 pub enum GetInfoError {}
 
@@ -82,7 +84,9 @@ impl ResponseToError for GetInfoResponse {
 }
 
 /// Error type for the `getdifficulty` RPC request.
-/// TODO: check for variants
+///
+/// No variants needed. This RPC should either succeed or fail with
+/// an [`RpcRequestError::JsonRpc`] or [`RpcRequestError::Transport`] error.
 #[derive(Debug, thiserror::Error)]
 pub enum GetDifficultyError {}
 
