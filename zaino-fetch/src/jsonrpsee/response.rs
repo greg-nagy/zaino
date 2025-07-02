@@ -105,7 +105,6 @@ pub enum ErrorsTimestamp {
 }
 
 /// Error type used for the `errors_timestamp` field of the `getinfo` RPC request.
-/// TODO: check for variants
 #[derive(Debug, thiserror::Error)]
 pub enum ErrorsTimestampError {}
 
@@ -220,7 +219,6 @@ pub struct GetBlockchainInfoResponse {
 }
 
 /// Error type for the `getblockchaininfo` RPC request.
-/// TODO: check for variants
 #[derive(Debug, thiserror::Error)]
 pub enum GetBlockchainInfoError {}
 
@@ -247,7 +245,6 @@ pub enum ChainWork {
 }
 
 /// Error type used for the `chainwork` field of the `getblockchaininfo` RPC request.
-/// TODO: check for variants
 #[derive(Debug, thiserror::Error)]
 pub enum ChainWorkError {}
 
@@ -277,7 +274,6 @@ impl Default for ChainWork {
 pub struct ChainBalance(Balance);
 
 /// Error type used for the `chain_supply` and `value_pools` field of the `getblockchaininfo` RPC request.
-/// TODO: check for variants
 #[derive(Debug, thiserror::Error)]
 pub enum ChainBalanceError {}
 
@@ -359,7 +355,19 @@ pub struct GetBalanceResponse {
 /// Error type for the `getbalance` RPC request.
 /// TODO: check for variants
 #[derive(Debug, thiserror::Error)]
-pub enum GetBalanceError {}
+pub enum GetBalanceError {
+    /// Invalid dummy value. It should be excluded or set to "*" or "".
+    #[error("Invalid dummy value: {0}")]
+    InvalidDummyValue(String),
+
+    /// If the `minconf` value is less than 0.
+    #[error("Invalid minconf value: {0}")]
+    InvalidMinimumConfirmations(i32),
+
+    /// Invalid asOfHeight value.
+    #[error("Invalid asOfHeight value: {0}")]
+    InvalidHeight(u64),
+}
 
 impl ResponseToError for GetBalanceResponse {
     type RpcError = GetBalanceError;
