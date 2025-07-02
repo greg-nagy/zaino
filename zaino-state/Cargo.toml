@@ -50,9 +50,9 @@ serde_json = { workspace = true, features = ["preserve_order"] }
 jsonrpsee-core = { workspace = true }
 prost = { workspace = true }
 primitive-types = { workspace = true }
-dcbor = { workspace = true }
-nonempty = { workspace = true }
+byteorder = { workspace = true }
 zcash_address = { workspace = true }
+nonempty = "0.11.0"
 
 [dev-dependencies]
 zingo-infra-services = { workspace = true }
@@ -63,4 +63,3 @@ zingolib = { workspace = true }
 [build-dependencies]
 whoami = { workspace = true }
 cargo-lock = "10.1.0"
-
