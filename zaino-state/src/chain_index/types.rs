@@ -22,7 +22,7 @@ use super::encoding::{
 /// Block hash (SHA256d hash of the block header).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub struct Hash([u8; 32]);
+pub struct Hash(pub [u8; 32]);
 
 impl Hash {
     /// Return the hash bytes in big-endian byte-order suitable for printing out byte by byte.
@@ -2219,7 +2219,7 @@ impl FixedEncodedLen for AddrHistRecord {
 /// [9..17] value  (little-endian, matches Zcashd)
 ///
 /// Note when flag is set to IS_INPUT, vout is actually the index of the input event.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(dead_code)]
 pub(crate) struct AddrEventBytes([u8; 17]);
 

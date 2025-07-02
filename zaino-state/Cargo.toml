@@ -50,6 +50,7 @@ jsonrpsee-core = { workspace = true }
 prost = { workspace = true }
 primitive-types = { workspace = true }
 blake2 = { workspace = true }
+sha2 = { workspace = true }
 byteorder = { workspace = true }
 core2 = { workspace = true }
 nonempty = "0.11.0"

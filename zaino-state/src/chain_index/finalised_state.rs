@@ -7,6 +7,7 @@ use crate::{
 };
 
 use dashmap::DashSet;
+use sha2::{Digest, Sha256};
 use tokio::time::interval;
 use zebra_chain::parameters::NetworkKind;
 
@@ -19,7 +20,7 @@ use lmdb::{
     Cursor, Database, DatabaseFlags, Environment, EnvironmentFlags, Transaction as _, WriteFlags,
 };
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, HashSet},
     fs,
     sync::{
         atomic::{AtomicU32, Ordering},
@@ -109,7 +110,7 @@ pub struct ZainoDB {
     ///
     /// Stored per-block, in order.
     commitment_tree_data: Database,
-    /// Heights: Hash -> Height
+    /// Heights: Hash -> SotredEntry<Height>
     ///
     /// Used for hash based fetch of the best chain (and random access).
     heights: Database,
@@ -907,6 +908,21 @@ impl ZainoDB {
 
     // **** Internal LMDB transaction methods ****
 
+    /// Heights: Hash -> StoredEntryFixed<Height>
+    ///
+    /// Returns slice of data holding serialised entry.
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    fn block_height_from_hash_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        hash_bytes: &Vec<u8>,
+    ) -> Result<Vec<u8>, FinalisedStateError> {
+        let value = txn.get(self.heights, hash_bytes)?;
+        Ok(value.to_vec())
+    }
+
     /// Headers: Height -> StoredEntryVar<BlockHeaderData>
     ///
     /// Returns slice of data holding serialised entry.
@@ -985,6 +1001,58 @@ impl ZainoDB {
             results.push(v.to_vec());
         }
         Ok(results)
+    }
+
+    /// Txids: TxIndex -> Txid (raw bytes)
+    ///
+    /// Returns the serialized 32-byte txid for the given TxIndex.
+    ///
+    /// This is an optimized version that avoids deserializing the entire TxidList.
+    fn txindex_to_txid_bytes_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        tx_index: TxIndex,
+    ) -> Result<[u8; 32], FinalisedStateError> {
+        use std::io::Cursor;
+
+        let height = Height::try_from(tx_index.block_index())
+            .map_err(|e| FinalisedStateError::Custom(e.to_string()))?;
+        let height_bytes = height.to_bytes()?;
+
+        let raw = txn.get(self.txids, &height_bytes)?;
+        let mut cursor = Cursor::new(raw);
+
+        // Skip [0] StoredEntry version
+        cursor.set_position(1);
+
+        // Read CompactSize: length of serialized body
+        let _body_len = CompactSize::read(&mut cursor)
+            .map_err(|e| FinalisedStateError::Custom(format!("compact size read error: {e}")))?;
+
+        // Read [1] Record version (skip 1 byte)
+        cursor.set_position(cursor.position() + 1);
+
+        // Read CompactSize: number of txids
+        let list_len = CompactSize::read(&mut cursor)
+            .map_err(|e| FinalisedStateError::Custom(format!("txid list len error: {e}")))?;
+
+        // Bounds check TODO: FIX THIS!
+        let idx = tx_index.tx_index() as usize;
+        if idx >= list_len as usize {
+            return Err(FinalisedStateError::Custom(
+                "tx_index out of range in txid list".to_string(),
+            ));
+        }
+
+        // Each txid is 32 bytes, so skip to the desired one
+        cursor.set_position(cursor.position() + (idx as u64) * 32);
+
+        let mut txid_bytes = [0u8; 32];
+        cursor
+            .read_exact(&mut txid_bytes)
+            .map_err(|e| FinalisedStateError::Custom(format!("txid read error: {e}")))?;
+
+        Ok(txid_bytes)
     }
 
     /// Transparent: Height -> StoredEntryVar<TransparentTxList>
@@ -1253,6 +1321,160 @@ impl ZainoDB {
         Ok(results)
     }
 
+    /// Returns every distinct `TxIndex` touching `addr_script` in the height
+    /// range `[start_height, end_height]` (inclusive), **deduplicated**.
+    ///
+    /// Ordering: returned `Vec` is sorted by `(height, tx_index)`.
+    fn addr_hist_tx_indices_by_addr_and_range_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        addr_script_bytes: &Vec<u8>,
+        start_height: Height,
+        end_height: Height,
+    ) -> Result<Vec<TxIndex>, FinalisedStateError> {
+        let mut cursor = txn.open_ro_cursor(self.addrhist)?;
+        let mut set: HashSet<TxIndex> = HashSet::new();
+
+        for (key, val) in cursor.iter_dup_of(&addr_script_bytes)? {
+            if key.len() != AddrScript::VERSIONED_LEN
+                || val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN
+            {
+                continue;
+            }
+
+            // Parse the tx_index out of val:
+            // - [0] StoredEntry tag
+            // - [1] record tag
+            // - [2..5] height
+            // - [6..7] tx_index
+            // - [8..9] vout
+            // - [10] flags
+            // - [11..18] value
+            // - [19..50] checksum
+
+            let h = u32::from_be_bytes([val[2], val[3], val[4], val[5]]);
+            if h < start_height.0 || h > end_height.0 {
+                continue;
+            }
+
+            let tx_idx = u16::from_be_bytes([val[6], val[7]]);
+            set.insert(TxIndex::new(h, tx_idx));
+        }
+
+        let mut vec: Vec<_> = set.into_iter().collect();
+        vec.sort_by_key(|txi| (txi.block_index(), txi.tx_index()));
+        Ok(vec)
+    }
+
+    /// Returns every *unspent mined output* (UTXO) for `addr_script` in the
+    /// height range `[start_height, end_height]`.
+    ///
+    /// A record qualifies when:
+    ///   * `FLAG_MINED` is set
+    ///   * `FLAG_SPENT` is **not** set
+    fn addr_hist_utxos_by_addr_and_range_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        addr_script_bytes: &Vec<u8>,
+        start_height: Height,
+        end_height: Height,
+    ) -> Result<Vec<(TxIndex, u16, u64)>, FinalisedStateError> {
+        let mut cursor = txn.open_ro_cursor(self.addrhist)?;
+        let mut utxos = Vec::new();
+
+        for (key, val) in cursor.iter_dup_of(&addr_script_bytes)? {
+            if key.len() != AddrScript::VERSIONED_LEN
+                || val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN
+            {
+                continue;
+            }
+
+            // Parse the tx_index out of val:
+            // - [0] StoredEntry tag
+            // - [1] record tag
+            // - [2..5] height
+            // - [6..7] tx_index
+            // - [8..9] vout
+            // - [10] flags
+            // - [11..18] value
+            // - [19..50] checksum
+
+            let height = u32::from_be_bytes([val[2], val[3], val[4], val[5]]);
+            if height < start_height.0 || height > end_height.0 {
+                continue;
+            }
+
+            let flags = val[10];
+            if (flags & AddrEventBytes::FLAG_MINED == 0)
+                || (flags & AddrEventBytes::FLAG_SPENT != 0)
+            {
+                continue;
+            }
+
+            let tx_idx = u16::from_be_bytes([val[6], val[7]]);
+            let vout = u16::from_be_bytes([val[8], val[9]]);
+            let value = u64::from_le_bytes([
+                val[11], val[12], val[13], val[14], val[15], val[16], val[17], val[18],
+            ]);
+
+            utxos.push((TxIndex::new(height, tx_idx), vout, value));
+        }
+
+        Ok(utxos)
+    }
+
+    /// Computes the net transparent balance change for `addr_script` across
+    /// `[start_height, end_height]`, using `i128` to avoid overflow.
+    ///
+    /// + Add `value` when `FLAG_MINED`
+    /// + Sub `value` when `FLAG_IS_INPUT`
+    fn addr_hist_balance_by_addr_and_range_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        addr_script_bytes: &Vec<u8>,
+        start_height: Height,
+        end_height: Height,
+    ) -> Result<i64, FinalisedStateError> {
+        let mut cursor = txn.open_ro_cursor(self.addrhist)?;
+        let mut balance: i64 = 0;
+
+        for (key, val) in cursor.iter_dup_of(&addr_script_bytes)? {
+            if key.len() != AddrScript::VERSIONED_LEN
+                || val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN
+            {
+                continue;
+            }
+
+            // Parse the tx_index out of val:
+            // - [0] StoredEntry tag
+            // - [1] record tag
+            // - [2..5] height
+            // - [6..7] tx_index
+            // - [8..9] vout
+            // - [10] flags
+            // - [11..18] value
+            // - [19..50] checksum
+
+            let height = u32::from_be_bytes([val[2], val[3], val[4], val[5]]);
+            if height < start_height.0 || height > end_height.0 {
+                continue;
+            }
+
+            let flags = val[10];
+            let value = u64::from_le_bytes([
+                val[11], val[12], val[13], val[14], val[15], val[16], val[17], val[18],
+            ]) as i64;
+
+            if flags & AddrEventBytes::FLAG_IS_INPUT != 0 {
+                balance -= value;
+            } else if flags & AddrEventBytes::FLAG_MINED != 0 {
+                balance += value;
+            }
+        }
+
+        Ok(balance)
+    }
+
     /// Mark a specific AddrHistRecord as spent in the addrhist DB.
     /// Looks up a record by script and tx_index, sets FLAG_SPENT, and updates it in place.
     ///
@@ -1385,6 +1607,19 @@ impl ZainoDB {
             }
         }
         Ok(false)
+    }
+
+    /// Metadata: singleton entry "metadata" -> StoredEntryFixed<DbMetadata>
+    ///
+    /// Returns slice of data holding serialised entry.
+    ///
+    /// This method takes an *open* read only LMDB transaction
+    /// so multiple calls can be chained internally.
+    fn metadata_raw_txn(&self, txn: &lmdb::RoTransaction) -> Result<Vec<u8>, FinalisedStateError> {
+        let value = txn
+            .get(self.metadata, b"metadata")
+            .map_err(FinalisedStateError::LmdbError)?;
+        Ok(value.to_vec())
     }
 
     // *** Internal DB methods ***
@@ -1578,7 +1813,496 @@ impl ZainoDB {
         None
     }
 
-    // *** Public fetcher methods ***
+    // *** Public fetcher methods - Used by DbReader ***
+
+    /// Fetch the block height in the main chain for a given block hash.
+    pub fn get_block_height_by_hash(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
+        let height = self.resolve_validated_hash_or_height(HashOrHeight::Hash(hash.into()))?;
+        Ok(height)
+    }
+
+    /// Fetch the height range for the given block hashes.
+    pub fn get_block_range_by_hash(
+        &self,
+        start_hash: Hash,
+        end_hash: Hash,
+    ) -> Result<(Height, Height), FinalisedStateError> {
+        let start_height =
+            self.resolve_validated_hash_or_height(HashOrHeight::Hash(start_hash.into()))?;
+        let end_height =
+            self.resolve_validated_hash_or_height(HashOrHeight::Hash(end_hash.into()))?;
+
+        let (validated_start, validated_end) =
+            self.validate_block_range(start_height, end_height)?;
+
+        Ok((validated_start, validated_end))
+    }
+
+    /// Fetch block header data by height.
+    pub fn get_block_header_data(
+        &self,
+        height: Height,
+    ) -> Result<BlockHeaderData, FinalisedStateError> {
+        let validated_height =
+            self.resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))?;
+        let height_bytes = validated_height.to_bytes()?;
+
+        let txn = self.env.begin_ro_txn()?;
+        let raw = self.block_header_raw_txn(&txn, &height_bytes)?;
+        let entry = StoredEntryVar::from_bytes(&raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("header decode error: {e}")))?;
+
+        Ok(*entry.inner())
+    }
+
+    /// Fetches block headers for the given height range.
+    ///
+    /// Uses cursor based fetch.
+    pub fn get_block_range_headers(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<BlockHeaderData>, FinalisedStateError> {
+        self.validate_block_range(start, end)?;
+        let start_bytes = start.to_bytes()?;
+        let end_bytes = end.to_bytes()?;
+
+        let txn = self.env.begin_ro_txn()?;
+        let raw_entries = self.block_range_header_raw_txn(&txn, &start_bytes, &end_bytes)?;
+
+        raw_entries
+            .into_iter()
+            .map(|bytes| {
+                StoredEntryVar::<BlockHeaderData>::from_bytes(&bytes)
+                    .map(|e| *e.inner())
+                    .map_err(|e| FinalisedStateError::Custom(format!("header decode error: {e}")))
+            })
+            .collect()
+    }
+
+    /// Fetch block txids by height.
+    pub fn get_block_txids(&self, height: Height) -> Result<TxidList, FinalisedStateError> {
+        let validated_height =
+            self.resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))?;
+        let height_bytes = validated_height.to_bytes()?;
+
+        let txn = self.env.begin_ro_txn()?;
+        let raw = self.block_txids_raw_txn(&txn, &height_bytes)?;
+        let entry: StoredEntryVar<TxidList> = StoredEntryVar::from_bytes(&raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("txids decode error: {e}")))?;
+
+        Ok(entry.inner().clone())
+    }
+
+    /// Fetches block txids for the given height range.
+    ///
+    /// Uses cursor based fetch.
+    pub fn get_block_range_txids(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<TxidList>, FinalisedStateError> {
+        self.validate_block_range(start, end)?;
+        let start_bytes = start.to_bytes()?;
+        let end_bytes = end.to_bytes()?;
+
+        let txn = self.env.begin_ro_txn()?;
+        let raw_entries = self.block_range_txids_raw_txn(&txn, &start_bytes, &end_bytes)?;
+
+        raw_entries
+            .into_iter()
+            .map(|bytes| {
+                StoredEntryVar::<TxidList>::from_bytes(&bytes)
+                    .map(|e| e.inner().clone())
+                    .map_err(|e| FinalisedStateError::Custom(format!("txids decode error: {e}")))
+            })
+            .collect()
+    }
+
+    /// Fetch block transparent transaction data by height.
+    pub fn get_block_transparent(
+        &self,
+        height: Height,
+    ) -> Result<TransparentTxList, FinalisedStateError> {
+        let validated_height =
+            self.resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))?;
+        let height_bytes = validated_height.to_bytes()?;
+
+        let txn = self.env.begin_ro_txn()?;
+        let raw = self.block_transparent_raw_txn(&txn, &height_bytes)?;
+        let entry: StoredEntryVar<TransparentTxList> = StoredEntryVar::from_bytes(&raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("transparent decode error: {e}")))?;
+
+        Ok(entry.inner().clone())
+    }
+
+    /// Fetches block transparent tx data for the given height range.
+    ///
+    /// Uses cursor based fetch.
+    pub fn get_block_range_transparent(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<TransparentTxList>, FinalisedStateError> {
+        self.validate_block_range(start, end)?;
+        let start_bytes = start.to_bytes()?;
+        let end_bytes = end.to_bytes()?;
+
+        let txn = self.env.begin_ro_txn()?;
+        let raw_entries = self.block_range_transparent_raw_txn(&txn, &start_bytes, &end_bytes)?;
+
+        raw_entries
+            .into_iter()
+            .map(|bytes| {
+                StoredEntryVar::<TransparentTxList>::from_bytes(&bytes)
+                    .map(|e| e.inner().clone())
+                    .map_err(|e| {
+                        FinalisedStateError::Custom(format!("transparent decode error: {e}"))
+                    })
+            })
+            .collect()
+    }
+
+    /// Fetch block sapling transaction data by height.
+    pub fn get_block_sapling(&self, height: Height) -> Result<SaplingTxList, FinalisedStateError> {
+        let validated_height =
+            self.resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))?;
+        let height_bytes = validated_height.to_bytes()?;
+
+        let txn = self.env.begin_ro_txn()?;
+        let raw = self.block_sapling_raw_txn(&txn, &height_bytes)?;
+        let entry: StoredEntryVar<SaplingTxList> = StoredEntryVar::from_bytes(&raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("sapling decode error: {e}")))?;
+
+        Ok(entry.inner().clone())
+    }
+
+    /// Fetches block sapling tx data for the given height range.
+    ///
+    /// Uses cursor based fetch.
+    pub fn get_block_range_sapling(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<SaplingTxList>, FinalisedStateError> {
+        self.validate_block_range(start, end)?;
+        let start_bytes = start.to_bytes()?;
+        let end_bytes = end.to_bytes()?;
+
+        let txn = self.env.begin_ro_txn()?;
+        let raw_entries = self.block_range_sapling_raw_txn(&txn, &start_bytes, &end_bytes)?;
+
+        raw_entries
+            .into_iter()
+            .map(|bytes| {
+                StoredEntryVar::<SaplingTxList>::from_bytes(&bytes)
+                    .map(|e| e.inner().clone())
+                    .map_err(|e| FinalisedStateError::Custom(format!("sapling decode error: {e}")))
+            })
+            .collect()
+    }
+
+    /// Fetch block orchard transaction data by height.
+    pub fn get_block_orchard(&self, height: Height) -> Result<OrchardTxList, FinalisedStateError> {
+        let validated_height =
+            self.resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))?;
+        let height_bytes = validated_height.to_bytes()?;
+
+        let txn = self.env.begin_ro_txn()?;
+        let raw = self.block_orchard_raw_txn(&txn, &height_bytes)?;
+        let entry: StoredEntryVar<OrchardTxList> = StoredEntryVar::from_bytes(&raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("orchard decode error: {e}")))?;
+
+        Ok(entry.inner().clone())
+    }
+
+    /// Fetches block orchard tx data for the given height range.
+    ///
+    /// Uses cursor based fetch.
+    pub fn get_block_range_orchard(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<OrchardTxList>, FinalisedStateError> {
+        self.validate_block_range(start, end)?;
+        let start_bytes = start.to_bytes()?;
+        let end_bytes = end.to_bytes()?;
+
+        let txn = self.env.begin_ro_txn()?;
+        let raw_entries = self.block_range_orchard_raw_txn(&txn, &start_bytes, &end_bytes)?;
+
+        raw_entries
+            .into_iter()
+            .map(|bytes| {
+                StoredEntryVar::<OrchardTxList>::from_bytes(&bytes)
+                    .map(|e| e.inner().clone())
+                    .map_err(|e| FinalisedStateError::Custom(format!("orchard decode error: {e}")))
+            })
+            .collect()
+    }
+
+    /// Fetch block commitment tree data by height.
+    pub fn get_block_commitment_tree_data(
+        &self,
+        height: Height,
+    ) -> Result<CommitmentTreeData, FinalisedStateError> {
+        let validated_height =
+            self.resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))?;
+        let height_bytes = validated_height.to_bytes()?;
+
+        let txn = self.env.begin_ro_txn()?;
+        let raw = self.block_commitment_tree_data_raw_txn(&txn, &height_bytes)?;
+        let entry = StoredEntryFixed::from_bytes(&raw).map_err(|e| {
+            FinalisedStateError::Custom(format!("commitment_tree decode error: {e}"))
+        })?;
+
+        Ok(entry.item)
+    }
+
+    /// Fetches block commitment tree data for the given height range.
+    ///
+    /// Uses cursor based fetch.
+    pub fn get_block_range_commitment_tree_data(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<CommitmentTreeData>, FinalisedStateError> {
+        self.validate_block_range(start, end)?;
+        let start_bytes = start.to_bytes()?;
+        let end_bytes = end.to_bytes()?;
+
+        let txn = self.env.begin_ro_txn()?;
+        let raw_entries =
+            self.block_range_commitment_tree_data_raw_txn(&txn, &start_bytes, &end_bytes)?;
+
+        raw_entries
+            .into_iter()
+            .map(|bytes| {
+                StoredEntryFixed::<CommitmentTreeData>::from_bytes(&bytes)
+                    .map(|e| e.item.clone())
+                    .map_err(|e| {
+                        FinalisedStateError::Custom(format!("commitment_tree decode error: {e}"))
+                    })
+            })
+            .collect()
+    }
+
+    /// Fetch the `TxIndex` that spent a given outpoint, if any.
+    ///
+    /// Returns:
+    /// - `Ok(Some(TxIndex))` if the outpoint is spent.
+    /// - `Ok(None)` if no entry exists (not spent or not known).
+    /// - `Err(...)` on deserialization or DB error.
+    pub fn prev_output_index(
+        &self,
+        outpoint: Outpoint,
+    ) -> Result<Option<TxIndex>, FinalisedStateError> {
+        let key = outpoint.to_bytes()?;
+        let txn = self.env.begin_ro_txn()?;
+
+        match txn.get(self.spent, &key) {
+            Ok(bytes) => {
+                let entry = StoredEntryFixed::<TxIndex>::from_bytes(bytes).map_err(|e| {
+                    FinalisedStateError::Custom(format!("spent entry decode error: {e}"))
+                })?;
+                Ok(Some(entry.item))
+            }
+            Err(lmdb::Error::NotFound) => Ok(None),
+            Err(e) => Err(FinalisedStateError::LmdbError(e)),
+        }
+    }
+
+    /// Fetch the `TxIndex` entries for a batch of outpoints.
+    ///
+    /// For each input:
+    /// - Returns `Some(TxIndex)` if spent,
+    /// - `None` if not found,
+    /// - or returns `Err` immediately if any DB or decode error occurs.
+    pub fn prev_outputs_index(
+        &self,
+        outpoints: Vec<Outpoint>,
+    ) -> Result<Vec<Option<TxIndex>>, FinalisedStateError> {
+        let txn = self.env.begin_ro_txn()?;
+
+        outpoints
+            .into_iter()
+            .map(|outpoint| {
+                let key = outpoint.to_bytes()?;
+                match txn.get(self.spent, &key) {
+                    Ok(bytes) => {
+                        let entry =
+                            StoredEntryFixed::<TxIndex>::from_bytes(bytes).map_err(|e| {
+                                FinalisedStateError::Custom(format!(
+                                    "spent entry decode error for {outpoint:?}: {e}"
+                                ))
+                            })?;
+                        Ok(Some(entry.item))
+                    }
+                    Err(lmdb::Error::NotFound) => Ok(None),
+                    Err(e) => Err(FinalisedStateError::LmdbError(e)),
+                }
+            })
+            .collect()
+    }
+
+    /// Fetch all address history records for a given transparent address.
+    ///
+    /// Returns:
+    /// - `Ok(Some(records))` if one or more valid records exist,
+    /// - `Ok(None)` if no records exist (not an error),
+    /// - `Err(...)` if any decoding or DB error occurs.
+    pub fn addr_records(
+        &self,
+        addr_script: AddrScript,
+    ) -> Result<Option<Vec<AddrEventBytes>>, FinalisedStateError> {
+        let addr_bytes = addr_script.to_bytes()?;
+        let txn = self.env.begin_ro_txn()?;
+
+        let raw_records = match self.addr_hist_records_by_addr_raw_txn(&txn, &addr_bytes) {
+            Ok(records) => records,
+            Err(FinalisedStateError::LmdbError(lmdb::Error::NotFound)) => return Ok(None),
+            Err(e) => return Err(e),
+        };
+        if raw_records.is_empty() {
+            return Ok(None);
+        }
+
+        let mut records = Vec::with_capacity(raw_records.len());
+        for val in raw_records {
+            let entry = StoredEntryFixed::<AddrEventBytes>::from_bytes(&val)
+                .map_err(|e| FinalisedStateError::Custom(format!("addrhist decode error: {e}")))?;
+            records.push(entry.item);
+        }
+
+        Ok(Some(records))
+    }
+
+    /// Fetch all address history records for a given address and TxIndex.
+    ///
+    /// Returns:
+    /// - `Ok(Some(records))` if one or more matching records are found at that index,
+    /// - `Ok(None)` if no matching records exist (not an error),
+    /// - `Err(...)` on decode or DB failure.
+    pub fn addr_and_index_records(
+        &self,
+        addr_script: AddrScript,
+        tx_index: TxIndex,
+    ) -> Result<Option<Vec<AddrEventBytes>>, FinalisedStateError> {
+        let addr_bytes = addr_script.to_bytes()?;
+        let txn = self.env.begin_ro_txn()?;
+
+        let raw_records =
+            match self.addr_hist_records_by_addr_and_index_raw_txn(&txn, &addr_bytes, tx_index) {
+                Ok(records) => records,
+                Err(FinalisedStateError::LmdbError(lmdb::Error::NotFound)) => return Ok(None),
+                Err(e) => return Err(e),
+            };
+        if raw_records.is_empty() {
+            return Ok(None);
+        }
+
+        let mut records = Vec::with_capacity(raw_records.len());
+
+        for val in raw_records {
+            let entry = StoredEntryFixed::<AddrEventBytes>::from_bytes(&val)
+                .map_err(|e| FinalisedStateError::Custom(format!("addrhist decode error: {e}")))?;
+            records.push(entry.item);
+        }
+
+        Ok(Some(records))
+    }
+
+    /// Fetch all distinct `TxIndex` values for `addr_script` within the
+    /// height range `[start_height, end_height]` (inclusive).
+    ///
+    /// Returns:
+    /// - `Ok(Some(vec))` if one or more matching records are found,
+    /// - `Ok(None)` if no matches found (not an error),
+    /// - `Err(...)` on decode or DB failure.
+    pub fn addr_tx_indexes_by_range(
+        &self,
+        addr_script: AddrScript,
+        start_height: Height,
+        end_height: Height,
+    ) -> Result<Option<Vec<TxIndex>>, FinalisedStateError> {
+        let addr_bytes = addr_script.to_bytes()?;
+        let txn = self.env.begin_ro_txn()?;
+
+        let indices = self.addr_hist_tx_indices_by_addr_and_range_txn(
+            &txn,
+            &addr_bytes,
+            start_height,
+            end_height,
+        )?;
+
+        if indices.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(indices))
+        }
+    }
+
+    /// Fetch all UTXOs (unspent mined outputs) for `addr_script` within the
+    /// height range `[start_height, end_height]` (inclusive).
+    ///
+    /// Each entry is `(TxIndex, vout, value)`.
+    ///
+    /// Returns:
+    /// - `Ok(Some(vec))` if one or more UTXOs are found,
+    /// - `Ok(None)` if none found (not an error),
+    /// - `Err(...)` on decode or DB failure.
+    pub fn addr_utxos_by_range(
+        &self,
+        addr_script: AddrScript,
+        start_height: Height,
+        end_height: Height,
+    ) -> Result<Option<Vec<(TxIndex, u16, u64)>>, FinalisedStateError> {
+        let addr_bytes = addr_script.to_bytes()?;
+        let txn = self.env.begin_ro_txn()?;
+
+        let utxos = self.addr_hist_utxos_by_addr_and_range_txn(
+            &txn,
+            &addr_bytes,
+            start_height,
+            end_height,
+        )?;
+
+        if utxos.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(utxos))
+        }
+    }
+
+    /// Computes the transparent balance change for `addr_script` over the
+    /// height range `[start_height, end_height]` (inclusive).
+    ///
+    /// Includes:
+    /// - `+value` for mined outputs
+    /// - `−value` for spent inputs
+    ///
+    /// Returns the signed net value as `i64`, or error on failure.
+    pub fn addr_balance_by_range(
+        &self,
+        addr_script: AddrScript,
+        start_height: Height,
+        end_height: Height,
+    ) -> Result<i64, FinalisedStateError> {
+        let addr_bytes = addr_script.to_bytes()?;
+        let txn = self.env.begin_ro_txn()?;
+
+        self.addr_hist_balance_by_addr_and_range_txn(&txn, &addr_bytes, start_height, end_height)
+    }
+
+    /// Fetch database metadata.
+    pub fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
+        let txn = self.env.begin_ro_txn()?;
+        let raw = self.metadata_raw_txn(&txn)?;
+        let entry = StoredEntryFixed::from_bytes(&raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("metadata decode error: {e}")))?;
+
+        Ok(entry.item)
+    }
 
     // /// Returns block header and chain indexing data for the block.
     // pub fn get_block_header_data(
@@ -1817,7 +2541,6 @@ impl ZainoDB {
     /// Lightweight per-block validation.
     ///
     /// *Confirms the checksum* in each of the three per-block tables.  
-    /// TODO: Add Merkle / ZIP-243 checks.
     fn validate_block(&self, height: Height, hash: Hash) -> Result<(), FinalisedStateError> {
         if self.is_validated(height.into()) {
             return Ok(());
@@ -1840,34 +2563,36 @@ impl ZainoDB {
         };
 
         // *** header ***
-        {
+        let header_entry = {
             let raw = ro
                 .get(self.headers, &height_key)
                 .map_err(|e| FinalisedStateError::LmdbError(e))?;
             let entry = StoredEntryVar::<BlockHeaderData>::from_bytes(raw)
-                .map_err(|e| fail(&format!("header corrupt CBOR: {e}")))?;
+                .map_err(|e| fail(&format!("header corrupt data: {e}")))?;
             if !entry.verify(&height_key) {
                 return Err(fail("header checksum mismatch"));
             }
-        }
+            entry
+        };
 
         // *** txids ***
-        {
+        let txid_list_entry = {
             let raw = ro
                 .get(self.txids, &height_key)
                 .map_err(|e| FinalisedStateError::LmdbError(e))?;
             let entry = StoredEntryVar::<TxidList>::from_bytes(raw)
-                .map_err(|e| fail(&format!("txids corrupt CBOR: {e}")))?;
+                .map_err(|e| fail(&format!("txids corrupt data: {e}")))?;
             if !entry.verify(&height_key) {
                 return Err(fail("txids checksum mismatch"));
             }
-        }
+            entry
+        };
 
         // *** transparent ***
         let transparent_tx_list = {
             let raw = ro.get(self.transparent, &height_key)?;
             let entry = StoredEntryVar::<TransparentTxList>::from_bytes(raw)
-                .map_err(|e| fail(&format!("transparent corrupt CBOR: {e}")))?;
+                .map_err(|e| fail(&format!("transparent corrupt data: {e}")))?;
             if !entry.verify(&height_key) {
                 return Err(fail("transparent checksum mismatch"));
             }
@@ -1880,7 +2605,7 @@ impl ZainoDB {
                 .get(self.sapling, &height_key)
                 .map_err(|e| FinalisedStateError::LmdbError(e))?;
             let entry = StoredEntryVar::<SaplingTxList>::from_bytes(raw)
-                .map_err(|e| fail(&format!("sapling corrupt CBOR: {e}")))?;
+                .map_err(|e| fail(&format!("sapling corrupt data: {e}")))?;
             if !entry.verify(&height_key) {
                 return Err(fail("sapling checksum mismatch"));
             }
@@ -1892,7 +2617,7 @@ impl ZainoDB {
                 .get(self.orchard, &height_key)
                 .map_err(|e| FinalisedStateError::LmdbError(e))?;
             let entry = StoredEntryVar::<OrchardTxList>::from_bytes(raw)
-                .map_err(|e| fail(&format!("orchard corrupt CBOR: {e}")))?;
+                .map_err(|e| fail(&format!("orchard corrupt data: {e}")))?;
             if !entry.verify(&height_key) {
                 return Err(fail("orchard checksum mismatch"));
             }
@@ -1923,6 +2648,37 @@ impl ZainoDB {
             if entry.item != height {
                 return Err(fail("hash -> height mapping mismatch"));
             }
+        }
+
+        // *** Parent block hash validation (chain continuity) ***
+        let parent_block_hash = {
+            let parent_block_height = Height::try_from(height.0.saturating_sub(1))
+                .map_err(|e| fail(&format!("invalid parent height: {e}")))?;
+            let parent_block_height_key = parent_block_height
+                .to_bytes()
+                .map_err(|e| fail(&format!("parent height serialize: {e}")))?;
+            let raw = ro
+                .get(self.headers, &parent_block_height_key)
+                .map_err(FinalisedStateError::LmdbError)?;
+            let entry = StoredEntryVar::<BlockHeaderData>::from_bytes(raw)
+                .map_err(|e| fail(&format!("parent header corrupt data: {e}")))?;
+
+            *entry.inner().index().parent_hash()
+        };
+
+        if parent_block_hash != hash {
+            return Err(fail("parent hash mismatch"));
+        }
+
+        // *** Merkle root / Txid validation ***
+        // let txids = txid_list_entry.inner().tx();
+        let txids: Vec<[u8; 32]> = txid_list_entry.inner().tx().iter().map(|h| h.0).collect();
+        let header_merkle_root = header_entry.inner().data().merkle_root();
+
+        let check_root = Self::calculate_block_merkle_root(&txids);
+
+        if &check_root != header_merkle_root {
+            return Err(fail("merkle root mismatch"));
         }
 
         // *** spent + addrhist validation ***
@@ -2011,6 +2767,105 @@ impl ZainoDB {
         Ok(())
     }
 
+    /// Double‑SHA‑256 (SHA256d) as used by Bitcoin/Zcash headers and Merkle nodes.
+    fn sha256d(data: &[u8]) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        Digest::update(&mut hasher, data); // first pass
+        let first = hasher.finalize_reset();
+        Digest::update(&mut hasher, &first); // second pass
+        let second = hasher.finalize();
+
+        let mut out = [0u8; 32];
+        out.copy_from_slice(&second);
+        out
+    }
+
+    /// Compute the Merkle root of a non‑empty slice of 32‑byte transaction IDs.
+    /// `txids` must be in block order and already in internal (little‑endian) byte order.
+    pub fn calculate_block_merkle_root(txids: &[[u8; 32]]) -> [u8; 32] {
+        assert!(
+            !txids.is_empty(),
+            "block must contain at least the coinbase"
+        );
+        let mut layer: Vec<[u8; 32]> = txids.to_vec();
+
+        // Iterate until we have reduced to one hash.
+        while layer.len() > 1 {
+            let mut next = Vec::with_capacity((layer.len() + 1) / 2);
+
+            // Combine pairs (duplicate the last when the count is odd).
+            for chunk in layer.chunks(2) {
+                let left = &chunk[0];
+                let right = if chunk.len() == 2 {
+                    &chunk[1]
+                } else {
+                    &chunk[0]
+                };
+
+                // Concatenate left‖right and hash twice.
+                let mut buf = [0u8; 64];
+                buf[..32].copy_from_slice(left);
+                buf[32..].copy_from_slice(right);
+                next.push(Self::sha256d(&buf));
+            }
+
+            layer = next;
+        }
+
+        layer[0]
+    }
+
+    /// Validate a contiguous range of block heights `[start, end]` inclusive.
+    ///
+    /// Optimized to skip blocks already known to be validated.  
+    /// Returns the full requested `(start, end)` range on success.
+    fn validate_block_range(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<(Height, Height), FinalisedStateError> {
+        if end.0 < start.0 {
+            return Err(FinalisedStateError::Custom(
+                "invalid block range: end < start".to_string(),
+            ));
+        }
+
+        let tip = self.validated_tip.load(Ordering::Acquire);
+        let mut h = std::cmp::max(start.0, tip);
+
+        if h > end.0 {
+            return Ok((start, end));
+        }
+
+        while h <= end.0 {
+            if self.is_validated(h) {
+                h += 1;
+                continue;
+            }
+
+            let height = Height(h);
+            let height_bytes = height.to_bytes()?;
+            let ro = self.env.begin_ro_txn()?;
+            let bytes = ro.get(self.headers, &height_bytes).map_err(|e| {
+                if e == lmdb::Error::NotFound {
+                    FinalisedStateError::Custom("height not found in best chain".into())
+                } else {
+                    FinalisedStateError::LmdbError(e)
+                }
+            })?;
+
+            let hash = *StoredEntryVar::<BlockHeaderData>::deserialize(bytes)?
+                .inner()
+                .index()
+                .hash();
+
+            self.validate_block(height, hash)?;
+            h += 1;
+        }
+
+        Ok((start, end))
+    }
+
     /// Same as `resolve_hash_or_height`, **but guarantees the block is validated**.
     ///
     /// * If the block hasn’t been validated yet we do it on-demand
@@ -2063,7 +2918,7 @@ impl ZainoDB {
         Ok(height)
     }
 
-    /// Resolve a `HashOrHeight` to the block hash stored on disk.
+    /// Resolve a `HashOrHeight` to the block height stored on disk.
     ///
     /// * Height  ->  returned unchanged (zero cost).  
     /// * Hash ->  lookup in `hashes` db.
@@ -2161,6 +3016,8 @@ impl ZainoDB {
         Ok(())
     }
 }
+
+// *** ZainoDB Reader ***
 
 /// Immutable view onto an already-running [`ZainoDB`].
 ///
