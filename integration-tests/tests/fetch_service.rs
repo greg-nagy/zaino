@@ -548,54 +548,10 @@ async fn fetch_service_get_block_count(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-/// Note: Test vectors taken from https://docs.rs/zcash_client_backend/latest/zcash_client_backend/encoding/fn.encode_transparent_address.html
-///
-/// TODO: test fields that depend on zcashd's `ENABLE_WALLET` being enabled.
-/// These fields include:
-/// - `is_mine`
-/// - `is_watchonly`
-/// - `is_compressed`
-/// - `pubkey`
-/// - `account` (although it is deprecated)
-/// ...
-///
-/// // This fails when validator is `ValidatorKind::Zebrad`, because zebra does not replicate behaviour in
-/// from zcashd. To be more precise, zebra defines the response as follows:
-/// ```rust
-/// /// `validateaddress` response
-/// #[derive(Clone, Default, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-/// pub struct Response {
-///     /// Whether the address is valid.
-///     ///
-///     /// If not, this is the only property returned.
-///     #[serde(rename = "isvalid")]
-///     pub is_valid: bool,
-///     /// The zcash address that has been validated.
-///     #[serde(skip_serializing_if = "Option::is_none")]
-///     pub address: Option<String>,
-///     /// If the key is a script.
-///     #[serde(rename = "isscript")]
-///     #[serde(skip_serializing_if = "Option::is_none")]
-///     pub is_script: Option<bool>,
-/// }
-/// ```
-///
-/// Defined here: https://github.com/ZcashFoundation/zebra/blob/1e3f40bbc0997439ddc0c112e396ae9fd1790217/zebra-rpc/src/methods/types/validate_address.rs
+/// TODO: This test started failing for some reason
 async fn fetch_service_validate_address(validator: &ValidatorKind) {
     let (mut test_manager, _fetch_service, fetch_service_subscriber) =
         create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
-
-    // let expected_validation: ValidateAddressResponse = ValidateAddressResponse {
-    //     is_valid: true,
-    //     address: Some("tm9iMLAuYMzJ6jtFLcA7rzUmfreGuKvr7Ma".to_owned()),
-    //     scriptpubkey: Some("76a914000000000000000000000000000000000000000088ac".to_owned()),
-    //     is_mine: Some(false),
-    //     is_script: Some(false),
-    //     is_watchonly: Some(false),
-    //     pubkey: None,
-    //     is_compressed: None,
-    //     account: None,
-    // };
 
     let expected_validation = validate_address::Response {
         is_valid: true,

@@ -26,7 +26,7 @@ use crate::jsonrpsee::{
     response::{
         GetBalanceResponse, GetBlockCountResponse, GetBlockResponse, GetBlockchainInfoResponse,
         GetInfoResponse, GetSubtreesResponse, GetTransactionResponse, GetTreestateResponse,
-        GetUtxosResponse, SendTransactionResponse, TxidsResponse, ValidateAddressResponse,
+        GetUtxosResponse, SendTransactionResponse, TxidsResponse,
     },
 };
 
