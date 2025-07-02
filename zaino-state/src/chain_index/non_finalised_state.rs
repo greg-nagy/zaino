@@ -660,7 +660,7 @@ impl BlockchainSource {
                             .unwrap_or_else(|_e| todo!("block too large")),
                     ))),
                     Ok(_) => unreachable!(),
-                    Err(_) => todo!(),
+                    Err(e) => todo!("{e}"),
                 }
             }
         }
@@ -719,36 +719,44 @@ impl BlockchainSource {
                     .inner()
                     .inner()
                     .as_ref()
+                    .map(hex::decode)
+                    .transpose()
+                    .unwrap()
+                    .as_ref()
                     .map(Vec::as_slice)
-                    .map(read_commitment_tree::<zebra_chain::sapling::tree::Node, _, 32>);
+                    .map(read_commitment_tree::<zebra_chain::sapling::tree::Node, _, 32>)
+                    .transpose()
+                    .map_err(|e| BlockchainSourceError::Unrecoverable(format!("io error: {e}")))?;
                 let orchard_frontier = orchard
                     .inner()
                     .inner()
                     .as_ref()
+                    .map(hex::decode)
+                    .transpose()
+                    .unwrap()
+                    .as_ref()
                     .map(Vec::as_slice)
-                    .map(read_commitment_tree::<zebra_chain::orchard::tree::Node, _, 32>);
+                    .map(read_commitment_tree::<zebra_chain::orchard::tree::Node, _, 32>)
+                    .transpose()
+                    .map_err(|e| BlockchainSourceError::Unrecoverable(format!("io error: {e}")))?;
                 let sapling_root = sapling_frontier
-                    .map(|frontier| {
-                        frontier.map(|tree| {
-                            zebra_chain::sapling::tree::Root::try_from(*tree.root().as_ref())
-                                .map(|root| (root, tree.size() as u64))
-                        })
+                    .map(|tree| {
+                        zebra_chain::sapling::tree::Root::try_from(*tree.root().as_ref())
+                            .map(|root| (root, tree.size() as u64))
                     })
                     .transpose()
-                    .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?
-                    .transpose()
-                    .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?;
+                    .map_err(|e| {
+                        BlockchainSourceError::Unrecoverable(format!("could not deser: {e}"))
+                    })?;
                 let orchard_root = orchard_frontier
-                    .map(|frontier| {
-                        frontier.map(|tree| {
-                            zebra_chain::orchard::tree::Root::try_from(tree.root().to_repr())
-                                .map(|root| (root, tree.size() as u64))
-                        })
+                    .map(|tree| {
+                        zebra_chain::orchard::tree::Root::try_from(tree.root().to_repr())
+                            .map(|root| (root, tree.size() as u64))
                     })
                     .transpose()
-                    .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?
-                    .transpose()
-                    .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?;
+                    .map_err(|e| {
+                        BlockchainSourceError::Unrecoverable(format!("could not deser: {e}"))
+                    })?;
                 Ok((sapling_root, orchard_root))
             }
         }
