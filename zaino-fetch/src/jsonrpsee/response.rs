@@ -430,7 +430,23 @@ pub struct GetBlockHash(#[serde(with = "hex")] pub zebra_chain::block::Hash);
 /// Error type for the `getblock` RPC request.
 /// TODO: check for variants
 #[derive(Debug, thiserror::Error)]
-pub enum GetBlockHashError {}
+pub enum GetBlockHashError {
+    /// Verbosity not in range from 0 to 2.
+    #[error("Invalid verbosity: {0}")]
+    InvalidVerbosity(i8),
+
+    /// Not found.
+    #[error("Block not found")]
+    BlockNotFound,
+
+    /// Block was pruned.
+    #[error("Block not available, pruned data: {0}")]
+    BlockNotAvailable(String),
+
+    /// TODO: Cannot read block from disk.
+    #[error("Cannot read block")]
+    CannotReadBlock,
+}
 
 impl ResponseToError for GetBlockHash {
     type RpcError = GetBlockHashError;
