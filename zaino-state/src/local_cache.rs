@@ -16,7 +16,7 @@ use zaino_fetch::{
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcRequestError},
         error::TransportError,
-        response::{GetBlockError, GetBlockResponse},
+        response::{GetBlockResponse, MissingBlock},
     },
 };
 use zaino_proto::proto::compact_formats::{ChainMetadata, CompactBlock, CompactOrchardAction};
@@ -134,12 +134,8 @@ impl BlockCacheSubscriber {
     pub async fn get_compact_block(
         &self,
         hash_or_height: String,
-    ) -> Result<CompactBlock, RpcRequestError<BlockCacheError>> {
-        let hash_or_height: HashOrHeight = hash_or_height.parse().map_err(|_| {
-            RpcRequestError::Transport(TransportError::JsonRpSeeClientError(
-                "Could not parse hash or height".to_string(),
-            ))
-        })?;
+    ) -> Result<CompactBlock, BlockCacheError> {
+        let hash_or_height: HashOrHeight = hash_or_height.parse()?;
 
         if self
             .non_finalised_state
@@ -150,14 +146,14 @@ impl BlockCacheSubscriber {
             self.non_finalised_state
                 .get_compact_block(hash_or_height)
                 .await
-                .map_err(|e| RpcRequestError::Method(BlockCacheError::NonFinalisedStateError(e)))
+                .map_err(Into::into)
         } else {
             match &self.finalised_state {
                 // Fetch from finalised state.
                 Some(finalised_state) => finalised_state
                     .get_compact_block(hash_or_height)
                     .await
-                    .map_err(|e| RpcRequestError::Method(BlockCacheError::FinalisedStateError(e))),
+                    .map_err(Into::into),
                 // Fetch from Validator.
                 None => {
                     let (_, block) = fetch_block_from_node(
@@ -167,7 +163,7 @@ impl BlockCacheSubscriber {
                         hash_or_height,
                     )
                     .await
-                    .map_err(|e| RpcRequestError::Method(BlockCacheError::Custom(e.to_string())))?;
+                    .map_err(|e| BlockCacheError::Custom(e.to_string()))?;
                     Ok(block)
                 }
             }
@@ -180,7 +176,7 @@ impl BlockCacheSubscriber {
     pub async fn get_compact_block_nullifiers(
         &self,
         hash_or_height: String,
-    ) -> Result<CompactBlock, RpcRequestError<BlockCacheError>> {
+    ) -> Result<CompactBlock, BlockCacheError> {
         self.get_compact_block(hash_or_height)
             .await
             .map(compact_block_to_nullifiers)
@@ -217,7 +213,7 @@ pub(crate) async fn fetch_block_from_node(
     network: Option<&Network>,
     fetcher: &JsonRpSeeConnector,
     hash_or_height: HashOrHeight,
-) -> Result<(Hash, CompactBlock), RpcRequestError<GetBlockError>> {
+) -> Result<(Hash, CompactBlock), RpcRequestError<MissingBlock>> {
     if let (Some(state), Some(network)) = (state, network) {
         match try_state_path(state, network, hash_or_height).await {
             Ok(result) => return Ok(result),
@@ -289,14 +285,16 @@ async fn try_state_path(
 async fn try_fetcher_path(
     fetcher: &JsonRpSeeConnector,
     hash_or_height: HashOrHeight,
-) -> Result<(Hash, CompactBlock), RpcRequestError<GetBlockError>> {
+) -> Result<(Hash, CompactBlock), RpcRequestError<MissingBlock>> {
     let (hash, tx, trees) = fetcher
         .get_block(hash_or_height.to_string(), Some(1))
         .await
         .and_then(|response| match response {
-            GetBlockResponse::Raw(_) => Err(RpcRequestError::Method(GetBlockError::Custom(
-                "Found transaction of `Raw` type, expected only `Hash` types.".to_string(),
-            ))),
+            GetBlockResponse::Raw(_) => {
+                Err(RpcRequestError::Transport(TransportError::BadNodeData(
+                    Box::new(std::io::Error::other("unexpected raw block response")),
+                )))
+            }
             GetBlockResponse::Object(block) => Ok((block.hash, block.tx, block.trees)),
         })?;
 
@@ -304,45 +302,30 @@ async fn try_fetcher_path(
         .get_block(hash.0.to_string(), Some(0))
         .await
         .and_then(|response| match response {
-            GetBlockResponse::Object { .. } => Err(RpcRequestError::Method(GetBlockError::Custom(
-                "Found transaction of `Object` type, expected only `Hash` types.".to_string(),
-            ))),
+            GetBlockResponse::Object { .. } => {
+                Err(RpcRequestError::Transport(TransportError::BadNodeData(
+                    Box::new(std::io::Error::other("unexpected object block response")),
+                )))
+            }
             GetBlockResponse::Raw(block_hex) => Ok((
                 hash.0,
                 FullBlock::parse_from_hex(
                     block_hex.as_ref(),
                     Some(display_txids_to_server(tx).map_err(|e| {
-                        RpcRequestError::Method(GetBlockError::Custom(format!(
-                            "Error parsing txids: {}",
-                            e
-                        )))
+                        RpcRequestError::Transport(TransportError::BadNodeData(Box::new(e)))
                     })?),
                 )
-                .map_err(|e| {
-                    RpcRequestError::Method(GetBlockError::Custom(format!(
-                        "Error parsing block: {}",
-                        e
-                    )))
-                })?
+                .map_err(|e| RpcRequestError::Transport(TransportError::BadNodeData(Box::new(e))))?
                 .into_compact(
                     u32::try_from(trees.sapling()).map_err(|e| {
-                        RpcRequestError::Method(GetBlockError::Custom(format!(
-                            "Error parsing sapling tree: {}",
-                            e
-                        )))
+                        RpcRequestError::Transport(TransportError::BadNodeData(Box::new(e)))
                     })?,
                     u32::try_from(trees.orchard()).map_err(|e| {
-                        RpcRequestError::Method(GetBlockError::Custom(format!(
-                            "Error parsing orchard tree: {}",
-                            e
-                        )))
+                        RpcRequestError::Transport(TransportError::BadNodeData(Box::new(e)))
                     })?,
                 )
                 .map_err(|e| {
-                    RpcRequestError::Method(GetBlockError::Custom(format!(
-                        "Error parsing compact block: {}",
-                        e
-                    )))
+                    RpcRequestError::Transport(TransportError::BadNodeData(Box::new(e)))
                 })?,
             )),
         })
