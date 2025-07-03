@@ -595,8 +595,6 @@ pub enum BlockchainSource {
 
 #[derive(Debug)]
 enum BlockchainSourceError {
-    ReadStateError(Box<dyn std::error::Error + Send + Sync + 'static>),
-    FetchServiceError(RpcRequestError<()>), // TODO: better error type here
     Unrecoverable(String),
 }
 
@@ -695,8 +693,11 @@ impl BlockchainSource {
                 )
                 .await;
                 let (sapling_tree, orchard_tree) = match (
-                    sapling_tree_response.map_err(BlockchainSourceError::ReadStateError)?,
-                    orchard_tree_response.map_err(BlockchainSourceError::ReadStateError)?,
+                    //TODO: Better readstateservice error handling
+                    sapling_tree_response
+                        .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?,
+                    orchard_tree_response
+                        .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?,
                 ) {
                     (ReadResponse::SaplingTree(saptree), ReadResponse::OrchardTree(orctree)) => {
                         (saptree, orctree)
@@ -720,21 +721,15 @@ impl BlockchainSource {
                     // As MethodError contains a GetTreestateError, which is an enum with no variants,
                     // we don't need to account for it at all here
                     .map_err(|e| match e {
-                        RpcRequestError::Transport(transport_error) => {
-                            RpcRequestError::Transport(transport_error)
-                        }
-                        RpcRequestError::JsonRpc(error) => RpcRequestError::JsonRpc(error),
-                        RpcRequestError::InternalUnrecoverable => {
-                            RpcRequestError::InternalUnrecoverable
-                        }
                         RpcRequestError::ServerWorkQueueFull => {
-                            RpcRequestError::ServerWorkQueueFull
+                            BlockchainSourceError::Unrecoverable(
+                                "Not yet implemented: handle backing validator\
+                                full queue"
+                                    .to_string(),
+                            )
                         }
-                        RpcRequestError::UnexpectedErrorResponse(error) => {
-                            RpcRequestError::UnexpectedErrorResponse(error)
-                        }
-                    })
-                    .map_err(BlockchainSourceError::FetchServiceError)?;
+                        _ => BlockchainSourceError::Unrecoverable(e.to_string()),
+                    })?;
                 let GetTreestateResponse {
                     sapling, orchard, ..
                 } = tree_responses;

@@ -4,14 +4,32 @@ use zaino_fetch::jsonrpsee::{
     connector::RpcRequestError, error::TransportError, response::GetInfoError,
 };
 
-impl<T> From<RpcRequestError<T>> for StateServiceError {
+impl<T: ToString> From<RpcRequestError<T>> for StateServiceError {
     fn from(value: RpcRequestError<T>) -> Self {
-        todo!()
+        match value {
+            RpcRequestError::Transport(transport_error) => {
+                Self::JsonRpcConnectorError(transport_error)
+            }
+            RpcRequestError::Method(e) => Self::UnhandledRpcError(format!(
+                "{}: {}",
+                std::any::type_name::<T>(),
+                e.to_string()
+            )),
+            RpcRequestError::JsonRpc(error) => Self::Custom(format!("bad argument: {error}")),
+            RpcRequestError::InternalUnrecoverable => {
+                Self::Custom("TODO: useless crash message".to_string())
+            }
+            RpcRequestError::ServerWorkQueueFull => todo!(),
+            RpcRequestError::UnexpectedErrorResponse(error) => todo!(),
+        }
     }
 }
 /// Errors related to the `StateService`.
 #[derive(Debug, thiserror::Error)]
 pub enum StateServiceError {
+    /// An rpc-specific error we haven't accounted for
+    #[error("unhandled fallible RPC call {0}")]
+    UnhandledRpcError(String),
     /// Custom Errors. *Remove before production.
     #[error("Custom error: {0}")]
     Custom(String),
@@ -104,6 +122,7 @@ impl From<StateServiceError> for tonic::Status {
             ref err @ StateServiceError::ZebradVersionMismatch { .. } => {
                 tonic::Status::internal(err.to_string())
             }
+            StateServiceError::UnhandledRpcError(e) => tonic::Status::internal(format!("{e}")),
         }
     }
 }
