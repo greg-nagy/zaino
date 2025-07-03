@@ -655,7 +655,6 @@ impl ResponseToError for GetBlockResponse {
 pub struct GetBlockCountResponse(Height);
 
 /// Error type for the `getblockcount` RPC request.
-/// TODO: check for variants
 #[derive(Debug, thiserror::Error)]
 pub enum GetBlockCountError {}
 
@@ -814,13 +813,44 @@ pub struct TxidsResponse {
     pub transactions: Vec<String>,
 }
 
-/// Error type for the `get_raw_mempool` and `get_address_txids` RPC requests.
-/// TODO: check for variants
+/// Error type for the `get_address_txids` RPC method.
 #[derive(Debug, thiserror::Error)]
-pub enum TxidsError {}
+pub enum TxidsError {
+    /// TODO: double check.
+    ///
+    /// If start is greater than the latest block height,
+    /// it's interpreted as that height.
+    #[error("invalid start block height: {0}")]
+    InvalidStartBlockHeight(i64),
+
+    /// TODO: check which cases this can happen.
+    #[error("invalid end block height: {0}")]
+    InvalidEndBlockHeight(i64),
+
+    /// Invalid address encoding.
+    #[error("Invalid encoding: {0}")]
+    InvalidEncoding(String),
+}
 
 impl ResponseToError for TxidsResponse {
     type RpcError = TxidsError;
+}
+
+/// Separate response for the `get_raw_mempool` RPC method.
+///
+/// Even though the output type is the same as [`TxidsResponse`],
+/// errors are different.
+pub struct RawMempoolResponse {
+    /// Vec of txids.
+    pub transactions: Vec<String>,
+}
+
+/// Error type for the `get_raw_mempool` RPC method.
+#[derive(Debug, thiserror::Error)]
+pub enum GetRawMempoolError {}
+
+impl ResponseToError for RawMempoolResponse {
+    type RpcError = GetRawMempoolError;
 }
 
 impl<'de> serde::Deserialize<'de> for TxidsResponse {
@@ -868,9 +898,12 @@ pub struct GetTreestateResponse {
 }
 
 /// Error type for the `get_treestate` RPC request.
-/// TODO: check for variants
 #[derive(Debug, thiserror::Error)]
-pub enum GetTreestateError {}
+pub enum GetTreestateError {
+    /// Invalid hash or height.
+    #[error("invalid hash or height: {0}")]
+    InvalidHashOrHeight(String),
+}
 
 impl ResponseToError for GetTreestateResponse {
     type RpcError = GetTreestateError;
@@ -1202,9 +1235,20 @@ pub struct GetSubtreesResponse {
 }
 
 /// Error type for the `z_getsubtreesbyindex` RPC request.
-/// TODO: check for variants
 #[derive(Debug, thiserror::Error)]
-pub enum GetSubtreesError {}
+pub enum GetSubtreesError {
+    /// Invalid pool
+    #[error("Invalid pool: {0}")]
+    InvalidPool(String),
+
+    /// Invalid start index
+    #[error("Invalid start index")]
+    InvalidStartIndex,
+
+    /// Invalid limit
+    #[error("Invalid limit")]
+    InvalidLimit,
+}
 
 impl ResponseToError for GetSubtreesResponse {
     type RpcError = GetSubtreesError;
@@ -1311,9 +1355,12 @@ pub struct GetUtxosResponse {
 }
 
 /// Error type for the `getaddressutxos` RPC request.
-/// TODO: check for variants
 #[derive(Debug, thiserror::Error)]
-pub enum GetUtxosError {}
+pub enum GetUtxosError {
+    /// Invalid encoding
+    #[error("Invalid encoding: {0}")]
+    InvalidEncoding(String),
+}
 
 impl ResponseToError for GetUtxosResponse {
     type RpcError = GetUtxosError;
