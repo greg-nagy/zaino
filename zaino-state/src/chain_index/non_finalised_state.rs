@@ -12,8 +12,7 @@ use primitive_types::U256;
 use tokio::sync::mpsc;
 use tower::Service;
 use zaino_fetch::jsonrpsee::{
-    connector::JsonRpSeeConnector,
-    error::JsonRpSeeConnectorError,
+    connector::{JsonRpSeeConnector, RpcRequestError},
     response::{GetBlockResponse, GetTreestateResponse},
 };
 use zcash_primitives::merkle_tree::read_commitment_tree;
@@ -597,7 +596,7 @@ pub enum BlockchainSource {
 #[derive(Debug)]
 enum BlockchainSourceError {
     ReadStateError(Box<dyn std::error::Error + Send + Sync + 'static>),
-    FetchServiceError(JsonRpSeeConnectorError),
+    FetchServiceError(RpcRequestError<()>), // TODO: better error type here
     Unrecoverable(String),
 }
 
@@ -711,6 +710,17 @@ impl BlockchainSource {
                 let tree_responses = json_rp_see_connector
                     .get_treestate(id.to_string())
                     .await
+                    // As MethodError contains a GetTreestateErrer, which is an enum with no variants,
+                    // we don't need to account for it at all here
+                    .map_err(|e| match e {
+                        RpcRequestError::Transport(transport_error) => {
+                            RpcRequestError::Transport(transport_error)
+                        }
+                        RpcRequestError::JsonRpc(error) => RpcRequestError::JsonRpc(error),
+                        RpcRequestError::InternalUnrecoverable => {
+                            RpcRequestError::InternalUnrecoverable
+                        }
+                    })
                     .map_err(BlockchainSourceError::FetchServiceError)?;
                 let GetTreestateResponse {
                     sapling, orchard, ..
