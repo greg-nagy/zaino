@@ -1,9 +1,12 @@
 //! Holds the Finalised portion of the chain index on disk.
 
 use crate::{
-    config::BlockCacheConfig, error::FinalisedStateError, AddrHistRecord, AddrScript, AtomicStatus,
-    ChainBlock, CommitmentTreeData, Hash, Height, Index, OrchardTxList, Outpoint, SaplingTxList,
-    ShardRoot, StatusType, TransparentTxList, TxInCompact, TxIndex, TxOutCompact, TxidList,
+    chain_index::encoding::read_u32_be, config::BlockCacheConfig, error::FinalisedStateError,
+    AddrHistRecord, AddrScript, AtomicStatus, ChainBlock, CommitmentTreeData, CompactOrchardAction,
+    CompactSaplingOutput, CompactSaplingSpend, CompactTxData, Hash, Height, Index,
+    OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, ShardRoot,
+    StatusType, TransparentCompactTx, TransparentTxList, TxInCompact, TxIndex, TxOutCompact,
+    TxidList,
 };
 
 use dashmap::DashSet;
@@ -1008,7 +1011,9 @@ impl ZainoDB {
     /// Returns the serialized 32-byte txid for the given TxIndex.
     ///
     /// This is an optimized version that avoids deserializing the entire TxidList.
-    fn txindex_to_txid_bytes_txn(
+    ///
+    /// NOTE: This method curretly ignores the txid version byte for efficiency.
+    fn txindex_to_txid_bytes_raw_txn(
         &self,
         txn: &lmdb::RoTransaction,
         tx_index: TxIndex,
@@ -1022,6 +1027,8 @@ impl ZainoDB {
         let raw = txn.get(self.txids, &height_bytes)?;
         let mut cursor = Cursor::new(raw);
 
+        // Parse StoredEntryVar<TxidList>:
+
         // Skip [0] StoredEntry version
         cursor.set_position(1);
 
@@ -1029,14 +1036,13 @@ impl ZainoDB {
         let _body_len = CompactSize::read(&mut cursor)
             .map_err(|e| FinalisedStateError::Custom(format!("compact size read error: {e}")))?;
 
-        // Read [1] Record version (skip 1 byte)
+        // Read [1] TxidList Record version (skip 1 byte)
         cursor.set_position(cursor.position() + 1);
 
         // Read CompactSize: number of txids
         let list_len = CompactSize::read(&mut cursor)
             .map_err(|e| FinalisedStateError::Custom(format!("txid list len error: {e}")))?;
 
-        // Bounds check TODO: FIX THIS!
         let idx = tx_index.tx_index() as usize;
         if idx >= list_len as usize {
             return Err(FinalisedStateError::Custom(
@@ -1044,10 +1050,17 @@ impl ZainoDB {
             ));
         }
 
-        // Each txid is 32 bytes, so skip to the desired one
-        cursor.set_position(cursor.position() + (idx as u64) * 32);
+        // Each txid entry is: [0] version tag + [1..32] txid
 
-        let mut txid_bytes = [0u8; 32];
+        // So we skip idx * 33 bytes to reach the start of the correct Hash
+        let offset = cursor.position() + (idx as u64) * Hash::VERSIONED_LEN as u64;
+        cursor.set_position(offset);
+
+        // Read [0] Txid Record version (skip 1 byte)
+        cursor.set_position(cursor.position() + 1);
+
+        // Then read 32 bytes for the txid
+        let mut txid_bytes = [0u8; Hash::ENCODED_LEN];
         cursor
             .read_exact(&mut txid_bytes)
             .map_err(|e| FinalisedStateError::Custom(format!("txid read error: {e}")))?;
@@ -1095,6 +1108,120 @@ impl ZainoDB {
         Ok(results)
     }
 
+    /// Txids: TxIndex -> TransparentCompactTx (raw bytes)
+    ///
+    /// Returns the serialized TransparentCompactTx bytes for the given TxIndex.
+    ///
+    /// This is an optimized version that avoids deserializing the entire TransparentTxList.
+    ///
+    /// NOTE: This method curretly ignores the txid version byte for efficiency.
+    fn txindex_to_transparent_bytes_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        tx_index: TxIndex,
+    ) -> Result<Option<Vec<u8>>, FinalisedStateError> {
+        use std::io::Cursor;
+
+        let height = Height::try_from(tx_index.block_index())
+            .map_err(|e| FinalisedStateError::Custom(e.to_string()))?;
+        let height_bytes = height.to_bytes()?;
+
+        let raw = txn.get(self.transparent, &height_bytes)?;
+        let mut cursor = Cursor::new(raw);
+
+        // Parse StoredEntryVar<TransparentTxList>:
+
+        // Skip [0] StoredEntry version
+        cursor.set_position(1);
+
+        // Read CompactSize: length of serialized body
+        let _body_len = CompactSize::read(&mut cursor)
+            .map_err(|e| FinalisedStateError::Custom(format!("compact size read error: {e}")))?;
+
+        // Read [1] TransparentTxList Record version (skip 1 byte)
+        cursor.set_position(cursor.position() + 1);
+
+        // Read CompactSize: number of records
+        let list_len = CompactSize::read(&mut cursor)
+            .map_err(|e| FinalisedStateError::Custom(format!("txid list len error: {e}")))?;
+
+        let idx = tx_index.tx_index() as usize;
+        if idx >= list_len as usize {
+            return Err(FinalisedStateError::Custom(
+                "tx_index out of range in transparent tx data".to_string(),
+            ));
+        }
+
+        let start = cursor.position();
+
+        // Peek at the 1-byte presence flag
+        let mut presence = [0u8; 1];
+        cursor
+            .read_exact(&mut presence)
+            .map_err(|e| FinalisedStateError::Custom(format!("failed to read Option tag: {e}")))?;
+
+        if presence[0] == 0 {
+            return Ok(None);
+        } else if presence[0] != 1 {
+            return Err(FinalisedStateError::Custom(format!(
+                "invalid Option tag: {}",
+                presence[0]
+            )));
+        }
+
+        cursor.set_position(start);
+        // Skip this entry to compute length
+        Self::skip_opt_transparent_entry(&mut cursor)?;
+        let end = cursor.position();
+        let slice = &raw[start as usize..end as usize];
+
+        // NOTE: Should we trial decode here?
+
+        Ok(Some(slice.to_vec()))
+    }
+
+    /// Skips one `Option<TransparentCompactTx>` entry from the current cursor position.
+    ///
+    /// Advances the cursor past either:
+    /// - 1 byte (`0x00`) if `None`, or
+    /// - 1 + 1 + vin_size + vout_size if `Some(TransparentCompactTx)`
+    ///   (presence + version + variable vin/vout sections)
+    fn skip_opt_transparent_entry(cursor: &mut std::io::Cursor<&[u8]>) -> io::Result<()> {
+        let _start_pos = cursor.position();
+
+        // Read 1-byte presence flag
+        let mut presence = [0u8; 1];
+        cursor.read_exact(&mut presence)?;
+
+        if presence[0] == 0 {
+            return Ok(());
+        } else if presence[0] != 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("invalid Option tag: {}", presence[0]),
+            ));
+        }
+
+        // Read version (1 byte)
+        cursor.read_exact(&mut [0u8; 1])?;
+
+        // Read vin_len (CompactSize)
+        let vin_len = CompactSize::read(&mut *cursor)? as usize;
+
+        // Skip vin entries: each is 1-byte version + 36-byte body
+        let vin_skip = vin_len * TxInCompact::VERSIONED_LEN;
+        cursor.set_position(cursor.position() + vin_skip as u64);
+
+        // Read vout_len (CompactSize)
+        let vout_len = CompactSize::read(&mut *cursor)? as usize;
+
+        // Skip vout entries: each is 1-byte version + 29-byte body
+        let vout_skip = vout_len * TxOutCompact::VERSIONED_LEN;
+        cursor.set_position(cursor.position() + vout_skip as u64);
+
+        Ok(())
+    }
+
     /// Sapling: Height -> StoredEntryVar<SaplingTxList>
     ///
     /// Returns slice of data holding serialised entry.
@@ -1135,6 +1262,125 @@ impl ZainoDB {
         Ok(results)
     }
 
+    /// SaplingTxs: TxIndex -> SaplingCompactTx (raw bytes)
+    ///
+    /// Returns the serialized SaplingCompactTx bytes for the given TxIndex, or `None`
+    /// if the entry is `None`.
+    ///
+    /// This is an optimized version that avoids deserializing the entire SaplingTxList.
+    fn txindex_to_sapling_bytes_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        tx_index: TxIndex,
+    ) -> Result<Option<Vec<u8>>, FinalisedStateError> {
+        use std::io::Cursor;
+
+        let height = Height::try_from(tx_index.block_index())
+            .map_err(|e| FinalisedStateError::Custom(e.to_string()))?;
+        let height_bytes = height.to_bytes()?;
+
+        let raw = txn.get(self.sapling, &height_bytes)?;
+        let mut cursor = Cursor::new(raw);
+
+        // Skip [0] StoredEntry version
+        cursor.set_position(1);
+
+        // Read CompactSize: length of serialized body
+        CompactSize::read(&mut cursor)
+            .map_err(|e| FinalisedStateError::Custom(format!("compact size read error: {e}")))?;
+
+        // Skip SaplingTxList version byte
+        cursor.set_position(cursor.position() + 1);
+
+        // Read CompactSize: number of entries
+        let list_len = CompactSize::read(&mut cursor)
+            .map_err(|e| FinalisedStateError::Custom(format!("sapling tx list len error: {e}")))?;
+
+        let idx = tx_index.tx_index() as usize;
+        if idx >= list_len as usize {
+            return Err(FinalisedStateError::Custom(
+                "tx_index out of range in sapling tx list".to_string(),
+            ));
+        }
+
+        // Skip preceding entries
+        for _ in 0..idx {
+            Self::skip_opt_sapling_entry(&mut cursor)?;
+        }
+
+        let start = cursor.position();
+
+        // Peek presence flag
+        let mut presence = [0u8; 1];
+        cursor
+            .read_exact(&mut presence)
+            .map_err(|e| FinalisedStateError::Custom(format!("failed to read Option tag: {e}")))?;
+
+        if presence[0] == 0 {
+            return Ok(None);
+        } else if presence[0] != 1 {
+            return Err(FinalisedStateError::Custom(format!(
+                "invalid Option tag: {}",
+                presence[0]
+            )));
+        }
+
+        // Rewind to include tag in returned bytes
+        cursor.set_position(start);
+        Self::skip_opt_sapling_entry(&mut cursor)?;
+        let end = cursor.position();
+
+        Ok(Some(raw[start as usize..end as usize].to_vec()))
+    }
+
+    /// Skips one `Option<SaplingCompactTx>` from the current cursor position.
+    ///
+    /// Advances past:
+    /// - 1 byte `0x00` if None, or
+    /// - 1 + 1 + value + spends + outputs if Some (presence + version + body)
+    fn skip_opt_sapling_entry(cursor: &mut std::io::Cursor<&[u8]>) -> io::Result<()> {
+        // Read presence byte
+        let mut presence = [0u8; 1];
+        cursor.read_exact(&mut presence)?;
+
+        if presence[0] == 0 {
+            return Ok(());
+        } else if presence[0] != 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("invalid Option tag: {}", presence[0]),
+            ));
+        }
+
+        // Read version
+        cursor.read_exact(&mut [0u8; 1])?;
+
+        // Read value: Option<i64>
+        let mut value_tag = [0u8; 1];
+        cursor.read_exact(&mut value_tag)?;
+        if value_tag[0] == 1 {
+            // Some(i64): read 8 bytes
+            cursor.set_position(cursor.position() + 8);
+        } else if value_tag[0] != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("invalid Option<i64> tag: {}", value_tag[0]),
+            ));
+        }
+
+        // Read number of spends (CompactSize)
+        let spend_len = CompactSize::read(&mut *cursor)? as usize;
+        let spend_skip = spend_len * CompactSaplingSpend::VERSIONED_LEN;
+        cursor.set_position(cursor.position() + spend_skip as u64);
+
+        // Read number of outputs (CompactSize)
+        let output_len = CompactSize::read(&mut *cursor)? as usize;
+        let output_skip = output_len * CompactSaplingOutput::VERSIONED_LEN;
+        cursor.set_position(cursor.position() + output_skip as u64);
+
+        Ok(())
+    }
+
     /// Orchard: Height -> StoredEntryVar<OrchardTxList>
     ///
     /// Returns slice of data holding serialised entry.
@@ -1173,6 +1419,122 @@ impl ZainoDB {
             results.push(v.to_vec());
         }
         Ok(results)
+    }
+
+    /// OrchardTxs: TxIndex -> OrchardCompactTx (raw bytes)
+    ///
+    /// Returns the serialized OrchardCompactTx bytes for the given TxIndex, or `None`
+    /// if the entry is `None`.
+    ///
+    /// This is an optimized version that avoids deserializing the entire OrchardTxList.
+    fn txindex_to_orchard_bytes_raw_txn(
+        &self,
+        txn: &lmdb::RoTransaction,
+        tx_index: TxIndex,
+    ) -> Result<Option<Vec<u8>>, FinalisedStateError> {
+        use std::io::Cursor;
+
+        let height = Height::try_from(tx_index.block_index())
+            .map_err(|e| FinalisedStateError::Custom(e.to_string()))?;
+        let height_bytes = height.to_bytes()?;
+
+        let raw = txn.get(self.orchard, &height_bytes)?;
+        let mut cursor = Cursor::new(raw);
+
+        // Skip [0] StoredEntry version
+        cursor.set_position(1);
+
+        // Read CompactSize: length of serialized body
+        CompactSize::read(&mut cursor)
+            .map_err(|e| FinalisedStateError::Custom(format!("compact size read error: {e}")))?;
+
+        // Skip OrchardTxList version byte
+        cursor.set_position(cursor.position() + 1);
+
+        // Read CompactSize: number of entries
+        let list_len = CompactSize::read(&mut cursor)
+            .map_err(|e| FinalisedStateError::Custom(format!("orchard tx list len error: {e}")))?;
+
+        let idx = tx_index.tx_index() as usize;
+        if idx >= list_len as usize {
+            return Err(FinalisedStateError::Custom(
+                "tx_index out of range in orchard tx list".to_string(),
+            ));
+        }
+
+        // Skip preceding entries
+        for _ in 0..idx {
+            Self::skip_opt_orchard_entry(&mut cursor)?;
+        }
+
+        let start = cursor.position();
+
+        // Peek presence flag
+        let mut presence = [0u8; 1];
+        cursor
+            .read_exact(&mut presence)
+            .map_err(|e| FinalisedStateError::Custom(format!("failed to read Option tag: {e}")))?;
+
+        if presence[0] == 0 {
+            return Ok(None);
+        } else if presence[0] != 1 {
+            return Err(FinalisedStateError::Custom(format!(
+                "invalid Option tag: {}",
+                presence[0]
+            )));
+        }
+
+        // Rewind to include presence flag in output
+        cursor.set_position(start);
+        Self::skip_opt_orchard_entry(&mut cursor)?;
+        let end = cursor.position();
+
+        Ok(Some(raw[start as usize..end as usize].to_vec()))
+    }
+
+    /// Skips one `Option<OrchardCompactTx>` from the current cursor position.
+    ///
+    /// Advances past:
+    /// - 1 byte `0x00` if None, or
+    /// - 1 + 1 + value + actions if Some (presence + version + body)
+    fn skip_opt_orchard_entry(cursor: &mut std::io::Cursor<&[u8]>) -> io::Result<()> {
+        // Read presence byte
+        let mut presence = [0u8; 1];
+        cursor.read_exact(&mut presence)?;
+
+        if presence[0] == 0 {
+            return Ok(());
+        } else if presence[0] != 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("invalid Option tag: {}", presence[0]),
+            ));
+        }
+
+        // Read version
+        cursor.read_exact(&mut [0u8; 1])?;
+
+        // Read value: Option<i64>
+        let mut value_tag = [0u8; 1];
+        cursor.read_exact(&mut value_tag)?;
+        if value_tag[0] == 1 {
+            // Some(i64): read 8 bytes
+            cursor.set_position(cursor.position() + 8);
+        } else if value_tag[0] != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("invalid Option<i64> tag: {}", value_tag[0]),
+            ));
+        }
+
+        // Read number of actions (CompactSize)
+        let action_len = CompactSize::read(&mut *cursor)? as usize;
+
+        // Skip actions: each is 1-byte version + 148-byte body
+        let action_skip = action_len * CompactOrchardAction::VERSIONED_LEN;
+        cursor.set_position(cursor.position() + action_skip as u64);
+
+        Ok(())
     }
 
     /// Commitment tree data: Height -> StoredEntryFixed<Vec<CommitmentTreeData>>
@@ -1482,7 +1844,7 @@ impl ZainoDB {
     ///
     /// This method takes an *open* read/write LMDB transaction
     /// so multiple calls can be chained internally.
-    pub fn mark_addr_hist_record_spent_txn(
+    fn mark_addr_hist_record_spent_txn(
         &self,
         txn: &mut lmdb::RwTransaction,
         addr_script: &AddrScript,
@@ -1549,7 +1911,7 @@ impl ZainoDB {
     ///
     /// This method takes an *open* read/write LMDB transaction
     /// so multiple calls can be chained internally.
-    pub fn mark_addr_hist_record_unspent_txn(
+    fn mark_addr_hist_record_unspent_txn(
         &self,
         txn: &mut lmdb::RwTransaction,
         addr_script: &AddrScript,
@@ -1838,6 +2200,15 @@ impl ZainoDB {
         Ok((validated_start, validated_end))
     }
 
+    // Fetch the TxIndex for the given txid, transaction data is indexed by Txidex internally.
+    pub fn get_tx_index(&self, txid: &Hash) -> Result<Option<TxIndex>, FinalisedStateError> {
+        if let Some(index) = self.find_txid_index(txid)? {
+            Ok(Some(index))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Fetch block header data by height.
     pub fn get_block_header_data(
         &self,
@@ -1880,6 +2251,15 @@ impl ZainoDB {
             .collect()
     }
 
+    /// Fetch the txid bytes for a given TxIndex.
+    ///
+    /// This uses an optimized lookup without decoding the full TxidList.
+    pub fn get_txid(&self, tx_index: TxIndex) -> Result<Hash, FinalisedStateError> {
+        let txn = self.env.begin_ro_txn()?;
+        let txid_bytes = self.txindex_to_txid_bytes_raw_txn(&txn, tx_index)?;
+        Ok(Hash::from(txid_bytes))
+    }
+
     /// Fetch block txids by height.
     pub fn get_block_txids(&self, height: Height) -> Result<TxidList, FinalisedStateError> {
         let validated_height =
@@ -1917,6 +2297,21 @@ impl ZainoDB {
                     .map_err(|e| FinalisedStateError::Custom(format!("txids decode error: {e}")))
             })
             .collect()
+    }
+
+    /// Fetch the serialized TransparentCompactTx for the given TxIndex, if present.
+    ///
+    /// This uses an optimized lookup without decoding the full TxidList.
+    pub fn get_transparent(
+        &self,
+        tx_index: TxIndex,
+    ) -> Result<Option<TransparentCompactTx>, FinalisedStateError> {
+        let txn = self.env.begin_ro_txn()?;
+        let transparent_opt = self.txindex_to_transparent_bytes_raw_txn(&txn, tx_index)?;
+        match transparent_opt {
+            None => Ok(None),
+            Some(bytes) => Ok(Some(TransparentCompactTx::from_bytes(&bytes)?)),
+        }
     }
 
     /// Fetch block transparent transaction data by height.
@@ -1963,6 +2358,21 @@ impl ZainoDB {
             .collect()
     }
 
+    /// Fetch the serialized SaplingCompactTx for the given TxIndex, if present.
+    ///
+    /// This uses an optimized lookup without decoding the full TxidList.
+    pub fn get_sapling(
+        &self,
+        tx_index: TxIndex,
+    ) -> Result<Option<SaplingCompactTx>, FinalisedStateError> {
+        let txn = self.env.begin_ro_txn()?;
+        let sapling_opt = self.txindex_to_sapling_bytes_raw_txn(&txn, tx_index)?;
+        match sapling_opt {
+            None => Ok(None),
+            Some(bytes) => Ok(Some(SaplingCompactTx::from_bytes(&bytes)?)),
+        }
+    }
+
     /// Fetch block sapling transaction data by height.
     pub fn get_block_sapling(&self, height: Height) -> Result<SaplingTxList, FinalisedStateError> {
         let validated_height =
@@ -2000,6 +2410,21 @@ impl ZainoDB {
                     .map_err(|e| FinalisedStateError::Custom(format!("sapling decode error: {e}")))
             })
             .collect()
+    }
+
+    /// Fetch the serialized OrchardCompactTx for the given TxIndex, if present.
+    ///
+    /// This uses an optimized lookup without decoding the full TxidList.
+    pub fn get_orchard(
+        &self,
+        tx_index: TxIndex,
+    ) -> Result<Option<OrchardCompactTx>, FinalisedStateError> {
+        let txn = self.env.begin_ro_txn()?;
+        let orchard_opt = self.txindex_to_orchard_bytes_raw_txn(&txn, tx_index)?;
+        match orchard_opt {
+            None => Ok(None),
+            Some(bytes) => Ok(Some(OrchardCompactTx::from_bytes(&bytes)?)),
+        }
     }
 
     /// Fetch block orchard transaction data by height.
@@ -2294,6 +2719,242 @@ impl ZainoDB {
         self.addr_hist_balance_by_addr_and_range_txn(&txn, &addr_bytes, start_height, end_height)
     }
 
+    /// Returns the ChainBlock for the given Height.
+    ///
+    /// TODO: Add separate range fetch method!
+    pub fn get_chain_block(&self, height: Height) -> Result<ChainBlock, FinalisedStateError> {
+        let validated_height =
+            self.resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))?;
+        let height_bytes = validated_height.to_bytes()?;
+
+        let txn = self.env.begin_ro_txn()?;
+
+        // Fetch header data
+        let raw = self.block_header_raw_txn(&txn, &height_bytes)?;
+        let header: BlockHeaderData = *StoredEntryVar::from_bytes(&raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("header decode error: {e}")))?
+            .inner();
+
+        // fetch transaction data
+        let raw = self.block_txids_raw_txn(&txn, &height_bytes)?;
+        let txids_list = StoredEntryVar::<TxidList>::from_bytes(&raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("txids decode error: {e}")))?
+            .inner()
+            .clone();
+        let txids = txids_list.tx();
+
+        let raw = self.block_transparent_raw_txn(&txn, &height_bytes)?;
+        let transparent_list = StoredEntryVar::<TransparentTxList>::from_bytes(&raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("transparent decode error: {e}")))?
+            .inner()
+            .clone();
+        let transparent = transparent_list.tx();
+
+        let raw = self.block_sapling_raw_txn(&txn, &height_bytes)?;
+        let sapling_list = StoredEntryVar::<SaplingTxList>::from_bytes(&raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("sapling decode error: {e}")))?
+            .inner()
+            .clone();
+        let sapling = sapling_list.tx();
+
+        let raw = self.block_orchard_raw_txn(&txn, &height_bytes)?;
+        let orchard_list = StoredEntryVar::<OrchardTxList>::from_bytes(&raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("orchard decode error: {e}")))?
+            .inner()
+            .clone();
+        let orchard = orchard_list.tx();
+
+        // Build CompactTxData
+        let len = txids.len();
+        if transparent.len() != len || sapling.len() != len || orchard.len() != len {
+            return Err(FinalisedStateError::Custom(
+                "mismatched tx list lengths in block data".to_string(),
+            ));
+        }
+
+        let txs: Vec<CompactTxData> = (0..len)
+            .map(|i| {
+                let txid = txids[i].0;
+
+                let transparent_tx = transparent[i]
+                    .clone()
+                    .unwrap_or_else(|| TransparentCompactTx::new(vec![], vec![]));
+                let sapling_tx = sapling[i]
+                    .clone()
+                    .unwrap_or_else(|| SaplingCompactTx::new(None, vec![], vec![]));
+                let orchard_tx = orchard[i]
+                    .clone()
+                    .unwrap_or_else(|| OrchardCompactTx::new(None, vec![]));
+
+                CompactTxData::new(i as u64, txid, transparent_tx, sapling_tx, orchard_tx)
+            })
+            .collect();
+
+        // fetch commitment tree data
+        let raw = self.block_commitment_tree_data_raw_txn(&txn, &height_bytes)?;
+        let commitment_tree_data: CommitmentTreeData = *StoredEntryFixed::from_bytes(&raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("commitment_tree decode error: {e}")))?
+            .inner();
+
+        // Construct ChainBlock
+        Ok(ChainBlock::new(
+            *header.index(),
+            *header.data(),
+            txs,
+            commitment_tree_data,
+        ))
+    }
+
+    /// Returns the CompactBlock for the given Height.
+    ///
+    /// TODO: Add separate range fetch method!
+    pub fn get_compact_block(
+        &self,
+        height: Height,
+    ) -> Result<zaino_proto::proto::compact_formats::CompactBlock, FinalisedStateError> {
+        let validated_height =
+            self.resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))?;
+        let height_bytes = validated_height.to_bytes()?;
+
+        let txn = self.env.begin_ro_txn()?;
+
+        // Fetch header data
+        let raw = self.block_header_raw_txn(&txn, &height_bytes)?;
+        let header: BlockHeaderData = *StoredEntryVar::from_bytes(&raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("header decode error: {e}")))?
+            .inner();
+
+        // fetch transaction data
+        let raw = self.block_txids_raw_txn(&txn, &height_bytes)?;
+        let txids_list = StoredEntryVar::<TxidList>::from_bytes(&raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("txids decode error: {e}")))?
+            .inner()
+            .clone();
+        let txids = txids_list.tx();
+
+        let raw = self.block_sapling_raw_txn(&txn, &height_bytes)?;
+        let sapling_list = StoredEntryVar::<SaplingTxList>::from_bytes(&raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("sapling decode error: {e}")))?
+            .inner()
+            .clone();
+        let sapling = sapling_list.tx();
+
+        let raw = self.block_orchard_raw_txn(&txn, &height_bytes)?;
+        let orchard_list = StoredEntryVar::<OrchardTxList>::from_bytes(&raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("orchard decode error: {e}")))?
+            .inner()
+            .clone();
+        let orchard = orchard_list.tx();
+
+        let vtx: Vec<zaino_proto::proto::compact_formats::CompactTx> = txids
+            .iter()
+            .enumerate()
+            .map(|(i, txid)| {
+                let spends = sapling
+                    .get(i)
+                    .and_then(|opt| opt.as_ref())
+                    .map(|s| s.spends().iter().map(|sp| sp.into_compact()).collect())
+                    .unwrap_or_default();
+
+                let outputs = sapling
+                    .get(i)
+                    .and_then(|opt| opt.as_ref())
+                    .map(|s| s.outputs().iter().map(|o| o.into_compact()).collect())
+                    .unwrap_or_default();
+
+                let actions = orchard
+                    .get(i)
+                    .and_then(|opt| opt.as_ref())
+                    .map(|o| o.actions().iter().map(|a| a.into_compact()).collect())
+                    .unwrap_or_default();
+
+                zaino_proto::proto::compact_formats::CompactTx {
+                    index: i as u64,
+                    hash: txid.0.to_vec(),
+                    fee: 0,
+                    spends,
+                    outputs,
+                    actions,
+                }
+            })
+            .collect();
+
+        // fetch commitment tree data
+        let raw = self.block_commitment_tree_data_raw_txn(&txn, &height_bytes)?;
+        let commitment_tree_data: CommitmentTreeData = *StoredEntryFixed::from_bytes(&raw)
+            .map_err(|e| FinalisedStateError::Custom(format!("commitment_tree decode error: {e}")))?
+            .inner();
+
+        let chain_metadata = zaino_proto::proto::compact_formats::ChainMetadata {
+            sapling_commitment_tree_size: commitment_tree_data.sizes().sapling(),
+            orchard_commitment_tree_size: commitment_tree_data.sizes().orchard(),
+        };
+
+        // Construct CompactBlock
+        Ok(zaino_proto::proto::compact_formats::CompactBlock {
+            proto_version: 4,
+            height: header
+                .index()
+                .height()
+                .expect("height always present in finalised state.")
+                .0 as u64,
+            hash: header.index().hash().0.to_vec(),
+            prev_hash: header.index().parent_hash().0.to_vec(),
+            // Is this safe?
+            time: header.data().time() as u32,
+            header: Vec::new(),
+            vtx,
+            chain_metadata: Some(chain_metadata),
+        })
+    }
+
+    /// Fetch every `ShardRoot` whose numeric index satisfies  
+    /// `start.index ≤ idx ≤ end.index` (inclusive).  
+    /// If `start > end` an empty `Vec` is returned.
+    pub fn get_shard_roots(
+        &self,
+        start: Index,
+        end: Index,
+    ) -> Result<Vec<ShardRoot>, FinalisedStateError> {
+        if start.0 > end.0 {
+            return Ok(Vec::new());
+        }
+
+        // Serialise the first key (version-tag + big-endian u32) so we can
+        // seek directly with `iter_from`.
+        let start_key = start.to_bytes()?;
+        let end_idx = end.0;
+
+        let txn = self.env.begin_ro_txn()?;
+        let mut cur = txn.open_ro_cursor(self.shard_roots)?;
+
+        let mut roots = Vec::new();
+
+        // Cursor walk from `start_key` until we pass `end_idx`.
+        for (key_bytes, val_bytes) in cur.iter_from::<&[u8]>(&start_key) {
+            if key_bytes.len() != Index::VERSIONED_LEN {
+                break;
+            }
+
+            let idx = {
+                use core2::io::Cursor;
+                let mut rdr = Cursor::new(&key_bytes[1..]);
+                read_u32_be(&mut rdr)?
+            };
+
+            if idx > end_idx {
+                break;
+            }
+
+            let entry = StoredEntryFixed::<ShardRoot>::from_bytes(val_bytes).map_err(|e| {
+                FinalisedStateError::Custom(format!("corrupt shard-root entry: {e}"))
+            })?;
+            roots.push(*entry.inner());
+        }
+
+        Ok(roots)
+    }
+
     /// Fetch database metadata.
     pub fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
         let txn = self.env.begin_ro_txn()?;
@@ -2303,184 +2964,6 @@ impl ZainoDB {
 
         Ok(entry.item)
     }
-
-    // /// Returns block header and chain indexing data for the block.
-    // pub fn get_block_header_data(
-    //     &self,
-    //     hash_or_height: HashOrHeight,
-    // ) -> Result<BlockHeaderData, FinalisedStateError> {
-    //     let hash_key: [u8; 32] = self
-    //         .resolve_validated_hash_or_height(hash_or_height)?
-    //         .into();
-
-    //     let hdr_vec: Vec<u8> = {
-    //         let ro = self.env.begin_ro_txn()?;
-    //         ro.get(self.headers_db, &hash_key)?.to_vec()
-    //     };
-    //     let stored: StoredEntry<BlockHeaderData> = StoredEntry::deserialize(&hdr_vec)
-    //         .map_err(|e| FinalisedStateError::Custom(format!("corrupt header CBOR: {e}")))?;
-    //     Ok(stored.item)
-    // }
-
-    // /// Returns transaction data for the block.
-    // pub fn get_block_transactions(
-    //     &self,
-    //     hash_or_height: HashOrHeight,
-    // ) -> Result<TxList, FinalisedStateError> {
-    //     let hash_key: [u8; 32] = self
-    //         .resolve_validated_hash_or_height(hash_or_height)?
-    //         .into();
-
-    //     let tx_vec: Vec<u8> = {
-    //         let ro = self.env.begin_ro_txn()?;
-    //         ro.get(self.transactions_db, &hash_key)?.to_vec()
-    //     };
-    //     let stored: StoredEntry<TxList> = StoredEntry::deserialize(&tx_vec)
-    //         .map_err(|e| FinalisedStateError::Custom(format!("corrupt tx CBOR: {e}")))?;
-    //     Ok(stored.item)
-    // }
-
-    // // Returns a single [`TxData`] from the block, identified by its
-    // /// zero-based position within the block’s compact-transaction list.
-    // pub fn get_transaction(
-    //     &self,
-    //     hash_or_height: HashOrHeight,
-    //     tx_index: u32,
-    // ) -> Result<TxData, FinalisedStateError> {
-    //     let list = self.get_block_transactions(hash_or_height)?;
-    //     let idx = tx_index as usize;
-
-    //     list.0.get(idx).cloned().ok_or_else(|| {
-    //         FinalisedStateError::Custom(format!("transaction index {tx_index} out of range"))
-    //     })
-    // }
-
-    // /// Returns spend data for the block.
-    // pub fn get_block_spends(
-    //     &self,
-    //     hash_or_height: HashOrHeight,
-    // ) -> Result<SpentList, FinalisedStateError> {
-    //     let hash_key: [u8; 32] = self
-    //         .resolve_validated_hash_or_height(hash_or_height)?
-    //         .into();
-
-    //     let sp_vec: Vec<u8> = {
-    //         let ro = self.env.begin_ro_txn()?;
-    //         ro.get(self.spent_db, &hash_key)?.to_vec()
-    //     };
-    //     let stored: StoredEntry<SpentList> = StoredEntry::deserialize(&sp_vec)
-    //         .map_err(|e| FinalisedStateError::Custom(format!("corrupt spends CBOR: {e}")))?;
-    //     Ok(stored.item)
-    // }
-
-    // /// Returns a single `SpentOutpoint` from the block, identified by its
-    // /// zero-based position inside the stored spends list.
-    // pub fn get_spend(
-    //     &self,
-    //     hash_or_height: HashOrHeight,
-    //     spend_index: u32,
-    // ) -> Result<SpentOutpoint, FinalisedStateError> {
-    //     let list = self.get_block_spends(hash_or_height)?;
-    //     let idx = spend_index as usize;
-
-    //     list.0.get(idx).cloned().ok_or_else(|| {
-    //         FinalisedStateError::Custom(format!("spend index {spend_index} out of range"))
-    //     })
-    // }
-
-    // /// Returns every `ShardRoot` whose index satisfies `start_index ≤ idx < end_index`.
-    // /// If `start_index >= end_index` an empty vector is returned.
-    // pub fn get_shard_roots(
-    //     &self,
-    //     start_index: u32,
-    //     end_index: u32,
-    // ) -> Result<Vec<ShardRoot>, FinalisedStateError> {
-    //     if start_index > end_index {
-    //         return Ok(Vec::new());
-    //     }
-
-    //     // first key in native-endian order
-    //     let first_key = Index(start_index).to_ne_bytes();
-
-    //     let ro_txn = self.env.begin_ro_txn()?;
-    //     let mut cursor = ro_txn.open_ro_cursor(self.roots_db)?;
-
-    //     let mut roots = Vec::new();
-
-    //     // `iter_from` → Iterator<Item = (&[u8], &[u8])>
-    //     for (key_bytes, val_bytes) in cursor.iter_from::<&[u8]>(&first_key) {
-    //         let idx =
-    //             u32::from_ne_bytes(key_bytes.try_into().expect("INTEGER_KEY keys are 4 bytes"));
-    //         if idx > end_index {
-    //             break;
-    //         }
-
-    //         let stored: StoredEntry<ShardRoot> = StoredEntry::deserialize(val_bytes)
-    //             .map_err(|e| FinalisedStateError::Custom(format!("corrupt root CBOR: {e}")))?;
-    //         roots.push(stored.item);
-    //     }
-
-    //     Ok(roots)
-    // }
-
-    // /// Returns chain indexing data for the block.
-    // pub fn get_chain_index(
-    //     &self,
-    //     hash_or_height: HashOrHeight,
-    // ) -> Result<BlockIndex, FinalisedStateError> {
-    //     Ok(self.get_block_header_data(hash_or_height)?.index)
-    // }
-
-    // /// Returns header data for the block.
-    // pub fn get_block_header(
-    //     &self,
-    //     hash_or_height: HashOrHeight,
-    // ) -> Result<BlockData, FinalisedStateError> {
-    //     Ok(self.get_block_header_data(hash_or_height)?.data)
-    // }
-
-    // /// Returns the **entire** [`ChainBlock`] (header/index + compact txs +
-    // /// spent outpoints) identified by `hash_or_height`.
-    // pub fn get_chain_block(
-    //     &self,
-    //     hash_or_height: HashOrHeight,
-    // ) -> Result<ChainBlock, FinalisedStateError> {
-    //     let header_data = self.get_block_header_data(hash_or_height)?;
-
-    //     let tx_list = self.get_block_transactions(hash_or_height)?;
-
-    //     let spent_list = self.get_block_spends(hash_or_height)?;
-
-    //     Ok(ChainBlock::new(
-    //         header_data.index,
-    //         header_data.data,
-    //         tx_list.0,
-    //         spent_list.0,
-    //     ))
-    // }
-
-    // /// Returns a CompactBlock identified by `hash_or_height`.
-    // pub fn get_compact_block(
-    //     &self,
-    //     hash_or_height: HashOrHeight,
-    // ) -> Result<zaino_proto::proto::compact_formats::CompactBlock, FinalisedStateError> {
-    //     Ok(self.get_chain_block(hash_or_height)?.to_compact_block())
-    // }
-
-    // /// Convenience getter so callers (RPC, tests, CLI) can inspect the
-    // /// on-disk schema version and hash.
-    // pub fn get_db_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
-    //     let ro = self.env.begin_ro_txn()?;
-    //     let raw = ro.get(self.metadata_db, b"metadata")?;
-    //     let stored: StoredEntry<DbMetadata> = StoredEntry::deserialize(raw)
-    //         .map_err(|e| FinalisedStateError::Custom(format!("corrupt metadata CBOR: {e}")))?;
-    //     if !stored.verify() {
-    //         return Err(FinalisedStateError::Custom(
-    //             "metadata checksum mismatch".into(),
-    //         ));
-    //     }
-    //     Ok(stored.item)
-    // }
 
     // *** DbReader creation ***
 
@@ -3029,83 +3512,308 @@ pub struct DbReader<'a> {
     inner: &'a ZainoDB,
 }
 
-// impl<'a> DbReader<'a> {
-//     /// Returns block header and chain indexing data for the block.
-//     pub fn get_block_header_data(
-//         &self,
-//         id: HashOrHeight,
-//     ) -> Result<BlockHeaderData, FinalisedStateError> {
-//         self.inner.get_block_header_data(id)
-//     }
+impl<'a> DbReader<'a> {
+    /// Fetch the block height in the main chain for a given block hash.
+    pub fn get_block_height_by_hash(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
+        self.inner.get_block_height_by_hash(hash)
+    }
 
-//     /// Returns transaction data for the block.
-//     pub fn get_block_transactions(&self, id: HashOrHeight) -> Result<TxList, FinalisedStateError> {
-//         self.inner.get_block_transactions(id)
-//     }
+    /// Fetch the height range for the given block hashes.
+    pub fn get_block_range_by_hash(
+        &self,
+        start_hash: Hash,
+        end_hash: Hash,
+    ) -> Result<(Height, Height), FinalisedStateError> {
+        self.inner.get_block_range_by_hash(start_hash, end_hash)
+    }
 
-//     // Returns a single [`TxData`] from the block, identified by its
-//     /// zero-based position within the block’s compact-transaction list.
-//     pub fn get_transaction(
-//         &self,
-//         id: HashOrHeight,
-//         idx: u32,
-//     ) -> Result<TxData, FinalisedStateError> {
-//         self.inner.get_transaction(id, idx)
-//     }
+    // Fetch the TxIndex for the given txid, transaction data is indexed by Txidex internally.
+    pub fn get_tx_index(&self, txid: &Hash) -> Result<Option<TxIndex>, FinalisedStateError> {
+        self.inner.get_tx_index(txid)
+    }
 
-//     /// Returns spend data for the block.
-//     pub fn get_block_spends(&self, id: HashOrHeight) -> Result<SpentList, FinalisedStateError> {
-//         self.inner.get_block_spends(id)
-//     }
+    /// Fetch block header data by height.
+    pub fn get_block_header_data(
+        &self,
+        height: Height,
+    ) -> Result<BlockHeaderData, FinalisedStateError> {
+        self.inner.get_block_header_data(height)
+    }
 
-//     pub fn get_spend(
-//         &self,
-//         id: HashOrHeight,
-//         idx: u32,
-//     ) -> Result<SpentOutpoint, FinalisedStateError> {
-//         self.inner.get_spend(id, idx)
-//     }
+    /// Fetches block headers for the given height range.
+    ///
+    /// Uses cursor based fetch.
+    pub fn get_block_range_headers(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<BlockHeaderData>, FinalisedStateError> {
+        self.inner.get_block_range_headers(start, end)
+    }
 
-//     /// Returns a single `SpentOutpoint` from the block, identified by its
-//     /// zero-based position inside the stored spends list.
-//     pub fn get_shard_roots(
-//         &self,
-//         start: u32,
-//         end: u32,
-//     ) -> Result<Vec<ShardRoot>, FinalisedStateError> {
-//         self.inner.get_shard_roots(start, end)
-//     }
+    /// Fetch the txid bytes for a given TxIndex.
+    ///
+    /// This uses an optimized lookup without decoding the full TxidList.
+    pub fn get_txid(&self, tx_index: TxIndex) -> Result<Hash, FinalisedStateError> {
+        self.inner.get_txid(tx_index)
+    }
 
-//     /// Returns chain indexing data for the block.
-//     pub fn get_chain_index(&self, id: HashOrHeight) -> Result<BlockIndex, FinalisedStateError> {
-//         self.inner.get_chain_index(id)
-//     }
+    /// Fetch block txids by height.
+    pub fn get_block_txids(&self, height: Height) -> Result<TxidList, FinalisedStateError> {
+        self.inner.get_block_txids(height)
+    }
 
-//     /// Returns header data for the block.
-//     pub fn get_block_header(&self, id: HashOrHeight) -> Result<BlockData, FinalisedStateError> {
-//         self.inner.get_block_header(id)
-//     }
+    /// Fetches block txids for the given height range.
+    ///
+    /// Uses cursor based fetch.
+    pub fn get_block_range_txids(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<TxidList>, FinalisedStateError> {
+        self.inner.get_block_range_txids(start, end)
+    }
 
-//     /// Returns the **entire** [`ChainBlock`] (header/index + compact txs +
-//     /// spent outpoints) identified by `hash_or_height`.
-//     pub fn get_chain_block(&self, id: HashOrHeight) -> Result<ChainBlock, FinalisedStateError> {
-//         self.inner.get_chain_block(id)
-//     }
+    /// Fetch the serialized TransparentCompactTx for the given TxIndex, if present.
+    ///
+    /// This uses an optimized lookup without decoding the full TxidList.
+    pub fn get_transparent(
+        &self,
+        tx_index: TxIndex,
+    ) -> Result<Option<TransparentCompactTx>, FinalisedStateError> {
+        self.inner.get_transparent(tx_index)
+    }
 
-//     /// Returns a CompactBlock identified by `hash_or_height`.
-//     pub fn get_compact_block(
-//         &self,
-//         id: HashOrHeight,
-//     ) -> Result<zaino_proto::proto::compact_formats::CompactBlock, FinalisedStateError> {
-//         self.inner.get_compact_block(id)
-//     }
+    /// Fetch block transparent transaction data by height.
+    pub fn get_block_transparent(
+        &self,
+        height: Height,
+    ) -> Result<TransparentTxList, FinalisedStateError> {
+        self.inner.get_block_transparent(height)
+    }
 
-//     /// Convenience getter so callers (RPC, tests, CLI) can inspect the
-//     /// on-disk schema version and hash.
-//     pub fn get_db_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
-//         self.inner.get_db_metadata()
-//     }
-// }
+    /// Fetches block transparent tx data for the given height range.
+    ///
+    /// Uses cursor based fetch.
+    pub fn get_block_range_transparent(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<TransparentTxList>, FinalisedStateError> {
+        self.inner.get_block_range_transparent(start, end)
+    }
+
+    /// Fetch the serialized SaplingCompactTx for the given TxIndex, if present.
+    ///
+    /// This uses an optimized lookup without decoding the full TxidList.
+    pub fn get_sapling(
+        &self,
+        tx_index: TxIndex,
+    ) -> Result<Option<SaplingCompactTx>, FinalisedStateError> {
+        self.inner.get_sapling(tx_index)
+    }
+
+    /// Fetch block sapling transaction data by height.
+    pub fn get_block_sapling(&self, height: Height) -> Result<SaplingTxList, FinalisedStateError> {
+        self.inner.get_block_sapling(height)
+    }
+
+    /// Fetches block sapling tx data for the given height range.
+    ///
+    /// Uses cursor based fetch.
+    pub fn get_block_range_sapling(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<SaplingTxList>, FinalisedStateError> {
+        self.inner.get_block_range_sapling(start, end)
+    }
+
+    /// Fetch the serialized OrchardCompactTx for the given TxIndex, if present.
+    ///
+    /// This uses an optimized lookup without decoding the full TxidList.
+    pub fn get_orchard(
+        &self,
+        tx_index: TxIndex,
+    ) -> Result<Option<OrchardCompactTx>, FinalisedStateError> {
+        self.inner.get_orchard(tx_index)
+    }
+
+    /// Fetch block orchard transaction data by height.
+    pub fn get_block_orchard(&self, height: Height) -> Result<OrchardTxList, FinalisedStateError> {
+        self.inner.get_block_orchard(height)
+    }
+
+    /// Fetches block orchard tx data for the given height range.
+    ///
+    /// Uses cursor based fetch.
+    pub fn get_block_range_orchard(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<OrchardTxList>, FinalisedStateError> {
+        self.inner.get_block_range_orchard(start, end)
+    }
+
+    /// Fetch block commitment tree data by height.
+    pub fn get_block_commitment_tree_data(
+        &self,
+        height: Height,
+    ) -> Result<CommitmentTreeData, FinalisedStateError> {
+        self.inner.get_block_commitment_tree_data(height)
+    }
+
+    /// Fetches block commitment tree data for the given height range.
+    ///
+    /// Uses cursor based fetch.
+    pub fn get_block_range_commitment_tree_data(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<CommitmentTreeData>, FinalisedStateError> {
+        self.inner.get_block_range_commitment_tree_data(start, end)
+    }
+
+    /// Fetch the `TxIndex` that spent a given outpoint, if any.
+    ///
+    /// Returns:
+    /// - `Ok(Some(TxIndex))` if the outpoint is spent.
+    /// - `Ok(None)` if no entry exists (not spent or not known).
+    /// - `Err(...)` on deserialization or DB error.
+    pub fn prev_output_index(
+        &self,
+        outpoint: Outpoint,
+    ) -> Result<Option<TxIndex>, FinalisedStateError> {
+        self.inner.prev_output_index(outpoint)
+    }
+
+    /// Fetch the `TxIndex` entries for a batch of outpoints.
+    ///
+    /// For each input:
+    /// - Returns `Some(TxIndex)` if spent,
+    /// - `None` if not found,
+    /// - or returns `Err` immediately if any DB or decode error occurs.
+    pub fn prev_outputs_index(
+        &self,
+        outpoints: Vec<Outpoint>,
+    ) -> Result<Vec<Option<TxIndex>>, FinalisedStateError> {
+        self.inner.prev_outputs_index(outpoints)
+    }
+
+    /// Fetch all address history records for a given transparent address.
+    ///
+    /// Returns:
+    /// - `Ok(Some(records))` if one or more valid records exist,
+    /// - `Ok(None)` if no records exist (not an error),
+    /// - `Err(...)` if any decoding or DB error occurs.
+    pub fn addr_records(
+        &self,
+        addr_script: AddrScript,
+    ) -> Result<Option<Vec<AddrEventBytes>>, FinalisedStateError> {
+        self.inner.addr_records(addr_script)
+    }
+
+    /// Fetch all address history records for a given address and TxIndex.
+    ///
+    /// Returns:
+    /// - `Ok(Some(records))` if one or more matching records are found at that index,
+    /// - `Ok(None)` if no matching records exist (not an error),
+    /// - `Err(...)` on decode or DB failure.
+    pub fn addr_and_index_records(
+        &self,
+        addr_script: AddrScript,
+        tx_index: TxIndex,
+    ) -> Result<Option<Vec<AddrEventBytes>>, FinalisedStateError> {
+        self.inner.addr_and_index_records(addr_script, tx_index)
+    }
+
+    /// Fetch all distinct `TxIndex` values for `addr_script` within the
+    /// height range `[start_height, end_height]` (inclusive).
+    ///
+    /// Returns:
+    /// - `Ok(Some(vec))` if one or more matching records are found,
+    /// - `Ok(None)` if no matches found (not an error),
+    /// - `Err(...)` on decode or DB failure.
+    pub fn addr_tx_indexes_by_range(
+        &self,
+        addr_script: AddrScript,
+        start_height: Height,
+        end_height: Height,
+    ) -> Result<Option<Vec<TxIndex>>, FinalisedStateError> {
+        self.inner
+            .addr_tx_indexes_by_range(addr_script, start_height, end_height)
+    }
+
+    /// Fetch all UTXOs (unspent mined outputs) for `addr_script` within the
+    /// height range `[start_height, end_height]` (inclusive).
+    ///
+    /// Each entry is `(TxIndex, vout, value)`.
+    ///
+    /// Returns:
+    /// - `Ok(Some(vec))` if one or more UTXOs are found,
+    /// - `Ok(None)` if none found (not an error),
+    /// - `Err(...)` on decode or DB failure.
+    pub fn addr_utxos_by_range(
+        &self,
+        addr_script: AddrScript,
+        start_height: Height,
+        end_height: Height,
+    ) -> Result<Option<Vec<(TxIndex, u16, u64)>>, FinalisedStateError> {
+        self.inner
+            .addr_utxos_by_range(addr_script, start_height, end_height)
+    }
+
+    /// Computes the transparent balance change for `addr_script` over the
+    /// height range `[start_height, end_height]` (inclusive).
+    ///
+    /// Includes:
+    /// - `+value` for mined outputs
+    /// - `−value` for spent inputs
+    ///
+    /// Returns the signed net value as `i64`, or error on failure.
+    pub fn addr_balance_by_range(
+        &self,
+        addr_script: AddrScript,
+        start_height: Height,
+        end_height: Height,
+    ) -> Result<i64, FinalisedStateError> {
+        self.inner
+            .addr_balance_by_range(addr_script, start_height, end_height)
+    }
+
+    /// Returns the ChainBlock for the given Height.
+    ///
+    /// TODO: Add separate range fetch method!
+    pub fn get_chain_block(&self, height: Height) -> Result<ChainBlock, FinalisedStateError> {
+        self.inner.get_chain_block(height)
+    }
+
+    /// Returns the CompactBlock for the given Height.
+    ///
+    /// TODO: Add separate range fetch method!
+    pub fn get_compact_block(
+        &self,
+        height: Height,
+    ) -> Result<zaino_proto::proto::compact_formats::CompactBlock, FinalisedStateError> {
+        self.inner.get_compact_block(height)
+    }
+
+    /// Fetch every `ShardRoot` whose numeric index satisfies  
+    /// `start.index ≤ idx ≤ end.index` (inclusive).  
+    /// If `start > end` an empty `Vec` is returned.
+    pub fn get_shard_roots(
+        &self,
+        start: Index,
+        end: Index,
+    ) -> Result<Vec<ShardRoot>, FinalisedStateError> {
+        self.inner.get_shard_roots(start, end)
+    }
+
+    /// Fetch database metadata.
+    pub fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
+        self.inner.get_metadata()
+    }
+}
 
 // *** DB validation and varification ***
 

@@ -1822,6 +1822,13 @@ impl CompactSaplingSpend {
     pub fn nullifier(&self) -> &[u8; 32] {
         &self.nf
     }
+
+    /// Creates a Proto CompactSaplingSpend from this record.
+    pub fn into_compact(&self) -> zaino_proto::proto::compact_formats::CompactSaplingSpend {
+        zaino_proto::proto::compact_formats::CompactSaplingSpend {
+            nf: self.nf.to_vec(),
+        }
+    }
 }
 
 impl ZainoVersionedSerialise for CompactSaplingSpend {
@@ -1882,6 +1889,15 @@ impl CompactSaplingOutput {
     /// Returns ciphertext.
     pub fn ciphertext(&self) -> &[u8; 52] {
         &self.ciphertext
+    }
+
+    /// Creates a Proto CompactSaplingOutput from this record.
+    pub fn into_compact(&self) -> zaino_proto::proto::compact_formats::CompactSaplingOutput {
+        zaino_proto::proto::compact_formats::CompactSaplingOutput {
+            cmu: self.cmu.to_vec(),
+            ephemeral_key: self.ephemeral_key.to_vec(),
+            ciphertext: self.ciphertext.to_vec(),
+        }
     }
 }
 
@@ -2014,6 +2030,16 @@ impl CompactOrchardAction {
     /// Returns ciphertext.
     pub fn ciphertext(&self) -> &[u8; 52] {
         &self.ciphertext
+    }
+
+    /// Creates a Proto CompactOrchardAction from this record.
+    pub fn into_compact(&self) -> zaino_proto::proto::compact_formats::CompactOrchardAction {
+        zaino_proto::proto::compact_formats::CompactOrchardAction {
+            nullifier: self.nullifier.to_vec(),
+            cmx: self.cmx.to_vec(),
+            ephemeral_key: self.ephemeral_key.to_vec(),
+            ciphertext: self.ciphertext.to_vec(),
+        }
     }
 }
 
@@ -2461,6 +2487,34 @@ impl ZainoVersionedSerialise for TxidList {
 ///
 /// This ensures 1-to-1 indexing with `TxidList`: element *i* matches txid *i*.
 /// `None` keeps the index when the tx lacks this pool.
+///
+/// **Serialization layout for `TransparentTxList` (implements `ZainoVersionedSerialise`)**
+///
+/// ┌──────────── byte 0 ─────────────┬────────── CompactSize ─────────────┬──────────── entries ─────────────┐
+/// │ TransparentTxList version tag   │ num_txs (CompactSize) = N          │ [Option<TransparentCompactTx>; N]│
+/// └─────────────────────────────────┴────────────────────────────────────┴──────────────────────────────────┘
+///
+/// Each `Option<TransparentCompactTx>` is serialized as:
+///
+/// ┌── 1 byte ──┬────────── TransparentCompactTx ─────────────┐
+/// │   0 or 1   │ If Some: 1-byte version + body              │
+/// └────────────┴─────────────────────────────────────────────┘
+///
+/// TransparentCompactTx:
+/// ┌── version ─┬──── CompactSize vin_len ─┬──── vin entries ─────┬──── CompactSize vout_len ──┬──── vout entries ────┐
+/// │    0x01    │ N1 (CompactSize)         │ [TxInCompact; N1]    │ N2 (CompactSize)           │ [TxOutCompact; N2]   │
+/// └────────────┴──────────────────────────┴──────────────────────┴────────────────────────────┴──────────────────────┘
+///
+/// Each `TxInCompact` is serialized as:
+/// ┌── version ─┬────────────── 36 bytes body ──────────────┐
+/// │   0x01     │ 32-byte txid + 4-byte LE prevout_index    │
+/// └────────────┴───────────────────────────────────────────┘
+///
+/// Each `TxOutCompact` is serialized as:
+/// ┌── version ─┬────────────── 29 bytes body ──────────────┐
+/// │   0x01     │ 8-byte LE value + 20-byte script_hash     │
+/// │            │ + 1-byte script_type                      │
+/// └────────────┴───────────────────────────────────────────┘
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct TransparentTxList {
@@ -2508,6 +2562,39 @@ impl ZainoVersionedSerialise for TransparentTxList {
 ///
 /// This ensures 1-to-1 indexing with `TxidList`: element *i* matches txid *i*.
 /// `None` keeps the index when the tx lacks this pool.
+///
+/// **Serialization layout for `SaplingTxList` (implements `ZainoVersionedSerialise`)**
+///
+/// ┌──────────── byte 0 ─────────────┬────────── CompactSize ─────────────┬──────────── entries ─────────────┐
+/// │ SaplingTxList version tag = 1   │ num_txs (CompactSize) = N          │ [Option<SaplingCompactTx>; N]    │
+/// └─────────────────────────────────┴────────────────────────────────────┴──────────────────────────────────┘
+///
+/// Each `Option<SaplingCompactTx>` is serialized as:
+///
+/// ┌── 1 byte ──┬────────────── SaplingCompactTx ──────────────┐
+/// │   0 or 1   │ If Some: 1-byte version + body               │
+/// └────────────┴──────────────────────────────────────────────┘
+///
+/// SaplingCompactTx:
+/// ┌── version ─┬──── 1 byte opt ─────┬──── CompactSize ──────┬──── spend entries ─────┬──── CompactSize ─────┬──── output entries ───────┐
+/// │   0x01     │ 0 or 1 + i64 (value)│ N1 = num_spends       │ [CompactSaplingSpend;N1] │ N2 = num_outputs   │ [CompactSaplingOutput;N2] │
+/// └────────────┴─────────────────────┴───────────────────────┴────────────────────────┴──────────────────────┴───────────────────────────┘
+///
+/// - The **Sapling value** is encoded as an `Option<i64>` using:
+///     - 0 = None
+///     - 1 = Some followed by 8-byte little-endian i64
+///
+/// Each `CompactSaplingSpend` is serialized as:
+///
+/// ┌── version ─┬────────────── 32 bytes ──────────────┐
+/// │   0x01     │ 32-byte nullifier                    │
+/// └────────────┴──────────────────────────────────────┘
+///
+/// Each `CompactSaplingOutput` is serialized as:
+///
+/// ┌── version ─┬────────────── 116 bytes ─────────────────────────────────────────────┐
+/// │   0x01     │ 32-byte cmu + 32-byte ephemeral_key + 52-byte ciphertext             │
+/// └────────────┴──────────────────────────────────────────────────────────────────────┘
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct SaplingTxList {
@@ -2549,6 +2636,33 @@ impl ZainoVersionedSerialise for SaplingTxList {
 ///
 /// This ensures 1-to-1 indexing with `TxidList`: element *i* matches txid *i*.
 /// `None` keeps the index when the tx lacks this pool.
+///
+/// **Serialization layout for `OrchardTxList` (implements `ZainoVersionedSerialise`)**
+///
+/// ┌──────────── byte 0 ─────────────┬────────── CompactSize ─────────────┬──────────── entries ─────────────┐
+/// │ OrchardTxList version tag = 1   │ num_txs (CompactSize) = N          │ [Option<OrchardCompactTx>; N]    │
+/// └─────────────────────────────────┴────────────────────────────────────┴──────────────────────────────────┘
+///
+/// Each `Option<OrchardCompactTx>` is serialized as:
+///
+/// ┌── 1 byte ──┬────────────── OrchardCompactTx ───────────────┐
+/// │   0 or 1   │ If Some: 1-byte version + body                │
+/// └────────────┴───────────────────────────────────────────────┘
+///
+/// OrchardCompactTx:
+/// ┌── version ─┬──── 1 byte opt ─────┬──── CompactSize ──────┬────────── action entries ─────────┐
+/// │   0x01     │ 0 or 1 + i64 (value)│ N = num_actions       │ [CompactOrchardAction; N]         │
+/// └────────────┴─────────────────────┴───────────────────────┴───────────────────────────────────┘
+///
+/// - The **Orchard value** is encoded as an `Option<i64>` using:
+///     - 0 = None
+///     - 1 = Some followed by 8-byte little-endian i64
+///
+/// Each `CompactOrchardAction` is serialized as:
+///
+/// ┌── version ─┬──────────── 148 bytes ─────────────────────────────────────────────────────────────┐
+/// │   0x01     │ 32-byte nullifier + 32-byte cmx + 32-byte ephemeral_key + 52-byte ciphertext       │
+/// └────────────┴────────────────────────────────────────────────────────────────────────────────────┘
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct OrchardTxList {
