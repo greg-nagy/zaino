@@ -352,21 +352,16 @@ pub struct GetBalanceResponse {
     pub balance: u64,
 }
 
-/// Error type for the `getbalance` RPC request.
-/// TODO: check for variants
+/// Error type for the `get_address_balance` RPC request.
 #[derive(Debug, thiserror::Error)]
 pub enum GetBalanceError {
-    /// Invalid dummy value. It should be excluded or set to "*" or "".
-    #[error("Invalid dummy value: {0}")]
-    InvalidDummyValue(String),
+    /// Invalid number of provided addresses.
+    #[error("Invalid number of addresses: {0}")]
+    InvalidAddressesAmount(i16),
 
-    /// If the `minconf` value is less than 0.
-    #[error("Invalid minconf value: {0}")]
-    InvalidMinimumConfirmations(i32),
-
-    /// Invalid asOfHeight value.
-    #[error("Invalid asOfHeight value: {0}")]
-    InvalidHeight(u64),
+    /// Invalid encoding.
+    #[error("Invalid encoding: {0}")]
+    InvalidEncoding(String),
 }
 
 impl ResponseToError for GetBalanceResponse {
