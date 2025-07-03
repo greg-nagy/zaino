@@ -383,9 +383,30 @@ impl From<GetBalanceResponse> for zebra_rpc::methods::AddressBalance {
 pub struct SendTransactionResponse(#[serde(with = "hex")] pub zebra_chain::transaction::Hash);
 
 /// Error type for the `sendrawtransaction` RPC request.
-/// TODO: check for variants
+/// TODO: should we track state here? (`Rejected`, `MissingInputs`)
 #[derive(Debug, thiserror::Error)]
-pub enum SendTransactionError {}
+pub enum SendTransactionError {
+    /// Decoding failed.
+    #[error("Decoding failed")]
+    DeserializationError,
+
+    /// Transaction rejected due to `expiryheight` being under `TX_EXPIRING_SOON_THRESHOLD`.
+    /// This is used for DoS mitigation.
+    #[error("Transaction expiring soon: {0}")]
+    ExpiringSoon(u64),
+
+    /// Transaction has no inputs.
+    #[error("Missing inputs")]
+    MissingInputs,
+
+    /// Transaction already in the blockchain.
+    #[error("Already in chain")]
+    AlreadyInChain,
+
+    /// Transaction rejected.
+    #[error("Transaction rejected")]
+    Rejected(String),
+}
 
 impl ResponseToError for SendTransactionResponse {
     type RpcError = SendTransactionError;
