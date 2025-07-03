@@ -83,8 +83,9 @@ async fn make_nfs() {
 
     let snapshot = non_finalized_state.get_snapshot();
 
-    dbg!(snapshot);
+    println!("\n\n\n{:?}\n\n\n", snapshot);
 
-    let snapshot = non_finalized_state.sync().await.unwrap();
-    dbg!(snapshot);
+    non_finalized_state.sync().await.unwrap();
+    let snapshot = non_finalized_state.get_snapshot();
+    println!("\n\n\n{:?}\n\n\n", snapshot);
 }

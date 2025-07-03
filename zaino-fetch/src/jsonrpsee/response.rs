@@ -664,16 +664,16 @@ pub enum GetBlockResponse {
 }
 
 impl ResponseToError for SerializedBlock {
-    type RpcError = MissingBlock;
+    type RpcError = GetBlockError;
 }
-impl TryFrom<RpcError> for MissingBlock {
+impl TryFrom<RpcError> for GetBlockError {
     type Error = RpcError;
 
     fn try_from(value: RpcError) -> Result<Self, Self::Error> {
         // If the block is not in Zebra's state, returns
         // [error code `-8`.](https://github.com/zcash/zcash/issues/5758)
         if value.code == -8 {
-            Ok(Self)
+            Ok(Self::MissingBlock(value.message))
         } else {
             Err(value)
         }
@@ -681,22 +681,25 @@ impl TryFrom<RpcError> for MissingBlock {
 }
 
 impl ResponseToError for BlockObject {
-    type RpcError = MissingBlock;
+    type RpcError = GetBlockError;
 }
 
 /// Error type for the `getblock` RPC request.
 /// TODO: check for variants
 #[derive(Debug, thiserror::Error)]
-pub struct MissingBlock;
+pub enum GetBlockError {
+    /// The reqeusted block hash or height could not be found
+    MissingBlock(String),
+}
 
-impl std::fmt::Display for MissingBlock {
+impl std::fmt::Display for GetBlockError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("block not found")
     }
 }
 
 impl ResponseToError for GetBlockResponse {
-    type RpcError = MissingBlock;
+    type RpcError = GetBlockError;
 }
 
 /// Contains the height of the most recent block in the best valid block chain

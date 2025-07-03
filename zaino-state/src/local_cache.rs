@@ -16,7 +16,7 @@ use zaino_fetch::{
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcRequestError},
         error::TransportError,
-        response::{GetBlockResponse, MissingBlock},
+        response::{GetBlockError, GetBlockResponse},
     },
 };
 use zaino_proto::proto::compact_formats::{ChainMetadata, CompactBlock, CompactOrchardAction};
@@ -213,7 +213,7 @@ pub(crate) async fn fetch_block_from_node(
     network: Option<&Network>,
     fetcher: &JsonRpSeeConnector,
     hash_or_height: HashOrHeight,
-) -> Result<(Hash, CompactBlock), RpcRequestError<MissingBlock>> {
+) -> Result<(Hash, CompactBlock), RpcRequestError<GetBlockError>> {
     if let (Some(state), Some(network)) = (state, network) {
         match try_state_path(state, network, hash_or_height).await {
             Ok(result) => return Ok(result),
@@ -285,7 +285,7 @@ async fn try_state_path(
 async fn try_fetcher_path(
     fetcher: &JsonRpSeeConnector,
     hash_or_height: HashOrHeight,
-) -> Result<(Hash, CompactBlock), RpcRequestError<MissingBlock>> {
+) -> Result<(Hash, CompactBlock), RpcRequestError<GetBlockError>> {
     let (hash, tx, trees) = fetcher
         .get_block(hash_or_height.to_string(), Some(1))
         .await

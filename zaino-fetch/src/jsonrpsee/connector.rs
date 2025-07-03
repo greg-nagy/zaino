@@ -23,10 +23,10 @@ use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
     response::{
         GetBalanceError, GetBalanceResponse, GetBlockCountError, GetBlockCountResponse,
-        GetBlockResponse, GetBlockchainInfoError, GetBlockchainInfoResponse, GetDifficultyError,
-        GetInfoError, GetInfoResponse, GetSubtreesError, GetSubtreesResponse, GetTransactionError,
-        GetTransactionResponse, GetTreestateError, GetTreestateResponse, GetUtxosError,
-        GetUtxosResponse, MissingBlock, SendTransactionError, SendTransactionResponse, TxidsError,
+        GetBlockError, GetBlockResponse, GetBlockchainInfoError, GetBlockchainInfoResponse,
+        GetDifficultyError, GetInfoError, GetInfoResponse, GetSubtreesError, GetSubtreesResponse,
+        GetTransactionError, GetTransactionResponse, GetTreestateError, GetTreestateResponse,
+        GetUtxosError, GetUtxosResponse, SendTransactionError, SendTransactionResponse, TxidsError,
         TxidsResponse,
     },
 };
@@ -462,7 +462,7 @@ impl JsonRpSeeConnector {
         &self,
         hash_or_height: String,
         verbosity: Option<u8>,
-    ) -> Result<GetBlockResponse, RpcRequestError<MissingBlock>> {
+    ) -> Result<GetBlockResponse, RpcRequestError<GetBlockError>> {
         let v = verbosity.unwrap_or(1);
         let params = [
             serde_json::to_value(hash_or_height).map_err(RpcRequestError::JsonRpc)?,

@@ -659,7 +659,14 @@ impl BlockchainSource {
                             .unwrap_or_else(|_e| todo!("block too large")),
                     ))),
                     Ok(_) => unreachable!(),
-                    Err(e) => todo!("{e}"),
+                    Err(e) => match e {
+                        RpcRequestError::Method(missing_block) => Ok(None),
+                        RpcRequestError::Transport(transport_error) => todo!(),
+                        RpcRequestError::JsonRpc(error) => todo!(),
+                        RpcRequestError::InternalUnrecoverable => todo!(),
+                        RpcRequestError::ServerWorkQueueFull => todo!(),
+                        RpcRequestError::UnexpectedErrorResponse(error) => todo!(),
+                    },
                 }
             }
         }
@@ -710,7 +717,7 @@ impl BlockchainSource {
                 let tree_responses = json_rp_see_connector
                     .get_treestate(id.to_string())
                     .await
-                    // As MethodError contains a GetTreestateErrer, which is an enum with no variants,
+                    // As MethodError contains a GetTreestateError, which is an enum with no variants,
                     // we don't need to account for it at all here
                     .map_err(|e| match e {
                         RpcRequestError::Transport(transport_error) => {
@@ -719,6 +726,12 @@ impl BlockchainSource {
                         RpcRequestError::JsonRpc(error) => RpcRequestError::JsonRpc(error),
                         RpcRequestError::InternalUnrecoverable => {
                             RpcRequestError::InternalUnrecoverable
+                        }
+                        RpcRequestError::ServerWorkQueueFull => {
+                            RpcRequestError::ServerWorkQueueFull
+                        }
+                        RpcRequestError::UnexpectedErrorResponse(error) => {
+                            RpcRequestError::UnexpectedErrorResponse(error)
                         }
                     })
                     .map_err(BlockchainSourceError::FetchServiceError)?;
