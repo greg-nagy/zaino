@@ -313,35 +313,30 @@ async fn try_fetcher_path(
                     block_hex.as_ref(),
                     Some(display_txids_to_server(tx).map_err(|e| {
                         RpcRequestError::Method(GetBlockError::Custom(format!(
-                            "Error parsing txids: {}",
-                            e
+                            "Error parsing txids: {e}"
                         )))
                     })?),
                 )
                 .map_err(|e| {
                     RpcRequestError::Method(GetBlockError::Custom(format!(
-                        "Error parsing block: {}",
-                        e
+                        "Error parsing block: {e}"
                     )))
                 })?
                 .into_compact(
                     u32::try_from(trees.sapling()).map_err(|e| {
                         RpcRequestError::Method(GetBlockError::Custom(format!(
-                            "Error parsing sapling tree: {}",
-                            e
+                            "Error parsing sapling tree: {e}"
                         )))
                     })?,
                     u32::try_from(trees.orchard()).map_err(|e| {
                         RpcRequestError::Method(GetBlockError::Custom(format!(
-                            "Error parsing orchard tree: {}",
-                            e
+                            "Error parsing orchard tree: {e}"
                         )))
                     })?,
                 )
                 .map_err(|e| {
                     RpcRequestError::Method(GetBlockError::Custom(format!(
-                        "Error parsing compact block: {}",
-                        e
+                        "Error parsing compact block: {e}"
                     )))
                 })?,
             )),
