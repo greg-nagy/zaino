@@ -24,7 +24,10 @@ use nonempty::NonEmpty;
 use tokio_stream::StreamExt as _;
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
+    jsonrpsee::{
+        connector::{JsonRpSeeConnector, RpcError},
+        error::TransportError,
+    },
 };
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
@@ -124,7 +127,7 @@ impl StateService {
                 std::task::Poll::Ready(StatusType::Ready)
             }
             std::task::Poll::Ready(Err(e)) => {
-                eprintln!("Service readiness error: {:?}", e);
+                eprintln!("Service readiness error: {e:?}");
                 self.status.store(StatusType::CriticalError.into());
                 std::task::Poll::Ready(StatusType::CriticalError)
             }
@@ -155,7 +158,11 @@ impl ZcashService for StateService {
         )
         .await?;
 
-        let zebra_build_data = rpc_client.get_info().await?;
+        let zebra_build_data = rpc_client.get_info().await.map_err(|_| {
+            StateServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
+                "Failed to get info".to_string(),
+            ))
+        })?;
 
         // This const is optional, as the build script can only
         // generate it from hash-based dependencies.
@@ -203,7 +210,15 @@ impl ZcashService for StateService {
 
         // Wait for ReadStateService to catch up to primary database:
         loop {
-            let server_height = rpc_client.get_blockchain_info().await?.blocks;
+            let server_height = rpc_client
+                .get_blockchain_info()
+                .await
+                .map_err(|_| {
+                    StateServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
+                        "Failed to get blockchain info".to_string(),
+                    ))
+                })?
+                .blocks;
 
             let syncer_response = read_state_service
                 .ready()
@@ -553,10 +568,9 @@ impl StateServiceSubscriber {
                             Err(e) => {
                                 if end >= chain_height {
                                     Err(tonic::Status::out_of_range(format!(
-                                        "Error: Height out of range [{}]. Height \
+                                        "Error: Height out of range [{end}]. Height \
                                             requested is greater than the best \
-                                            chain tip [{}].",
-                                        end, chain_height,
+                                            chain tip [{chain_height}].",
                                     )))
                                 } else {
                                     Err(tonic::Status::unknown(e.to_string()))
@@ -591,9 +605,8 @@ impl StateServiceSubscriber {
                                     let height = end - (i - start);
                                     if height >= chain_height {
                                         Err(tonic::Status::out_of_range(format!(
-                                            "Error: Height out of range [{}]. Height requested \
-                                            is greater than the best chain tip [{}].",
-                                            height, chain_height,
+                                            "Error: Height out of range [{height}]. Height requested \
+                                            is greater than the best chain tip [{chain_height}].",
                                         )))
                                     } else {
                                         Err(tonic::Status::unknown(e.to_string()))
@@ -638,16 +651,14 @@ impl StateServiceSubscriber {
         let chain_height = self.block_cache.get_chain_height().await?.0;
         Err(if height >= chain_height {
             StateServiceError::TonicStatusError(tonic::Status::out_of_range(format!(
-                "Error: Height out of range [{}]. Height requested \
-                                is greater than the best chain tip [{}].",
-                height, chain_height,
+                "Error: Height out of range [{height}]. Height requested \
+                                is greater than the best chain tip [{chain_height}].",
             )))
         } else {
             // TODO: Hide server error from clients before release.
             // Currently useful for dev purposes.
             StateServiceError::TonicStatusError(tonic::Status::unknown(format!(
-                "Error: Failed to retrieve block from node. Server Error: {}",
-                e,
+                "Error: Failed to retrieve block from node. Server Error: {e}",
             )))
         })
     }
@@ -824,7 +835,7 @@ impl ZcashIndexer for StateServiceSubscriber {
             .get_info()
             .await
             .map(GetInfo::from)
-            .map_err(Self::Error::from)
+            .map_err(|e| StateServiceError::Custom(e.to_string()))
     }
 
     async fn get_difficulty(&self) -> Result<f64, Self::Error> {
@@ -1008,7 +1019,11 @@ impl ZcashIndexer for StateServiceSubscriber {
             .send_raw_transaction(raw_transaction_hex)
             .await
             .map(SentTransactionHash::from)
-            .map_err(StateServiceError::JsonRpcConnectorError)
+            .map_err(|_| {
+                StateServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
+                    "Failed to send raw transaction".to_string(),
+                ))
+            })
     }
 
     async fn z_get_block(
@@ -1385,7 +1400,10 @@ impl LightWalletIndexer for StateServiceSubscriber {
             .await
         {
             Ok(block) => Ok(block),
-            Err(e) => self.error_get_block(e, height as u32).await,
+            Err(e) => {
+                self.error_get_block(BlockCacheError::Custom(e.to_string()), height as u32)
+                    .await
+            }
         }
     }
 
@@ -1408,7 +1426,10 @@ impl LightWalletIndexer for StateServiceSubscriber {
             .await
         {
             Ok(block) => Ok(block),
-            Err(e) => self.error_get_block(e, height).await,
+            Err(e) => {
+                self.error_get_block(BlockCacheError::Custom(e.to_string()), height)
+                    .await
+            }
         }
     }
 
@@ -1585,7 +1606,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
                 while let Some(address_result) = request.next().await {
                     // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                     let address = address_result.map_err(|e| {
-                        tonic::Status::unknown(format!("Failed to read from stream: {}", e))
+                        tonic::Status::unknown(format!("Failed to read from stream: {e}"))
                     })?;
                     if channel_tx.send(address.address).await.is_err() {
                         // TODO: Hide server error from clients before release. Currently useful for dev purposes.
@@ -1632,7 +1653,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
             Ok(Err(e)) => Err(StateServiceError::TonicStatusError(e)),
             // TODO: Hide server error from clients before release. Currently useful for dev purposes.
             Err(e) => Err(StateServiceError::TonicStatusError(tonic::Status::unknown(
-                format!("Fetcher Task failed: {}", e),
+                format!("Fetcher Task failed: {e}"),
             ))),
         }
     }
@@ -1816,8 +1837,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
                             Err(e) => {
                                 channel_tx
                                     .send(Err(tonic::Status::internal(format!(
-                                        "Error in mempool stream: {:?}",
-                                        e
+                                        "Error in mempool stream: {e:?}"
                                     ))))
                                     .await
                                     .ok();

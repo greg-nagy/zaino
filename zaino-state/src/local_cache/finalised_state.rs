@@ -362,8 +362,7 @@ impl FinalisedState {
                                 }
                             }
                             Err(_) => Err(FinalisedStateError::MissingData(format!(
-                                "Block {:?} not found in finalised state or validator.",
-                                hash_or_height
+                                "Block {hash_or_height:?} not found in finalised state or validator."
                             ))),
                         }
                     }
@@ -396,8 +395,14 @@ impl FinalisedState {
         let mut check_hash = match self
             .fetcher
             .get_block(reorg_height.0.to_string(), Some(1))
-            .await?
-        {
+            .await
+            .map_err(|_| {
+                FinalisedStateError::JsonRpcConnectorError(
+                    zaino_fetch::jsonrpsee::error::TransportError::JsonRpSeeClientError(
+                        "Failed to get block".to_string(),
+                    ),
+                )
+            })? {
             zaino_fetch::jsonrpsee::response::GetBlockResponse::Object(block) => block.hash.0,
             _ => {
                 return Err(FinalisedStateError::Custom(
@@ -430,8 +435,14 @@ impl FinalisedState {
             check_hash = match self
                 .fetcher
                 .get_block(reorg_height.0.to_string(), Some(1))
-                .await?
-            {
+                .await
+                .map_err(|_| {
+                    FinalisedStateError::JsonRpcConnectorError(
+                        zaino_fetch::jsonrpsee::error::TransportError::JsonRpSeeClientError(
+                            "Failed to get block".to_string(),
+                        ),
+                    )
+                })? {
                 zaino_fetch::jsonrpsee::response::GetBlockResponse::Object(block) => block.hash.0,
                 _ => {
                     return Err(FinalisedStateError::Custom(
@@ -445,7 +456,14 @@ impl FinalisedState {
         let mut sync_height = self
             .fetcher
             .get_blockchain_info()
-            .await?
+            .await
+            .map_err(|e| {
+                FinalisedStateError::JsonRpcConnectorError(
+                    zaino_fetch::jsonrpsee::error::TransportError::JsonRpSeeClientError(
+                        e.to_string(),
+                    ),
+                )
+            })?
             .blocks
             .0
             .saturating_sub(99);
@@ -486,7 +504,13 @@ impl FinalisedState {
         if !self.config.network.is_regtest() && !self.config.no_sync {
             self.status.store(StatusType::Syncing.into());
             loop {
-                let blockchain_info = self.fetcher.get_blockchain_info().await?;
+                let blockchain_info = self.fetcher.get_blockchain_info().await.map_err(|e| {
+                    FinalisedStateError::JsonRpcConnectorError(
+                        zaino_fetch::jsonrpsee::error::TransportError::JsonRpSeeClientError(
+                            e.to_string(),
+                        ),
+                    )
+                })?;
                 let server_height = blockchain_info.blocks.0;
                 for block_height in (sync_height + 1)..(server_height - 99) {
                     if self.get_hash(block_height).is_ok() {
@@ -618,8 +642,7 @@ impl FinalisedState {
             Ok(bytes) => bytes,
             Err(lmdb::Error::NotFound) => {
                 return Err(FinalisedStateError::MissingData(format!(
-                    "No hash found for height {}",
-                    height
+                    "No hash found for height {height}"
                 )));
             }
             Err(e) => return Err(FinalisedStateError::LmdbError(e)),

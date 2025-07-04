@@ -12,6 +12,8 @@ use zebra_chain::{
 };
 use zebra_rpc::methods::{opthex, types::get_blockchain_info::Balance};
 
+use crate::jsonrpsee::connector::ResponseToError;
+
 /// Response to a `getinfo` RPC request.
 ///
 /// This is used for the output parameter of [`JsonRpcConnector::get_info`].
@@ -70,6 +72,24 @@ pub struct GetInfoResponse {
     errors_timestamp: ErrorsTimestamp,
 }
 
+/// Error type for the `getinfo` RPC request.
+/// TODO: check for variants
+#[derive(Debug, thiserror::Error)]
+pub enum GetInfoError {}
+
+impl ResponseToError for GetInfoResponse {
+    type RpcError = GetInfoError;
+}
+
+/// Error type for the `getdifficulty` RPC request.
+/// TODO: check for variants
+#[derive(Debug, thiserror::Error)]
+pub enum GetDifficultyError {}
+
+impl ResponseToError for GetDifficultyResponse {
+    type RpcError = GetDifficultyError;
+}
+
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(untagged)]
 /// A wrapper to allow both types of error timestamp
@@ -78,6 +98,15 @@ pub enum ErrorsTimestamp {
     Num(usize),
     /// Returned from zebrad, the timestamp is a string representing a timestamp
     Str(String),
+}
+
+/// Error type used for the `errors_timestamp` field of the `getinfo` RPC request.
+/// TODO: check for variants
+#[derive(Debug, thiserror::Error)]
+pub enum ErrorsTimestampError {}
+
+impl ResponseToError for ErrorsTimestamp {
+    type RpcError = ErrorsTimestampError;
 }
 
 impl std::fmt::Display for ErrorsTimestamp {
@@ -186,6 +215,14 @@ pub struct GetBlockchainInfoResponse {
     commitments: u64,
 }
 
+/// Error type for the `getblockchaininfo` RPC request.
+/// TODO: check for variants
+#[derive(Debug, thiserror::Error)]
+pub enum GetBlockchainInfoError {}
+
+impl ResponseToError for GetBlockchainInfoResponse {
+    type RpcError = GetBlockchainInfoError;
+}
 /// Response to a `getdifficulty` RPC request.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GetDifficultyResponse(pub f64);
@@ -203,6 +240,15 @@ pub enum ChainWork {
     Str(String),
     /// Returned from zebrad, a chainwork is an integer
     Num(u64),
+}
+
+/// Error type used for the `chainwork` field of the `getblockchaininfo` RPC request.
+/// TODO: check for variants
+#[derive(Debug, thiserror::Error)]
+pub enum ChainWorkError {}
+
+impl ResponseToError for ChainWork {
+    type RpcError = ChainWorkError;
 }
 
 impl TryFrom<ChainWork> for u64 {
@@ -225,6 +271,15 @@ impl Default for ChainWork {
 /// Wrapper struct for a Zebra [`Balance`], enabling custom deserialisation logic to handle both zebrad and zcashd.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct ChainBalance(Balance);
+
+/// Error type used for the `chain_supply` and `value_pools` field of the `getblockchaininfo` RPC request.
+/// TODO: check for variants
+#[derive(Debug, thiserror::Error)]
+pub enum ChainBalanceError {}
+
+impl ResponseToError for ChainBalance {
+    type RpcError = ChainBalanceError;
+}
 
 impl<'de> Deserialize<'de> for ChainBalance {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -297,6 +352,15 @@ pub struct GetBalanceResponse {
     pub balance: u64,
 }
 
+/// Error type for the `getbalance` RPC request.
+/// TODO: check for variants
+#[derive(Debug, thiserror::Error)]
+pub enum GetBalanceError {}
+
+impl ResponseToError for GetBalanceResponse {
+    type RpcError = GetBalanceError;
+}
+
 impl From<GetBalanceResponse> for zebra_rpc::methods::AddressBalance {
     fn from(response: GetBalanceResponse) -> Self {
         zebra_rpc::methods::AddressBalance {
@@ -310,6 +374,15 @@ impl From<GetBalanceResponse> for zebra_rpc::methods::AddressBalance {
 /// This is used for the output parameter of [`JsonRpcConnector::send_raw_transaction`].
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct SendTransactionResponse(#[serde(with = "hex")] pub zebra_chain::transaction::Hash);
+
+/// Error type for the `sendrawtransaction` RPC request.
+/// TODO: check for variants
+#[derive(Debug, thiserror::Error)]
+pub enum SendTransactionError {}
+
+impl ResponseToError for SendTransactionResponse {
+    type RpcError = SendTransactionError;
+}
 
 impl From<SendTransactionResponse> for zebra_rpc::methods::SentTransactionHash {
     fn from(value: SendTransactionResponse) -> Self {
@@ -325,6 +398,15 @@ impl From<SendTransactionResponse> for zebra_rpc::methods::SentTransactionHash {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(transparent)]
 pub struct GetBlockHash(#[serde(with = "hex")] pub zebra_chain::block::Hash);
+
+/// Error type for the `getblock` RPC request.
+/// TODO: check for variants
+#[derive(Debug, thiserror::Error)]
+pub enum GetBlockHashError {}
+
+impl ResponseToError for GetBlockHash {
+    type RpcError = GetBlockHashError;
+}
 
 impl Default for GetBlockHash {
     fn default() -> Self {
@@ -506,9 +588,39 @@ pub enum GetBlockResponse {
     Object(Box<BlockObject>),
 }
 
+impl ResponseToError for SerializedBlock {
+    type RpcError = GetBlockError;
+}
+
+impl ResponseToError for BlockObject {
+    type RpcError = GetBlockError;
+}
+
+/// Error type for the `getblock` RPC request.
+/// TODO: check for variants
+#[derive(Debug, thiserror::Error)]
+pub enum GetBlockError {
+    /// TODO: temporary variant
+    #[error("Custom error: {0}")]
+    Custom(String),
+}
+
+impl ResponseToError for GetBlockResponse {
+    type RpcError = GetBlockError;
+}
+
 /// Contains the height of the most recent block in the best valid block chain
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GetBlockCountResponse(Height);
+
+/// Error type for the `getblockcount` RPC request.
+/// TODO: check for variants
+#[derive(Debug, thiserror::Error)]
+pub enum GetBlockCountError {}
+
+impl ResponseToError for GetBlockCountResponse {
+    type RpcError = GetBlockCountError;
+}
 
 impl From<GetBlockCountResponse> for Height {
     fn from(value: GetBlockCountResponse) -> Self {
@@ -661,6 +773,15 @@ pub struct TxidsResponse {
     pub transactions: Vec<String>,
 }
 
+/// Error type for the `get_raw_mempool` and `get_address_txids` RPC requests.
+/// TODO: check for variants
+#[derive(Debug, thiserror::Error)]
+pub enum TxidsError {}
+
+impl ResponseToError for TxidsResponse {
+    type RpcError = TxidsError;
+}
+
 impl<'de> serde::Deserialize<'de> for TxidsResponse {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -703,6 +824,15 @@ pub struct GetTreestateResponse {
 
     /// A treestate containing an Orchard note commitment tree, hex-encoded.
     pub orchard: zebra_rpc::methods::trees::Treestate,
+}
+
+/// Error type for the `get_treestate` RPC request.
+/// TODO: check for variants
+#[derive(Debug, thiserror::Error)]
+pub enum GetTreestateError {}
+
+impl ResponseToError for GetTreestateResponse {
+    type RpcError = GetTreestateError;
 }
 
 impl<'de> serde::Deserialize<'de> for GetTreestateResponse {
@@ -785,6 +915,15 @@ pub enum GetTransactionResponse {
     Raw(#[serde(with = "hex")] zebra_chain::transaction::SerializedTransaction),
     /// The transaction object.
     Object(Box<zebra_rpc::methods::types::transaction::TransactionObject>),
+}
+
+/// Error type for the `get_transaction` RPC request.
+/// TODO: check for variants
+#[derive(Debug, thiserror::Error)]
+pub enum GetTransactionError {}
+
+impl ResponseToError for GetTransactionResponse {
+    type RpcError = GetTransactionError;
 }
 
 impl<'de> serde::Deserialize<'de> for GetTransactionResponse {
@@ -1021,6 +1160,15 @@ pub struct GetSubtreesResponse {
     pub subtrees: Vec<SubtreeRpcData>,
 }
 
+/// Error type for the `z_getsubtreesbyindex` RPC request.
+/// TODO: check for variants
+#[derive(Debug, thiserror::Error)]
+pub enum GetSubtreesError {}
+
+impl ResponseToError for GetSubtreesResponse {
+    type RpcError = GetSubtreesError;
+}
+
 impl From<GetSubtreesResponse> for zebra_rpc::methods::trees::GetSubtrees {
     fn from(value: GetSubtreesResponse) -> Self {
         zebra_rpc::methods::trees::GetSubtrees {
@@ -1121,6 +1269,19 @@ pub struct GetUtxosResponse {
     pub height: zebra_chain::block::Height,
 }
 
+/// Error type for the `getaddressutxos` RPC request.
+/// TODO: check for variants
+#[derive(Debug, thiserror::Error)]
+pub enum GetUtxosError {}
+
+impl ResponseToError for GetUtxosResponse {
+    type RpcError = GetUtxosError;
+}
+
+impl ResponseToError for Vec<GetUtxosResponse> {
+    type RpcError = GetUtxosError;
+}
+
 impl From<GetUtxosResponse> for zebra_rpc::methods::GetAddressUtxos {
     fn from(value: GetUtxosResponse) -> Self {
         zebra_rpc::methods::GetAddressUtxos::from_parts(
@@ -1132,4 +1293,8 @@ impl From<GetUtxosResponse> for zebra_rpc::methods::GetAddressUtxos {
             value.height,
         )
     }
+}
+
+impl<T: ResponseToError> ResponseToError for Box<T> {
+    type RpcError = T::RpcError;
 }
