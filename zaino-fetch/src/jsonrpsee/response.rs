@@ -1,6 +1,6 @@
 //! Response types for jsonRPC client.
 
-use std::num::ParseIntError;
+use std::{convert::Infallible, num::ParseIntError};
 
 use hex::FromHex;
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
@@ -80,7 +80,7 @@ pub struct GetInfoResponse {
 pub enum GetInfoError {}
 
 impl ResponseToError for GetInfoResponse {
-    type RpcError = GetInfoError;
+    type RpcError = Infallible;
 }
 
 /// Error type for the `getdifficulty` RPC request.

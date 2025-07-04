@@ -8,6 +8,7 @@ use http::Uri;
 use reqwest::{Client, ClientBuilder, Url};
 use serde::{Deserialize, Serialize};
 use std::{
+    convert::Infallible,
     fmt, fs,
     net::SocketAddr,
     path::Path,
@@ -24,7 +25,7 @@ use crate::jsonrpsee::{
     response::{
         GetBalanceError, GetBalanceResponse, GetBlockCountError, GetBlockCountResponse,
         GetBlockError, GetBlockResponse, GetBlockchainInfoError, GetBlockchainInfoResponse,
-        GetDifficultyError, GetInfoError, GetInfoResponse, GetSubtreesError, GetSubtreesResponse,
+        GetDifficultyError, GetInfoResponse, GetSubtreesError, GetSubtreesResponse,
         GetTransactionError, GetTransactionResponse, GetTreestateError, GetTreestateResponse,
         GetUtxosError, GetUtxosResponse, SendTransactionError, SendTransactionResponse, TxidsError,
         TxidsResponse,
@@ -360,7 +361,7 @@ impl JsonRpSeeConnector {
     /// zcashd reference: [`getinfo`](https://zcash.github.io/rpc/getinfo.html)
     /// method: post
     /// tags: control
-    pub async fn get_info(&self) -> Result<GetInfoResponse, RpcRequestError<GetInfoError>> {
+    pub async fn get_info(&self) -> Result<GetInfoResponse, RpcRequestError<Infallible>> {
         self.send_request::<(), GetInfoResponse>("getinfo", ())
             .await
     }
