@@ -1,8 +1,11 @@
 //! Holds error types for Zaino-state.
 
+use std::any::type_name;
+
 use zaino_fetch::jsonrpsee::{
     connector::RpcRequestError, error::TransportError, response::GetInfoError,
 };
+use zebra_state::NonFinalizedState;
 
 impl<T: ToString> From<RpcRequestError<T>> for StateServiceError {
     fn from(value: RpcRequestError<T>) -> Self {
@@ -19,8 +22,10 @@ impl<T: ToString> From<RpcRequestError<T>> for StateServiceError {
             RpcRequestError::InternalUnrecoverable => {
                 Self::Custom("TODO: useless crash message".to_string())
             }
-            RpcRequestError::ServerWorkQueueFull => todo!(),
-            RpcRequestError::UnexpectedErrorResponse(error) => todo!(),
+            RpcRequestError::ServerWorkQueueFull => {
+                Self::Custom("Server queue full. Handling for this not yet implemented".to_string())
+            }
+            RpcRequestError::UnexpectedErrorResponse(error) => Self::Custom(format!("{error}")),
         }
     }
 }
@@ -127,9 +132,34 @@ impl From<StateServiceError> for tonic::Status {
     }
 }
 
-impl<T> From<RpcRequestError<T>> for FetchServiceError {
+impl<T: ToString> From<RpcRequestError<T>> for FetchServiceError {
     fn from(value: RpcRequestError<T>) -> Self {
-        todo!()
+        match value {
+            RpcRequestError::Transport(transport_error) => {
+                FetchServiceError::JsonRpcConnectorError(transport_error)
+            }
+            RpcRequestError::JsonRpc(error) => {
+                FetchServiceError::Critical(format!("argument failed to serialze: {error}"))
+            }
+            RpcRequestError::InternalUnrecoverable => {
+                FetchServiceError::Critical("Something unspecified went wrong".to_string())
+            }
+            RpcRequestError::ServerWorkQueueFull => FetchServiceError::Critical(
+                "Server queue full. Handling for this not yet implemented".to_string(),
+            ),
+            RpcRequestError::Method(e) => FetchServiceError::Critical(format!(
+                "unhandled rpc-specific {} error: {}",
+                type_name::<T>(),
+                e.to_string()
+            )),
+            RpcRequestError::UnexpectedErrorResponse(error) => {
+                FetchServiceError::Critical(format!(
+                    "unhandled rpc-specific {} error: {}",
+                    type_name::<T>(),
+                    error.to_string()
+                ))
+            }
+        }
     }
 }
 
@@ -188,9 +218,34 @@ impl From<FetchServiceError> for tonic::Status {
         }
     }
 }
-impl<T> From<RpcRequestError<T>> for MempoolError {
+/// These aren't the best conversions, but the MempoolError should go away
+/// in favor of a new type with the new chain cache is complete
+impl<T: ToString> From<RpcRequestError<T>> for MempoolError {
     fn from(value: RpcRequestError<T>) -> Self {
-        todo!()
+        match value {
+            RpcRequestError::Transport(transport_error) => {
+                MempoolError::JsonRpcConnectorError(transport_error)
+            }
+            RpcRequestError::JsonRpc(error) => {
+                MempoolError::Critical(format!("argument failed to serialze: {error}"))
+            }
+            RpcRequestError::InternalUnrecoverable => {
+                MempoolError::Critical("Something unspecified went wrong".to_string())
+            }
+            RpcRequestError::ServerWorkQueueFull => MempoolError::Critical(
+                "Server queue full. Handling for this not yet implemented".to_string(),
+            ),
+            RpcRequestError::Method(e) => MempoolError::Critical(format!(
+                "unhandled rpc-specific {} error: {}",
+                type_name::<T>(),
+                e.to_string()
+            )),
+            RpcRequestError::UnexpectedErrorResponse(error) => MempoolError::Critical(format!(
+                "unhandled rpc-specific {} error: {}",
+                type_name::<T>(),
+                error.to_string()
+            )),
+        }
     }
 }
 
@@ -257,9 +312,36 @@ pub enum BlockCacheError {
     #[error("Integer conversion error: {0}")]
     TryFromIntError(#[from] std::num::TryFromIntError),
 }
-impl<T> From<RpcRequestError<T>> for NonFinalisedStateError {
+/// These aren't the best conversions, but the NonFinalizedStateError should go away
+/// in favor of a new type with the new chain cache is complete
+impl<T: ToString> From<RpcRequestError<T>> for NonFinalisedStateError {
     fn from(value: RpcRequestError<T>) -> Self {
-        todo!()
+        match value {
+            RpcRequestError::Transport(transport_error) => {
+                NonFinalisedStateError::JsonRpcConnectorError(transport_error)
+            }
+            RpcRequestError::JsonRpc(error) => {
+                NonFinalisedStateError::Custom(format!("argument failed to serialze: {error}"))
+            }
+            RpcRequestError::InternalUnrecoverable => {
+                NonFinalisedStateError::Custom("Something unspecified went wrong".to_string())
+            }
+            RpcRequestError::ServerWorkQueueFull => NonFinalisedStateError::Custom(
+                "Server queue full. Handling for this not yet implemented".to_string(),
+            ),
+            RpcRequestError::Method(e) => NonFinalisedStateError::Custom(format!(
+                "unhandled rpc-specific {} error: {}",
+                type_name::<T>(),
+                e.to_string()
+            )),
+            RpcRequestError::UnexpectedErrorResponse(error) => {
+                NonFinalisedStateError::Custom(format!(
+                    "unhandled rpc-specific {} error: {}",
+                    type_name::<T>(),
+                    error.to_string()
+                ))
+            }
+        }
     }
 }
 
@@ -286,12 +368,39 @@ pub enum NonFinalisedStateError {
     #[error("Status error: {0:?}")]
     StatusError(StatusError),
 }
-
-impl<T> From<RpcRequestError<T>> for FinalisedStateError {
+/// These aren't the best conversions, but the FinalizedStateError should go away
+/// in favor of a new type with the new chain cache is complete
+impl<T: ToString> From<RpcRequestError<T>> for FinalisedStateError {
     fn from(value: RpcRequestError<T>) -> Self {
-        todo!()
+        match value {
+            RpcRequestError::Transport(transport_error) => {
+                FinalisedStateError::JsonRpcConnectorError(transport_error)
+            }
+            RpcRequestError::JsonRpc(error) => {
+                FinalisedStateError::Custom(format!("argument failed to serialze: {error}"))
+            }
+            RpcRequestError::InternalUnrecoverable => {
+                FinalisedStateError::Custom("Something unspecified went wrong".to_string())
+            }
+            RpcRequestError::ServerWorkQueueFull => FinalisedStateError::Custom(
+                "Server queue full. Handling for this not yet implemented".to_string(),
+            ),
+            RpcRequestError::Method(e) => FinalisedStateError::Custom(format!(
+                "unhandled rpc-specific {} error: {}",
+                type_name::<T>(),
+                e.to_string()
+            )),
+            RpcRequestError::UnexpectedErrorResponse(error) => {
+                FinalisedStateError::Custom(format!(
+                    "unhandled rpc-specific {} error: {}",
+                    type_name::<T>(),
+                    error.to_string()
+                ))
+            }
+        }
     }
 }
+
 /// Errors related to the `FinalisedState`.
 #[derive(Debug, thiserror::Error)]
 pub enum FinalisedStateError {

@@ -13,7 +13,7 @@ use tokio::sync::mpsc;
 use tower::Service;
 use zaino_fetch::jsonrpsee::{
     connector::{JsonRpSeeConnector, RpcRequestError},
-    response::{GetBlockResponse, GetTreestateResponse},
+    response::{GetBlockError, GetBlockResponse, GetTreestateResponse},
 };
 use zcash_primitives::merkle_tree::read_commitment_tree;
 use zebra_chain::{
@@ -595,6 +595,7 @@ pub enum BlockchainSource {
 
 #[derive(Debug)]
 enum BlockchainSourceError {
+    // TODO: Add logic for handling ephemeral network errors
     Unrecoverable(String),
 }
 
@@ -608,25 +609,21 @@ impl BlockchainSource {
     {
         match self {
             BlockchainSource::State(read_state_service) => {
-                let response = match read_state_service
+                let response = read_state_service
                     .clone()
                     .call(zebra_state::ReadRequest::Tip)
                     .await
-                {
-                    Ok(resp) => resp,
-                    Err(_) => todo!(),
-                };
+                    .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?;
                 match response {
                     zebra_state::ReadResponse::Tip(tip) => Ok(tip),
                     _ => unreachable!("bad read response"),
                 }
             }
-            BlockchainSource::Fetch(json_rp_see_connector) => {
-                match json_rp_see_connector.get_blockchain_info().await {
-                    Ok(info) => Ok(Some((info.blocks, info.best_block_hash))),
-                    Err(_) => todo!(),
-                }
-            }
+            BlockchainSource::Fetch(json_rp_see_connector) => json_rp_see_connector
+                .get_blockchain_info()
+                .await
+                .map(|info| Ok(Some((info.blocks, info.best_block_hash))))
+                .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?,
         }
     }
 
@@ -645,7 +642,7 @@ impl BlockchainSource {
                     "Read Request of Block returned Read Response of {otherwise:#?} \n\
                     This should be deterministically unreachable"
                 ),
-                Err(_) => todo!(),
+                Err(e) => Err(BlockchainSourceError::Unrecoverable(e.to_string())),
             },
             BlockchainSource::Fetch(json_rp_see_connector) => {
                 match json_rp_see_connector
@@ -658,12 +655,9 @@ impl BlockchainSource {
                     ))),
                     Ok(_) => unreachable!(),
                     Err(e) => match e {
-                        RpcRequestError::Method(missing_block) => Ok(None),
-                        RpcRequestError::Transport(transport_error) => todo!(),
-                        RpcRequestError::JsonRpc(error) => todo!(),
-                        RpcRequestError::InternalUnrecoverable => todo!(),
-                        RpcRequestError::ServerWorkQueueFull => todo!(),
-                        RpcRequestError::UnexpectedErrorResponse(error) => todo!(),
+                        RpcRequestError::Method(GetBlockError::MissingBlock(_)) => Ok(None),
+                        RpcRequestError::ServerWorkQueueFull => Err(BlockchainSourceError::Unrecoverable("Work queue full. not yet implemented: handling of ephemeral network errors.".to_string())),
+                        _ => Err(BlockchainSourceError::Unrecoverable(e.to_string())),
                     },
                 }
             }
