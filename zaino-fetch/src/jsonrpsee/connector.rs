@@ -162,7 +162,7 @@ pub enum RpcRequestError<MethodError> {
     /// An error related to the specific JSON-RPC method being called, that
     /// wasn't accounted for as a MethodError. This means that either
     /// Zaino has not yet accounted for the possibilty of this error,
-    /// or the Node returned an undocumented/malformed error response.  
+    /// or the Node returned an undocumented/malformed error response.
     #[error("unexpected error response from server: {0}")]
     UnexpectedErrorResponse(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
