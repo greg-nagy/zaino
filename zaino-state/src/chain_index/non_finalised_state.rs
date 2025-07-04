@@ -16,10 +16,8 @@ use zaino_fetch::jsonrpsee::{
     response::{GetBlockError, GetBlockResponse, GetTreestateResponse},
 };
 use zcash_primitives::merkle_tree::read_commitment_tree;
-use zebra_chain::{
-    parameters::Network, sapling::tree::NoteCommitmentTree, serialization::ZcashDeserialize,
-};
-use zebra_state::{FromDisk, HashOrHeight, ReadResponse, ReadStateService};
+use zebra_chain::{parameters::Network, serialization::ZcashDeserialize};
+use zebra_state::{HashOrHeight, ReadResponse, ReadStateService};
 
 use crate::ChainBlock;
 
@@ -52,7 +50,8 @@ pub struct NonfinalizedBlockCacheSnapshot {
 }
 
 #[derive(Debug)]
-pub enum ZebradConnectionError {
+/// Could not connect to a validator
+pub enum NodeConnectionError {
     /// The Uri provided was invalid
     BadUri(String),
     /// Could not connect to the zebrad.
@@ -60,7 +59,7 @@ pub enum ZebradConnectionError {
     ConnectionFailure(reqwest::Error),
     /// The Zebrad provided invalid or corrupt data. Something has gone wrong
     /// and we need to shut down.
-    UnrecoverableError,
+    UnrecoverableError(Box<dyn std::error::Error>),
 }
 
 #[derive(Debug)]
@@ -69,13 +68,17 @@ pub enum SyncError {
     /// The backing validator node returned corrupt, invalid, or incomplete data
     /// TODO: This may not be correctly disambibuated from temporary network issues
     /// in the fetchservice case.
-    ZebradConnectionError(ZebradConnectionError),
+    ZebradConnectionError(NodeConnectionError),
     /// The channel used to store new blocks has been closed. This should only happen
     /// during shutdown.
     StagingChannelClosed,
     /// Sync has been called multiple times in parallel, or another process has
     /// written to the block snapshot.
     CompetingSyncProcess,
+    /// Sync attempted a reorg, and something went wrong. Currently, this
+    /// only happens when we attempt to reorg below the start of the chain,
+    /// indicating an entirely separate regtest/testnet chain to what we expected
+    ReorgFailure(String),
 }
 
 impl From<UpdateError> for SyncError {
@@ -87,10 +90,16 @@ impl From<UpdateError> for SyncError {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug)]
+#[error("Genesis block missing in validator")]
+struct MissingGenesisBlock;
+
+#[derive(Debug, thiserror::Error)]
 /// An error occured during initial creation of the NonFinalizedState
 pub enum InitError {
-    InvalidZebraData,
+    #[error("zebra returned invalid data: {0}")]
+    /// the connected node returned garbage data
+    InvalidNodeData(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
 /// This is the core of the concurrent block cache.
@@ -109,14 +118,12 @@ impl NonFinalizedState {
         let genesis_block = source
             .get_block(HashOrHeight::Height(zebra_chain::block::Height(1)))
             .await
-            .ok()
-            // The genesis block should always exist. A None return is a error here.
-            .flatten()
-            .ok_or(InitError::InvalidZebraData)?;
+            .map_err(|e| InitError::InvalidNodeData(Box::new(e)))?
+            .ok_or_else(|| InitError::InvalidNodeData(Box::new(MissingGenesisBlock)))?;
         let (sapling_root_and_len, orchard_root_and_len) = source
             .get_commitment_tree_roots(genesis_block.hash().into())
             .await
-            .unwrap_or_else(|e| todo!("{e:?}"));
+            .map_err(|e| InitError::InvalidNodeData(Box::new(e)))?;
         let ((sapling_root, sapling_size), (orchard_root, orchard_size)) = (
             sapling_root_and_len.unwrap_or_default(),
             orchard_root_and_len.unwrap_or_default(),
@@ -134,7 +141,7 @@ impl NonFinalizedState {
             ),
             block_commitments: match genesis_block
                 .commitment(&network)
-                .map_err(|_| InitError::InvalidZebraData)?
+                .map_err(|e| InitError::InvalidNodeData(Box::new(e)))?
             {
                 zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
                 zebra_chain::block::Commitment::FinalSaplingRoot(root) => root.into(),
@@ -298,9 +305,11 @@ impl NonFinalizedState {
                 u32::from(best_tip.0) + 1,
             )))
             .await
-            .map_err(|_| {
-                /// TODO: Check error. Determine what kind of error to return, this may be recoverable
-                SyncError::ZebradConnectionError(ZebradConnectionError::UnrecoverableError)
+            .map_err(|e| {
+                // TODO: Check error. Determine what kind of error to return, this may be recoverable
+                SyncError::ZebradConnectionError(NodeConnectionError::UnrecoverableError(Box::new(
+                    e,
+                )))
             })?
         {
             // If this block is next in the chain, we sync it as normal
@@ -314,7 +323,11 @@ impl NonFinalizedState {
                     .source
                     .get_commitment_tree_roots(block.hash().into())
                     .await
-                    .unwrap_or_else(|_e| todo!());
+                    .map_err(|e| {
+                        SyncError::ZebradConnectionError(NodeConnectionError::UnrecoverableError(
+                            Box::new(e),
+                        ))
+                    })?;
                 let ((sapling_root, sapling_size), (orchard_root, orchard_size)) = (
                     sapling_root_and_len.unwrap_or_default(),
                     orchard_root_and_len.unwrap_or_default(),
@@ -327,11 +340,13 @@ impl NonFinalizedState {
                     bits: u32::from_be_bytes(
                         block.header.difficulty_threshold.bytes_in_display_order(),
                     ),
-                    block_commitments: match block.commitment(&self.network).map_err(|_| {
+                    block_commitments: match block.commitment(&self.network).map_err(|e| {
                         // Currently, this can only fail when the zebra provides unvalid data.
                         // Sidechain blocks will fail, however, and when we incorporate them
                         // we must adapt this to match
-                        SyncError::ZebradConnectionError(ZebradConnectionError::UnrecoverableError)
+                        SyncError::ZebradConnectionError(NodeConnectionError::UnrecoverableError(
+                            Box::new(e),
+                        ))
                     })? {
                         zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
                         zebra_chain::block::Commitment::FinalSaplingRoot(root) => root.into(),
@@ -468,15 +483,28 @@ impl NonFinalizedState {
                 };
                 new_blocks.push(chainblock.clone());
             } else {
+                let mut next_height_down = best_tip.0 - 1;
                 // If not, there's been a reorg, and we need to adjust our best-tip
-                let prev_hash = initial_state
-                    .blocks
-                    .values()
-                    .find(|block| block.height() == Some(best_tip.0 - 1))
-                    .map(ChainBlock::hash)
-                    .unwrap_or_else(|| todo!("handle holes in database?"));
+                let prev_hash = loop {
+                    if next_height_down == Height(0) {
+                        return Err(SyncError::ReorgFailure(
+                            "attempted to reorg below chain genesis".to_string(),
+                        ));
+                    }
+                    match initial_state
+                        .blocks
+                        .values()
+                        .find(|block| block.height() == Some(best_tip.0 - 1))
+                        .map(ChainBlock::hash)
+                    {
+                        Some(hash) => break hash,
+                        // There is a hole in our database.
+                        // TODO: An error return may be more appropriate here
+                        None => next_height_down = next_height_down - 1,
+                    }
+                };
 
-                best_tip = (best_tip.0 - 1, *prev_hash);
+                best_tip = (next_height_down, *prev_hash);
                 // We can't calculate things like chainwork until we
                 // know the parent block
                 sidechain_blocks.push(block);
@@ -544,7 +572,8 @@ impl NonFinalizedState {
                 .iter()
                 .map(|(hash, block)| (hash.clone(), block.clone())),
         );
-        let (newly_finalzed, blocks): (HashMap<_, _>, HashMap<Hash, _>) = new
+        // todo: incorperate with finalized state to synchronize removal of finalized blocks from nonfinalized state instead of discarding below a cetain height
+        let (_newly_finalzed, blocks): (HashMap<_, _>, HashMap<Hash, _>) = new
             .into_iter()
             .partition(|(_hash, block)| match block.index().height() {
                 Some(height) => height <= finalized_height,
@@ -589,13 +618,17 @@ pub enum UpdateError {
 /// A connection to a validator.
 #[derive(Clone)]
 pub enum BlockchainSource {
+    /// The connection is via direct read access to a zebrad's data file
     State(ReadStateService),
+    /// We are connected to a zebrad, zcashd, or other zainod via JsonRpSee
     Fetch(JsonRpSeeConnector),
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 enum BlockchainSourceError {
-    // TODO: Add logic for handling ephemeral network errors
+    // TODO: Add logic for handling recoverable errors if any are identified
+    // one candidate may be ephemerable network hiccoughs
+    #[error("critical error in backing block source: {0}")]
     Unrecoverable(String),
 }
 
@@ -603,30 +636,6 @@ type BlockchainSourceResult<T> = Result<T, BlockchainSourceError>;
 
 /// Methods that will dispatch to a ReadStateService or JsonRpSeeConnector
 impl BlockchainSource {
-    async fn get_tip(
-        &self,
-    ) -> Result<Option<(zebra_chain::block::Height, zebra_chain::block::Hash)>, BlockchainSourceError>
-    {
-        match self {
-            BlockchainSource::State(read_state_service) => {
-                let response = read_state_service
-                    .clone()
-                    .call(zebra_state::ReadRequest::Tip)
-                    .await
-                    .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?;
-                match response {
-                    zebra_state::ReadResponse::Tip(tip) => Ok(tip),
-                    _ => unreachable!("bad read response"),
-                }
-            }
-            BlockchainSource::Fetch(json_rp_see_connector) => json_rp_see_connector
-                .get_blockchain_info()
-                .await
-                .map(|info| Ok(Some((info.blocks, info.best_block_hash))))
-                .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?,
-        }
-    }
-
     async fn get_block(
         &self,
         id: HashOrHeight,
@@ -651,7 +660,7 @@ impl BlockchainSource {
                 {
                     Ok(GetBlockResponse::Raw(raw_block)) => Ok(Some(Arc::new(
                         zebra_chain::block::Block::zcash_deserialize(raw_block.as_ref())
-                            .unwrap_or_else(|_e| todo!("block too large")),
+                            .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?,
                     ))),
                     Ok(_) => unreachable!(),
                     Err(e) => match e {
