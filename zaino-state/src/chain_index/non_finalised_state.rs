@@ -43,10 +43,10 @@ pub struct NonfinalizedBlockCacheSnapshot {
     /// this includes all blocks on-chain, as well as
     /// all blocks known to have been on-chain before being
     /// removed by a reorg. Blocks reorged away have no height.
-    blocks: HashMap<Hash, ChainBlock>,
+    pub blocks: HashMap<Hash, ChainBlock>,
     // Do we need height here?
     /// The highest known block
-    best_tip: (Height, Hash),
+    pub best_tip: (Height, Hash),
 }
 
 #[derive(Debug)]
@@ -93,6 +93,10 @@ impl From<UpdateError> for SyncError {
 #[derive(thiserror::Error, Debug)]
 #[error("Genesis block missing in validator")]
 struct MissingGenesisBlock;
+
+#[derive(thiserror::Error, Debug)]
+#[error("data from validator invalid: {0}")]
+struct InvalidData(String);
 
 #[derive(Debug, thiserror::Error)]
 /// An error occured during initial creation of the NonFinalizedState
@@ -240,7 +244,13 @@ impl NonFinalizedState {
                 .header
                 .difficulty_threshold
                 .to_work()
-                .expect("invalid block")
+                .ok_or_else(|| {
+                    InitError::InvalidNodeData(Box::new(InvalidData(format!(
+                        "Invalid work field of block {} {:?}",
+                        hash.to_string(),
+                        height
+                    ))))
+                })?
                 .as_u128(),
         ));
 
@@ -272,8 +282,10 @@ impl NonFinalizedState {
         let best_tip = (Height(1), chainblock.index().hash);
 
         let mut blocks = HashMap::new();
-        blocks.insert(chainblock.index.hash, chainblock);
+        blocks.insert(chainblock.index().hash, chainblock);
 
+        dbg!(&best_tip);
+        dbg!(&blocks);
         let current = ArcSwap::new(Arc::new(NonfinalizedBlockCacheSnapshot {
             blocks,
             best_tip,
@@ -314,11 +326,23 @@ impl NonFinalizedState {
         {
             // If this block is next in the chain, we sync it as normal
             if Hash::from(block.header.previous_block_hash) == best_tip.1 {
-                best_tip = (best_tip.0 + 1, block.hash().into());
-                let prev_block = initial_state
-                    .blocks
-                    .get(&best_tip.1)
-                    .expect("hole in block cache");
+                let prev_block = match new_blocks.last() {
+                    Some(block) => block,
+                    None => initial_state.blocks.get(&best_tip.1).ok_or_else(|| {
+                        SyncError::ReorgFailure(format!(
+                            "found blocks {:?}, expected block {:?}",
+                            initial_state
+                                .blocks
+                                .iter()
+                                .map(|(_hash, block)| (
+                                    block.index().hash(),
+                                    block.index().height()
+                                ))
+                                .collect::<Vec<_>>(),
+                            best_tip
+                        ))
+                    })?,
+                };
                 let (sapling_root_and_len, orchard_root_and_len) = self
                     .source
                     .get_commitment_tree_roots(block.hash().into())
@@ -444,6 +468,8 @@ impl NonFinalizedState {
                     transactions.push(txdata);
                 }
 
+                best_tip = (best_tip.0 + 1, block.hash().into());
+
                 let height = Some(best_tip.0);
                 let hash = Hash::from(block.hash());
                 let parent_hash = Hash::from(block.header.previous_block_hash);
@@ -452,7 +478,17 @@ impl NonFinalizedState {
                         .header
                         .difficulty_threshold
                         .to_work()
-                        .expect("invalid block")
+                        .ok_or_else(|| {
+                            SyncError::ZebradConnectionError(
+                                NodeConnectionError::UnrecoverableError(Box::new(InvalidData(
+                                    format!(
+                                        "Invalid work field of block {} {:?}",
+                                        block.hash().to_string(),
+                                        height
+                                    ),
+                                ))),
+                            )
+                        })?
                         .as_u128(),
                 )));
 
@@ -517,6 +553,13 @@ impl NonFinalizedState {
                 return Err(e.into());
             }
         }
+        // TODO: connect to finalized state to determine where to truncate
+        self.update(if best_tip.0 .0 > 100 {
+            best_tip.0 - 100
+        } else {
+            Height(1)
+        })
+        .await?;
 
         Ok(())
     }
@@ -530,7 +573,8 @@ impl NonFinalizedState {
                         block
                             .index
                             .height
-                            .expect("TODO: fix when handling sidechain blocks")
+                            // we'll just truncate at the end
+                            .unwrap_or(Height(101))
                             - 100,
                     )
                     .await?;
@@ -742,7 +786,12 @@ impl BlockchainSource {
                     .as_ref()
                     .map(hex::decode)
                     .transpose()
-                    .unwrap()
+                    .map_err(|_e| {
+                        BlockchainSourceError::Unrecoverable(
+                            InvalidData(format!("could not interpret sapling tree of block {id}"))
+                                .to_string(),
+                        )
+                    })?
                     .as_ref()
                     .map(Vec::as_slice)
                     .map(read_commitment_tree::<zebra_chain::sapling::tree::Node, _, 32>)
@@ -754,7 +803,12 @@ impl BlockchainSource {
                     .as_ref()
                     .map(hex::decode)
                     .transpose()
-                    .unwrap()
+                    .map_err(|_e| {
+                        BlockchainSourceError::Unrecoverable(
+                            InvalidData(format!("could not interpret orchard tree of block {id}"))
+                                .to_string(),
+                        )
+                    })?
                     .as_ref()
                     .map(Vec::as_slice)
                     .map(read_commitment_tree::<zebra_chain::orchard::tree::Node, _, 32>)

@@ -530,10 +530,10 @@ impl BlockData {
 #[allow(clippy::large_enum_variant)]
 pub enum EquihashSolution {
     /// 200-9 solution (mainnet / testnet).
-    #[cfg_attr(test, serde(with = "serde_arrays::fixed"))]
+    #[cfg_attr(test, serde(with = "serde_arrays"))]
     Standard([u8; 1344]),
     /// 48-5 solution (regtest).
-    #[cfg_attr(test, serde(with = "serde_arrays::fixed"))]
+    #[cfg_attr(test, serde(with = "serde_arrays"))]
     Regtest([u8; 36]),
 }
 
@@ -796,7 +796,6 @@ impl
         [u8; 32],
         u32,
         u32,
-        &zebra_chain::parameters::Network,
     )> for ChainBlock
 {
     type Error = String;
@@ -809,7 +808,6 @@ impl
             final_orchard_root,
             parent_sapling_size,
             parent_orchard_size,
-            network,
         ): (
             zaino_fetch::chain::block::FullBlock,
             ChainWork,
@@ -817,7 +815,6 @@ impl
             [u8; 32],
             u32,
             u32,
-            &zebra_chain::parameters::Network,
         ),
     ) -> Result<Self, Self::Error> {
         // --- Block Header Info ---
@@ -1371,7 +1368,7 @@ pub struct CompactSaplingOutput {
     /// Ephemeral public key used by receivers to detect/decrypt the note.
     ephemeral_key: [u8; 32],
     /// Encrypted note ciphertext (minimal required portion).
-    #[cfg_attr(test, serde(with = "serde_arrays::fixed"))]
+    #[cfg_attr(test, serde(with = "serde_arrays"))]
     ciphertext: [u8; 52],
 }
 
@@ -1439,7 +1436,7 @@ pub struct CompactOrchardAction {
     /// Ephemeral public key for detecting and decrypting Orchard notes.
     ephemeral_key: [u8; 32],
     /// Encrypted ciphertext of the Orchard note (minimal required portion).
-    #[cfg_attr(test, serde(with = "serde_arrays::fixed"))]
+    #[cfg_attr(test, serde(with = "serde_arrays"))]
     ciphertext: [u8; 52],
 }
 
@@ -1677,25 +1674,25 @@ impl ShardRoot {
 // *** Custom serde based debug serialisation ***
 
 #[cfg(test)]
+/// utilities for serializing/deserializing nonstandard-sized arrays
 pub mod serde_arrays {
     use serde::{Deserialize, Deserializer, Serializer};
 
-    pub mod fixed {
-        use super::*;
-        pub fn serialize<const N: usize, S>(val: &[u8; N], s: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            s.serialize_bytes(val)
-        }
+    /// Serialze an arbirtary fixed-size array
+    pub fn serialize<const N: usize, S>(val: &[u8; N], s: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        s.serialize_bytes(val)
+    }
 
-        pub fn deserialize<'de, const N: usize, D>(d: D) -> Result<[u8; N], D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            let v: &[u8] = Deserialize::deserialize(d)?;
-            v.try_into()
-                .map_err(|_| serde::de::Error::custom(format!("invalid length for [u8; {N}]")))
-        }
+    /// Deserialze an arbirtary fixed-size array
+    pub fn deserialize<'de, const N: usize, D>(d: D) -> Result<[u8; N], D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let v: &[u8] = Deserialize::deserialize(d)?;
+        v.try_into()
+            .map_err(|_| serde::de::Error::custom(format!("invalid length for [u8; {N}]")))
     }
 }

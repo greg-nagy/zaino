@@ -77,15 +77,21 @@ async fn create_test_manager_and_nfs(
 }
 
 #[tokio::test]
-async fn make_nfs() {
-    let (test_manager, json_service, non_finalized_state) =
+async fn nfs_simple_sync() {
+    let (test_manager, _json_service, non_finalized_state) =
         create_test_manager_and_nfs(&ValidatorKind::Zebrad, None, true, false, false, true).await;
 
     let snapshot = non_finalized_state.get_snapshot();
+    assert_eq!(
+        snapshot.best_tip.0,
+        zaino_state::Height::try_from(1).unwrap()
+    );
 
-    println!("\n\n\n{:?}\n\n\n", snapshot);
-
+    test_manager.generate_blocks_with_delay(5).await;
     non_finalized_state.sync().await.unwrap();
     let snapshot = non_finalized_state.get_snapshot();
-    println!("\n\n\n{:?}\n\n\n", snapshot);
+    assert_eq!(
+        snapshot.best_tip.0,
+        zaino_state::Height::try_from(6).unwrap()
+    );
 }

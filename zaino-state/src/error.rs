@@ -2,10 +2,7 @@
 
 use std::any::type_name;
 
-use zaino_fetch::jsonrpsee::{
-    connector::RpcRequestError, error::TransportError, response::GetInfoError,
-};
-use zebra_state::NonFinalizedState;
+use zaino_fetch::jsonrpsee::connector::RpcRequestError;
 
 impl<T: ToString> From<RpcRequestError<T>> for StateServiceError {
     fn from(value: RpcRequestError<T>) -> Self {
