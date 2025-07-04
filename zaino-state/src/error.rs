@@ -124,7 +124,7 @@ impl From<StateServiceError> for tonic::Status {
             ref err @ StateServiceError::ZebradVersionMismatch { .. } => {
                 tonic::Status::internal(err.to_string())
             }
-            StateServiceError::UnhandledRpcError(e) => tonic::Status::internal(format!("{e}")),
+            StateServiceError::UnhandledRpcError(e) => tonic::Status::internal(e.to_string()),
         }
     }
 }
@@ -153,7 +153,7 @@ impl<T: ToString> From<RpcRequestError<T>> for FetchServiceError {
                 FetchServiceError::Critical(format!(
                     "unhandled rpc-specific {} error: {}",
                     type_name::<T>(),
-                    error.to_string()
+                    error
                 ))
             }
         }
@@ -240,7 +240,7 @@ impl<T: ToString> From<RpcRequestError<T>> for MempoolError {
             RpcRequestError::UnexpectedErrorResponse(error) => MempoolError::Critical(format!(
                 "unhandled rpc-specific {} error: {}",
                 type_name::<T>(),
-                error.to_string()
+                error
             )),
         }
     }
@@ -335,7 +335,7 @@ impl<T: ToString> From<RpcRequestError<T>> for NonFinalisedStateError {
                 NonFinalisedStateError::Custom(format!(
                     "unhandled rpc-specific {} error: {}",
                     type_name::<T>(),
-                    error.to_string()
+                    error
                 ))
             }
         }
@@ -391,7 +391,7 @@ impl<T: ToString> From<RpcRequestError<T>> for FinalisedStateError {
                 FinalisedStateError::Custom(format!(
                     "unhandled rpc-specific {} error: {}",
                     type_name::<T>(),
-                    error.to_string()
+                    error
                 ))
             }
         }

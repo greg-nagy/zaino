@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem, sync::Arc, u64};
+use std::{collections::HashMap, mem, sync::Arc};
 
 use crate::{
     chain_index::types::{Hash, Height},
@@ -246,9 +246,7 @@ impl NonFinalizedState {
                 .to_work()
                 .ok_or_else(|| {
                     InitError::InvalidNodeData(Box::new(InvalidData(format!(
-                        "Invalid work field of block {} {:?}",
-                        hash.to_string(),
-                        height
+                        "Invalid work field of block {hash} {height:?}"
                     ))))
                 })?
                 .as_u128(),
@@ -304,7 +302,7 @@ impl NonFinalizedState {
         let initial_state = self.get_snapshot();
         let mut new_blocks = Vec::new();
         let mut sidechain_blocks = Vec::new();
-        let mut best_tip = initial_state.best_tip.clone();
+        let mut best_tip = initial_state.best_tip;
         // currently this only gets main-chain blocks
         // once readstateservice supports serving sidechain data, this
         // must be rewritten to match
@@ -333,11 +331,8 @@ impl NonFinalizedState {
                             "found blocks {:?}, expected block {:?}",
                             initial_state
                                 .blocks
-                                .iter()
-                                .map(|(_hash, block)| (
-                                    block.index().hash(),
-                                    block.index().height()
-                                ))
+                                .values()
+                                .map(|block| (block.index().hash(), block.index().height()))
                                 .collect::<Vec<_>>(),
                             best_tip
                         ))
@@ -483,7 +478,7 @@ impl NonFinalizedState {
                                 NodeConnectionError::UnrecoverableError(Box::new(InvalidData(
                                     format!(
                                         "Invalid work field of block {} {:?}",
-                                        block.hash().to_string(),
+                                        block.hash(),
                                         height
                                     ),
                                 ))),
@@ -566,7 +561,7 @@ impl NonFinalizedState {
 
     async fn sync_stage_update_loop(&self, block: ChainBlock) -> Result<(), UpdateError> {
         if let Err(e) = self.stage(block.clone()) {
-            match e {
+            match *e {
                 mpsc::error::TrySendError::Full(_) => {
                     // TODO: connect to finalized state to determine where to truncate
                     self.update(
@@ -588,8 +583,11 @@ impl NonFinalizedState {
         Ok(())
     }
     /// Stage a block
-    pub fn stage(&self, block: ChainBlock) -> Result<(), mpsc::error::TrySendError<ChainBlock>> {
-        self.staging_sender.try_send(block)
+    pub fn stage(
+        &self,
+        block: ChainBlock,
+    ) -> Result<(), Box<mpsc::error::TrySendError<ChainBlock>>> {
+        self.staging_sender.try_send(block).map_err(Box::new)
     }
     /// Add all blocks from the staging area, and save a new cache snapshot
     pub async fn update(&self, finalized_height: Height) -> Result<(), UpdateError> {
@@ -614,7 +612,7 @@ impl NonFinalizedState {
             snapshot
                 .blocks
                 .iter()
-                .map(|(hash, block)| (hash.clone(), block.clone())),
+                .map(|(hash, block)| (*hash, block.clone())),
         );
         // todo: incorperate with finalized state to synchronize removal of finalized blocks from nonfinalized state instead of discarding below a cetain height
         let (_newly_finalzed, blocks): (HashMap<_, _>, HashMap<Hash, _>) = new
@@ -628,7 +626,7 @@ impl NonFinalizedState {
 
         let best_tip = blocks.iter().fold(snapshot.best_tip, |acc, (hash, block)| {
             match block.index().height() {
-                Some(height) if height > acc.0 => (height, (*hash).clone()),
+                Some(height) if height > acc.0 => (height, (*hash)),
                 _ => acc,
             }
         });
@@ -792,8 +790,7 @@ impl BlockchainSource {
                                 .to_string(),
                         )
                     })?
-                    .as_ref()
-                    .map(Vec::as_slice)
+                    .as_deref()
                     .map(read_commitment_tree::<zebra_chain::sapling::tree::Node, _, 32>)
                     .transpose()
                     .map_err(|e| BlockchainSourceError::Unrecoverable(format!("io error: {e}")))?;
@@ -809,8 +806,7 @@ impl BlockchainSource {
                                 .to_string(),
                         )
                     })?
-                    .as_ref()
-                    .map(Vec::as_slice)
+                    .as_deref()
                     .map(read_commitment_tree::<zebra_chain::orchard::tree::Node, _, 32>)
                     .transpose()
                     .map_err(|e| BlockchainSourceError::Unrecoverable(format!("io error: {e}")))?;
