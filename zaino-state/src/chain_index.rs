@@ -11,6 +11,7 @@
 //!     - b. Build trasparent tx indexes efficiently
 //!   - NOTE: Full transaction and block data is served from the backend finalizer.
 
+pub mod encoding;
 /// All state at least 100 blocks old
 pub mod finalised_state;
 /// State in the mempool, not yet on-chain
