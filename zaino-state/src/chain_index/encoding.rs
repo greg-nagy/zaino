@@ -181,7 +181,7 @@ impl CompactSize {
         }
     }
 
-    /// Reads an integer encoded in contact form and performs checked conversion
+    /// Reads an integer encoded in compact form and performs checked conversion
     /// to the target type.
     pub fn read_t<R: Read, T: TryFrom<u64>>(mut reader: R) -> io::Result<T> {
         let n = Self::read(&mut reader)?;
