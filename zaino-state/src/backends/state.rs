@@ -24,10 +24,7 @@ use nonempty::NonEmpty;
 use tokio_stream::StreamExt as _;
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpsee::{
-        connector::{JsonRpSeeConnector, RpcError},
-        error::TransportError,
-    },
+    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
 };
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
@@ -158,11 +155,7 @@ impl ZcashService for StateService {
         )
         .await?;
 
-        let zebra_build_data = rpc_client.get_info().await.map_err(|_| {
-            StateServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
-                "Failed to get info".to_string(),
-            ))
-        })?;
+        let zebra_build_data = rpc_client.get_info().await?;
 
         // This const is optional, as the build script can only
         // generate it from hash-based dependencies.
@@ -210,15 +203,7 @@ impl ZcashService for StateService {
 
         // Wait for ReadStateService to catch up to primary database:
         loop {
-            let server_height = rpc_client
-                .get_blockchain_info()
-                .await
-                .map_err(|_| {
-                    StateServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
-                        "Failed to get blockchain info".to_string(),
-                    ))
-                })?
-                .blocks;
+            let server_height = rpc_client.get_blockchain_info().await?.blocks;
 
             let syncer_response = read_state_service
                 .ready()
@@ -1019,11 +1004,7 @@ impl ZcashIndexer for StateServiceSubscriber {
             .send_raw_transaction(raw_transaction_hex)
             .await
             .map(SentTransactionHash::from)
-            .map_err(|_| {
-                StateServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
-                    "Failed to send raw transaction".to_string(),
-                ))
-            })
+            .map_err(Into::into)
     }
 
     async fn z_get_block(
