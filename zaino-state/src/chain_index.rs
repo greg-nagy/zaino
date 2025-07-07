@@ -16,3 +16,6 @@ pub mod finalised_state;
 pub mod mempool;
 pub mod non_finalised_state;
 pub mod types;
+
+#[cfg(test)]
+mod tests;

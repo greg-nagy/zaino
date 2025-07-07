@@ -2111,7 +2111,10 @@ dependencies = [
 name = "integration-tests"
 version = "0.1.2"
 dependencies = [
+ "core2 0.4.0",
  "futures",
+ "prost",
+ "serde_json",
  "tokio",
  "tracing-subscriber",
  "url",
@@ -2122,6 +2125,7 @@ dependencies = [
  "zebra-chain 1.0.0-beta.46 (git+https://github.com/ZcashFoundation/zebra.git?rev=3b5cbf845146ffe43be2d40b3ed5e2e6ffb7f12c)",
  "zebra-rpc 1.0.0-beta.46 (git+https://github.com/ZcashFoundation/zebra.git?rev=3b5cbf845146ffe43be2d40b3ed5e2e6ffb7f12c)",
  "zebra-state 1.0.0-beta.46 (git+https://github.com/ZcashFoundation/zebra.git?rev=3b5cbf845146ffe43be2d40b3ed5e2e6ffb7f12c)",
+ "zingolib",
 ]
 
 [[package]]

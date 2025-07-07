@@ -1249,6 +1249,30 @@ impl
     }
 }
 
+impl ZainoVersionedSerialise for ChainBlock {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, mut w: &mut W) -> io::Result<()> {
+        self.index.serialize(&mut w)?;
+        self.data.serialize(&mut w)?;
+        write_vec(&mut w, &self.tx, |w, tx| tx.serialize(w))?;
+        self.commitment_tree_data.serialize(&mut w)
+    }
+
+    fn decode_latest<R: Read>(mut r: &mut R) -> io::Result<Self> {
+        let index = BlockIndex::deserialize(&mut r)?;
+        let data = BlockData::deserialize(&mut r)?;
+        let tx = read_vec(&mut r, |r| CompactTxData::deserialize(r))?;
+        let ctd = CommitmentTreeData::deserialize(&mut r)?;
+
+        Ok(ChainBlock::new(index, data, tx, ctd))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
+    }
+}
+
 // *** Transaction Objects ***
 
 /// Compact indexed representation of a transaction within a block, supporting quick queries.
@@ -1485,6 +1509,41 @@ impl TryFrom<(u64, zaino_fetch::chain::transaction::FullTransaction)> for Compac
             sapling,
             orchard,
         ))
+    }
+}
+
+impl ZainoVersionedSerialise for CompactTxData {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, mut w: &mut W) -> io::Result<()> {
+        write_u64_le(&mut w, self.index)?;
+
+        write_fixed_le::<32, _>(&mut w, &self.txid)?;
+
+        self.transparent.serialize(&mut w)?;
+        self.sapling.serialize(&mut w)?;
+        self.orchard.serialize(&mut w)
+    }
+
+    fn decode_latest<R: Read>(mut r: &mut R) -> io::Result<Self> {
+        let index = read_u64_le(&mut r)?;
+        let txid = read_fixed_le::<32, _>(&mut r)?;
+
+        let transparent = TransparentCompactTx::deserialize(&mut r)?;
+        let sapling = SaplingCompactTx::deserialize(&mut r)?;
+        let orchard = OrchardCompactTx::deserialize(&mut r)?;
+
+        Ok(CompactTxData::new(
+            index,
+            txid,
+            transparent,
+            sapling,
+            orchard,
+        ))
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_latest(r)
     }
 }
 

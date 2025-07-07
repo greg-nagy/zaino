@@ -39,6 +39,8 @@ pub use chain_index::types::{
     TxidList,
 };
 
+pub use chain_index::encoding::*;
+
 pub(crate) mod local_cache;
 
 pub use local_cache::mempool::{MempoolKey, MempoolValue};

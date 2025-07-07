@@ -253,86 +253,86 @@ impl CompactSize {
 /* ───────────────────────────── integer helpers ───────────────────────────── */
 
 #[inline]
-pub(crate) fn read_u16_le<R: Read>(mut r: R) -> io::Result<u16> {
+pub fn read_u16_le<R: Read>(mut r: R) -> io::Result<u16> {
     let mut buf = [0u8; 2];
     r.read_exact(&mut buf)?;
     Ok(u16::from_le_bytes(buf))
 }
 #[inline]
-pub(crate) fn read_u16_be<R: Read>(mut r: R) -> io::Result<u16> {
+pub fn read_u16_be<R: Read>(mut r: R) -> io::Result<u16> {
     let mut buf = [0u8; 2];
     r.read_exact(&mut buf)?;
     Ok(u16::from_be_bytes(buf))
 }
 #[inline]
-pub(crate) fn write_u16_le<W: Write>(mut w: W, v: u16) -> io::Result<()> {
+pub fn write_u16_le<W: Write>(mut w: W, v: u16) -> io::Result<()> {
     w.write_all(&v.to_le_bytes())
 }
 #[inline]
-pub(crate) fn write_u16_be<W: Write>(mut w: W, v: u16) -> io::Result<()> {
+pub fn write_u16_be<W: Write>(mut w: W, v: u16) -> io::Result<()> {
     w.write_all(&v.to_be_bytes())
 }
 
 #[inline]
-pub(crate) fn read_u32_le<R: Read>(mut r: R) -> io::Result<u32> {
+pub fn read_u32_le<R: Read>(mut r: R) -> io::Result<u32> {
     let mut buf = [0u8; 4];
     r.read_exact(&mut buf)?;
     Ok(u32::from_le_bytes(buf))
 }
 #[inline]
-pub(crate) fn read_u32_be<R: Read>(mut r: R) -> io::Result<u32> {
+pub fn read_u32_be<R: Read>(mut r: R) -> io::Result<u32> {
     let mut buf = [0u8; 4];
     r.read_exact(&mut buf)?;
     Ok(u32::from_be_bytes(buf))
 }
 #[inline]
-pub(crate) fn write_u32_le<W: Write>(mut w: W, v: u32) -> io::Result<()> {
+pub fn write_u32_le<W: Write>(mut w: W, v: u32) -> io::Result<()> {
     w.write_all(&v.to_le_bytes())
 }
 #[inline]
-pub(crate) fn write_u32_be<W: Write>(mut w: W, v: u32) -> io::Result<()> {
+pub fn write_u32_be<W: Write>(mut w: W, v: u32) -> io::Result<()> {
     w.write_all(&v.to_be_bytes())
 }
 
 #[inline]
-pub(crate) fn read_u64_le<R: Read>(mut r: R) -> io::Result<u64> {
+pub fn read_u64_le<R: Read>(mut r: R) -> io::Result<u64> {
     let mut buf = [0u8; 8];
     r.read_exact(&mut buf)?;
     Ok(u64::from_le_bytes(buf))
 }
 #[inline]
-pub(crate) fn read_u64_be<R: Read>(mut r: R) -> io::Result<u64> {
+pub fn read_u64_be<R: Read>(mut r: R) -> io::Result<u64> {
     let mut buf = [0u8; 8];
     r.read_exact(&mut buf)?;
     Ok(u64::from_be_bytes(buf))
 }
 #[inline]
-pub(crate) fn write_u64_le<W: Write>(mut w: W, v: u64) -> io::Result<()> {
+pub fn write_u64_le<W: Write>(mut w: W, v: u64) -> io::Result<()> {
     w.write_all(&v.to_le_bytes())
 }
 #[inline]
-pub(crate) fn write_u64_be<W: Write>(mut w: W, v: u64) -> io::Result<()> {
+pub fn write_u64_be<W: Write>(mut w: W, v: u64) -> io::Result<()> {
     w.write_all(&v.to_be_bytes())
 }
 
 #[inline]
-pub(crate) fn read_i64_le<R: Read>(mut r: R) -> io::Result<i64> {
+pub fn read_i64_le<R: Read>(mut r: R) -> io::Result<i64> {
     let mut buf = [0u8; 8];
     r.read_exact(&mut buf)?;
     Ok(i64::from_le_bytes(buf))
 }
 #[inline]
-pub(crate) fn read_i64_be<R: Read>(mut r: R) -> io::Result<i64> {
+pub fn read_i64_be<R: Read>(mut r: R) -> io::Result<i64> {
     let mut buf = [0u8; 8];
     r.read_exact(&mut buf)?;
     Ok(i64::from_be_bytes(buf))
 }
 #[inline]
-pub(crate) fn write_i64_le<W: Write>(mut w: W, v: i64) -> io::Result<()> {
+pub fn write_i64_le<W: Write>(mut w: W, v: i64) -> io::Result<()> {
     w.write_all(&v.to_le_bytes())
 }
 #[inline]
-pub(crate) fn write_i64_be<W: Write>(mut w: W, v: i64) -> io::Result<()> {
+pub fn write_i64_be<W: Write>(mut w: W, v: i64) -> io::Result<()> {
     w.write_all(&v.to_be_bytes())
 }
 
@@ -340,7 +340,7 @@ pub(crate) fn write_i64_be<W: Write>(mut w: W, v: i64) -> io::Result<()> {
 
 /// Read exactly `N` bytes **as-is** (little-endian / “native order”).
 #[inline]
-pub(crate) fn read_fixed_le<const N: usize, R: Read>(mut r: R) -> io::Result<[u8; N]> {
+pub fn read_fixed_le<const N: usize, R: Read>(mut r: R) -> io::Result<[u8; N]> {
     let mut buf = [0u8; N];
     r.read_exact(&mut buf)?;
     Ok(buf)
@@ -348,17 +348,14 @@ pub(crate) fn read_fixed_le<const N: usize, R: Read>(mut r: R) -> io::Result<[u8
 
 /// Write an `[u8; N]` **as-is** (little-endian / “native order”).
 #[inline]
-pub(crate) fn write_fixed_le<const N: usize, W: Write>(
-    mut w: W,
-    bytes: &[u8; N],
-) -> io::Result<()> {
+pub fn write_fixed_le<const N: usize, W: Write>(mut w: W, bytes: &[u8; N]) -> io::Result<()> {
     w.write_all(bytes)
 }
 
 /// Read exactly `N` bytes from the stream and **reverse** them so the caller
 /// receives little-endian/internal order while the wire sees big-endian.
 #[inline]
-pub(crate) fn read_fixed_be<const N: usize, R: Read>(mut r: R) -> io::Result<[u8; N]> {
+pub fn read_fixed_be<const N: usize, R: Read>(mut r: R) -> io::Result<[u8; N]> {
     let mut buf = [0u8; N];
     r.read_exact(&mut buf)?;
     buf.reverse();
@@ -368,10 +365,7 @@ pub(crate) fn read_fixed_be<const N: usize, R: Read>(mut r: R) -> io::Result<[u8
 /// Take an internal little-endian `[u8; N]`, reverse it, and write big-endian
 /// order to the stream.
 #[inline]
-pub(crate) fn write_fixed_be<const N: usize, W: Write>(
-    mut w: W,
-    bytes: &[u8; N],
-) -> io::Result<()> {
+pub fn write_fixed_be<const N: usize, W: Write>(mut w: W, bytes: &[u8; N]) -> io::Result<()> {
     let mut tmp = *bytes;
     tmp.reverse();
     w.write_all(&tmp)
@@ -380,7 +374,7 @@ pub(crate) fn write_fixed_be<const N: usize, W: Write>(
 /* ─────────────────────────── Option<T> helpers ──────────────────────────── */
 
 /// 0 = None, 1 = Some.
-pub(crate) fn write_option<W, T, F>(mut w: W, value: &Option<T>, mut f: F) -> io::Result<()>
+pub fn write_option<W, T, F>(mut w: W, value: &Option<T>, mut f: F) -> io::Result<()>
 where
     W: Write,
     F: FnMut(&mut W, &T) -> io::Result<()>,
@@ -394,7 +388,7 @@ where
     }
 }
 
-pub(crate) fn read_option<R, T, F>(mut r: R, mut f: F) -> io::Result<Option<T>>
+pub fn read_option<R, T, F>(mut r: R, mut f: F) -> io::Result<Option<T>>
 where
     R: Read,
     F: FnMut(&mut R) -> io::Result<T>,
@@ -412,7 +406,7 @@ where
 }
 
 /* ──────────────────────────── Vec<T> helpers ────────────────────────────── */
-pub(crate) fn write_vec<W, T, F>(mut w: W, vec: &[T], mut f: F) -> io::Result<()>
+pub fn write_vec<W, T, F>(mut w: W, vec: &[T], mut f: F) -> io::Result<()>
 where
     W: Write,
     F: FnMut(&mut W, &T) -> io::Result<()>,
@@ -424,7 +418,7 @@ where
     Ok(())
 }
 
-pub(crate) fn read_vec<R, T, F>(mut r: R, mut f: F) -> io::Result<Vec<T>>
+pub fn read_vec<R, T, F>(mut r: R, mut f: F) -> io::Result<Vec<T>>
 where
     R: Read,
     F: FnMut(&mut R) -> io::Result<T>,
@@ -439,7 +433,7 @@ where
 
 /// Same as `read_vec` but collects straight into any container that
 /// implements `FromIterator`.
-pub(crate) fn read_vec_into<R, T, C, F>(mut r: R, mut f: F) -> io::Result<C>
+pub fn read_vec_into<R, T, C, F>(mut r: R, mut f: F) -> io::Result<C>
 where
     R: Read,
     F: FnMut(&mut R) -> io::Result<T>,
