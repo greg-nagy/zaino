@@ -74,6 +74,7 @@ pub trait ZainoVersionedSerialise: Sized {
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()>;
 
     #[inline]
+    /// Serialze, including the version tag
     fn serialize<W: Write>(&self, mut w: W) -> io::Result<()> {
         w.write_all(&[Self::VERSION])?;
         self.encode_body(&mut w)
@@ -89,11 +90,13 @@ pub trait ZainoVersionedSerialise: Sized {
 
     #[inline(always)]
     #[allow(unused)]
+    /// Decode an older v1 version
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         Err(io::Error::new(io::ErrorKind::InvalidData, "v1 unsupported"))
     }
     #[inline(always)]
     #[allow(unused)]
+    /// Decode an older v2 version
     fn decode_v2<R: Read>(r: &mut R) -> io::Result<Self> {
         Err(io::Error::new(io::ErrorKind::InvalidData, "v2 unsupported"))
     }
@@ -101,6 +104,7 @@ pub trait ZainoVersionedSerialise: Sized {
     /*──────────── router ────────────*/
 
     #[inline]
+    /// Decode the body, dispatcing to the appropriate decode_vx function
     fn decode_body<R: Read>(r: &mut R, version_tag: u8) -> io::Result<Self> {
         if version_tag == Self::VERSION {
             Self::decode_latest(r)
@@ -119,6 +123,7 @@ pub trait ZainoVersionedSerialise: Sized {
     /*──────────── convenience entry point ────────────*/
 
     #[inline]
+    /// The expected start point. Read the version tag, then decode the rest
     fn deserialize<R: Read>(mut r: R) -> io::Result<Self> {
         let mut tag = [0u8; 1];
         r.read_exact(&mut tag)?;
@@ -127,8 +132,10 @@ pub trait ZainoVersionedSerialise: Sized {
 }
 
 /* ──────────────────────────── CompactSize helpers ────────────────────────────── */
+/// A zcash/bitcoin CompactSize, a form of variable-length integer
 pub struct CompactSize;
 
+/// The largest value representable as a CompactSize
 pub const MAX_COMPACT_SIZE: u32 = 0x0200_0000;
 
 impl CompactSize {
