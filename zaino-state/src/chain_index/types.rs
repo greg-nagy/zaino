@@ -1425,21 +1425,14 @@ impl TryFrom<(u64, zaino_fetch::chain::transaction::FullTransaction)> for Compac
         let vout: Vec<TxOutCompact> = tx
             .transparent_outputs()
             .into_iter()
-            .filter_map(|(value, script_hash)| {
-                if script_hash.len() == 21 {
-                    let script_type = script_hash[0];
-                    let mut hash_bytes = [0u8; 20];
-                    hash_bytes.copy_from_slice(&script_hash[1..]);
-                    TxOutCompact::new(value, hash_bytes, script_type)
+            .filter_map(|(value, script)| {
+                if let Some((hash20, stype)) = parse_standard_script(&script) {
+                    TxOutCompact::new(value, hash20, stype as u8)
                 } else {
                     let mut fallback = [0u8; 20];
-                    let usable_len = script_hash.len().min(20);
-                    fallback[..usable_len].copy_from_slice(&script_hash[..usable_len]);
-                    Some(TxOutCompact::new(
-                        value,
-                        fallback,
-                        ScriptType::NonStandard as u8,
-                    )?)
+                    let copy_len = script.len().min(20);
+                    fallback[..copy_len].copy_from_slice(&script[..copy_len]);
+                    TxOutCompact::new(value, fallback, ScriptType::NonStandard as u8)
                 }
             })
             .collect();
@@ -1714,6 +1707,30 @@ impl ZainoVersionedSerialise for ScriptType {
 impl FixedEncodedLen for ScriptType {
     /// 1 byte
     const ENCODED_LEN: usize = 1;
+}
+
+/// Try to recognise a standard P2PKH / P2SH locking script.
+/// Returns (payload-hash, ScriptType) on success.
+pub(crate) fn parse_standard_script(script: &[u8]) -> Option<([u8; 20], ScriptType)> {
+    // P2PKH 76 a9 14 <20-B hash> 88 ac
+    const P2PKH_PREFIX: &[u8] = &[0x76, 0xa9, 0x14];
+    const P2PKH_SUFFIX: &[u8] = &[0x88, 0xac];
+
+    // P2SH  a9 14 <20-B hash> 87
+    const P2SH_PREFIX: &[u8] = &[0xa9, 0x14];
+    const P2SH_SUFFIX: &[u8] = &[0x87];
+
+    if script.starts_with(P2PKH_PREFIX) && script.ends_with(P2PKH_SUFFIX) && script.len() == 25 {
+        let mut hash = [0u8; 20];
+        hash.copy_from_slice(&script[3..23]);
+        return Some((hash, ScriptType::P2PKH));
+    }
+    if script.starts_with(P2SH_PREFIX) && script.ends_with(P2SH_SUFFIX) && script.len() == 23 {
+        let mut hash = [0u8; 20];
+        hash.copy_from_slice(&script[2..22]);
+        return Some((hash, ScriptType::P2SH));
+    }
+    None
 }
 
 /// Compact representation of a transparent output, optimized for indexing and efficient querying.

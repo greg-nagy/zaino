@@ -73,32 +73,54 @@ fn vectors_can_be_loaded_and_deserialised() -> io::Result<()> {
         .join("chain_index")
         .join("tests")
         .join("vectors");
-
     let (blocks, faucet, recipient) = read_vectors_from_file(&base_dir)?;
 
+    // Chech block data..
     assert!(
         !blocks.is_empty(),
         "expected at least one block in test-vectors"
     );
+    let mut prev_h: u32 = 0;
+    for (h, chain_block, compact_block) in &blocks {
+        println!("Checking block at height {h}");
 
-    let mut prev = 0u32;
-    for (h, _, _) in &blocks {
-        assert!(
-            *h > prev,
-            "block heights not monotonically increasing ({} then {})",
-            prev,
-            h
+        assert_eq!(
+            prev_h,
+            (h - 1),
+            "Chain continuity check failed at height {h}"
         );
-        prev = *h;
+        prev_h = *h;
+
+        let compact_block_hash = compact_block.hash.clone();
+        let chain_block_hash_bytes = chain_block.hash().0.to_vec();
+
+        assert_eq!(
+            compact_block_hash, chain_block_hash_bytes,
+            "Block hash check failed at height {h}"
+        );
+
+        // ChainBlock round trip check.
+        let bytes = chain_block.to_bytes()?;
+        let reparsed = ChainBlock::from_bytes(&bytes)?;
+        assert_eq!(
+            chain_block, &reparsed,
+            "ChainBlock round-trip failed at height {h}"
+        );
     }
 
-    let (h0, blk0, _) = &blocks[0];
-    let bytes = blk0.to_bytes()?;
-    let reparsed = ChainBlock::from_bytes(&bytes)?;
-    assert_eq!(
-        blk0, &reparsed,
-        "ChainBlock round-trip failed at height {h0}"
-    );
+    // check taddrs.
+    let (_, utxos_f, _) = faucet;
+    let (_, utxos_r, _) = recipient;
+
+    println!("\nFaucet UTXO address:");
+    let (addr, _hash, _outindex, _script, _value, _height) = utxos_f[0].into_parts();
+    println!("addr: {}", addr);
+
+    println!("\nRecipient UTXO address:");
+    let (addr, _hash, _outindex, _script, _value, _height) = utxos_r[0].into_parts();
+    println!("addr: {}", addr);
+
+    // Script hash <-> Taddress round trip check.
 
     Ok(())
 }
