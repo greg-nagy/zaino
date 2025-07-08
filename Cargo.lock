@@ -5864,6 +5864,7 @@ dependencies = [
 name = "zaino-state"
 version = "0.1.2"
 dependencies = [
+ "arc-swap",
  "async-trait",
  "blake2",
  "bs58",
@@ -5882,6 +5883,7 @@ dependencies = [
  "nonempty",
  "primitive-types 0.13.1",
  "prost",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2 0.10.9",

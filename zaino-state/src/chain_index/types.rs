@@ -143,7 +143,7 @@ impl FixedEncodedLen for Hash {
 /// for keys in Lexicographically sorted B-Tree.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub struct Height(pub u32);
+pub struct Height(pub(crate) u32);
 
 impl TryFrom<u32> for Height {
     type Error = &'static str;
@@ -161,6 +161,22 @@ impl TryFrom<u32> for Height {
 impl From<Height> for u32 {
     fn from(h: Height) -> Self {
         h.0
+    }
+}
+
+impl std::ops::Add<u32> for Height {
+    type Output = Self;
+
+    fn add(self, rhs: u32) -> Self::Output {
+        Height(self.0 + rhs)
+    }
+}
+
+impl std::ops::Sub<u32> for Height {
+    type Output = Self;
+
+    fn sub(self, rhs: u32) -> Self::Output {
+        Height(self.0 - rhs)
     }
 }
 
@@ -408,13 +424,13 @@ impl FixedEncodedLen for Outpoint {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct BlockIndex {
     /// The hash identifying this block uniquely.
-    hash: Hash,
+    pub(super) hash: Hash,
     /// The hash of this block's parent block (previous block in chain).
-    parent_hash: Hash,
+    pub(super) parent_hash: Hash,
     /// The cumulative proof-of-work of the blockchain up to this block, used for chain selection.
-    chainwork: ChainWork,
+    pub(super) chainwork: ChainWork,
     /// The height of this block if it's in the current best chain. None if it's part of a fork.
-    height: Option<Height>,
+    pub(super) height: Option<Height>,
 }
 
 impl BlockIndex {
@@ -574,21 +590,21 @@ impl FixedEncodedLen for ChainWork {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct BlockData {
     /// Version number of the block format (protocol upgrades).
-    version: u32,
+    pub(super) version: u32,
     /// Unix timestamp of when the block was mined (seconds since epoch).
-    time: i64,
+    pub(super) time: i64,
     /// Merkle root hash of all transaction IDs in the block (used for quick tx inclusion proofs).
-    merkle_root: [u8; 32],
+    pub(super) merkle_root: [u8; 32],
     /// Digest representing the block-commitments Merkle root (commitment to note states).
     /// - < V4: [`hashFinalSaplingRoot`] - Sapling note commitment tree root.
     /// - => V4: [`hashBlockCommitments`] - digest over hashLightClientRoot and hashAuthDataRoot.``
-    block_commitments: [u8; 32],
+    pub(super) block_commitments: [u8; 32],
     /// Compact difficulty target used for proof-of-work and difficulty calculation.
-    bits: u32,
+    pub(super) bits: u32,
     /// Equihash nonse.
-    nonse: [u8; 32],
+    pub(super) nonse: [u8; 32],
     /// Equihash solution
-    solution: EquihashSolution,
+    pub(super) solution: EquihashSolution,
 }
 
 impl BlockData {
@@ -748,11 +764,20 @@ impl ZainoVersionedSerialise for BlockData {
 #[allow(clippy::large_enum_variant)]
 pub enum EquihashSolution {
     /// 200-9 solution (mainnet / testnet).
-    #[cfg_attr(test, serde(with = "serde_arrays::fixed_1344"))]
+    #[cfg_attr(test, serde(with = "serde_arrays"))]
     Standard([u8; 1344]),
     /// 48-5 solution (regtest).
-    #[cfg_attr(test, serde(with = "serde_arrays::fixed_36"))]
+    #[cfg_attr(test, serde(with = "serde_arrays"))]
     Regtest([u8; 36]),
+}
+
+impl From<zebra_chain::work::equihash::Solution> for EquihashSolution {
+    fn from(value: zebra_chain::work::equihash::Solution) -> Self {
+        match value {
+            zebra_chain::work::equihash::Solution::Common(array) => Self::Standard(array),
+            zebra_chain::work::equihash::Solution::Regtest(array) => Self::Regtest(array),
+        }
+    }
 }
 
 impl EquihashSolution {
@@ -788,7 +813,7 @@ impl<'a> TryFrom<&'a [u8]> for EquihashSolution {
                 arr.copy_from_slice(bytes);
                 Ok(EquihashSolution::Regtest(arr))
             }
-            _ => Err("invalid Equihash solution length (expected 32 or 1344 bytes)"),
+            _ => Err("invalid Equihash solution length (expected 36 or 1344 bytes)"),
         }
     }
 }
@@ -1006,14 +1031,14 @@ impl FixedEncodedLen for CommitmentTreeSizes {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct ChainBlock {
     /// Metadata and indexing information for this block.
-    index: BlockIndex,
+    pub(super) index: BlockIndex,
     /// Essential header and metadata information for the block.
-    data: BlockData,
+    pub(super) data: BlockData,
     /// Compact representations of transactions in this block.
-    tx: Vec<CompactTxData>,
+    pub(super) transactions: Vec<CompactTxData>,
     /// Sapling and orchard commitment tree data for the chain
     /// *after this block has been applied.
-    commitment_tree_data: CommitmentTreeData,
+    pub(super) commitment_tree_data: CommitmentTreeData,
 }
 
 impl ChainBlock {
@@ -1027,7 +1052,7 @@ impl ChainBlock {
         Self {
             index,
             data,
-            tx,
+            transactions: tx,
             commitment_tree_data,
         }
     }
@@ -1044,7 +1069,7 @@ impl ChainBlock {
 
     /// Returns a reference to the compact transactions in this block.
     pub fn transactions(&self) -> &[CompactTxData] {
-        &self.tx
+        &self.transactions
     }
 
     /// Returns the commitment tree data for this block.
@@ -1204,7 +1229,7 @@ impl
 
         for (i, ftx) in full_transactions.into_iter().enumerate() {
             let txdata = CompactTxData::try_from((i as u64, ftx))
-                .map_err(|e| format!("TxData conversion failed at index {}: {e}", i))?;
+                .map_err(|e| format!("TxData conversion failed at index {i}: {e}"))?;
 
             sapling_note_count += txdata.sapling().outputs().len();
             orchard_note_count += txdata.orchard().actions().len();
@@ -1255,7 +1280,7 @@ impl ZainoVersionedSerialise for ChainBlock {
     fn encode_body<W: Write>(&self, mut w: &mut W) -> io::Result<()> {
         self.index.serialize(&mut w)?;
         self.data.serialize(&mut w)?;
-        write_vec(&mut w, &self.tx, |w, tx| tx.serialize(w))?;
+        write_vec(&mut w, &self.transactions, |w, tx| tx.serialize(w))?;
         self.commitment_tree_data.serialize(&mut w)
     }
 
@@ -1422,6 +1447,8 @@ impl TryFrom<(u64, zaino_fetch::chain::transaction::FullTransaction)> for Compac
             })
             .collect::<Result<_, _>>()?;
 
+        //TODO: We should error handle on these, a failure here should probably be
+        // reacted to
         let vout: Vec<TxOutCompact> = tx
             .transparent_outputs()
             .into_iter()
@@ -1780,6 +1807,25 @@ impl TxOutCompact {
     }
 }
 
+impl<T: AsRef<[u8]>> TryFrom<(u64, T)> for TxOutCompact {
+    type Error = ();
+
+    fn try_from((value, script_hash): (u64, T)) -> Result<Self, Self::Error> {
+        let script_hash_ref = script_hash.as_ref();
+        if script_hash_ref.len() == 21 {
+            let script_type = script_hash_ref[0];
+            let mut hash_bytes = [0u8; 20];
+            hash_bytes.copy_from_slice(&script_hash_ref[1..]);
+            TxOutCompact::new(value, hash_bytes, script_type).ok_or(())
+        } else {
+            let mut fallback = [0u8; 20];
+            let usable_len = script_hash_ref.len().min(20);
+            fallback[..usable_len].copy_from_slice(&script_hash_ref[..usable_len]);
+            TxOutCompact::new(value, fallback, ScriptType::NonStandard as u8).ok_or(())
+        }
+    }
+}
+
 impl ZainoVersionedSerialise for TxOutCompact {
     const VERSION: u8 = version::V1;
 
@@ -1938,7 +1984,7 @@ pub struct CompactSaplingOutput {
     /// Ephemeral public key used by receivers to detect/decrypt the note.
     ephemeral_key: [u8; 32],
     /// Encrypted note ciphertext (minimal required portion).
-    #[cfg_attr(test, serde(with = "serde_arrays::fixed_52"))]
+    #[cfg_attr(test, serde(with = "serde_arrays"))]
     ciphertext: [u8; 52],
 }
 
@@ -2068,7 +2114,7 @@ pub struct CompactOrchardAction {
     /// Ephemeral public key for detecting and decrypting Orchard notes.
     ephemeral_key: [u8; 32],
     /// Encrypted ciphertext of the Orchard note (minimal required portion).
-    #[cfg_attr(test, serde(with = "serde_arrays::fixed_52"))]
+    #[cfg_attr(test, serde(with = "serde_arrays"))]
     ciphertext: [u8; 52],
 }
 
@@ -2776,63 +2822,25 @@ impl ZainoVersionedSerialise for OrchardTxList {
 // *** Custom serde based debug serialisation ***
 
 #[cfg(test)]
+/// utilities for serializing/deserializing nonstandard-sized arrays
 pub mod serde_arrays {
     use serde::{Deserialize, Deserializer, Serializer};
 
-    pub mod fixed_36 {
-        use super::*;
-        pub fn serialize<S>(val: &[u8; 36], s: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            s.serialize_bytes(val)
-        }
-
-        pub fn deserialize<'de, D>(d: D) -> Result<[u8; 36], D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            let v: &[u8] = Deserialize::deserialize(d)?;
-            v.try_into()
-                .map_err(|_| serde::de::Error::custom("invalid length for [u8; 36]"))
-        }
+    /// Serialze an arbirtary fixed-size array
+    pub fn serialize<const N: usize, S>(val: &[u8; N], s: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        s.serialize_bytes(val)
     }
 
-    pub mod fixed_52 {
-        use super::*;
-        pub fn serialize<S>(val: &[u8; 52], s: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            s.serialize_bytes(val)
-        }
-
-        pub fn deserialize<'de, D>(d: D) -> Result<[u8; 52], D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            let v: &[u8] = Deserialize::deserialize(d)?;
-            v.try_into()
-                .map_err(|_| serde::de::Error::custom("invalid length for [u8; 52]"))
-        }
-    }
-
-    pub mod fixed_1344 {
-        use super::*;
-        pub fn serialize<S>(val: &[u8; 1344], s: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            s.serialize_bytes(val)
-        }
-
-        pub fn deserialize<'de, D>(d: D) -> Result<[u8; 1344], D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            let v: &[u8] = Deserialize::deserialize(d)?;
-            v.try_into()
-                .map_err(|_| serde::de::Error::custom("invalid length for [u8; 1344]"))
-        }
+    /// Deserialze an arbirtary fixed-size array
+    pub fn deserialize<'de, const N: usize, D>(d: D) -> Result<[u8; N], D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let v: &[u8] = Deserialize::deserialize(d)?;
+        v.try_into()
+            .map_err(|_| serde::de::Error::custom(format!("invalid length for [u8; {N}]")))
     }
 }
