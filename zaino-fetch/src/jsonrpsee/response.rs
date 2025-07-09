@@ -7,7 +7,7 @@ use serde::{de::Error, Deserialize, Deserializer, Serialize};
 
 use zebra_chain::{
     amount::{Amount, NonNegative},
-    block::{Hash, Height},
+    block::Height,
     work::difficulty::CompactDifficulty,
 };
 use zebra_rpc::methods::{opthex, types::get_blockchain_info::Balance};
@@ -661,16 +661,6 @@ pub enum GetBlockResponse {
     Raw(#[serde(with = "hex")] SerializedBlock),
     /// The block object.
     Object(Box<BlockObject>),
-}
-
-/// Contains the hex-encoded hash of the best (tip) block of the longest chain.
-#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct GetBestBlockHashResponse(Hash);
-
-impl From<GetBestBlockHashResponse> for Hash {
-    fn from(value: GetBestBlockHashResponse) -> Self {
-        value.0
-    }
 }
 
 impl ResponseToError for SerializedBlock {
