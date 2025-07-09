@@ -36,7 +36,7 @@ use zaino_proto::proto::{
 };
 
 use zebra_chain::{
-    block::{Hash, Header, Height, SerializedBlock},
+    block::{Header, Height, SerializedBlock},
     chain_tip::NetworkChainTipHeightEstimator,
     parameters::{ConsensusBranchId, Network, NetworkUpgrade},
     serialization::ZcashSerialize,

@@ -22,12 +22,12 @@ use tracing::error;
 use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
     response::{
-        GetBalanceError, GetBalanceResponse, GetBestBlockHashResponse, GetBlockCountError,
-        GetBlockCountResponse, GetBlockError, GetBlockHash, GetBlockHashError, GetBlockResponse,
-        GetBlockchainInfoError, GetBlockchainInfoResponse, GetDifficultyError, GetInfoError,
-        GetInfoResponse, GetSubtreesError, GetSubtreesResponse, GetTransactionError,
-        GetTransactionResponse, GetTreestateError, GetTreestateResponse, GetUtxosError,
-        GetUtxosResponse, SendTransactionError, SendTransactionResponse, TxidsError, TxidsResponse,
+        GetBalanceError, GetBalanceResponse, GetBlockCountError, GetBlockCountResponse,
+        GetBlockError, GetBlockHash, GetBlockHashError, GetBlockResponse, GetBlockchainInfoError,
+        GetBlockchainInfoResponse, GetDifficultyError, GetInfoError, GetInfoResponse,
+        GetSubtreesError, GetSubtreesResponse, GetTransactionError, GetTransactionResponse,
+        GetTreestateError, GetTreestateResponse, GetUtxosError, GetUtxosResponse,
+        SendTransactionError, SendTransactionResponse, TxidsError, TxidsResponse,
     },
 };
 

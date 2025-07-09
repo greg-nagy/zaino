@@ -2,10 +2,7 @@
 
 use zaino_state::{LightWalletIndexer, ZcashIndexer};
 
-use zebra_chain::{
-    block::{Hash, Height},
-    subtree::NoteCommitmentSubtreeIndex,
-};
+use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
