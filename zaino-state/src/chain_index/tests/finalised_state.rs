@@ -5,9 +5,14 @@ use prost::Message;
 use std::io::BufReader;
 use std::path::Path;
 use std::{fs::File, path::PathBuf};
+use tempfile::TempDir;
+
 use zaino_proto::proto::compact_formats::CompactBlock;
 use zebra_rpc::methods::GetAddressUtxos;
 
+use crate::bench::BlockCacheConfig;
+use crate::chain_index::finalised_state::ZainoDB;
+use crate::error::FinalisedStateError;
 use crate::{read_u32_le, ChainBlock, CompactSize, ZainoVersionedSerialise as _};
 
 /// Reads test data from file.
@@ -65,15 +70,75 @@ fn read_vectors_from_file<P: AsRef<Path>>(
     Ok((full_blocks, faucet, recipient))
 }
 
-#[test]
-fn vectors_can_be_loaded_and_deserialised() -> io::Result<()> {
+fn load_test_vectors() -> io::Result<(
+    Vec<(u32, ChainBlock, CompactBlock)>,
+    (Vec<String>, Vec<GetAddressUtxos>, u64),
+    (Vec<String>, Vec<GetAddressUtxos>, u64),
+)> {
     // <repo>/zaino-state/src/chain_index/tests/vectors
     let base_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("src")
         .join("chain_index")
         .join("tests")
         .join("vectors");
-    let (blocks, faucet, recipient) = read_vectors_from_file(&base_dir)?;
+    read_vectors_from_file(&base_dir)
+}
+
+async fn spawn_default_zaino_db() -> Result<(TempDir, ZainoDB), FinalisedStateError> {
+    let temp_dir: TempDir = tempfile::tempdir().unwrap();
+    let db_path: PathBuf = temp_dir.path().to_path_buf();
+
+    let config = BlockCacheConfig {
+        map_capacity: None,
+        map_shard_amount: None,
+        db_path,
+        db_size: None,
+        network: zebra_chain::parameters::Network::new_regtest(
+            zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                before_overwinter: Some(1),
+                overwinter: Some(1),
+                sapling: Some(1),
+                blossom: Some(1),
+                heartwood: Some(1),
+                canopy: Some(1),
+                nu5: Some(1),
+                nu6: Some(1),
+                // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
+                nu6_1: None,
+                nu7: None,
+            },
+        ),
+        no_sync: false,
+        no_db: false,
+    };
+
+    let zaino_db = ZainoDB::spawn(&config).await.unwrap();
+
+    let metadata = zaino_db.get_metadata().unwrap();
+
+    println!("ZainoDB launched with version: {:?}", metadata);
+
+    Ok((temp_dir, zaino_db))
+}
+
+async fn load_vectors_and_spawn_and_sync_zaino_db() -> (
+    Vec<(u32, ChainBlock, CompactBlock)>,
+    (Vec<String>, Vec<GetAddressUtxos>, u64),
+    (Vec<String>, Vec<GetAddressUtxos>, u64),
+    TempDir,
+    ZainoDB,
+) {
+    let (blocks, faucet, recipient) = load_test_vectors().unwrap();
+    let (db_dir, zaino_db) = spawn_default_zaino_db().await.unwrap();
+    for (_h, chain_block, _compact_block) in blocks.clone() {
+        zaino_db.write_block(chain_block).unwrap();
+    }
+    (blocks, faucet, recipient, db_dir, zaino_db)
+}
+
+#[tokio::test]
+async fn vectors_can_be_loaded_and_deserialised() {
+    let (blocks, faucet, recipient) = load_test_vectors().unwrap();
 
     // Chech block data..
     assert!(
@@ -82,12 +147,12 @@ fn vectors_can_be_loaded_and_deserialised() -> io::Result<()> {
     );
     let mut prev_h: u32 = 0;
     for (h, chain_block, compact_block) in &blocks {
-        println!("Checking block at height {h}");
+        // println!("Checking block at height {h}");
 
         assert_eq!(
             prev_h,
             (h - 1),
-            "Chain continuity check failed at height {h}"
+            "Chain height continuity check failed at height {h}"
         );
         prev_h = *h;
 
@@ -100,8 +165,8 @@ fn vectors_can_be_loaded_and_deserialised() -> io::Result<()> {
         );
 
         // ChainBlock round trip check.
-        let bytes = chain_block.to_bytes()?;
-        let reparsed = ChainBlock::from_bytes(&bytes)?;
+        let bytes = chain_block.to_bytes().unwrap();
+        let reparsed = ChainBlock::from_bytes(&bytes).unwrap();
         assert_eq!(
             chain_block, &reparsed,
             "ChainBlock round-trip failed at height {h}"
@@ -119,8 +184,10 @@ fn vectors_can_be_loaded_and_deserialised() -> io::Result<()> {
     println!("\nRecipient UTXO address:");
     let (addr, _hash, _outindex, _script, _value, _height) = utxos_r[0].into_parts();
     println!("addr: {}", addr);
+}
 
-    // Script hash <-> Taddress round trip check.
-
-    Ok(())
+#[tokio::test]
+async fn create_db_and_sync_chain() {
+    let (_blocks, _faucet, _recipient, _db_dir, _zaino_db) =
+        load_vectors_and_spawn_and_sync_zaino_db().await;
 }

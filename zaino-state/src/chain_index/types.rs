@@ -1646,6 +1646,12 @@ impl TxInCompact {
     pub fn prevout_index(&self) -> u32 {
         self.prevout_index
     }
+
+    /// `true` iff this input is the special “null” out-point used by a
+    /// coinbase transaction (all-zero txid, index 0xffff_ffff).
+    pub fn is_null_prevout(&self) -> bool {
+        self.prevout_txid == [0u8; 32] && self.prevout_index == u32::MAX
+    }
 }
 
 impl ZainoVersionedSerialise for TxInCompact {

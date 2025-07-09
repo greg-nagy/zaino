@@ -191,13 +191,13 @@ impl ZainoDB {
             .open(&db_path)?;
 
         // Open individual LMDB DBs.
-        let headers = Self::open_or_create_db(&env, "headers", DatabaseFlags::INTEGER_KEY)?;
-        let txids = Self::open_or_create_db(&env, "txids", DatabaseFlags::INTEGER_KEY)?;
-        let transparent = Self::open_or_create_db(&env, "transparent", DatabaseFlags::INTEGER_KEY)?;
-        let sapling = Self::open_or_create_db(&env, "sapling", DatabaseFlags::INTEGER_KEY)?;
-        let orchard = Self::open_or_create_db(&env, "orchard", DatabaseFlags::INTEGER_KEY)?;
+        let headers = Self::open_or_create_db(&env, "headers", DatabaseFlags::empty())?;
+        let txids = Self::open_or_create_db(&env, "txids", DatabaseFlags::empty())?;
+        let transparent = Self::open_or_create_db(&env, "transparent", DatabaseFlags::empty())?;
+        let sapling = Self::open_or_create_db(&env, "sapling", DatabaseFlags::empty())?;
+        let orchard = Self::open_or_create_db(&env, "orchard", DatabaseFlags::empty())?;
         let commitment_tree_data =
-            Self::open_or_create_db(&env, "commitment_tree_data", DatabaseFlags::INTEGER_KEY)?;
+            Self::open_or_create_db(&env, "commitment_tree_data", DatabaseFlags::empty())?;
         let hashes = Self::open_or_create_db(&env, "hashes", DatabaseFlags::empty())?;
         let spent = Self::open_or_create_db(&env, "spent", DatabaseFlags::empty())?;
         let addrhist = Self::open_or_create_db(
@@ -205,7 +205,7 @@ impl ZainoDB {
             "addrhist",
             DatabaseFlags::DUP_SORT | DatabaseFlags::DUP_FIXED,
         )?;
-        let shard_roots = Self::open_or_create_db(&env, "shard_roots", DatabaseFlags::INTEGER_KEY)?;
+        let shard_roots = Self::open_or_create_db(&env, "shard_roots", DatabaseFlags::empty())?;
         let metadata = Self::open_or_create_db(&env, "metadata", DatabaseFlags::empty())?;
 
         // Create ZainoDB
@@ -499,6 +499,7 @@ impl ZainoDB {
         // Build transaction indexes
         let tx_len = block.transactions().len();
         let mut txids = Vec::with_capacity(tx_len);
+        let mut txid_set: HashSet<Hash> = HashSet::with_capacity(tx_len);
         let mut transparent = Vec::with_capacity(tx_len);
         let mut sapling = Vec::with_capacity(tx_len);
         let mut orchard = Vec::with_capacity(tx_len);
@@ -507,7 +508,13 @@ impl ZainoDB {
         let mut addrhist_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
 
         for (tx_pos, tx) in block.transactions().iter().enumerate() {
-            txids.push(Hash::from(*tx.txid()));
+            let mut h = Hash::from(*tx.txid());
+            // NOTE: Why do we have to do this here??
+            h.0.reverse();
+
+            if txid_set.insert(h) {
+                txids.push(h);
+            }
 
             // Transparent transactions
             let transparent_data =
@@ -537,28 +544,6 @@ impl ZainoDB {
             // Transaction index
             let tx_index = TxIndex::new(block_height.into(), tx_pos as u16);
 
-            // Transparent Inputs: Build Spent Outpoints Index and Address History
-            for input in tx.transparent().inputs() {
-                let prev_outpoint = Outpoint::new(*input.prevout_txid(), input.prevout_index());
-                spent_map.insert(prev_outpoint, tx_index);
-
-                if let Ok(prev_output) = self.get_previous_output(prev_outpoint) {
-                    let addr_script = AddrScript::new(*prev_output.script_hash());
-                    let hist_record = AddrHistRecord::new(
-                        tx_index,
-                        input.prevout_index() as u16,
-                        prev_output.value(),
-                        AddrHistRecord::FLAG_IS_INPUT,
-                    );
-                    match addrhist_map.entry(addr_script) {
-                        Entry::Occupied(mut entry) => entry.get_mut().push(hist_record),
-                        Entry::Vacant(entry) => {
-                            entry.insert(vec![hist_record]);
-                        }
-                    }
-                }
-            }
-
             // Transparent Outputs: Build Address History
             for (output_index, output) in tx.transparent().outputs().iter().enumerate() {
                 let addr_script = AddrScript::new(*output.script_hash());
@@ -572,6 +557,60 @@ impl ZainoDB {
                     Entry::Occupied(mut entry) => entry.get_mut().push(hist_record),
                     Entry::Vacant(entry) => {
                         entry.insert(vec![hist_record]);
+                    }
+                }
+            }
+
+            // Transparent Inputs: Build Spent Outpoints Index and Address History
+            for input in tx.transparent().inputs() {
+                if input.is_null_prevout() {
+                    continue;
+                }
+                let prev_outpoint = Outpoint::new(*input.prevout_txid(), input.prevout_index());
+                spent_map.insert(prev_outpoint, tx_index);
+
+                //Check if output is in *this* block, else fetch from DB.
+                let prev_tx_hash = Hash(*prev_outpoint.prev_txid());
+
+                if txid_set.contains(&prev_tx_hash) {
+                    // Fetch transaction index within block
+                    if let Some(tx_pos) = txids.iter().position(|h| h == &prev_tx_hash) {
+                        // Fetch Transparent data for transaction
+                        if let Some(Some(prev_transparent)) = transparent.get(tx_pos) {
+                            // Fetch output from transaction
+                            if let Some(prev_output) = prev_transparent
+                                .outputs()
+                                .get(prev_outpoint.prev_index() as usize)
+                            {
+                                let addr_script = AddrScript::new(*prev_output.script_hash());
+                                let hist_record = AddrHistRecord::new(
+                                    tx_index,
+                                    input.prevout_index() as u16,
+                                    prev_output.value(),
+                                    AddrHistRecord::FLAG_IS_INPUT,
+                                );
+                                match addrhist_map.entry(addr_script) {
+                                    Entry::Occupied(mut e) => e.get_mut().push(hist_record),
+                                    Entry::Vacant(e) => {
+                                        e.insert(vec![hist_record]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else if let Ok(prev_output) = self.get_previous_output(prev_outpoint) {
+                    let addr_script = AddrScript::new(*prev_output.script_hash());
+                    let hist_record = AddrHistRecord::new(
+                        tx_index,
+                        input.prevout_index() as u16,
+                        prev_output.value(),
+                        AddrHistRecord::FLAG_IS_INPUT,
+                    );
+                    match addrhist_map.entry(addr_script) {
+                        Entry::Occupied(mut entry) => entry.get_mut().push(hist_record),
+                        Entry::Vacant(entry) => {
+                            entry.insert(vec![hist_record]);
+                        }
                     }
                 }
             }
@@ -1992,7 +2031,7 @@ impl ZainoDB {
     /// Used to build addrhist records.
     fn get_previous_output(&self, outpoint: Outpoint) -> Result<TxOutCompact, FinalisedStateError> {
         // Find the tx’s location in the chain
-        let prev_txid = Hash::from(*outpoint.prev_txid());
+        let mut prev_txid = Hash::from(*outpoint.prev_txid());
         let tx_index = self
             .find_txid_index(&prev_txid)?
             .ok_or_else(|| FinalisedStateError::Custom("Previous txid not found".into()))?;
@@ -2143,30 +2182,33 @@ impl ZainoDB {
                     return None;
                 }
             } else if *option_tag == 1 {
+                let (_tx_version, rest) = remaining.split_first()?;
+                remaining = rest;
+
                 let vin_len = CompactSize::read(&mut remaining).ok()? as usize;
-                let vin_bytes = TxInCompact::VERSIONED_LEN * vin_len;
-                if remaining.len() < vin_bytes {
-                    return None;
-                }
-                remaining = &remaining[vin_bytes..];
 
-                let vout_len = CompactSize::read(&mut remaining).ok()? as usize;
-                let vout_bytes = TxOutCompact::VERSIONED_LEN * vout_len;
-                if remaining.len() < vout_bytes {
-                    return None;
-                }
-
-                if i == target_tx_idx {
-                    if target_output_idx >= vout_len {
+                for _ in 0..vin_len {
+                    if remaining.len() < TxInCompact::VERSIONED_LEN {
                         return None;
                     }
-                    let offset = TxOutCompact::VERSIONED_LEN * target_output_idx;
-                    let out_bytes = &remaining[offset..offset + TxOutCompact::VERSIONED_LEN];
-                    let (_record_version, output_bytes) = out_bytes.split_first()?;
-                    let tx_out = TxOutCompact::from_bytes(output_bytes).ok()?;
-                    return Some(tx_out);
+                    remaining = &remaining[TxInCompact::VERSIONED_LEN..];
                 }
-                remaining = &remaining[vout_bytes..];
+
+                let vout_len = CompactSize::read(&mut remaining).ok()? as usize;
+
+                for out_idx in 0..vout_len {
+                    if remaining.len() < TxOutCompact::VERSIONED_LEN {
+                        return None;
+                    }
+
+                    let out_bytes = &remaining[..TxOutCompact::VERSIONED_LEN];
+
+                    if i == target_tx_idx && out_idx == target_output_idx {
+                        return TxOutCompact::from_bytes(out_bytes).ok();
+                    }
+
+                    remaining = &remaining[TxOutCompact::VERSIONED_LEN..];
+                }
             } else {
                 // Non-canonical Option tag
                 return None;
@@ -3134,28 +3176,32 @@ impl ZainoDB {
         }
 
         // *** Parent block hash validation (chain continuity) ***
-        let parent_block_hash = {
-            let parent_block_height = Height::try_from(height.0.saturating_sub(1))
-                .map_err(|e| fail(&format!("invalid parent height: {e}")))?;
-            let parent_block_height_key = parent_block_height
-                .to_bytes()
-                .map_err(|e| fail(&format!("parent height serialize: {e}")))?;
-            let raw = ro
-                .get(self.headers, &parent_block_height_key)
-                .map_err(FinalisedStateError::LmdbError)?;
-            let entry = StoredEntryVar::<BlockHeaderData>::from_bytes(raw)
-                .map_err(|e| fail(&format!("parent header corrupt data: {e}")))?;
+        if height.0 > 1 {
+            let parent_block_hash = {
+                let parent_block_height = Height::try_from(height.0.saturating_sub(1))
+                    .map_err(|e| fail(&format!("invalid parent height: {e}")))?;
+                let parent_block_height_key = parent_block_height
+                    .to_bytes()
+                    .map_err(|e| fail(&format!("parent height serialize: {e}")))?;
+                let raw = ro
+                    .get(self.headers, &parent_block_height_key)
+                    .map_err(FinalisedStateError::LmdbError)?;
+                let entry = StoredEntryVar::<BlockHeaderData>::from_bytes(raw)
+                    .map_err(|e| fail(&format!("parent header corrupt data: {e}")))?;
 
-            *entry.inner().index().parent_hash()
-        };
+                *entry.inner().index().hash()
+            };
 
-        if parent_block_hash != hash {
-            return Err(fail("parent hash mismatch"));
+            let check_hash = header_entry.inner().index().parent_hash();
+
+            if &parent_block_hash != check_hash {
+                return Err(fail("parent hash mismatch"));
+            }
         }
 
         // *** Merkle root / Txid validation ***
-        // let txids = txid_list_entry.inner().tx();
         let txids: Vec<[u8; 32]> = txid_list_entry.inner().tx().iter().map(|h| h.0).collect();
+
         let header_merkle_root = header_entry.inner().data().merkle_root();
 
         let check_root = Self::calculate_block_merkle_root(&txids);
@@ -3173,8 +3219,40 @@ impl ZainoDB {
 
             let Some(tx) = tx_opt else { continue };
 
+            // Outputs: check addrhist mined record
+            for (vout, output) in tx.outputs().iter().enumerate() {
+                let addr_bytes = AddrScript::new(*output.script_hash()).to_bytes()?;
+                let rec_bytes =
+                    self.addr_hist_records_by_addr_and_index_raw_txn(&ro, &addr_bytes, txid_index)?;
+
+                let matched = rec_bytes.iter().any(|val| {
+                    // avoid deserialization: check IS_MINED + correct vout
+                    // - [0] StoredEntry tag
+                    // - [1] record tag
+                    // - [2..5] height
+                    // - [6..7] tx_index
+                    // - [8..9] vout
+                    // - [10] flags
+                    // - [11..18] value
+                    // - [19..50] checksum
+
+                    let flags = val[10];
+                    let vout_rec = u16::from_be_bytes([val[8], val[9]]);
+                    (flags & AddrEventBytes::FLAG_MINED) != 0 && vout_rec as usize == vout
+                });
+
+                if !matched {
+                    return Err(fail("missing addrhist mined output record"));
+                }
+            }
+
             // Inputs: check spent + addrhist input record
             for input in tx.inputs() {
+                // Continue if coinbase.
+                if input.is_null_prevout() {
+                    continue;
+                }
+
                 // Check spent record
                 let outpoint = Outpoint::new(*input.prevout_txid(), input.prevout_index());
                 let outpoint_bytes = outpoint.to_bytes()?;
@@ -3215,33 +3293,6 @@ impl ZainoDB {
 
                 if !matched {
                     return Err(fail("missing addrhist input record"));
-                }
-            }
-
-            // Outputs: check addrhist mined record
-            for (vout, output) in tx.outputs().iter().enumerate() {
-                let addr_bytes = AddrScript::new(*output.script_hash()).to_bytes()?;
-                let rec_bytes =
-                    self.addr_hist_records_by_addr_and_index_raw_txn(&ro, &addr_bytes, txid_index)?;
-
-                let matched = rec_bytes.iter().any(|val| {
-                    // avoid deserialization: check IS_MINED + correct vout
-                    // - [0] StoredEntry tag
-                    // - [1] record tag
-                    // - [2..5] height
-                    // - [6..7] tx_index
-                    // - [8..9] vout
-                    // - [10] flags
-                    // - [11..18] value
-                    // - [19..50] checksum
-
-                    let flags = val[10];
-                    let vout_rec = u16::from_be_bytes([val[8], val[9]]);
-                    (flags & AddrEventBytes::FLAG_MINED) != 0 && vout_rec as usize == vout
-                });
-
-                if !matched {
-                    return Err(fail("missing addrhist mined output record"));
                 }
             }
         }
