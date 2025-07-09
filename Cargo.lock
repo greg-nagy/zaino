@@ -6265,7 +6265,7 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "caf6e76f310bb2d3cc233086a97c1710ba1de7ffbbf8198b8113407d0f427dfc"
 dependencies = [
- "bindgen 0.72.0",
+ "bindgen 0.69.5",
  "bitflags 2.9.1",
  "cc",
  "enum_primitive",
@@ -6860,7 +6860,7 @@ dependencies = [
 [[package]]
 name = "zingo-infra-fetcher-core"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?rev=cca5d0705111e1e7064a691724c8501560c84782#cca5d0705111e1e7064a691724c8501560c84782"
+source = "git+https://github.com/zingolabs/infrastructure.git?rev=c078e87d6e42e41586bdd9b07924644369736726#c078e87d6e42e41586bdd9b07924644369736726"
 dependencies = [
  "hex",
  "reqwest",
@@ -6871,7 +6871,7 @@ dependencies = [
 [[package]]
 name = "zingo-infra-services"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?rev=cca5d0705111e1e7064a691724c8501560c84782#cca5d0705111e1e7064a691724c8501560c84782"
+source = "git+https://github.com/zingolabs/infrastructure.git?rev=c078e87d6e42e41586bdd9b07924644369736726#c078e87d6e42e41586bdd9b07924644369736726"
 dependencies = [
  "getset",
  "hex",
@@ -6896,7 +6896,7 @@ dependencies = [
 [[package]]
 name = "zingo-infra-testutils"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?rev=cca5d0705111e1e7064a691724c8501560c84782#cca5d0705111e1e7064a691724c8501560c84782"
+source = "git+https://github.com/zingolabs/infrastructure.git?rev=c078e87d6e42e41586bdd9b07924644369736726#c078e87d6e42e41586bdd9b07924644369736726"
 dependencies = [
  "http",
  "portpicker",

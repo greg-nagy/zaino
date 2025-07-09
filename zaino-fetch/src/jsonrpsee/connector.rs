@@ -8,6 +8,7 @@ use http::Uri;
 use reqwest::{Client, ClientBuilder, Url};
 use serde::{Deserialize, Serialize};
 use std::{
+    any::type_name,
     fmt, fs,
     net::SocketAddr,
     path::Path,
@@ -355,7 +356,7 @@ impl JsonRpSeeConnector {
                 // Success
                 200..300 => {
                     let response: RpcResponse<R> = serde_json::from_slice(&body_bytes)
-                        .map_err(|e| TransportError::BadNodeData(Box::new(e)))?;
+                        .map_err(|e| TransportError::BadNodeData(Box::new(e), type_name::<R>()))?;
 
                     match (response.error, response.result) {
                         (Some(error), _) => Err(RpcRequestError::Method(
@@ -668,7 +669,7 @@ async fn test_node_connection(url: Url, auth_method: AuthMethod) -> Result<(), T
         .await
         .map_err(TransportError::ReqwestError)?;
     let _response: RpcResponse<serde_json::Value> = serde_json::from_slice(&body_bytes)
-        .map_err(|e| TransportError::BadNodeData(Box::new(e)))?;
+        .map_err(|e| TransportError::BadNodeData(Box::new(e), ""))?;
     Ok(())
 }
 
