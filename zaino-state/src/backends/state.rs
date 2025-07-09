@@ -1091,7 +1091,7 @@ impl ZcashIndexer for StateServiceSubscriber {
 
     // No request parameters.
     /// Return the hex encoded hash of the best (tip) block, in the longest block chain.
-    async fn get_best_blockhash(&self) -> Result<Hash, Self::Error> {
+    async fn get_best_blockhash(&self) -> Result<GetBlockHash, Self::Error> {
         // return should be valid hex encoded.
         // Hash from zebra says:
         // Return the hash bytes in big-endian byte-order suitable for printing out byte by byte.
@@ -1099,13 +1099,10 @@ impl ZcashIndexer for StateServiceSubscriber {
         // Zebra displays transaction and block hashes in big-endian byte-order,
         // following the u256 convention set by Bitcoin and zcashd.
         match self.read_state_service.best_tip() {
-            Some(x) => return Ok(x.1),
+            Some(x) => return Ok(GetBlockHash(x.1)),
             None => {
-                return Err(StateServiceError::RpcError(RpcError {
-                    code: -1,
-                    message: "problem unwrapping .best_tip() -  None returned.".to_string(),
-                    data: None,
-                }))
+                // try RPC if state read fails:
+                Ok(self.rpc_client.get_best_blockhash().await?.into())
             }
         }
     }

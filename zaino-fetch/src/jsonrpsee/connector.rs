@@ -22,12 +22,12 @@ use tracing::error;
 use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
     response::{
-        GetBalanceError, GetBalanceResponse, GetBestBlockHashResponse, GetBlockCountError, GetBlockCountResponse,
-        GetBlockError, GetBlockResponse, GetBlockchainInfoError, GetBlockchainInfoResponse,
-        GetDifficultyError, GetInfoError, GetInfoResponse, GetSubtreesError, GetSubtreesResponse,
-        GetTransactionError, GetTransactionResponse, GetTreestateError, GetTreestateResponse,
-        GetUtxosError, GetUtxosResponse, SendTransactionError, SendTransactionResponse, TxidsError,
-        TxidsResponse,
+        GetBalanceError, GetBalanceResponse, GetBestBlockHashResponse, GetBlockCountError,
+        GetBlockCountResponse, GetBlockError, GetBlockHash, GetBlockHashError, GetBlockResponse,
+        GetBlockchainInfoError, GetBlockchainInfoResponse, GetDifficultyError, GetInfoError,
+        GetInfoResponse, GetSubtreesError, GetSubtreesResponse, GetTransactionError,
+        GetTransactionResponse, GetTreestateError, GetTreestateResponse, GetUtxosError,
+        GetUtxosResponse, SendTransactionError, SendTransactionResponse, TxidsError, TxidsResponse,
     },
 };
 
@@ -495,8 +495,8 @@ impl JsonRpSeeConnector {
     /// The zcashd doc reference above says there are no parameters and the result is a "hex" (string) of the block hash hex encoded.
     pub async fn get_best_blockhash(
         &self,
-    ) -> Result<GetBestBlockHashResponse, JsonRpSeeConnectorError> {
-        self.send_request::<(), GetBestBlockHashResponse>("getbestblockhash", ())
+    ) -> Result<GetBlockHash, RpcRequestError<GetBlockHashError>> {
+        self.send_request::<(), GetBlockHash>("getbestblockhash", ())
             .await
     }
 

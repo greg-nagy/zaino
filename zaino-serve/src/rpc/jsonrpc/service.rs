@@ -10,7 +10,7 @@ use zebra_chain::{
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
-    GetBlockChainInfo, GetInfo, GetRawTransaction, SentTransactionHash,
+    GetBlockChainInfo, GetBlockHash, GetInfo, GetRawTransaction, SentTransactionHash,
 };
 
 use jsonrpsee::types::ErrorObjectOwned;
@@ -62,7 +62,7 @@ pub trait ZcashIndexerRpc {
     ///
     /// The zcashd doc reference above says there are no parameters and the result is a "hex" (string) of the block hash hex encoded.
     #[method(name = "getbestblockhash")]
-    async fn get_best_blockhash(&self) -> Result<Hash, ErrorObjectOwned>;
+    async fn get_best_blockhash(&self) -> Result<GetBlockHash, ErrorObjectOwned>;
 
     /// Returns the proof-of-work difficulty as a multiple of the minimum difficulty.
     ///
@@ -303,7 +303,7 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
             })
     }
 
-    async fn get_best_blockhash(&self) -> Result<Hash, ErrorObjectOwned> {
+    async fn get_best_blockhash(&self) -> Result<GetBlockHash, ErrorObjectOwned> {
         self.service_subscriber
             .inner_ref()
             .get_best_blockhash()

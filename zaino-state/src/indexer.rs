@@ -20,7 +20,7 @@ use zebra_chain::{
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
-    GetBlockChainInfo, GetInfo, GetRawTransaction, SentTransactionHash,
+    GetBlockChainInfo, GetBlockHash, GetInfo, GetRawTransaction, SentTransactionHash,
 };
 
 use crate::{
@@ -261,7 +261,7 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// The zcashd doc reference above says there are no parameters and the result is a "hex" (string) of the block hash hex encoded.
     /// method: post
     /// tags: blockchain
-    async fn get_best_blockhash(&self) -> Result<Hash, Self::Error>;
+    async fn get_best_blockhash(&self) -> Result<GetBlockHash, Self::Error>;
 
     /// Returns all transaction ids in the memory pool, as a JSON array.
     ///

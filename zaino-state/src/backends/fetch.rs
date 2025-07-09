@@ -15,7 +15,7 @@ use zebra_chain::{
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
-    GetBlockChainInfo, GetInfo, GetRawTransaction, SentTransactionHash,
+    GetBlockChainInfo, GetBlockHash, GetInfo, GetRawTransaction, SentTransactionHash,
 };
 
 use zaino_fetch::{
@@ -350,7 +350,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// # Notes
     ///
     /// Return should be valid hex encoded.
-    async fn get_best_blockhash(&self) -> Result<Hash, Self::Error> {
+    async fn get_best_blockhash(&self) -> Result<GetBlockHash, Self::Error> {
         Ok(self.fetcher.get_best_blockhash().await?.into())
     }
 
