@@ -14,6 +14,13 @@ use zebra_rpc::methods::{opthex, types::get_blockchain_info::Balance};
 
 use crate::jsonrpsee::connector::ResponseToError;
 
+use super::connector::RpcError;
+
+impl From<RpcError> for Infallible {
+    fn from(_: RpcError) -> Self {
+        unreachable!()
+    }
+}
 /// Response to a `getinfo` RPC request.
 ///
 /// This is used for the output parameter of [`JsonRpcConnector::get_info`].
@@ -83,6 +90,15 @@ impl ResponseToError for GetInfoResponse {
     type RpcError = Infallible;
 }
 
+impl TryFrom<RpcError> for GetInfoError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        // TODO: attempt to convert RpcError into errors specific to this RPC response
+        Err(value)
+    }
+}
+
 /// Error type for the `getdifficulty` RPC request.
 ///
 /// No variants needed. This RPC should either succeed or fail with
@@ -92,6 +108,14 @@ pub enum GetDifficultyError {}
 
 impl ResponseToError for GetDifficultyResponse {
     type RpcError = GetDifficultyError;
+}
+impl TryFrom<RpcError> for GetDifficultyError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        // TODO: attempt to convert RpcError into errors specific to this RPC response
+        Err(value)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -110,6 +134,14 @@ pub enum ErrorsTimestampError {}
 
 impl ResponseToError for ErrorsTimestamp {
     type RpcError = ErrorsTimestampError;
+}
+impl TryFrom<RpcError> for ErrorsTimestampError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        // TODO: attempt to convert RpcError into errors specific to this RPC response
+        Err(value)
+    }
 }
 
 impl std::fmt::Display for ErrorsTimestamp {
@@ -225,6 +257,14 @@ pub enum GetBlockchainInfoError {}
 impl ResponseToError for GetBlockchainInfoResponse {
     type RpcError = GetBlockchainInfoError;
 }
+impl TryFrom<RpcError> for GetBlockchainInfoError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        // TODO: attempt to convert RpcError into errors specific to this RPC response
+        Err(value)
+    }
+}
 /// Response to a `getdifficulty` RPC request.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GetDifficultyResponse(pub f64);
@@ -250,6 +290,14 @@ pub enum ChainWorkError {}
 
 impl ResponseToError for ChainWork {
     type RpcError = ChainWorkError;
+}
+impl TryFrom<RpcError> for ChainWorkError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        // TODO: attempt to convert RpcError into errors specific to this RPC response
+        Err(value)
+    }
 }
 
 impl TryFrom<ChainWork> for u64 {
@@ -279,6 +327,14 @@ pub enum ChainBalanceError {}
 
 impl ResponseToError for ChainBalance {
     type RpcError = ChainBalanceError;
+}
+impl TryFrom<RpcError> for ChainBalanceError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        // TODO: attempt to convert RpcError into errors specific to this RPC response
+        Err(value)
+    }
 }
 
 impl<'de> Deserialize<'de> for ChainBalance {
@@ -367,6 +423,14 @@ pub enum GetBalanceError {
 impl ResponseToError for GetBalanceResponse {
     type RpcError = GetBalanceError;
 }
+impl TryFrom<RpcError> for GetBalanceError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        // TODO: attempt to convert RpcError into errors specific to this RPC response
+        Err(value)
+    }
+}
 
 impl From<GetBalanceResponse> for zebra_rpc::methods::AddressBalance {
     fn from(response: GetBalanceResponse) -> Self {
@@ -411,6 +475,14 @@ pub enum SendTransactionError {
 impl ResponseToError for SendTransactionResponse {
     type RpcError = SendTransactionError;
 }
+impl TryFrom<RpcError> for SendTransactionError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        // TODO: attempt to convert RpcError into errors specific to this RPC response
+        Err(value)
+    }
+}
 
 impl From<SendTransactionResponse> for zebra_rpc::methods::SentTransactionHash {
     fn from(value: SendTransactionResponse) -> Self {
@@ -433,6 +505,14 @@ pub enum GetBlockHashError {}
 
 impl ResponseToError for GetBlockHash {
     type RpcError = GetBlockHashError;
+}
+impl TryFrom<RpcError> for GetBlockHashError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        // TODO: attempt to convert RpcError into errors specific to this RPC response
+        Err(value)
+    }
 }
 
 impl Default for GetBlockHash {
@@ -618,6 +698,19 @@ pub enum GetBlockResponse {
 impl ResponseToError for SerializedBlock {
     type RpcError = GetBlockError;
 }
+impl TryFrom<RpcError> for GetBlockError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        // If the block is not in Zebra's state, returns
+        // [error code `-8`.](https://github.com/zcash/zcash/issues/5758)
+        if value.code == -8 {
+            Ok(Self::MissingBlock(value.message))
+        } else {
+            Err(value)
+        }
+    }
+}
 
 impl ResponseToError for BlockObject {
     type RpcError = GetBlockError;
@@ -644,7 +737,16 @@ pub enum GetBlockError {
     /// TODO: temporary variant
     #[error("Custom error: {0}")]
     Custom(String),
+    /// The requested block hash or height could not be found
+    #[error("Block not found: {0}")]
+    MissingBlock(String),
 }
+
+// impl std::fmt::Display for GetBlockError {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.write_str("block not found")
+//     }
+// }
 
 impl ResponseToError for GetBlockResponse {
     type RpcError = GetBlockError;
@@ -660,6 +762,14 @@ pub enum GetBlockCountError {}
 
 impl ResponseToError for GetBlockCountResponse {
     type RpcError = GetBlockCountError;
+}
+impl TryFrom<RpcError> for GetBlockCountError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        // TODO: attempt to convert RpcError into errors specific to this RPC response
+        Err(value)
+    }
 }
 
 impl From<GetBlockCountResponse> for Height {
@@ -835,6 +945,14 @@ pub enum TxidsError {
 impl ResponseToError for TxidsResponse {
     type RpcError = TxidsError;
 }
+impl TryFrom<RpcError> for TxidsError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        // TODO: attempt to convert RpcError into errors specific to this RPC response
+        Err(value)
+    }
+}
 
 /// Separate response for the `get_raw_mempool` RPC method.
 ///
@@ -850,7 +968,11 @@ pub struct RawMempoolResponse {
 pub enum GetRawMempoolError {}
 
 impl ResponseToError for RawMempoolResponse {
-    type RpcError = GetRawMempoolError;
+    type RpcError = Infallible;
+
+    fn to_error(self) -> Result<Self, Self::RpcError> {
+        Ok(self)
+    }
 }
 
 impl<'de> serde::Deserialize<'de> for TxidsResponse {
@@ -907,6 +1029,14 @@ pub enum GetTreestateError {
 
 impl ResponseToError for GetTreestateResponse {
     type RpcError = GetTreestateError;
+}
+impl TryFrom<RpcError> for GetTreestateError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        // TODO: attempt to convert RpcError into errors specific to this RPC response
+        Err(value)
+    }
 }
 
 impl<'de> serde::Deserialize<'de> for GetTreestateResponse {
@@ -998,6 +1128,14 @@ pub enum GetTransactionError {}
 
 impl ResponseToError for GetTransactionResponse {
     type RpcError = GetTransactionError;
+}
+impl TryFrom<RpcError> for GetTransactionError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        // TODO: attempt to convert RpcError into errors specific to this RPC response
+        Err(value)
+    }
 }
 
 impl<'de> serde::Deserialize<'de> for GetTransactionResponse {
@@ -1253,6 +1391,14 @@ pub enum GetSubtreesError {
 impl ResponseToError for GetSubtreesResponse {
     type RpcError = GetSubtreesError;
 }
+impl TryFrom<RpcError> for GetSubtreesError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        // TODO: attempt to convert RpcError into errors specific to this RPC response
+        Err(value)
+    }
+}
 
 impl From<GetSubtreesResponse> for zebra_rpc::methods::trees::GetSubtrees {
     fn from(value: GetSubtreesResponse) -> Self {
@@ -1365,6 +1511,14 @@ pub enum GetUtxosError {
 impl ResponseToError for GetUtxosResponse {
     type RpcError = GetUtxosError;
 }
+impl TryFrom<RpcError> for GetUtxosError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        // TODO: attempt to convert RpcError into errors specific to this RPC response
+        Err(value)
+    }
+}
 
 impl ResponseToError for Vec<GetUtxosResponse> {
     type RpcError = GetUtxosError;
@@ -1383,6 +1537,9 @@ impl From<GetUtxosResponse> for zebra_rpc::methods::GetAddressUtxos {
     }
 }
 
-impl<T: ResponseToError> ResponseToError for Box<T> {
+impl<T: ResponseToError> ResponseToError for Box<T>
+where
+    T::RpcError: Send + Sync + 'static,
+{
     type RpcError = T::RpcError;
 }
