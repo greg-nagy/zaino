@@ -23,10 +23,8 @@ use tracing::error;
 use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
     response::{
-        GetBalanceError, GetBalanceResponse, GetBlockCountError, GetBlockCountResponse,
-        GetBlockError, GetBlockResponse, GetBlockchainInfoError, GetBlockchainInfoResponse,
-        GetDifficultyError, GetInfoResponse, GetSubtreesError, GetSubtreesResponse,
-        GetTransactionError, GetTransactionResponse, GetTreestateError, GetTreestateResponse,
+        GetBalanceError, GetBalanceResponse, GetBlockCountResponse,
+        GetBlockError, GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse, GetSubtreesError, GetSubtreesResponse, GetTransactionResponse, GetTreestateError, GetTreestateResponse,
         GetUtxosError, GetUtxosResponse, SendTransactionError, SendTransactionResponse, TxidsError,
         TxidsResponse,
     },
@@ -398,7 +396,7 @@ impl JsonRpSeeConnector {
     /// tags: blockchain
     pub async fn get_blockchain_info(
         &self,
-    ) -> Result<GetBlockchainInfoResponse, RpcRequestError<GetBlockchainInfoError>> {
+    ) -> Result<GetBlockchainInfoResponse, RpcRequestError<Infallible>> {
         self.send_request::<(), GetBlockchainInfoResponse>("getblockchaininfo", ())
             .await
     }
@@ -410,7 +408,7 @@ impl JsonRpSeeConnector {
     /// tags: blockchain
     pub async fn get_difficulty(
         &self,
-    ) -> Result<GetDifficultyResponse, RpcRequestError<GetDifficultyError>> {
+    ) -> Result<GetDifficultyResponse, RpcRequestError<Infallible>> {
         self.send_request::<(), GetDifficultyResponse>("getdifficulty", ())
             .await
     }
@@ -494,7 +492,7 @@ impl JsonRpSeeConnector {
     /// tags: blockchain
     pub async fn get_block_count(
         &self,
-    ) -> Result<GetBlockCountResponse, RpcRequestError<GetBlockCountError>> {
+    ) -> Result<GetBlockCountResponse, RpcRequestError<Infallible>> {
         self.send_request::<(), GetBlockCountResponse>("getblockcount", ())
             .await
     }
@@ -571,7 +569,7 @@ impl JsonRpSeeConnector {
         &self,
         txid_hex: String,
         verbose: Option<u8>,
-    ) -> Result<GetTransactionResponse, RpcRequestError<GetTransactionError>> {
+    ) -> Result<GetTransactionResponse, RpcRequestError<Infallible>> {
         let params = match verbose {
             Some(v) => vec![
                 serde_json::to_value(txid_hex).map_err(RpcRequestError::JsonRpc)?,
