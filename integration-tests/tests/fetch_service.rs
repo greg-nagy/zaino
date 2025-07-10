@@ -1,5 +1,3 @@
-use std::hash::{DefaultHasher, Hash, Hasher};
-
 use futures::StreamExt as _;
 use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
 use zaino_proto::proto::service::{
@@ -13,7 +11,7 @@ use zaino_state::{
 use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind};
 use zebra_chain::{parameters::Network, subtree::NoteCommitmentSubtreeIndex};
-use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetBlockHash};
+use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetBlock, GetBlockHash};
 
 async fn create_test_manager_and_fetch_service(
     validator: &ValidatorKind,
@@ -562,26 +560,50 @@ async fn fetch_service_get_best_blockhash(validator: &ValidatorKind) {
     test_manager.local_net.generate_blocks(5).await.unwrap();
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    let block_id = BlockId {
-        height: 6,
-        // originally code copied from get_block_count:
-        // hash: Vec::new(),
-        // we need to read the actual hash somehow.
-        // this one was pulled from tests, with zebra producing:
-        hash: vec![48, 118, 216, 155, 182, 155, 143, 235],
-        // but zcashd wants another value.
-    };
+    let inspected_block: GetBlock = fetch_service_subscriber
+        // Some(verbosity) : 1 for JSON Object, 2 for tx data as JSON instead of hex
+        .z_get_block("6".to_string(), Some(1))
+        .await
+        .unwrap();
+
+    let ret: Option<GetBlockHash>;
+    match inspected_block {
+        GetBlock::Object {
+            hash,
+            confirmations: _,
+            size: _,
+            height: _,
+            version: _,
+            merkle_root: _,
+            block_commitments: _,
+            final_sapling_root: _,
+            final_orchard_root: _,
+            tx: _,
+            time: _,
+            nonce: _,
+            solution: _,
+            bits: _,
+            difficulty: _,
+            trees: _,
+            previous_block_hash: _,
+            next_block_hash: _,
+        } => {
+            println!("yup {:?}", hash);
+            ret = Some(hash);
+        }
+        _ => {
+            println!("nope");
+            ret = None;
+        }
+    }
 
     let fetch_service_get_best_blockhash: GetBlockHash =
         dbg!(fetch_service_subscriber.get_best_blockhash().await.unwrap());
 
-    // converting GetBlockHash to Vec<u8> for comparison with block_id.hash
-    let hash_from_getblockhash = fetch_service_get_best_blockhash.0;
-    let mut hasher = DefaultHasher::new();
-    hash_from_getblockhash.hash(&mut hasher);
-    let hash_value = hasher.finish();
-    let hash_bytes: Vec<u8> = hash_value.to_le_bytes().to_vec();
-    assert_eq!(hash_bytes, block_id.hash);
+    assert_eq!(
+        fetch_service_get_best_blockhash,
+        ret.expect("ret to be Some(GetBlockHash) not None")
+    );
 
     test_manager.close().await;
 }
