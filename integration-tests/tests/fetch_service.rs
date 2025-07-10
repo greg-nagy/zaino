@@ -566,8 +566,7 @@ async fn fetch_service_get_best_blockhash(validator: &ValidatorKind) {
         .await
         .unwrap();
 
-    let ret: Option<GetBlockHash>;
-    match inspected_block {
+    let ret: Option<GetBlockHash> = match inspected_block {
         GetBlock::Object {
             hash,
             confirmations: _,
@@ -587,15 +586,9 @@ async fn fetch_service_get_best_blockhash(validator: &ValidatorKind) {
             trees: _,
             previous_block_hash: _,
             next_block_hash: _,
-        } => {
-            println!("yup {:?}", hash);
-            ret = Some(hash);
-        }
-        _ => {
-            println!("nope");
-            ret = None;
-        }
-    }
+        } => Some(hash),
+        _ => None,
+    };
 
     let fetch_service_get_best_blockhash: GetBlockHash =
         dbg!(fetch_service_subscriber.get_best_blockhash().await.unwrap());
