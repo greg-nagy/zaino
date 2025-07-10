@@ -1,3 +1,5 @@
+use std::hash::{DefaultHasher, Hash, Hasher};
+
 use futures::StreamExt as _;
 use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
 use zaino_proto::proto::service::{
@@ -6,12 +8,12 @@ use zaino_proto::proto::service::{
 };
 use zaino_state::{
     BackendType, FetchService, FetchServiceConfig, FetchServiceSubscriber, LightWalletIndexer,
-    StatusType, ZcashIndexer as _, ZcashService as _,
+    StatusType, ZcashIndexer, ZcashService as _,
 };
 use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind};
 use zebra_chain::{parameters::Network, subtree::NoteCommitmentSubtreeIndex};
-use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest};
+use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetBlockHash};
 
 async fn create_test_manager_and_fetch_service(
     validator: &ValidatorKind,
@@ -549,6 +551,37 @@ async fn fetch_service_get_block(validator: &ValidatorKind) {
         .await
         .unwrap();
     assert_eq!(fetch_service_get_block_by_hash.hash, block_id_by_hash.hash);
+
+    test_manager.close().await;
+}
+
+async fn fetch_service_get_best_blockhash(validator: &ValidatorKind) {
+    let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+        create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
+
+    test_manager.local_net.generate_blocks(5).await.unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+    let block_id = BlockId {
+        height: 6,
+        // originally code copied from get_block_count:
+        // hash: Vec::new(),
+        // we need to read the actual hash somehow.
+        // this one was pulled from tests, with zebra producing:
+        hash: vec![48, 118, 216, 155, 182, 155, 143, 235],
+        // but zcashd wants another value.
+    };
+
+    let fetch_service_get_best_blockhash: GetBlockHash =
+        dbg!(fetch_service_subscriber.get_best_blockhash().await.unwrap());
+
+    // converting GetBlockHash to Vec<u8> for comparison with block_id.hash
+    let hash_from_getblockhash = fetch_service_get_best_blockhash.0;
+    let mut hasher = DefaultHasher::new();
+    hash_from_getblockhash.hash(&mut hasher);
+    let hash_value = hasher.finish();
+    let hash_bytes: Vec<u8> = hash_value.to_le_bytes().to_vec();
+    assert_eq!(hash_bytes, block_id.hash);
 
     test_manager.close().await;
 }
@@ -1289,6 +1322,11 @@ mod zcashd {
         }
 
         #[tokio::test]
+        pub(crate) async fn best_blockhash() {
+            fetch_service_get_best_blockhash(&ValidatorKind::Zcashd).await;
+        }
+
+        #[tokio::test]
         pub(crate) async fn block_count() {
             fetch_service_get_block_count(&ValidatorKind::Zcashd).await;
         }
@@ -1461,6 +1499,11 @@ mod zebrad {
         #[tokio::test]
         pub(crate) async fn difficulty() {
             assert_fetch_service_difficulty_matches_rpc(&ValidatorKind::Zebrad).await;
+        }
+
+        #[tokio::test]
+        pub(crate) async fn best_blockhash() {
+            fetch_service_get_best_blockhash(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test]
