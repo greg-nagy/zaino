@@ -23,8 +23,9 @@ use tracing::error;
 use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
     response::{
-        GetBalanceError, GetBalanceResponse, GetBlockCountResponse,
-        GetBlockError, GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse, GetSubtreesError, GetSubtreesResponse, GetTransactionResponse, GetTreestateError, GetTreestateResponse,
+        GetBalanceError, GetBalanceResponse, GetBlockCountResponse, GetBlockError,
+        GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse, GetSubtreesError,
+        GetSubtreesResponse, GetTransactionResponse, GetTreestateError, GetTreestateResponse,
         GetUtxosError, GetUtxosResponse, SendTransactionError, SendTransactionResponse, TxidsError,
         TxidsResponse,
     },
