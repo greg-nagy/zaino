@@ -286,41 +286,17 @@ impl JsonRpSeeConnector {
         R::RpcError: Send + Sync + 'static,
     {
         let id = self.id_counter.fetch_add(1, Ordering::SeqCst);
-        let req = RpcRequest {
-            jsonrpc: "2.0".to_string(),
-            method: method.to_string(),
-            params,
-            id,
-        };
+
         let max_attempts = 5;
         let mut attempts = 0;
         loop {
             attempts += 1;
-            let mut request_builder = self
-                .client
-                .post(self.url.clone())
-                .header("Content-Type", "application/json");
 
-            match &self.auth_method {
-                AuthMethod::Basic { username, password } => {
-                    request_builder = request_builder.basic_auth(username, Some(password));
-                }
-                AuthMethod::Cookie { cookie } => {
-                    request_builder = request_builder.header(
-                        reqwest::header::AUTHORIZATION,
-                        format!(
-                            "Basic {}",
-                            general_purpose::STANDARD.encode(format!("__cookie__:{cookie}"))
-                        ),
-                    );
-                }
-            }
-
-            let request_body =
-                serde_json::to_string(&req).map_err(|_| RpcRequestError::InternalUnrecoverable)?;
+            let request_builder = self
+                .build_request(method, &params, id)
+                .map_err(|e| RpcRequestError::JsonRpc(e))?;
 
             let response = request_builder
-                .body(request_body)
                 .send()
                 .await
                 .map_err(|e| RpcRequestError::Transport(TransportError::ReqwestError(e)))?;
@@ -378,6 +354,46 @@ impl JsonRpSeeConnector {
                 ))),
             };
         }
+    }
+
+    /// Builds a request from a given method, params, and id.
+    fn build_request<T: std::fmt::Debug + Serialize>(
+        &self,
+        method: &str,
+        params: T,
+        id: i32,
+    ) -> serde_json::Result<reqwest::RequestBuilder> {
+        let req = RpcRequest {
+            jsonrpc: "2.0".to_string(),
+            method: method.to_string(),
+            params,
+            id,
+        };
+
+        let mut request_builder = self
+            .client
+            .post(self.url.clone())
+            .header("Content-Type", "application/json");
+
+        match &self.auth_method {
+            AuthMethod::Basic { username, password } => {
+                request_builder = request_builder.basic_auth(username, Some(password));
+            }
+            AuthMethod::Cookie { cookie } => {
+                request_builder = request_builder.header(
+                    reqwest::header::AUTHORIZATION,
+                    format!(
+                        "Basic {}",
+                        general_purpose::STANDARD.encode(format!("__cookie__:{cookie}"))
+                    ),
+                );
+            }
+        }
+
+        let request_body = serde_json::to_string(&req)?;
+        request_builder = request_builder.body(request_body);
+
+        Ok(request_builder)
     }
 
     /// Returns software information from the RPC server, as a [`GetInfo`] JSON struct.
