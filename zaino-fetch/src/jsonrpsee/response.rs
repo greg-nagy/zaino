@@ -16,9 +16,11 @@ use crate::jsonrpsee::connector::ResponseToError;
 
 use super::connector::RpcError;
 
-impl From<RpcError> for Infallible {
-    fn from(_: RpcError) -> Self {
-        unreachable!()
+impl TryFrom<RpcError> for Infallible {
+    type Error = RpcError;
+
+    fn try_from(err: RpcError) -> Result<Self, Self::Error> {
+        Err(err)
     }
 }
 
