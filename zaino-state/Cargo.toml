@@ -45,6 +45,7 @@ http = { workspace = true }
 lazy-regex = { workspace = true }
 dashmap = { workspace = true }
 lmdb = { workspace = true }
+lmdb-sys = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order"] }
 jsonrpsee-core = { workspace = true }

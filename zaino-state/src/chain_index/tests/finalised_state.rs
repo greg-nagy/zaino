@@ -197,8 +197,8 @@ async fn delete_blocks_from_db() {
     let (_blocks, _faucet, _recipient, _db_dir, zaino_db) =
         load_vectors_and_spawn_and_sync_zaino_db().await;
 
-    for h in (197..=200).rev() {
-        dbg!("Deleting block at height {}", h);
+    for h in (1..=200).rev() {
+        // dbg!("Deleting block at height {}", h);
         zaino_db
             .delete_block(HashOrHeight::Height(zebra_chain::block::Height(h)))
             .await

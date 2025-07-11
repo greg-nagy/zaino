@@ -83,6 +83,7 @@ indexmap = "2.2.6"
 crossbeam-channel = "0.5"
 dashmap = "6.1"
 lmdb = "0.8"
+lmdb-sys = "0.8"
 
 # Async
 async-stream = "0.3"

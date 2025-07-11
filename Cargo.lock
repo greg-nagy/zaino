@@ -5880,6 +5880,7 @@ dependencies = [
  "jsonrpsee-core",
  "lazy-regex",
  "lmdb",
+ "lmdb-sys",
  "nonempty",
  "primitive-types 0.13.1",
  "prost",

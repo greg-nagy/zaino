@@ -232,8 +232,6 @@ impl ZainoDB {
             config: config.clone(),
         };
 
-        dbg!(zaino_db.env.get_db_flags(zaino_db.addrhist))?;
-
         // Validate (or initialise) the metadata entry before we touch any tables.
         zaino_db.check_schema_version().await?;
 
@@ -482,6 +480,42 @@ impl ZainoDB {
             "finalised state received non finalised block".to_string(),
         ))?;
         let block_height_bytes = block_height.to_bytes()?;
+
+        // check this is the *next* block in the chain.
+        {
+            let ro = self.env.begin_ro_txn()?;
+            let cur = ro.open_ro_cursor(self.headers)?;
+
+            // Position the cursor at the last header we currently have
+            match cur.get(None, None, lmdb_sys::MDB_LAST) {
+                // Database already has blocks
+                Ok((last_height_bytes, _last_header_bytes)) => {
+                    let last_height = Height::from_bytes(
+                        last_height_bytes.expect("Height is always some in the finalised state"),
+                    )?;
+
+                    // Height must be exactly +1 over the current tip
+                    if block_height.0 != last_height.0 + 1 {
+                        return Err(FinalisedStateError::Custom(format!(
+                            "cannot write block at height {:?}; \
+                     current tip is {:?}",
+                            block_height, last_height
+                        )));
+                    }
+                }
+                // no block in db, this must be genesis block.
+                Err(lmdb::Error::NotFound) => {
+                    if block_height.0 != 1 {
+                        return Err(FinalisedStateError::Custom(format!(
+                            "first block must be height 1, got {:?}",
+                            block_height
+                        )));
+                    }
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            }
+            drop(cur);
+        }
 
         // Build DBHeight
         let height_entry = StoredEntryFixed::new(
@@ -794,13 +828,13 @@ impl ZainoDB {
                 )?;
                 txn.commit()?;
                 // mark corresponding output as spent
-                // let _updated = self
-                //     .mark_addr_hist_record_spent(
-                //         &prev_output_script,
-                //         prev_output_record.tx_index(),
-                //         prev_output_record.out_index(),
-                //     )
-                //     .await?;
+                let _updated = self
+                    .mark_addr_hist_record_spent(
+                        &prev_output_script,
+                        prev_output_record.tx_index(),
+                        prev_output_record.out_index(),
+                    )
+                    .await?;
             }
         }
 
@@ -847,8 +881,10 @@ impl ZainoDB {
     }
 
     /// Deletes a block identified by hash *or* height from every finalised table.
+    ///
+    /// NOTE: This is not efficient and could be improved but should never be called on main,
+    ///       zcash would probably require a hard fork if it ever was!
     pub async fn delete_block(&self, id: HashOrHeight) -> Result<(), FinalisedStateError> {
-        dbg!("Fetching hash or height");
         // Resolve the HashOrHeight and find corresponding database hash and height key.
         let (hash_bytes, height_bytes) = {
             match id {
@@ -905,7 +941,6 @@ impl ZainoDB {
             }
         };
         let block_height = Height::from_bytes(&height_bytes)?;
-        dbg!(&hash_bytes, &height_bytes);
 
         // Check block is at the top of the finalised state
         {
@@ -932,7 +967,6 @@ impl ZainoDB {
             }
         }
 
-        dbg!("Reconstructing spent and addrhist");
         // Reconstruct transaction index state to remove
         let transparent = {
             let ro = self.env.begin_ro_txn()?;
@@ -1019,143 +1053,54 @@ impl ZainoDB {
             }
         }
 
-        dbg!("Deleting spent");
         // Delete spent data
         let mut txn = self.env.begin_rw_txn()?;
 
         for outpoint in &spent_outpoints {
             let outpoint_bytes = &outpoint.to_bytes()?;
-            match dbg!(txn.del(self.spent, outpoint_bytes, None)) {
+            match txn.del(self.spent, outpoint_bytes, None) {
                 Ok(()) | Err(lmdb::Error::NotFound) => {}
                 Err(e) => return Err(FinalisedStateError::LmdbError(e)),
             }
         }
-        dbg!(txn.commit())?;
+        txn.commit()?;
 
-        dbg!("Deleting addrhist inputs");
         // Delete addrhist input data and mark old outputs spent in this block as unspent
         for (addr_script, records) in &addrhist_inputs_map {
-            let addr_bytes = addr_script.to_bytes()?;
-
             // Mark outputs spent in this block as unspent
-            // dbg!("marking addrhist records as unspent");
-            // for (_record, (prev_output_script, prev_output_record)) in records {
-            //     {
-            //         let _updated = self
-            //             .mark_addr_hist_record_unspent(
-            //                 prev_output_script,
-            //                 prev_output_record.tx_index(),
-            //                 prev_output_record.out_index(),
-            //             )
-            //             .await?;
-            //     }
-            // }
+            for (_record, (prev_output_script, prev_output_record)) in records {
+                {
+                    let _updated = self
+                        .mark_addr_hist_record_unspent(
+                            prev_output_script,
+                            prev_output_record.tx_index(),
+                            prev_output_record.out_index(),
+                        )
+                        .await?;
+                }
+            }
 
             // Delete all input records created in this block.
-            dbg!("deleting addrhist records");
-            let mut remaining = records.len();
-
-            let mut txn = self.env.begin_rw_txn()?;
-            let mut cursor = txn.open_rw_cursor(self.addrhist)?;
-
-            for (key, val) in cursor.iter_dup_of(&addr_bytes)? {
-                if key.len() != AddrScript::VERSIONED_LEN {
-                    // TODO: Return error?
-                    dbg!("Incorrect addrscript len found");
-                    break;
-                }
-                if val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN {
-                    // TODO: Return error?
-                    dbg!("Incorrect StoredEntryFixed<AddrEventBytes> len found");
-                    break;
-                }
-                let mut hist_record = [0u8; StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN];
-                hist_record.copy_from_slice(val);
-
-                // Parse the block_index out of arr:
-                // - [0] StoredEntry tag
-                // - [1] record tag
-                // - [2..5] height
-                // - [6..7] tx_index
-                // - [8..9] vout
-                // - [10] flags
-                // - [11..18] value
-                // - [19..50] checksum
-
-                let block_index = u32::from_be_bytes([
-                    hist_record[2],
-                    hist_record[3],
-                    hist_record[4],
-                    hist_record[5],
-                ]);
-
-                // Delete all records for
-                if block_index == block_height.0 {
-                    dbg!(cursor.del(WriteFlags::empty()))?;
-                    remaining -= 1;
-                    if remaining == 0 {
-                        break;
-                    }
-                }
-            }
-            drop(cursor);
-            txn.commit()?;
+            self.delete_addrhist_dups(
+                &addr_script.to_bytes()?,
+                block_height,
+                true,
+                false,
+                records.len(),
+            )?;
         }
 
-        dbg!("Deleting addrhist outputs");
         // Delete addrhist output data
         for (addr_script, records) in &addrhist_output_map {
-            let addr_bytes = addr_script.to_bytes()?;
-            let mut remaining = records.len();
-
-            let mut txn = self.env.begin_rw_txn()?;
-            let mut cursor = txn.open_rw_cursor(self.addrhist)?;
-
-            for (key, val) in cursor.iter_dup_of(&addr_bytes)? {
-                if key.len() != AddrScript::VERSIONED_LEN {
-                    // TODO: Return error?
-                    dbg!("Incorrect addrscript len found");
-                    break;
-                }
-                if val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN {
-                    // TODO: Return error?
-                    dbg!("Incorrect StoredEntryFixed<AddrEventBytes> len found");
-                    break;
-                }
-                let mut hist_record = [0u8; StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN];
-                hist_record.copy_from_slice(val);
-
-                // Parse the block_index out of arr:
-                // - [0] StoredEntry tag
-                // - [1] record tag
-                // - [2..5] height
-                // - [6..7] tx_index
-                // - [8..9] vout
-                // - [10] flags
-                // - [11..18] value
-                // - [19..50] checksum
-
-                let block_index = u32::from_be_bytes([
-                    hist_record[2],
-                    hist_record[3],
-                    hist_record[4],
-                    hist_record[5],
-                ]);
-
-                // Delete all records for
-                if block_index == block_height.0 {
-                    dbg!(cursor.del(WriteFlags::empty()))?;
-                    remaining -= 1;
-                    if remaining == 0 {
-                        break;
-                    }
-                }
-            }
-            drop(cursor);
-            dbg!(txn.commit())?;
+            self.delete_addrhist_dups(
+                &addr_script.to_bytes()?,
+                block_height,
+                false,
+                true,
+                records.len(),
+            )?;
         }
 
-        dbg!("Deleting block");
         // Delete block data
         let mut txn = self.env.begin_rw_txn()?;
 
@@ -1167,18 +1112,18 @@ impl ZainoDB {
             self.orchard,
             self.commitment_tree_data,
         ] {
-            match dbg!(txn.del(db, &height_bytes, None)) {
+            match txn.del(db, &height_bytes, None) {
                 Ok(()) | Err(lmdb::Error::NotFound) => {}
                 Err(e) => return Err(FinalisedStateError::LmdbError(e)),
             }
         }
 
-        match dbg!(txn.del(self.heights, &hash_bytes, None)) {
+        match txn.del(self.heights, &hash_bytes, None) {
             Ok(()) | Err(lmdb::Error::NotFound) => {}
             Err(e) => return Err(FinalisedStateError::LmdbError(e)),
         }
 
-        dbg!(txn.commit())?;
+        txn.commit()?;
         Ok(())
     }
 
@@ -2148,6 +2093,99 @@ impl ZainoDB {
 
     // *** Internal DB methods ***
 
+    /// Delete all `addrhist` duplicates for `addr_bytes` that
+    ///   * belong to `block_height`, **and**
+    ///   * match the requested record type(s).
+    ///
+    /// * `delete_inputs`  – remove records whose flag-byte contains FLAG_IS_INPUT
+    /// * `delete_outputs` – remove records whose flag-byte contains FLAG_MINED
+    ///
+    /// `expected` is the number of records to delete;
+    fn delete_addrhist_dups(
+        &self,
+        addr_bytes: &[u8],
+        block_height: Height,
+        delete_inputs: bool,
+        delete_outputs: bool,
+        expected: usize,
+    ) -> Result<(), FinalisedStateError> {
+        if !delete_inputs && !delete_outputs {
+            return Err(FinalisedStateError::Custom(
+                "called delete_addrhist_dups with neither inputs nor outputs to delete".into(),
+            ));
+        }
+        if expected == 0 {
+            return Err(FinalisedStateError::Custom(
+                "called delete_addrhist_dups with 0 expected deletes".into(),
+            ));
+        }
+
+        let mut remaining = expected;
+        let height_be = block_height.0.to_be_bytes();
+
+        let mut txn = self.env.begin_rw_txn()?;
+        let mut cur = txn.open_rw_cursor(self.addrhist)?;
+
+        match cur
+            .get(Some(addr_bytes), None, lmdb_sys::MDB_SET_KEY)
+            .and_then(|_| cur.get(None, None, lmdb_sys::MDB_LAST_DUP))
+        {
+            Ok((_k, mut val)) => loop {
+                // Parse AddrEventBytes:
+                // - [0] StoredEntry tag
+                // - [1] record tag
+                // - [2..5] height
+                // - [6..7] tx_index
+                // - [8..9] vout
+                // - [10] flags
+                // - [11..18] value
+                // - [19..50] checksum
+                if val.len() == StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN
+                    && val[2..6] == height_be
+                {
+                    let flags = val[10];
+                    let is_input = flags & AddrEventBytes::FLAG_IS_INPUT != 0;
+                    let is_output = flags & AddrEventBytes::FLAG_MINED != 0;
+
+                    if (delete_inputs && is_input) || (delete_outputs && is_output) {
+                        cur.del(WriteFlags::empty())?;
+                        remaining -= 1;
+                        if remaining == 0 {
+                            break;
+                        }
+                    }
+                } else if val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN {
+                    tracing::warn!("bad addrhist dup (len={})", val.len());
+                }
+
+                // step backwards through duplicates
+                match cur.get(None, None, lmdb_sys::MDB_PREV_DUP) {
+                    Ok((_k, v)) => val = v,
+                    Err(lmdb::Error::NotFound) => {
+                        if remaining == 0 {
+                            break;
+                        }
+                        return Err(FinalisedStateError::Custom(format!(
+                            "expected {expected} records, deleted {}",
+                            expected - remaining
+                        )));
+                    }
+                    Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+                }
+            },
+            Err(lmdb::Error::NotFound) => {
+                return Err(FinalisedStateError::Custom(
+                    "no addrhist record for key".into(),
+                ));
+            }
+            Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+        }
+
+        drop(cur);
+        txn.commit()?;
+        Ok(())
+    }
+
     /// Mark a specific AddrHistRecord as spent in the addrhist DB.
     /// Looks up a record by script and tx_index, sets FLAG_SPENT, and updates it in place.
     ///
@@ -2225,7 +2263,7 @@ impl ZainoDB {
                 }
             }
         }
-        dbg!(txn.commit())?;
+        txn.commit()?;
         Ok(false)
     }
 
@@ -2300,13 +2338,13 @@ impl ZainoDB {
                     // Write back in place.
                     cur.put(&addr_bytes, &hist_record, WriteFlags::CURRENT)?;
                     drop(cur);
-                    dbg!(txn.commit())?;
+                    txn.commit()?;
 
                     return Ok(true);
                 }
             }
         }
-        dbg!(txn.commit())?;
+        txn.commit()?;
         Ok(false)
     }
 
