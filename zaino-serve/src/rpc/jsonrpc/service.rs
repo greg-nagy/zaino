@@ -51,7 +51,7 @@ pub trait ZcashIndexerRpc {
     async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, ErrorObjectOwned>;
 
     /// Returns the hash of the best block (tip) of the longest chain.
-    /// zcashd reference: [`z_gettreestate`](https://zcash.github.io/rpc/getbestblockhash.html)
+    /// zcashd reference: [`getbestblockhash`](https://zcash.github.io/rpc/getbestblockhash.html)
     /// method: post
     /// tags: blockchain
     ///

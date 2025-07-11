@@ -254,7 +254,7 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     async fn get_block_count(&self) -> Result<Height, Self::Error>;
 
     /// Returns the hash of the best block (tip) of the longest chain.
-    /// zcashd reference: [`z_gettreestate`](https://zcash.github.io/rpc/getbestblockhash.html)
+    /// zcashd reference: [`getbestblockhash`](https://zcash.github.io/rpc/getbestblockhash.html)
     /// The zcashd doc reference above says there are no parameters and the result is a "hex" (string) of the block hash hex encoded.
     /// method: post
     /// tags: blockchain
