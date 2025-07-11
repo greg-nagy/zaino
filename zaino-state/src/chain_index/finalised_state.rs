@@ -191,22 +191,25 @@ impl ZainoDB {
             .open(&db_path)?;
 
         // Open individual LMDB DBs.
-        let headers = Self::open_or_create_db(&env, "headers", DatabaseFlags::empty())?;
-        let txids = Self::open_or_create_db(&env, "txids", DatabaseFlags::empty())?;
-        let transparent = Self::open_or_create_db(&env, "transparent", DatabaseFlags::empty())?;
-        let sapling = Self::open_or_create_db(&env, "sapling", DatabaseFlags::empty())?;
-        let orchard = Self::open_or_create_db(&env, "orchard", DatabaseFlags::empty())?;
+        let headers = Self::open_or_create_db(&env, "headers", DatabaseFlags::empty()).await?;
+        let txids = Self::open_or_create_db(&env, "txids", DatabaseFlags::empty()).await?;
+        let transparent =
+            Self::open_or_create_db(&env, "transparent", DatabaseFlags::empty()).await?;
+        let sapling = Self::open_or_create_db(&env, "sapling", DatabaseFlags::empty()).await?;
+        let orchard = Self::open_or_create_db(&env, "orchard", DatabaseFlags::empty()).await?;
         let commitment_tree_data =
-            Self::open_or_create_db(&env, "commitment_tree_data", DatabaseFlags::empty())?;
-        let hashes = Self::open_or_create_db(&env, "hashes", DatabaseFlags::empty())?;
-        let spent = Self::open_or_create_db(&env, "spent", DatabaseFlags::empty())?;
+            Self::open_or_create_db(&env, "commitment_tree_data", DatabaseFlags::empty()).await?;
+        let hashes = Self::open_or_create_db(&env, "hashes", DatabaseFlags::empty()).await?;
+        let spent = Self::open_or_create_db(&env, "spent", DatabaseFlags::empty()).await?;
         let addrhist = Self::open_or_create_db(
             &env,
             "addrhist",
             DatabaseFlags::DUP_SORT | DatabaseFlags::DUP_FIXED,
-        )?;
-        let shard_roots = Self::open_or_create_db(&env, "shard_roots", DatabaseFlags::empty())?;
-        let metadata = Self::open_or_create_db(&env, "metadata", DatabaseFlags::empty())?;
+        )
+        .await?;
+        let shard_roots =
+            Self::open_or_create_db(&env, "shard_roots", DatabaseFlags::empty()).await?;
+        let metadata = Self::open_or_create_db(&env, "metadata", DatabaseFlags::empty()).await?;
 
         // Create ZainoDB
         let mut zaino_db = Self {
@@ -229,8 +232,10 @@ impl ZainoDB {
             config: config.clone(),
         };
 
+        dbg!(zaino_db.env.get_db_flags(zaino_db.addrhist))?;
+
         // Validate (or initialise) the metadata entry before we touch any tables.
-        zaino_db.check_schema_version()?;
+        zaino_db.check_schema_version().await?;
 
         // Spawn handler task to perform background validation and trailing tx cleanup.
         zaino_db.spawn_handler().await?;
@@ -274,10 +279,10 @@ impl ZainoDB {
             async move {
                 // ────────────────────────── initial validation ─────────────────────────
                 let (r1, r2, r3, r4) = tokio::join!(
-                    async { zaino_db.initial_root_scan() },
-                    async { zaino_db.initial_spent_scan() },
-                    async { zaino_db.initial_addrhist_scan() },
-                    async { zaino_db.initial_block_scan() },
+                    async { zaino_db.initial_root_scan().await },
+                    async { zaino_db.initial_spent_scan().await },
+                    async { zaino_db.initial_addrhist_scan().await },
+                    async { zaino_db.initial_block_scan().await },
                 );
 
                 for (desc, result) in [
@@ -353,7 +358,7 @@ impl ZainoDB {
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_secs(5)) => {},
             _ = maintenance.tick() => {
-                if let Err(e) = self.clean_trailing() {
+                if let Err(e) = self.clean_trailing().await {
                     warn!("clean_trailing failed: {}", e);
                 }
             }
@@ -361,7 +366,7 @@ impl ZainoDB {
     }
 
     /// Validate every stored `ShardRoot` (cheap – single checksum each).
-    fn initial_root_scan(&self) -> Result<(), FinalisedStateError> {
+    async fn initial_root_scan(&self) -> Result<(), FinalisedStateError> {
         let ro_txn = self.env.begin_ro_txn()?;
         let mut cursor = ro_txn.open_ro_cursor(self.shard_roots)?;
 
@@ -383,7 +388,7 @@ impl ZainoDB {
     }
 
     /// Validate every stored `TxIndex` (cheap – single checksum each).
-    pub fn initial_spent_scan(&self) -> Result<(), FinalisedStateError> {
+    async fn initial_spent_scan(&self) -> Result<(), FinalisedStateError> {
         let ro = self.env.begin_ro_txn()?;
         let mut cursor = ro.open_ro_cursor(self.spent)?;
 
@@ -404,7 +409,7 @@ impl ZainoDB {
     }
 
     /// Validate every stored `AddrEventBytes` (cheap – single checksum each).
-    pub fn initial_addrhist_scan(&self) -> Result<(), FinalisedStateError> {
+    async fn initial_addrhist_scan(&self) -> Result<(), FinalisedStateError> {
         let ro = self.env.begin_ro_txn()?;
         let mut cursor = ro.open_ro_cursor(self.addrhist)?;
 
@@ -425,7 +430,7 @@ impl ZainoDB {
     }
 
     /// Scan the whole chain once at start-up and validate every block.
-    fn initial_block_scan(&self) -> Result<(), FinalisedStateError> {
+    async fn initial_block_scan(&self) -> Result<(), FinalisedStateError> {
         let ro = self.env.begin_ro_txn()?;
         let mut cursor = ro.open_ro_cursor(self.heights)?;
 
@@ -445,14 +450,14 @@ impl ZainoDB {
     }
 
     /// Clears stale reader slots by opening and closing a read transaction.
-    fn clean_trailing(&self) -> Result<(), FinalisedStateError> {
+    async fn clean_trailing(&self) -> Result<(), FinalisedStateError> {
         let txn = self.env.begin_ro_txn()?;
         drop(txn);
         Ok(())
     }
 
     /// Opens an lmdb database if present else creates a new one.
-    fn open_or_create_db(
+    async fn open_or_create_db(
         env: &Environment,
         name: &str,
         flags: DatabaseFlags,
@@ -470,7 +475,7 @@ impl ZainoDB {
     // These should only ever be used in a single DB control task.
 
     /// Writes a given (finalised) [`ChainBlock`] to ZainoDB.
-    pub fn write_block(&self, block: ChainBlock) -> Result<(), FinalisedStateError> {
+    pub async fn write_block(&self, block: ChainBlock) -> Result<(), FinalisedStateError> {
         let block_hash = block.index().hash();
         let block_hash_bytes = block_hash.to_bytes()?;
         let block_height = block.index().height().ok_or(FinalisedStateError::Custom(
@@ -505,7 +510,11 @@ impl ZainoDB {
         let mut orchard = Vec::with_capacity(tx_len);
 
         let mut spent_map: HashMap<Outpoint, TxIndex> = HashMap::new();
-        let mut addrhist_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
+        let mut addrhist_inputs_map: HashMap<
+            AddrScript,
+            Vec<(AddrHistRecord, (AddrScript, AddrHistRecord))>,
+        > = HashMap::new();
+        let mut addrhist_outputs_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
 
         for (tx_pos, tx) in block.transactions().iter().enumerate() {
             let mut h = Hash::from(*tx.txid());
@@ -553,7 +562,7 @@ impl ZainoDB {
                     output.value(),
                     AddrHistRecord::FLAG_MINED,
                 );
-                match addrhist_map.entry(addr_script) {
+                match addrhist_outputs_map.entry(addr_script) {
                     Entry::Occupied(mut entry) => entry.get_mut().push(hist_record),
                     Entry::Vacant(entry) => {
                         entry.insert(vec![hist_record]);
@@ -562,7 +571,9 @@ impl ZainoDB {
             }
 
             // Transparent Inputs: Build Spent Outpoints Index and Address History
-            for input in tx.transparent().inputs() {
+            //
+            // NOTE: This can be rewritten to be more efficient.
+            for (input_index, input) in tx.transparent().inputs().iter().enumerate() {
                 if input.is_null_prevout() {
                     continue;
                 }
@@ -571,7 +582,6 @@ impl ZainoDB {
 
                 //Check if output is in *this* block, else fetch from DB.
                 let prev_tx_hash = Hash(*prev_outpoint.prev_txid());
-
                 if txid_set.contains(&prev_tx_hash) {
                     // Fetch transaction index within block
                     if let Some(tx_pos) = txids.iter().position(|h| h == &prev_tx_hash) {
@@ -585,14 +595,25 @@ impl ZainoDB {
                                 let addr_script = AddrScript::new(*prev_output.script_hash());
                                 let hist_record = AddrHistRecord::new(
                                     tx_index,
-                                    input.prevout_index() as u16,
+                                    input_index as u16,
                                     prev_output.value(),
                                     AddrHistRecord::FLAG_IS_INPUT,
                                 );
-                                match addrhist_map.entry(addr_script) {
-                                    Entry::Occupied(mut e) => e.get_mut().push(hist_record),
+                                let prev_output_record = (
+                                    AddrScript::new(*prev_output.script_hash()),
+                                    AddrHistRecord::new(
+                                        TxIndex::new(block_height.0, tx_pos as u16),
+                                        prev_outpoint.prev_index() as u16,
+                                        prev_output.value(),
+                                        AddrHistRecord::FLAG_MINED,
+                                    ),
+                                );
+                                match addrhist_inputs_map.entry(addr_script) {
+                                    Entry::Occupied(mut e) => {
+                                        e.get_mut().push((hist_record, prev_output_record))
+                                    }
                                     Entry::Vacant(e) => {
-                                        e.insert(vec![hist_record]);
+                                        e.insert(vec![(hist_record, prev_output_record)]);
                                     }
                                 }
                             }
@@ -602,17 +623,35 @@ impl ZainoDB {
                     let addr_script = AddrScript::new(*prev_output.script_hash());
                     let hist_record = AddrHistRecord::new(
                         tx_index,
-                        input.prevout_index() as u16,
+                        input_index as u16,
                         prev_output.value(),
                         AddrHistRecord::FLAG_IS_INPUT,
                     );
-                    match addrhist_map.entry(addr_script) {
-                        Entry::Occupied(mut entry) => entry.get_mut().push(hist_record),
+                    let pre_output_tx_index = self
+                        .find_txid_index(&Hash::from(*prev_outpoint.prev_txid()))?
+                        .ok_or_else(|| {
+                            FinalisedStateError::Custom("Previous txid not found".into())
+                        })?;
+
+                    let prev_output_record = (
+                        AddrScript::new(*prev_output.script_hash()),
+                        AddrHistRecord::new(
+                            pre_output_tx_index,
+                            prev_outpoint.prev_index() as u16,
+                            prev_output.value(),
+                            AddrHistRecord::FLAG_MINED,
+                        ),
+                    );
+                    match addrhist_inputs_map.entry(addr_script) {
+                        Entry::Occupied(mut entry) => {
+                            entry.get_mut().push((hist_record, prev_output_record))
+                        }
                         Entry::Vacant(entry) => {
-                            entry.insert(vec![hist_record]);
+                            entry.insert(vec![(hist_record, prev_output_record)]);
                         }
                     }
                 }
+                // TODO: else return error here?
             }
         }
 
@@ -622,7 +661,7 @@ impl ZainoDB {
         let sapling_entry = StoredEntryVar::new(&block_height_bytes, SaplingTxList::new(sapling));
         let orchard_entry = StoredEntryVar::new(&block_height_bytes, OrchardTxList::new(orchard));
 
-        // Write to ZainoDB
+        // Write block to ZainoDB
         let mut txn = self.env.begin_rw_txn()?;
 
         txn.put(
@@ -674,6 +713,11 @@ impl ZainoDB {
             WriteFlags::NO_OVERWRITE,
         )?;
 
+        txn.commit()?;
+
+        // Write spent to ZainoDB
+        let mut txn = self.env.begin_rw_txn()?;
+
         for (outpoint, tx_index) in spent_map {
             let outpoint_bytes = &outpoint.to_bytes()?;
             let tx_index_entry_bytes =
@@ -686,32 +730,79 @@ impl ZainoDB {
             )?;
         }
 
-        for (addr_script, records) in addrhist_map {
-            let addr_bytes = &addr_script.to_bytes()?;
+        txn.commit()?;
+
+        // Write outputs to ZainoDB addrhist
+        let mut txn = self.env.begin_rw_txn()?;
+
+        for (addr_script, records) in addrhist_outputs_map {
+            let addr_bytes = addr_script.to_bytes()?;
+
+            // Convert all records to their StoredEntryFixed<AddrEventBytes> for ordering.
+            let mut stored_entries = Vec::with_capacity(records.len());
             for record in records {
                 let packed_record = AddrEventBytes::from_record(&record).map_err(|e| {
                     FinalisedStateError::Custom(format!("AddrEventBytes pack error: {e:?}"))
                 })?;
-                let record_entry_bytes =
-                    StoredEntryFixed::new(&addr_bytes, packed_record).to_bytes()?;
+                let entry = StoredEntryFixed::new(&addr_bytes, packed_record);
+                let entry_bytes = entry.to_bytes()?;
+                stored_entries.push((record, entry_bytes));
+            }
+
+            // Order by byte encoding for LMDB DUP_SORT insertion order
+            stored_entries.sort_by(|a, b| a.1.cmp(&b.1));
+
+            for (_record, record_entry_bytes) in stored_entries {
                 txn.put(
                     self.addrhist,
                     &addr_bytes,
                     &record_entry_bytes,
                     WriteFlags::empty(),
                 )?;
-                if record.is_input() {
-                    // mark corresponding output as spent
-                    let _updated = self.mark_addr_hist_record_spent_txn(
-                        &mut txn,
-                        &addr_script,
-                        record.tx_index(),
-                    )?;
-                }
             }
         }
 
         txn.commit()?;
+
+        // Write inputs to ZainoDB addrhist
+        for (addr_script, records) in addrhist_inputs_map {
+            let addr_bytes = addr_script.to_bytes()?;
+
+            // Convert all records to their StoredEntryFixed<AddrEventBytes> for ordering.
+            let mut stored_entries = Vec::with_capacity(records.len());
+            for (record, prev_output) in records {
+                let packed_record = AddrEventBytes::from_record(&record).map_err(|e| {
+                    FinalisedStateError::Custom(format!("AddrEventBytes pack error: {e:?}"))
+                })?;
+                let entry = StoredEntryFixed::new(&addr_bytes, packed_record);
+                let entry_bytes = entry.to_bytes()?;
+                stored_entries.push((record, entry_bytes, prev_output));
+            }
+
+            // Order by byte encoding for LMDB DUP_SORT insertion order
+            stored_entries.sort_by(|a, b| a.1.cmp(&b.1));
+
+            for (_record, record_entry_bytes, (prev_output_script, prev_output_record)) in
+                stored_entries
+            {
+                let mut txn = self.env.begin_rw_txn()?;
+                txn.put(
+                    self.addrhist,
+                    &addr_bytes,
+                    &record_entry_bytes,
+                    WriteFlags::empty(),
+                )?;
+                txn.commit()?;
+                // mark corresponding output as spent
+                // let _updated = self
+                //     .mark_addr_hist_record_spent(
+                //         &prev_output_script,
+                //         prev_output_record.tx_index(),
+                //         prev_output_record.out_index(),
+                //     )
+                //     .await?;
+            }
+        }
 
         self.validate_block(block_height, *block_hash)?;
 
@@ -724,7 +815,11 @@ impl ZainoDB {
     /// * The value is a `StoredEntryFixed<ShardRoot>`.
     ///
     /// Returns an error if an entry already exists for that index.
-    pub fn write_root(&self, index: Index, root: ShardRoot) -> Result<(), FinalisedStateError> {
+    pub async fn write_root(
+        &self,
+        index: Index,
+        root: ShardRoot,
+    ) -> Result<(), FinalisedStateError> {
         // 1) Build key (tag + BE index)
         let key = index
             .to_bytes()
@@ -751,84 +846,123 @@ impl ZainoDB {
         }
     }
 
-    /// Deletes a block identified by hash *or* height from every finalised table.  
-    pub fn delete_block(&self, id: HashOrHeight) -> Result<(), FinalisedStateError> {
+    /// Deletes a block identified by hash *or* height from every finalised table.
+    pub async fn delete_block(&self, id: HashOrHeight) -> Result<(), FinalisedStateError> {
+        dbg!("Fetching hash or height");
         // Resolve the HashOrHeight and find corresponding database hash and height key.
-        let (hash_bytes, height_bytes) = match id {
-            HashOrHeight::Height(height) => {
-                let height_bytes = Height::try_from(height.0)
-                    .expect("zebra height always fits")
-                    .to_bytes()?;
+        let (hash_bytes, height_bytes) = {
+            match id {
+                HashOrHeight::Height(height) => {
+                    let height_bytes = Height::try_from(height.0)
+                        .expect("zebra height always fits")
+                        .to_bytes()?;
 
-                // Look up hash in hashes db.
-                let hash = {
-                    let ro = self.env.begin_ro_txn()?;
-                    let hash_bytes = ro.get(self.heights, &height_bytes).map_err(|e| {
-                        if e == lmdb::Error::NotFound {
-                            FinalisedStateError::Custom("height not found in best chain".into())
-                        } else {
-                            FinalisedStateError::LmdbError(e)
-                        }
-                    })?;
-                    let check_hash_bytes: [u8; 32] = hash_bytes
-                        .try_into()
-                        .expect("LMDB returned correct length value");
-                    Hash::from(check_hash_bytes)
-                };
-                let hash_bytes = hash.to_bytes()?;
-                (hash_bytes, height_bytes)
-            }
-            HashOrHeight::Hash(z_hash) => {
-                let hash_bytes = Hash::from(z_hash).to_bytes()?;
+                    // Clone header bytes out of the RO txn and fetch height.
+                    let header = {
+                        let ro = self.env.begin_ro_txn()?;
+                        let header_bytes = ro.get(self.headers, &height_bytes).map_err(|e| {
+                            if e == lmdb::Error::NotFound {
+                                FinalisedStateError::Custom("block not found".into())
+                            } else {
+                                FinalisedStateError::LmdbError(e)
+                            }
+                        })?;
 
-                // Clone header bytes out of the RO txn and fetch height.
-                let header_vec: Vec<u8> = {
-                    let ro = self.env.begin_ro_txn()?;
-                    let header_bytes = ro.get(self.headers, &hash_bytes).map_err(|e| {
-                        if e == lmdb::Error::NotFound {
-                            FinalisedStateError::Custom("block not found".into())
-                        } else {
-                            FinalisedStateError::LmdbError(e)
-                        }
-                    })?;
-                    header_bytes.to_vec()
-                };
+                        let stored: StoredEntryVar<BlockHeaderData> =
+                            StoredEntryVar::from_bytes(header_bytes).map_err(|e| {
+                                FinalisedStateError::Custom(format!("corrupt header CBOR: {e}"))
+                            })?;
+                        *stored.inner()
+                    };
 
-                let stored: StoredEntryVar<BlockHeaderData> =
-                    StoredEntryVar::from_bytes(&header_vec).map_err(|e| {
-                        FinalisedStateError::Custom(format!("corrupt header CBOR: {e}"))
-                    })?;
-                let height_bytes = Height::try_from(
-                    stored
-                        .item
-                        .index()
-                        .height()
-                        .expect("db always stores a height"),
-                )
-                .expect("zebra height always fits")
-                .to_bytes()?;
+                    let hash_bytes = header.index().hash().to_bytes()?;
+                    (hash_bytes, height_bytes)
+                }
+                HashOrHeight::Hash(z_hash) => {
+                    let hash_bytes = Hash::from(z_hash).to_bytes()?;
 
-                (hash_bytes, height_bytes)
+                    // Look up height in heights db.
+                    let height = {
+                        let ro = self.env.begin_ro_txn()?;
+                        let height_bytes = ro.get(self.heights, &hash_bytes).map_err(|e| {
+                            if e == lmdb::Error::NotFound {
+                                FinalisedStateError::Custom("hash not found in best chain".into())
+                            } else {
+                                FinalisedStateError::LmdbError(e)
+                            }
+                        })?;
+                        let stored: StoredEntryFixed<Height> =
+                            StoredEntryFixed::from_bytes(height_bytes).map_err(|e| {
+                                FinalisedStateError::Custom(format!("corrupt header CBOR: {e}"))
+                            })?;
+                        *stored.inner()
+                    };
+
+                    let height_bytes = height.to_bytes()?;
+
+                    (hash_bytes, height_bytes)
+                }
             }
         };
-
-        // Reconstruct transaction index state to remove
         let block_height = Height::from_bytes(&height_bytes)?;
-        let ro = self.env.begin_ro_txn()?;
-        let transparent_bytes = self.block_transparent_raw_txn(&ro, &height_bytes)?;
-        let transparent_entry = StoredEntryVar::<TransparentTxList>::from_bytes(&transparent_bytes)
+        dbg!(&hash_bytes, &height_bytes);
+
+        // Check block is at the top of the finalised state
+        {
+            let ro = self.env.begin_ro_txn()?;
+            let mut cursor = ro.open_ro_cursor(self.headers)?;
+
+            let mut iter = cursor.iter_from(&height_bytes);
+
+            let Some((current_height_bytes, _)) = iter.next() else {
+                return Err(FinalisedStateError::Custom("block not found".into()));
+            };
+            if current_height_bytes != height_bytes.as_slice() {
+                return Err(FinalisedStateError::Custom(format!(
+                    "block with height {:?} not found in headers",
+                    Height::from_bytes(&height_bytes)?
+                )));
+            }
+
+            if iter.next().is_some() {
+                return Err(FinalisedStateError::Custom(format!(
+                    "can only delete tip block at height {:?}, but higher blocks exist",
+                    Height::from_bytes(&height_bytes)?
+                )));
+            }
+        }
+
+        dbg!("Reconstructing spent and addrhist");
+        // Reconstruct transaction index state to remove
+        let transparent = {
+            let ro = self.env.begin_ro_txn()?;
+            let transparent_bytes = self.block_transparent_raw_txn(&ro, &height_bytes)?;
+            let transparent_entry = StoredEntryVar::<TransparentTxList>::from_bytes(
+                &transparent_bytes,
+            )
             .map_err(|e| {
                 FinalisedStateError::Custom(format!("transparent CBOR decode error: {e:?}"))
             })?;
-        let transparent = transparent_entry.inner().tx();
+            transparent_entry.inner().tx().to_vec()
+        };
 
-        let mut addrhist_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
         let mut spent_outpoints: Vec<Outpoint> = Vec::new();
+        // let mut addrhist_input_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
+        let mut addrhist_inputs_map: HashMap<
+            AddrScript,
+            Vec<(AddrHistRecord, (AddrScript, AddrHistRecord))>,
+        > = HashMap::new();
+        let mut addrhist_output_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
 
         for (tx_index, tx_opt) in transparent.iter().enumerate() {
             let tx_index = TxIndex::new(block_height.0, tx_index as u16);
+
             if let Some(tx) = tx_opt {
-                for input in tx.inputs() {
+                // Transparent Inputs: Build Spent Outpoints Index and Address History
+                for (input_index, input) in tx.inputs().iter().enumerate() {
+                    if input.is_null_prevout() {
+                        continue;
+                    }
                     let prev_outpoint = Outpoint::new(*input.prevout_txid(), input.prevout_index());
                     spent_outpoints.push(prev_outpoint);
 
@@ -836,27 +970,46 @@ impl ZainoDB {
                         let addr_script = AddrScript::new(*prev_output.script_hash());
                         let hist_record = AddrHistRecord::new(
                             tx_index,
-                            input.prevout_index() as u16,
+                            input_index as u16,
                             prev_output.value(),
                             AddrHistRecord::FLAG_IS_INPUT,
                         );
-                        match addrhist_map.entry(addr_script) {
-                            Entry::Occupied(mut entry) => entry.get_mut().push(hist_record),
+                        let pre_output_tx_index = self
+                            .find_txid_index(&Hash::from(*prev_outpoint.prev_txid()))?
+                            .ok_or_else(|| {
+                                FinalisedStateError::Custom("Previous txid not found".into())
+                            })?;
+
+                        let prev_output_record = (
+                            AddrScript::new(*prev_output.script_hash()),
+                            AddrHistRecord::new(
+                                pre_output_tx_index,
+                                prev_outpoint.prev_index() as u16,
+                                prev_output.value(),
+                                AddrHistRecord::FLAG_MINED,
+                            ),
+                        );
+                        match addrhist_inputs_map.entry(addr_script) {
+                            Entry::Occupied(mut entry) => {
+                                entry.get_mut().push((hist_record, prev_output_record))
+                            }
                             Entry::Vacant(entry) => {
-                                entry.insert(vec![hist_record]);
+                                entry.insert(vec![(hist_record, prev_output_record)]);
                             }
                         }
                     }
                 }
-                for (vout, output) in tx.outputs().iter().enumerate() {
+
+                // Transparent Outputs: Build Address History
+                for (output_index, output) in tx.outputs().iter().enumerate() {
                     let addr_script = AddrScript::new(*output.script_hash());
                     let hist_record = AddrHistRecord::new(
                         tx_index,
-                        vout as u16,
+                        output_index as u16,
                         output.value(),
                         AddrHistRecord::FLAG_MINED,
                     );
-                    match addrhist_map.entry(addr_script) {
+                    match addrhist_output_map.entry(addr_script) {
                         Entry::Occupied(mut entry) => entry.get_mut().push(hist_record),
                         Entry::Vacant(entry) => {
                             entry.insert(vec![hist_record]);
@@ -866,42 +1019,146 @@ impl ZainoDB {
             }
         }
 
-        // Delete data from db.
+        dbg!("Deleting spent");
+        // Delete spent data
         let mut txn = self.env.begin_rw_txn()?;
 
-        // Delete spent data
         for outpoint in &spent_outpoints {
             let outpoint_bytes = &outpoint.to_bytes()?;
-            match txn.del(self.spent, outpoint_bytes, None) {
+            match dbg!(txn.del(self.spent, outpoint_bytes, None)) {
                 Ok(()) | Err(lmdb::Error::NotFound) => {}
                 Err(e) => return Err(FinalisedStateError::LmdbError(e)),
             }
         }
+        dbg!(txn.commit())?;
 
-        // Delete addrhist data and mark old outputs spent in this block as unspent
-        for (addr_script, records) in &addrhist_map {
-            let addr_bytes = &addr_script.to_bytes()?;
-            for record in records {
-                let packed_record = AddrEventBytes::from_record(record).map_err(|e| {
-                    FinalisedStateError::Custom(format!("AddrEventBytes pack error: {e:?}"))
-                })?;
-                let record_entry_bytes =
-                    StoredEntryFixed::new(addr_bytes, packed_record).to_bytes()?;
-                match txn.del(self.addrhist, addr_bytes, Some(&record_entry_bytes)) {
-                    Ok(()) | Err(lmdb::Error::NotFound) => {}
-                    Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+        dbg!("Deleting addrhist inputs");
+        // Delete addrhist input data and mark old outputs spent in this block as unspent
+        for (addr_script, records) in &addrhist_inputs_map {
+            let addr_bytes = addr_script.to_bytes()?;
+
+            // Mark outputs spent in this block as unspent
+            // dbg!("marking addrhist records as unspent");
+            // for (_record, (prev_output_script, prev_output_record)) in records {
+            //     {
+            //         let _updated = self
+            //             .mark_addr_hist_record_unspent(
+            //                 prev_output_script,
+            //                 prev_output_record.tx_index(),
+            //                 prev_output_record.out_index(),
+            //             )
+            //             .await?;
+            //     }
+            // }
+
+            // Delete all input records created in this block.
+            dbg!("deleting addrhist records");
+            let mut remaining = records.len();
+
+            let mut txn = self.env.begin_rw_txn()?;
+            let mut cursor = txn.open_rw_cursor(self.addrhist)?;
+
+            for (key, val) in cursor.iter_dup_of(&addr_bytes)? {
+                if key.len() != AddrScript::VERSIONED_LEN {
+                    // TODO: Return error?
+                    dbg!("Incorrect addrscript len found");
+                    break;
                 }
-                if record.is_input() {
-                    let _updated = self.mark_addr_hist_record_unspent_txn(
-                        &mut txn,
-                        addr_script,
-                        record.tx_index(),
-                    )?;
+                if val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN {
+                    // TODO: Return error?
+                    dbg!("Incorrect StoredEntryFixed<AddrEventBytes> len found");
+                    break;
+                }
+                let mut hist_record = [0u8; StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN];
+                hist_record.copy_from_slice(val);
+
+                // Parse the block_index out of arr:
+                // - [0] StoredEntry tag
+                // - [1] record tag
+                // - [2..5] height
+                // - [6..7] tx_index
+                // - [8..9] vout
+                // - [10] flags
+                // - [11..18] value
+                // - [19..50] checksum
+
+                let block_index = u32::from_be_bytes([
+                    hist_record[2],
+                    hist_record[3],
+                    hist_record[4],
+                    hist_record[5],
+                ]);
+
+                // Delete all records for
+                if block_index == block_height.0 {
+                    dbg!(cursor.del(WriteFlags::empty()))?;
+                    remaining -= 1;
+                    if remaining == 0 {
+                        break;
+                    }
                 }
             }
+            drop(cursor);
+            txn.commit()?;
         }
 
+        dbg!("Deleting addrhist outputs");
+        // Delete addrhist output data
+        for (addr_script, records) in &addrhist_output_map {
+            let addr_bytes = addr_script.to_bytes()?;
+            let mut remaining = records.len();
+
+            let mut txn = self.env.begin_rw_txn()?;
+            let mut cursor = txn.open_rw_cursor(self.addrhist)?;
+
+            for (key, val) in cursor.iter_dup_of(&addr_bytes)? {
+                if key.len() != AddrScript::VERSIONED_LEN {
+                    // TODO: Return error?
+                    dbg!("Incorrect addrscript len found");
+                    break;
+                }
+                if val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN {
+                    // TODO: Return error?
+                    dbg!("Incorrect StoredEntryFixed<AddrEventBytes> len found");
+                    break;
+                }
+                let mut hist_record = [0u8; StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN];
+                hist_record.copy_from_slice(val);
+
+                // Parse the block_index out of arr:
+                // - [0] StoredEntry tag
+                // - [1] record tag
+                // - [2..5] height
+                // - [6..7] tx_index
+                // - [8..9] vout
+                // - [10] flags
+                // - [11..18] value
+                // - [19..50] checksum
+
+                let block_index = u32::from_be_bytes([
+                    hist_record[2],
+                    hist_record[3],
+                    hist_record[4],
+                    hist_record[5],
+                ]);
+
+                // Delete all records for
+                if block_index == block_height.0 {
+                    dbg!(cursor.del(WriteFlags::empty()))?;
+                    remaining -= 1;
+                    if remaining == 0 {
+                        break;
+                    }
+                }
+            }
+            drop(cursor);
+            dbg!(txn.commit())?;
+        }
+
+        dbg!("Deleting block");
         // Delete block data
+        let mut txn = self.env.begin_rw_txn()?;
+
         for &db in &[
             self.headers,
             self.txids,
@@ -910,25 +1167,25 @@ impl ZainoDB {
             self.orchard,
             self.commitment_tree_data,
         ] {
-            match txn.del(db, &height_bytes, None) {
+            match dbg!(txn.del(db, &height_bytes, None)) {
                 Ok(()) | Err(lmdb::Error::NotFound) => {}
                 Err(e) => return Err(FinalisedStateError::LmdbError(e)),
             }
         }
 
-        match txn.del(self.heights, &hash_bytes, None) {
+        match dbg!(txn.del(self.heights, &hash_bytes, None)) {
             Ok(()) | Err(lmdb::Error::NotFound) => {}
             Err(e) => return Err(FinalisedStateError::LmdbError(e)),
         }
 
-        txn.commit()?;
+        dbg!(txn.commit())?;
         Ok(())
     }
 
     /// Removes the `ShardRoot` stored at the specified `Index`.
     ///
     /// Returns an error if no entry exists at that index.
-    pub fn delete_root(&self, index: Index) -> Result<(), FinalisedStateError> {
+    pub async fn delete_root(&self, index: Index) -> Result<(), FinalisedStateError> {
         // Reconstruct exactly the same key
         let key = index
             .to_bytes()
@@ -1876,140 +2133,6 @@ impl ZainoDB {
         Ok(balance)
     }
 
-    /// Mark a specific AddrHistRecord as spent in the addrhist DB.
-    /// Looks up a record by script and tx_index, sets FLAG_SPENT, and updates it in place.
-    ///
-    /// Returns Ok(true) if a record was updated, Ok(false) if not found, or Err on DB error.
-    ///
-    /// This method takes an *open* read/write LMDB transaction
-    /// so multiple calls can be chained internally.
-    fn mark_addr_hist_record_spent_txn(
-        &self,
-        txn: &mut lmdb::RwTransaction,
-        addr_script: &AddrScript,
-        tx_index: TxIndex,
-    ) -> Result<bool, FinalisedStateError> {
-        let addr_bytes = addr_script.to_bytes()?;
-        let mut cur = txn.open_rw_cursor(self.addrhist)?;
-
-        for (key, val) in cur.iter_dup_of(&addr_bytes)? {
-            if key.len() != AddrScript::VERSIONED_LEN {
-                // TODO: Return error?
-                break;
-            }
-            if val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN {
-                // TODO: Return error?
-                break;
-            }
-            let mut hist_record = [0u8; StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN];
-            hist_record.copy_from_slice(val);
-
-            // Parse the tx_index out of arr:
-            // - [0] StoredEntry tag
-            // - [1] record tag
-            // - [2..5] height
-            // - [6..7] tx_index
-            // - [8..9] vout
-            // - [10] flags
-            // - [11..18] value
-            // - [19..50] checksum
-
-            let block_index = u32::from_be_bytes([
-                hist_record[2],
-                hist_record[3],
-                hist_record[4],
-                hist_record[5],
-            ]);
-            let t_idx = u16::from_be_bytes([hist_record[6], hist_record[7]]);
-
-            if block_index == tx_index.block_index() && t_idx == tx_index.tx_index() {
-                if hist_record[10] & AddrHistRecord::FLAG_SPENT != 0 {
-                    continue;
-                }
-                // Mark as spent (set the flag)
-                hist_record[10] |= AddrHistRecord::FLAG_SPENT;
-
-                // Update checksum
-                let checksum = StoredEntryFixed::<AddrEventBytes>::blake2b256(
-                    &[&addr_bytes, &hist_record[1..19]].concat(),
-                );
-                hist_record[19..51].copy_from_slice(&checksum);
-
-                // Overwrite in place
-                cur.put(&addr_bytes, &hist_record, WriteFlags::CURRENT)?;
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
-    /// Mark a specific AddrHistRecord as unspent in the addrhist DB.
-    /// Looks up a record by script and tx_index, sets FLAG_SPENT, and updates it in place.
-    ///
-    /// Returns Ok(true) if a record was updated, Ok(false) if not found, or Err on DB error.
-    ///
-    /// This method takes an *open* read/write LMDB transaction
-    /// so multiple calls can be chained internally.
-    fn mark_addr_hist_record_unspent_txn(
-        &self,
-        txn: &mut lmdb::RwTransaction,
-        addr_script: &AddrScript,
-        tx_index: TxIndex,
-    ) -> Result<bool, FinalisedStateError> {
-        let addr_bytes = addr_script.to_bytes()?;
-        let mut cur = txn.open_rw_cursor(self.addrhist)?;
-
-        for (key, val) in cur.iter_dup_of(&addr_bytes)? {
-            if key.len() != AddrScript::VERSIONED_LEN {
-                // TODO: Return error?
-                break;
-            }
-            if val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN {
-                // TODO: Return error?
-                break;
-            }
-            let mut hist_record = [0u8; StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN];
-            hist_record.copy_from_slice(val);
-
-            // Parse the tx_index out of arr:
-            // - [0] StoredEntry tag
-            // - [1] record tag
-            // - [2..5] height
-            // - [6..7] tx_index
-            // - [8..9] vout
-            // - [10] flags
-            // - [11..18] value
-            // - [19..50] checksum
-
-            let block_index = u32::from_be_bytes([
-                hist_record[2],
-                hist_record[3],
-                hist_record[4],
-                hist_record[5],
-            ]);
-            let t_idx = u16::from_be_bytes([hist_record[6], hist_record[7]]);
-
-            if block_index == tx_index.block_index() && t_idx == tx_index.tx_index() {
-                if hist_record[10] & AddrHistRecord::FLAG_SPENT != 0 {
-                    continue;
-                }
-                // Mark as unspent (unset the flag)
-                hist_record[10] &= !AddrHistRecord::FLAG_SPENT;
-
-                // Update checksum
-                let checksum = StoredEntryFixed::<AddrEventBytes>::blake2b256(
-                    &[&addr_bytes, &hist_record[1..19]].concat(),
-                );
-                hist_record[19..51].copy_from_slice(&checksum);
-
-                // Overwrite in place
-                cur.put(&addr_bytes, &hist_record, WriteFlags::CURRENT)?;
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
     /// Metadata: singleton entry "metadata" -> StoredEntryFixed<DbMetadata>
     ///
     /// Returns slice of data holding serialised entry.
@@ -2024,6 +2147,168 @@ impl ZainoDB {
     }
 
     // *** Internal DB methods ***
+
+    /// Mark a specific AddrHistRecord as spent in the addrhist DB.
+    /// Looks up a record by script and tx_index, sets FLAG_SPENT, and updates it in place.
+    ///
+    /// Returns Ok(true) if a record was updated, Ok(false) if not found, or Err on DB error.
+    async fn mark_addr_hist_record_spent(
+        &self,
+        addr_script: &AddrScript,
+        tx_index: TxIndex,
+        vout: u16,
+    ) -> Result<bool, FinalisedStateError> {
+        let addr_bytes = addr_script.to_bytes()?;
+        let mut txn = self.env.begin_rw_txn()?;
+        {
+            let mut cur = txn.open_rw_cursor(self.addrhist)?;
+
+            for (key, val) in cur.iter_dup_of(&addr_bytes)? {
+                if key.len() != AddrScript::VERSIONED_LEN {
+                    // TODO: Return error?
+                    break;
+                }
+                if val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN {
+                    // TODO: Return error?
+                    break;
+                }
+                let mut hist_record = [0u8; StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN];
+                hist_record.copy_from_slice(val);
+
+                // Parse the tx_index out of arr:
+                // - [0] StoredEntry tag
+                // - [1] record tag
+                // - [2..5] height
+                // - [6..7] tx_index
+                // - [8..9] vout
+                // - [10] flags
+                // - [11..18] value
+                // - [19..50] checksum
+
+                let block_index = u32::from_be_bytes([
+                    hist_record[2],
+                    hist_record[3],
+                    hist_record[4],
+                    hist_record[5],
+                ]);
+                let tx_idx = u16::from_be_bytes([hist_record[6], hist_record[7]]);
+                let rec_vout = u16::from_be_bytes([hist_record[8], hist_record[9]]);
+                let flags = hist_record[10];
+
+                // Skip if this row is an input or already marked spent.
+                if flags & AddrHistRecord::FLAG_IS_INPUT != 0
+                    || flags & AddrHistRecord::FLAG_SPENT != 0
+                {
+                    continue;
+                }
+
+                // Match on (height, tx_index, vout).
+                if block_index == tx_index.block_index()
+                    && tx_idx == tx_index.tx_index()
+                    && rec_vout == vout
+                {
+                    // Flip FLAG_SPENT.
+                    hist_record[10] |= AddrHistRecord::FLAG_SPENT;
+
+                    // Recompute checksum over entry header + payload (bytes 1‥19).
+                    let checksum = StoredEntryFixed::<AddrEventBytes>::blake2b256(
+                        &[&addr_bytes, &hist_record[1..19]].concat(),
+                    );
+                    hist_record[19..51].copy_from_slice(&checksum);
+
+                    // Write back in place.
+                    cur.put(&addr_bytes, &hist_record, WriteFlags::CURRENT)?;
+                    drop(cur);
+                    txn.commit()?;
+
+                    return Ok(true);
+                }
+            }
+        }
+        dbg!(txn.commit())?;
+        Ok(false)
+    }
+
+    /// Mark a specific AddrHistRecord as unspent in the addrhist DB.
+    /// Looks up a record by script and tx_index, sets FLAG_SPENT, and updates it in place.
+    ///
+    /// Returns Ok(true) if a record was updated, Ok(false) if not found, or Err on DB error.
+    async fn mark_addr_hist_record_unspent(
+        &self,
+        addr_script: &AddrScript,
+        tx_index: TxIndex,
+        vout: u16,
+    ) -> Result<bool, FinalisedStateError> {
+        let addr_bytes = addr_script.to_bytes()?;
+        let mut txn = self.env.begin_rw_txn()?;
+        {
+            let mut cur = txn.open_rw_cursor(self.addrhist)?;
+
+            for (key, val) in cur.iter_dup_of(&addr_bytes)? {
+                if key.len() != AddrScript::VERSIONED_LEN {
+                    // TODO: Return error?
+                    break;
+                }
+                if val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN {
+                    // TODO: Return error?
+                    break;
+                }
+                let mut hist_record = [0u8; StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN];
+                hist_record.copy_from_slice(val);
+
+                // Parse the tx_index out of arr:
+                // - [0] StoredEntry tag
+                // - [1] record tag
+                // - [2..5] height
+                // - [6..7] tx_index
+                // - [8..9] vout
+                // - [10] flags
+                // - [11..18] value
+                // - [19..50] checksum
+
+                let block_index = u32::from_be_bytes([
+                    hist_record[2],
+                    hist_record[3],
+                    hist_record[4],
+                    hist_record[5],
+                ]);
+                let tx_idx = u16::from_be_bytes([hist_record[6], hist_record[7]]);
+                let rec_vout = u16::from_be_bytes([hist_record[8], hist_record[9]]);
+                let flags = hist_record[10];
+
+                // Skip if this row is an input or already marked unspent.
+                if (flags & AddrHistRecord::FLAG_IS_INPUT) != 0
+                    || (flags & AddrHistRecord::FLAG_SPENT) == 0
+                {
+                    continue;
+                }
+
+                // Match on (height, tx_index, vout).
+                if block_index == tx_index.block_index()
+                    && tx_idx == tx_index.tx_index()
+                    && rec_vout == vout
+                {
+                    // Flip FLAG_SPENT.
+                    hist_record[10] &= !AddrHistRecord::FLAG_SPENT;
+
+                    // Recompute checksum over entry header + payload (bytes 1‥19).
+                    let checksum = StoredEntryFixed::<AddrEventBytes>::blake2b256(
+                        &[&addr_bytes, &hist_record[1..19]].concat(),
+                    );
+                    hist_record[19..51].copy_from_slice(&checksum);
+
+                    // Write back in place.
+                    cur.put(&addr_bytes, &hist_record, WriteFlags::CURRENT)?;
+                    drop(cur);
+                    dbg!(txn.commit())?;
+
+                    return Ok(true);
+                }
+            }
+        }
+        dbg!(txn.commit())?;
+        Ok(false)
+    }
 
     /// Fetches the previous transparent output for the given outpoint.
     /// Returns `TxOutCompact` or an explicit error if not found or invalid.
@@ -2220,30 +2505,34 @@ impl ZainoDB {
     // *** Public fetcher methods - Used by DbReader ***
 
     /// Fetch the block height in the main chain for a given block hash.
-    pub fn get_block_height_by_hash(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
-        let height = self.resolve_validated_hash_or_height(HashOrHeight::Hash(hash.into()))?;
+    async fn get_block_height_by_hash(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
+        let height = self
+            .resolve_validated_hash_or_height(HashOrHeight::Hash(hash.into()))
+            .await?;
         Ok(height)
     }
 
     /// Fetch the height range for the given block hashes.
-    pub fn get_block_range_by_hash(
+    async fn get_block_range_by_hash(
         &self,
         start_hash: Hash,
         end_hash: Hash,
     ) -> Result<(Height, Height), FinalisedStateError> {
-        let start_height =
-            self.resolve_validated_hash_or_height(HashOrHeight::Hash(start_hash.into()))?;
-        let end_height =
-            self.resolve_validated_hash_or_height(HashOrHeight::Hash(end_hash.into()))?;
+        let start_height = self
+            .resolve_validated_hash_or_height(HashOrHeight::Hash(start_hash.into()))
+            .await?;
+        let end_height = self
+            .resolve_validated_hash_or_height(HashOrHeight::Hash(end_hash.into()))
+            .await?;
 
         let (validated_start, validated_end) =
-            self.validate_block_range(start_height, end_height)?;
+            self.validate_block_range(start_height, end_height).await?;
 
         Ok((validated_start, validated_end))
     }
 
     // Fetch the TxIndex for the given txid, transaction data is indexed by Txidex internally.
-    pub fn get_tx_index(&self, txid: &Hash) -> Result<Option<TxIndex>, FinalisedStateError> {
+    async fn get_tx_index(&self, txid: &Hash) -> Result<Option<TxIndex>, FinalisedStateError> {
         if let Some(index) = self.find_txid_index(txid)? {
             Ok(Some(index))
         } else {
@@ -2252,12 +2541,13 @@ impl ZainoDB {
     }
 
     /// Fetch block header data by height.
-    pub fn get_block_header_data(
+    async fn get_block_header_data(
         &self,
         height: Height,
     ) -> Result<BlockHeaderData, FinalisedStateError> {
-        let validated_height =
-            self.resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))?;
+        let validated_height = self
+            .resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))
+            .await?;
         let height_bytes = validated_height.to_bytes()?;
 
         let txn = self.env.begin_ro_txn()?;
@@ -2271,12 +2561,12 @@ impl ZainoDB {
     /// Fetches block headers for the given height range.
     ///
     /// Uses cursor based fetch.
-    pub fn get_block_range_headers(
+    async fn get_block_range_headers(
         &self,
         start: Height,
         end: Height,
     ) -> Result<Vec<BlockHeaderData>, FinalisedStateError> {
-        self.validate_block_range(start, end)?;
+        self.validate_block_range(start, end).await?;
         let start_bytes = start.to_bytes()?;
         let end_bytes = end.to_bytes()?;
 
@@ -2296,16 +2586,17 @@ impl ZainoDB {
     /// Fetch the txid bytes for a given TxIndex.
     ///
     /// This uses an optimized lookup without decoding the full TxidList.
-    pub fn get_txid(&self, tx_index: TxIndex) -> Result<Hash, FinalisedStateError> {
+    async fn get_txid(&self, tx_index: TxIndex) -> Result<Hash, FinalisedStateError> {
         let txn = self.env.begin_ro_txn()?;
         let txid_bytes = self.txindex_to_txid_bytes_raw_txn(&txn, tx_index)?;
         Ok(Hash::from(txid_bytes))
     }
 
     /// Fetch block txids by height.
-    pub fn get_block_txids(&self, height: Height) -> Result<TxidList, FinalisedStateError> {
-        let validated_height =
-            self.resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))?;
+    async fn get_block_txids(&self, height: Height) -> Result<TxidList, FinalisedStateError> {
+        let validated_height = self
+            .resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))
+            .await?;
         let height_bytes = validated_height.to_bytes()?;
 
         let txn = self.env.begin_ro_txn()?;
@@ -2319,12 +2610,12 @@ impl ZainoDB {
     /// Fetches block txids for the given height range.
     ///
     /// Uses cursor based fetch.
-    pub fn get_block_range_txids(
+    async fn get_block_range_txids(
         &self,
         start: Height,
         end: Height,
     ) -> Result<Vec<TxidList>, FinalisedStateError> {
-        self.validate_block_range(start, end)?;
+        self.validate_block_range(start, end).await?;
         let start_bytes = start.to_bytes()?;
         let end_bytes = end.to_bytes()?;
 
@@ -2344,7 +2635,7 @@ impl ZainoDB {
     /// Fetch the serialized TransparentCompactTx for the given TxIndex, if present.
     ///
     /// This uses an optimized lookup without decoding the full TxidList.
-    pub fn get_transparent(
+    async fn get_transparent(
         &self,
         tx_index: TxIndex,
     ) -> Result<Option<TransparentCompactTx>, FinalisedStateError> {
@@ -2357,12 +2648,13 @@ impl ZainoDB {
     }
 
     /// Fetch block transparent transaction data by height.
-    pub fn get_block_transparent(
+    async fn get_block_transparent(
         &self,
         height: Height,
     ) -> Result<TransparentTxList, FinalisedStateError> {
-        let validated_height =
-            self.resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))?;
+        let validated_height = self
+            .resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))
+            .await?;
         let height_bytes = validated_height.to_bytes()?;
 
         let txn = self.env.begin_ro_txn()?;
@@ -2376,12 +2668,12 @@ impl ZainoDB {
     /// Fetches block transparent tx data for the given height range.
     ///
     /// Uses cursor based fetch.
-    pub fn get_block_range_transparent(
+    async fn get_block_range_transparent(
         &self,
         start: Height,
         end: Height,
     ) -> Result<Vec<TransparentTxList>, FinalisedStateError> {
-        self.validate_block_range(start, end)?;
+        self.validate_block_range(start, end).await?;
         let start_bytes = start.to_bytes()?;
         let end_bytes = end.to_bytes()?;
 
@@ -2403,7 +2695,7 @@ impl ZainoDB {
     /// Fetch the serialized SaplingCompactTx for the given TxIndex, if present.
     ///
     /// This uses an optimized lookup without decoding the full TxidList.
-    pub fn get_sapling(
+    async fn get_sapling(
         &self,
         tx_index: TxIndex,
     ) -> Result<Option<SaplingCompactTx>, FinalisedStateError> {
@@ -2416,9 +2708,13 @@ impl ZainoDB {
     }
 
     /// Fetch block sapling transaction data by height.
-    pub fn get_block_sapling(&self, height: Height) -> Result<SaplingTxList, FinalisedStateError> {
-        let validated_height =
-            self.resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))?;
+    async fn get_block_sapling(
+        &self,
+        height: Height,
+    ) -> Result<SaplingTxList, FinalisedStateError> {
+        let validated_height = self
+            .resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))
+            .await?;
         let height_bytes = validated_height.to_bytes()?;
 
         let txn = self.env.begin_ro_txn()?;
@@ -2432,12 +2728,12 @@ impl ZainoDB {
     /// Fetches block sapling tx data for the given height range.
     ///
     /// Uses cursor based fetch.
-    pub fn get_block_range_sapling(
+    async fn get_block_range_sapling(
         &self,
         start: Height,
         end: Height,
     ) -> Result<Vec<SaplingTxList>, FinalisedStateError> {
-        self.validate_block_range(start, end)?;
+        self.validate_block_range(start, end).await?;
         let start_bytes = start.to_bytes()?;
         let end_bytes = end.to_bytes()?;
 
@@ -2457,7 +2753,7 @@ impl ZainoDB {
     /// Fetch the serialized OrchardCompactTx for the given TxIndex, if present.
     ///
     /// This uses an optimized lookup without decoding the full TxidList.
-    pub fn get_orchard(
+    async fn get_orchard(
         &self,
         tx_index: TxIndex,
     ) -> Result<Option<OrchardCompactTx>, FinalisedStateError> {
@@ -2470,9 +2766,13 @@ impl ZainoDB {
     }
 
     /// Fetch block orchard transaction data by height.
-    pub fn get_block_orchard(&self, height: Height) -> Result<OrchardTxList, FinalisedStateError> {
-        let validated_height =
-            self.resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))?;
+    async fn get_block_orchard(
+        &self,
+        height: Height,
+    ) -> Result<OrchardTxList, FinalisedStateError> {
+        let validated_height = self
+            .resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))
+            .await?;
         let height_bytes = validated_height.to_bytes()?;
 
         let txn = self.env.begin_ro_txn()?;
@@ -2486,12 +2786,12 @@ impl ZainoDB {
     /// Fetches block orchard tx data for the given height range.
     ///
     /// Uses cursor based fetch.
-    pub fn get_block_range_orchard(
+    async fn get_block_range_orchard(
         &self,
         start: Height,
         end: Height,
     ) -> Result<Vec<OrchardTxList>, FinalisedStateError> {
-        self.validate_block_range(start, end)?;
+        self.validate_block_range(start, end).await?;
         let start_bytes = start.to_bytes()?;
         let end_bytes = end.to_bytes()?;
 
@@ -2509,12 +2809,13 @@ impl ZainoDB {
     }
 
     /// Fetch block commitment tree data by height.
-    pub fn get_block_commitment_tree_data(
+    async fn get_block_commitment_tree_data(
         &self,
         height: Height,
     ) -> Result<CommitmentTreeData, FinalisedStateError> {
-        let validated_height =
-            self.resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))?;
+        let validated_height = self
+            .resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))
+            .await?;
         let height_bytes = validated_height.to_bytes()?;
 
         let txn = self.env.begin_ro_txn()?;
@@ -2529,12 +2830,12 @@ impl ZainoDB {
     /// Fetches block commitment tree data for the given height range.
     ///
     /// Uses cursor based fetch.
-    pub fn get_block_range_commitment_tree_data(
+    async fn get_block_range_commitment_tree_data(
         &self,
         start: Height,
         end: Height,
     ) -> Result<Vec<CommitmentTreeData>, FinalisedStateError> {
-        self.validate_block_range(start, end)?;
+        self.validate_block_range(start, end).await?;
         let start_bytes = start.to_bytes()?;
         let end_bytes = end.to_bytes()?;
 
@@ -2560,7 +2861,7 @@ impl ZainoDB {
     /// - `Ok(Some(TxIndex))` if the outpoint is spent.
     /// - `Ok(None)` if no entry exists (not spent or not known).
     /// - `Err(...)` on deserialization or DB error.
-    pub fn prev_output_index(
+    async fn prev_output_index(
         &self,
         outpoint: Outpoint,
     ) -> Result<Option<TxIndex>, FinalisedStateError> {
@@ -2585,7 +2886,7 @@ impl ZainoDB {
     /// - Returns `Some(TxIndex)` if spent,
     /// - `None` if not found,
     /// - or returns `Err` immediately if any DB or decode error occurs.
-    pub fn prev_outputs_index(
+    async fn prev_outputs_index(
         &self,
         outpoints: Vec<Outpoint>,
     ) -> Result<Vec<Option<TxIndex>>, FinalisedStateError> {
@@ -2618,7 +2919,7 @@ impl ZainoDB {
     /// - `Ok(Some(records))` if one or more valid records exist,
     /// - `Ok(None)` if no records exist (not an error),
     /// - `Err(...)` if any decoding or DB error occurs.
-    pub fn addr_records(
+    async fn addr_records(
         &self,
         addr_script: AddrScript,
     ) -> Result<Option<Vec<AddrEventBytes>>, FinalisedStateError> {
@@ -2650,7 +2951,7 @@ impl ZainoDB {
     /// - `Ok(Some(records))` if one or more matching records are found at that index,
     /// - `Ok(None)` if no matching records exist (not an error),
     /// - `Err(...)` on decode or DB failure.
-    pub fn addr_and_index_records(
+    async fn addr_and_index_records(
         &self,
         addr_script: AddrScript,
         tx_index: TxIndex,
@@ -2686,7 +2987,7 @@ impl ZainoDB {
     /// - `Ok(Some(vec))` if one or more matching records are found,
     /// - `Ok(None)` if no matches found (not an error),
     /// - `Err(...)` on decode or DB failure.
-    pub fn addr_tx_indexes_by_range(
+    async fn addr_tx_indexes_by_range(
         &self,
         addr_script: AddrScript,
         start_height: Height,
@@ -2718,7 +3019,7 @@ impl ZainoDB {
     /// - `Ok(Some(vec))` if one or more UTXOs are found,
     /// - `Ok(None)` if none found (not an error),
     /// - `Err(...)` on decode or DB failure.
-    pub fn addr_utxos_by_range(
+    async fn addr_utxos_by_range(
         &self,
         addr_script: AddrScript,
         start_height: Height,
@@ -2749,7 +3050,7 @@ impl ZainoDB {
     /// - `−value` for spent inputs
     ///
     /// Returns the signed net value as `i64`, or error on failure.
-    pub fn addr_balance_by_range(
+    async fn addr_balance_by_range(
         &self,
         addr_script: AddrScript,
         start_height: Height,
@@ -2764,9 +3065,10 @@ impl ZainoDB {
     /// Returns the ChainBlock for the given Height.
     ///
     /// TODO: Add separate range fetch method!
-    pub fn get_chain_block(&self, height: Height) -> Result<ChainBlock, FinalisedStateError> {
-        let validated_height =
-            self.resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))?;
+    async fn get_chain_block(&self, height: Height) -> Result<ChainBlock, FinalisedStateError> {
+        let validated_height = self
+            .resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))
+            .await?;
         let height_bytes = validated_height.to_bytes()?;
 
         let txn = self.env.begin_ro_txn()?;
@@ -2850,12 +3152,13 @@ impl ZainoDB {
     /// Returns the CompactBlock for the given Height.
     ///
     /// TODO: Add separate range fetch method!
-    pub fn get_compact_block(
+    async fn get_compact_block(
         &self,
         height: Height,
     ) -> Result<zaino_proto::proto::compact_formats::CompactBlock, FinalisedStateError> {
-        let validated_height =
-            self.resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))?;
+        let validated_height = self
+            .resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))
+            .await?;
         let height_bytes = validated_height.to_bytes()?;
 
         let txn = self.env.begin_ro_txn()?;
@@ -2953,7 +3256,7 @@ impl ZainoDB {
     /// Fetch every `ShardRoot` whose numeric index satisfies  
     /// `start.index ≤ idx ≤ end.index` (inclusive).  
     /// If `start > end` an empty `Vec` is returned.
-    pub fn get_shard_roots(
+    async fn get_shard_roots(
         &self,
         start: Index,
         end: Index,
@@ -2998,7 +3301,7 @@ impl ZainoDB {
     }
 
     /// Fetch database metadata.
-    pub fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
+    async fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
         let txn = self.env.begin_ro_txn()?;
         let raw = self.metadata_raw_txn(&txn)?;
         let entry = StoredEntryFixed::from_bytes(&raw)
@@ -3010,7 +3313,7 @@ impl ZainoDB {
     // *** DbReader creation ***
 
     /// Create a read-only facade backed by *this* live database.
-    pub fn to_reader(&self) -> DbReader<'_> {
+    pub(crate) async fn to_reader(&self) -> DbReader<'_> {
         DbReader { inner: self }
     }
 
@@ -3316,7 +3619,7 @@ impl ZainoDB {
 
     /// Compute the Merkle root of a non‑empty slice of 32‑byte transaction IDs.
     /// `txids` must be in block order and already in internal (little‑endian) byte order.
-    pub fn calculate_block_merkle_root(txids: &[[u8; 32]]) -> [u8; 32] {
+    fn calculate_block_merkle_root(txids: &[[u8; 32]]) -> [u8; 32] {
         assert!(
             !txids.is_empty(),
             "block must contain at least the coinbase"
@@ -3353,7 +3656,7 @@ impl ZainoDB {
     ///
     /// Optimized to skip blocks already known to be validated.  
     /// Returns the full requested `(start, end)` range on success.
-    fn validate_block_range(
+    async fn validate_block_range(
         &self,
         start: Height,
         end: Height,
@@ -3405,7 +3708,7 @@ impl ZainoDB {
     /// * If the block hasn’t been validated yet we do it on-demand
     /// * On success the block hright is returned; on any failure you get a
     ///   `FinalisedStateError`.
-    fn resolve_validated_hash_or_height(
+    async fn resolve_validated_hash_or_height(
         &self,
         hash_or_height: HashOrHeight,
     ) -> Result<Height, FinalisedStateError> {
@@ -3443,7 +3746,7 @@ impl ZainoDB {
 
             // Hash lookup path.
             HashOrHeight::Hash(z_hash) => {
-                let height = self.resolve_hash_or_height(hash_or_height)?;
+                let height = self.resolve_hash_or_height(hash_or_height).await?;
                 (height, Hash::from(z_hash))
             }
         };
@@ -3456,7 +3759,7 @@ impl ZainoDB {
     ///
     /// * Height  ->  returned unchanged (zero cost).  
     /// * Hash ->  lookup in `hashes` db.
-    fn resolve_hash_or_height(
+    async fn resolve_hash_or_height(
         &self,
         hash_or_height: HashOrHeight,
     ) -> Result<Height, FinalisedStateError> {
@@ -3493,7 +3796,7 @@ impl ZainoDB {
     ///
     /// * Brand-new DB → insert the entry.
     /// * Existing DB  → verify checksum, version, and schema hash.
-    fn check_schema_version(&self) -> Result<(), FinalisedStateError> {
+    async fn check_schema_version(&self) -> Result<(), FinalisedStateError> {
         // We only need a mutable LMDB txn; `self` itself isn’t mutated.
         let mut txn = self.env.begin_rw_txn()?;
 
@@ -3559,170 +3862,189 @@ impl ZainoDB {
 ///   therefore:
 ///   * absolutely no cloning / ARC-ing of LMDB handles,
 ///   * compile-time guarantee that the reader cannot mutate state.
-pub struct DbReader<'a> {
+pub(crate) struct DbReader<'a> {
     inner: &'a ZainoDB,
 }
 
 impl<'a> DbReader<'a> {
     /// Fetch the block height in the main chain for a given block hash.
-    pub fn get_block_height_by_hash(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
-        self.inner.get_block_height_by_hash(hash)
+    pub(crate) async fn get_block_height_by_hash(
+        &self,
+        hash: Hash,
+    ) -> Result<Height, FinalisedStateError> {
+        self.inner.get_block_height_by_hash(hash).await
     }
 
     /// Fetch the height range for the given block hashes.
-    pub fn get_block_range_by_hash(
+    pub(crate) async fn get_block_range_by_hash(
         &self,
         start_hash: Hash,
         end_hash: Hash,
     ) -> Result<(Height, Height), FinalisedStateError> {
-        self.inner.get_block_range_by_hash(start_hash, end_hash)
+        self.inner
+            .get_block_range_by_hash(start_hash, end_hash)
+            .await
     }
 
-    // Fetch the TxIndex for the given txid, transaction data is indexed by Txidex internally.
-    pub fn get_tx_index(&self, txid: &Hash) -> Result<Option<TxIndex>, FinalisedStateError> {
-        self.inner.get_tx_index(txid)
+    /// Fetch the TxIndex for the given txid, transaction data is indexed by Txidex internally.
+    pub(crate) async fn get_tx_index(
+        &self,
+        txid: &Hash,
+    ) -> Result<Option<TxIndex>, FinalisedStateError> {
+        self.inner.get_tx_index(txid).await
     }
 
     /// Fetch block header data by height.
-    pub fn get_block_header_data(
+    pub(crate) async fn get_block_header_data(
         &self,
         height: Height,
     ) -> Result<BlockHeaderData, FinalisedStateError> {
-        self.inner.get_block_header_data(height)
+        self.inner.get_block_header_data(height).await
     }
 
     /// Fetches block headers for the given height range.
     ///
     /// Uses cursor based fetch.
-    pub fn get_block_range_headers(
+    pub(crate) async fn get_block_range_headers(
         &self,
         start: Height,
         end: Height,
     ) -> Result<Vec<BlockHeaderData>, FinalisedStateError> {
-        self.inner.get_block_range_headers(start, end)
+        self.inner.get_block_range_headers(start, end).await
     }
 
     /// Fetch the txid bytes for a given TxIndex.
     ///
     /// This uses an optimized lookup without decoding the full TxidList.
-    pub fn get_txid(&self, tx_index: TxIndex) -> Result<Hash, FinalisedStateError> {
-        self.inner.get_txid(tx_index)
+    pub(crate) async fn get_txid(&self, tx_index: TxIndex) -> Result<Hash, FinalisedStateError> {
+        self.inner.get_txid(tx_index).await
     }
 
     /// Fetch block txids by height.
-    pub fn get_block_txids(&self, height: Height) -> Result<TxidList, FinalisedStateError> {
-        self.inner.get_block_txids(height)
+    pub(crate) async fn get_block_txids(
+        &self,
+        height: Height,
+    ) -> Result<TxidList, FinalisedStateError> {
+        self.inner.get_block_txids(height).await
     }
 
     /// Fetches block txids for the given height range.
     ///
     /// Uses cursor based fetch.
-    pub fn get_block_range_txids(
+    pub(crate) async fn get_block_range_txids(
         &self,
         start: Height,
         end: Height,
     ) -> Result<Vec<TxidList>, FinalisedStateError> {
-        self.inner.get_block_range_txids(start, end)
+        self.inner.get_block_range_txids(start, end).await
     }
 
     /// Fetch the serialized TransparentCompactTx for the given TxIndex, if present.
     ///
     /// This uses an optimized lookup without decoding the full TxidList.
-    pub fn get_transparent(
+    pub(crate) async fn get_transparent(
         &self,
         tx_index: TxIndex,
     ) -> Result<Option<TransparentCompactTx>, FinalisedStateError> {
-        self.inner.get_transparent(tx_index)
+        self.inner.get_transparent(tx_index).await
     }
 
     /// Fetch block transparent transaction data by height.
-    pub fn get_block_transparent(
+    pub(crate) async fn get_block_transparent(
         &self,
         height: Height,
     ) -> Result<TransparentTxList, FinalisedStateError> {
-        self.inner.get_block_transparent(height)
+        self.inner.get_block_transparent(height).await
     }
 
     /// Fetches block transparent tx data for the given height range.
     ///
     /// Uses cursor based fetch.
-    pub fn get_block_range_transparent(
+    pub(crate) async fn get_block_range_transparent(
         &self,
         start: Height,
         end: Height,
     ) -> Result<Vec<TransparentTxList>, FinalisedStateError> {
-        self.inner.get_block_range_transparent(start, end)
+        self.inner.get_block_range_transparent(start, end).await
     }
 
     /// Fetch the serialized SaplingCompactTx for the given TxIndex, if present.
     ///
     /// This uses an optimized lookup without decoding the full TxidList.
-    pub fn get_sapling(
+    pub(crate) async fn get_sapling(
         &self,
         tx_index: TxIndex,
     ) -> Result<Option<SaplingCompactTx>, FinalisedStateError> {
-        self.inner.get_sapling(tx_index)
+        self.inner.get_sapling(tx_index).await
     }
 
     /// Fetch block sapling transaction data by height.
-    pub fn get_block_sapling(&self, height: Height) -> Result<SaplingTxList, FinalisedStateError> {
-        self.inner.get_block_sapling(height)
+    pub(crate) async fn get_block_sapling(
+        &self,
+        height: Height,
+    ) -> Result<SaplingTxList, FinalisedStateError> {
+        self.inner.get_block_sapling(height).await
     }
 
     /// Fetches block sapling tx data for the given height range.
     ///
     /// Uses cursor based fetch.
-    pub fn get_block_range_sapling(
+    pub(crate) async fn get_block_range_sapling(
         &self,
         start: Height,
         end: Height,
     ) -> Result<Vec<SaplingTxList>, FinalisedStateError> {
-        self.inner.get_block_range_sapling(start, end)
+        self.inner.get_block_range_sapling(start, end).await
     }
 
     /// Fetch the serialized OrchardCompactTx for the given TxIndex, if present.
     ///
     /// This uses an optimized lookup without decoding the full TxidList.
-    pub fn get_orchard(
+    pub(crate) async fn get_orchard(
         &self,
         tx_index: TxIndex,
     ) -> Result<Option<OrchardCompactTx>, FinalisedStateError> {
-        self.inner.get_orchard(tx_index)
+        self.inner.get_orchard(tx_index).await
     }
 
     /// Fetch block orchard transaction data by height.
-    pub fn get_block_orchard(&self, height: Height) -> Result<OrchardTxList, FinalisedStateError> {
-        self.inner.get_block_orchard(height)
+    pub(crate) async fn get_block_orchard(
+        &self,
+        height: Height,
+    ) -> Result<OrchardTxList, FinalisedStateError> {
+        self.inner.get_block_orchard(height).await
     }
 
     /// Fetches block orchard tx data for the given height range.
     ///
     /// Uses cursor based fetch.
-    pub fn get_block_range_orchard(
+    pub(crate) async fn get_block_range_orchard(
         &self,
         start: Height,
         end: Height,
     ) -> Result<Vec<OrchardTxList>, FinalisedStateError> {
-        self.inner.get_block_range_orchard(start, end)
+        self.inner.get_block_range_orchard(start, end).await
     }
 
     /// Fetch block commitment tree data by height.
-    pub fn get_block_commitment_tree_data(
+    pub(crate) async fn get_block_commitment_tree_data(
         &self,
         height: Height,
     ) -> Result<CommitmentTreeData, FinalisedStateError> {
-        self.inner.get_block_commitment_tree_data(height)
+        self.inner.get_block_commitment_tree_data(height).await
     }
 
     /// Fetches block commitment tree data for the given height range.
     ///
     /// Uses cursor based fetch.
-    pub fn get_block_range_commitment_tree_data(
+    pub(crate) async fn get_block_range_commitment_tree_data(
         &self,
         start: Height,
         end: Height,
     ) -> Result<Vec<CommitmentTreeData>, FinalisedStateError> {
-        self.inner.get_block_range_commitment_tree_data(start, end)
+        self.inner
+            .get_block_range_commitment_tree_data(start, end)
+            .await
     }
 
     /// Fetch the `TxIndex` that spent a given outpoint, if any.
@@ -3731,11 +4053,11 @@ impl<'a> DbReader<'a> {
     /// - `Ok(Some(TxIndex))` if the outpoint is spent.
     /// - `Ok(None)` if no entry exists (not spent or not known).
     /// - `Err(...)` on deserialization or DB error.
-    pub fn prev_output_index(
+    pub(crate) async fn prev_output_index(
         &self,
         outpoint: Outpoint,
     ) -> Result<Option<TxIndex>, FinalisedStateError> {
-        self.inner.prev_output_index(outpoint)
+        self.inner.prev_output_index(outpoint).await
     }
 
     /// Fetch the `TxIndex` entries for a batch of outpoints.
@@ -3744,11 +4066,11 @@ impl<'a> DbReader<'a> {
     /// - Returns `Some(TxIndex)` if spent,
     /// - `None` if not found,
     /// - or returns `Err` immediately if any DB or decode error occurs.
-    pub fn prev_outputs_index(
+    pub(crate) async fn prev_outputs_index(
         &self,
         outpoints: Vec<Outpoint>,
     ) -> Result<Vec<Option<TxIndex>>, FinalisedStateError> {
-        self.inner.prev_outputs_index(outpoints)
+        self.inner.prev_outputs_index(outpoints).await
     }
 
     /// Fetch all address history records for a given transparent address.
@@ -3757,11 +4079,11 @@ impl<'a> DbReader<'a> {
     /// - `Ok(Some(records))` if one or more valid records exist,
     /// - `Ok(None)` if no records exist (not an error),
     /// - `Err(...)` if any decoding or DB error occurs.
-    pub fn addr_records(
+    pub(crate) async fn addr_records(
         &self,
         addr_script: AddrScript,
     ) -> Result<Option<Vec<AddrEventBytes>>, FinalisedStateError> {
-        self.inner.addr_records(addr_script)
+        self.inner.addr_records(addr_script).await
     }
 
     /// Fetch all address history records for a given address and TxIndex.
@@ -3770,12 +4092,14 @@ impl<'a> DbReader<'a> {
     /// - `Ok(Some(records))` if one or more matching records are found at that index,
     /// - `Ok(None)` if no matching records exist (not an error),
     /// - `Err(...)` on decode or DB failure.
-    pub fn addr_and_index_records(
+    pub(crate) async fn addr_and_index_records(
         &self,
         addr_script: AddrScript,
         tx_index: TxIndex,
     ) -> Result<Option<Vec<AddrEventBytes>>, FinalisedStateError> {
-        self.inner.addr_and_index_records(addr_script, tx_index)
+        self.inner
+            .addr_and_index_records(addr_script, tx_index)
+            .await
     }
 
     /// Fetch all distinct `TxIndex` values for `addr_script` within the
@@ -3785,7 +4109,7 @@ impl<'a> DbReader<'a> {
     /// - `Ok(Some(vec))` if one or more matching records are found,
     /// - `Ok(None)` if no matches found (not an error),
     /// - `Err(...)` on decode or DB failure.
-    pub fn addr_tx_indexes_by_range(
+    pub(crate) async fn addr_tx_indexes_by_range(
         &self,
         addr_script: AddrScript,
         start_height: Height,
@@ -3793,6 +4117,7 @@ impl<'a> DbReader<'a> {
     ) -> Result<Option<Vec<TxIndex>>, FinalisedStateError> {
         self.inner
             .addr_tx_indexes_by_range(addr_script, start_height, end_height)
+            .await
     }
 
     /// Fetch all UTXOs (unspent mined outputs) for `addr_script` within the
@@ -3804,7 +4129,7 @@ impl<'a> DbReader<'a> {
     /// - `Ok(Some(vec))` if one or more UTXOs are found,
     /// - `Ok(None)` if none found (not an error),
     /// - `Err(...)` on decode or DB failure.
-    pub fn addr_utxos_by_range(
+    pub(crate) async fn addr_utxos_by_range(
         &self,
         addr_script: AddrScript,
         start_height: Height,
@@ -3812,6 +4137,7 @@ impl<'a> DbReader<'a> {
     ) -> Result<Option<Vec<(TxIndex, u16, u64)>>, FinalisedStateError> {
         self.inner
             .addr_utxos_by_range(addr_script, start_height, end_height)
+            .await
     }
 
     /// Computes the transparent balance change for `addr_script` over the
@@ -3822,7 +4148,7 @@ impl<'a> DbReader<'a> {
     /// - `−value` for spent inputs
     ///
     /// Returns the signed net value as `i64`, or error on failure.
-    pub fn addr_balance_by_range(
+    pub(crate) async fn addr_balance_by_range(
         &self,
         addr_script: AddrScript,
         start_height: Height,
@@ -3830,39 +4156,43 @@ impl<'a> DbReader<'a> {
     ) -> Result<i64, FinalisedStateError> {
         self.inner
             .addr_balance_by_range(addr_script, start_height, end_height)
+            .await
     }
 
     /// Returns the ChainBlock for the given Height.
     ///
     /// TODO: Add separate range fetch method!
-    pub fn get_chain_block(&self, height: Height) -> Result<ChainBlock, FinalisedStateError> {
-        self.inner.get_chain_block(height)
+    pub(crate) async fn get_chain_block(
+        &self,
+        height: Height,
+    ) -> Result<ChainBlock, FinalisedStateError> {
+        self.inner.get_chain_block(height).await
     }
 
     /// Returns the CompactBlock for the given Height.
     ///
     /// TODO: Add separate range fetch method!
-    pub fn get_compact_block(
+    pub(crate) async fn get_compact_block(
         &self,
         height: Height,
     ) -> Result<zaino_proto::proto::compact_formats::CompactBlock, FinalisedStateError> {
-        self.inner.get_compact_block(height)
+        self.inner.get_compact_block(height).await
     }
 
     /// Fetch every `ShardRoot` whose numeric index satisfies  
     /// `start.index ≤ idx ≤ end.index` (inclusive).  
     /// If `start > end` an empty `Vec` is returned.
-    pub fn get_shard_roots(
+    pub(crate) async fn get_shard_roots(
         &self,
         start: Index,
         end: Index,
     ) -> Result<Vec<ShardRoot>, FinalisedStateError> {
-        self.inner.get_shard_roots(start, end)
+        self.inner.get_shard_roots(start, end).await
     }
 
     /// Fetch database metadata.
-    pub fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
-        self.inner.get_metadata()
+    pub(crate) async fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
+        self.inner.get_metadata().await
     }
 }
 
@@ -3879,7 +4209,9 @@ impl<'a> DbReader<'a> {
 /// └──────────────────────┴──────────────────┴───────────────────────────────┴─────────────────┘
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredEntryFixed<T: ZainoVersionedSerialise + FixedEncodedLen> {
+    /// Inner record
     pub item: T,
+    /// Entry checksum
     pub checksum: [u8; 32],
 }
 
@@ -3958,7 +4290,9 @@ impl<T: ZainoVersionedSerialise + FixedEncodedLen> FixedEncodedLen for StoredEnt
 /// └─────────────────────┴──────────────────────────────┴────────────────┴────────────────────┴────────────┘
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredEntryVar<T: ZainoVersionedSerialise> {
+    /// Inner record
     pub item: T,
+    /// Entry checksum
     pub checksum: [u8; 32],
 }
 

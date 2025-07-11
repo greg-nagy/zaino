@@ -6,6 +6,7 @@ use std::io::BufReader;
 use std::path::Path;
 use std::{fs::File, path::PathBuf};
 use tempfile::TempDir;
+use zebra_state::HashOrHeight;
 
 use zaino_proto::proto::compact_formats::CompactBlock;
 use zebra_rpc::methods::GetAddressUtxos;
@@ -114,10 +115,6 @@ async fn spawn_default_zaino_db() -> Result<(TempDir, ZainoDB), FinalisedStateEr
 
     let zaino_db = ZainoDB::spawn(&config).await.unwrap();
 
-    let metadata = zaino_db.get_metadata().unwrap();
-
-    println!("ZainoDB launched with version: {:?}", metadata);
-
     Ok((temp_dir, zaino_db))
 }
 
@@ -131,7 +128,8 @@ async fn load_vectors_and_spawn_and_sync_zaino_db() -> (
     let (blocks, faucet, recipient) = load_test_vectors().unwrap();
     let (db_dir, zaino_db) = spawn_default_zaino_db().await.unwrap();
     for (_h, chain_block, _compact_block) in blocks.clone() {
-        zaino_db.write_block(chain_block).unwrap();
+        // dbg!("Writing block at height {}", _h);
+        zaino_db.write_block(chain_block).await.unwrap();
     }
     (blocks, faucet, recipient, db_dir, zaino_db)
 }
@@ -186,8 +184,26 @@ async fn vectors_can_be_loaded_and_deserialised() {
     println!("addr: {}", addr);
 }
 
+// Writes all blocks to db and validates data.
 #[tokio::test]
-async fn create_db_and_sync_chain() {
+async fn add_blocks_to_db_and_verify() {
     let (_blocks, _faucet, _recipient, _db_dir, _zaino_db) =
         load_vectors_and_spawn_and_sync_zaino_db().await;
 }
+
+// Deletes all blocks from db.
+#[tokio::test]
+async fn delete_blocks_from_db() {
+    let (_blocks, _faucet, _recipient, _db_dir, zaino_db) =
+        load_vectors_and_spawn_and_sync_zaino_db().await;
+
+    for h in (197..=200).rev() {
+        dbg!("Deleting block at height {}", h);
+        zaino_db
+            .delete_block(HashOrHeight::Height(zebra_chain::block::Height(h)))
+            .await
+            .unwrap();
+    }
+}
+
+// fetcher methods
