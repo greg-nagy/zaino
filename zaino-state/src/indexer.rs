@@ -254,10 +254,14 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     async fn get_block_count(&self) -> Result<Height, Self::Error>;
 
     /// Returns the hash of the best block (tip) of the longest chain.
-    /// zcashd reference: [`getbestblockhash`](https://zcash.github.io/rpc/getbestblockhash.html)
+    /// online zcashd reference: [`getbestblockhash`](https://zcash.github.io/rpc/getbestblockhash.html)
     /// The zcashd doc reference above says there are no parameters and the result is a "hex" (string) of the block hash hex encoded.
     /// method: post
     /// tags: blockchain
+    /// The Zcash source code is considered canonical:
+    /// [In the rpc definition](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/common.h#L48) there are no required params, or optional params.
+    /// [The function in rpc/blockchain.cpp]https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L325
+    /// where `return chainActive.Tip()->GetBlockHash().GetHex();` is the [return expression](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L339)returning a `std::string`
     async fn get_best_blockhash(&self) -> Result<GetBlockHash, Self::Error>;
 
     /// Returns all transaction ids in the memory pool, as a JSON array.
