@@ -83,11 +83,13 @@ pub trait ZainoVersionedSerialise: Sized {
 
     #[inline(always)]
     #[allow(unused)]
+    /// Decode V1 of this struct.
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         Err(io::Error::new(io::ErrorKind::InvalidData, "v1 unsupported"))
     }
     #[inline(always)]
     #[allow(unused)]
+    /// Decode V2 of this struct.
     fn decode_v2<R: Read>(r: &mut R) -> io::Result<Self> {
         Err(io::Error::new(io::ErrorKind::InvalidData, "v2 unsupported"))
     }
@@ -95,6 +97,7 @@ pub trait ZainoVersionedSerialise: Sized {
     /*──────────── router ────────────*/
 
     #[inline]
+    /// Decodes struct based on version tag.
     fn decode_body<R: Read>(r: &mut R, version_tag: u8) -> io::Result<Self> {
         if version_tag == Self::VERSION {
             Self::decode_latest(r)
@@ -113,12 +116,14 @@ pub trait ZainoVersionedSerialise: Sized {
     /*──────────── User entry points ────────────*/
 
     #[inline]
+    /// Serialises struct.
     fn serialize<W: Write>(&self, mut w: W) -> io::Result<()> {
         w.write_all(&[Self::VERSION])?;
         self.encode_body(&mut w)
     }
 
     #[inline]
+    /// Deserialises struct.
     fn deserialize<R: Read>(mut r: R) -> io::Result<Self> {
         let mut tag = [0u8; 1];
         r.read_exact(&mut tag)?;
@@ -154,8 +159,10 @@ pub trait FixedEncodedLen {
 }
 
 /* ──────────────────────────── CompactSize helpers ────────────────────────────── */
+/// Zcash compact size encoding
 pub struct CompactSize;
 
+/// CompactSize maximum size.
 pub const MAX_COMPACT_SIZE: u32 = 0x0200_0000;
 
 impl CompactSize {
@@ -252,85 +259,113 @@ impl CompactSize {
 
 /* ───────────────────────────── integer helpers ───────────────────────────── */
 
+/// Reads a u16 in LE format.
 #[inline]
 pub fn read_u16_le<R: Read>(mut r: R) -> io::Result<u16> {
     let mut buf = [0u8; 2];
     r.read_exact(&mut buf)?;
     Ok(u16::from_le_bytes(buf))
 }
+
+/// Reads a u16 in BE format.
 #[inline]
 pub fn read_u16_be<R: Read>(mut r: R) -> io::Result<u16> {
     let mut buf = [0u8; 2];
     r.read_exact(&mut buf)?;
     Ok(u16::from_be_bytes(buf))
 }
+
+/// Writes a u16 in LE format.
 #[inline]
 pub fn write_u16_le<W: Write>(mut w: W, v: u16) -> io::Result<()> {
     w.write_all(&v.to_le_bytes())
 }
+
+/// Writes a u16 in BE format.
 #[inline]
 pub fn write_u16_be<W: Write>(mut w: W, v: u16) -> io::Result<()> {
     w.write_all(&v.to_be_bytes())
 }
 
+/// Reads a u32 in LE format.
 #[inline]
 pub fn read_u32_le<R: Read>(mut r: R) -> io::Result<u32> {
     let mut buf = [0u8; 4];
     r.read_exact(&mut buf)?;
     Ok(u32::from_le_bytes(buf))
 }
+
+/// Reads a u32 in BE format.
 #[inline]
 pub fn read_u32_be<R: Read>(mut r: R) -> io::Result<u32> {
     let mut buf = [0u8; 4];
     r.read_exact(&mut buf)?;
     Ok(u32::from_be_bytes(buf))
 }
+
+/// Writes a u32 in LE format.
 #[inline]
 pub fn write_u32_le<W: Write>(mut w: W, v: u32) -> io::Result<()> {
     w.write_all(&v.to_le_bytes())
 }
+
+/// Writes a u32 in BE format.
 #[inline]
 pub fn write_u32_be<W: Write>(mut w: W, v: u32) -> io::Result<()> {
     w.write_all(&v.to_be_bytes())
 }
 
+/// Reads a u64 in LE format.
 #[inline]
 pub fn read_u64_le<R: Read>(mut r: R) -> io::Result<u64> {
     let mut buf = [0u8; 8];
     r.read_exact(&mut buf)?;
     Ok(u64::from_le_bytes(buf))
 }
+
+/// Reads a u64 in BE format.
 #[inline]
 pub fn read_u64_be<R: Read>(mut r: R) -> io::Result<u64> {
     let mut buf = [0u8; 8];
     r.read_exact(&mut buf)?;
     Ok(u64::from_be_bytes(buf))
 }
+
+/// Writes a u64 in LE format.
 #[inline]
 pub fn write_u64_le<W: Write>(mut w: W, v: u64) -> io::Result<()> {
     w.write_all(&v.to_le_bytes())
 }
+
+/// Writes a u64 in BE format.
 #[inline]
 pub fn write_u64_be<W: Write>(mut w: W, v: u64) -> io::Result<()> {
     w.write_all(&v.to_be_bytes())
 }
 
+/// Reads an i64 in LE format.
 #[inline]
 pub fn read_i64_le<R: Read>(mut r: R) -> io::Result<i64> {
     let mut buf = [0u8; 8];
     r.read_exact(&mut buf)?;
     Ok(i64::from_le_bytes(buf))
 }
+
+/// Reads an i64 in BE format.
 #[inline]
 pub fn read_i64_be<R: Read>(mut r: R) -> io::Result<i64> {
     let mut buf = [0u8; 8];
     r.read_exact(&mut buf)?;
     Ok(i64::from_be_bytes(buf))
 }
+
+/// Writes an i64 in LE format.
 #[inline]
 pub fn write_i64_le<W: Write>(mut w: W, v: i64) -> io::Result<()> {
     w.write_all(&v.to_le_bytes())
 }
+
+/// Writes an i64 in BE format.
 #[inline]
 pub fn write_i64_be<W: Write>(mut w: W, v: i64) -> io::Result<()> {
     w.write_all(&v.to_be_bytes())
@@ -388,6 +423,7 @@ where
     }
 }
 
+/// Reads an option based on option tag byte.
 pub fn read_option<R, T, F>(mut r: R, mut f: F) -> io::Result<Option<T>>
 where
     R: Read,
@@ -406,6 +442,7 @@ where
 }
 
 /* ──────────────────────────── Vec<T> helpers ────────────────────────────── */
+/// Writes a vec of structs, preceded by number of items (compactsize).
 pub fn write_vec<W, T, F>(mut w: W, vec: &[T], mut f: F) -> io::Result<()>
 where
     W: Write,
@@ -418,6 +455,7 @@ where
     Ok(())
 }
 
+/// Reads a vec of structs, preceded by number of items (compactsize).
 pub fn read_vec<R, T, F>(mut r: R, mut f: F) -> io::Result<Vec<T>>
 where
     R: Read,

@@ -2730,9 +2730,12 @@ pub struct SaplingTxList {
 }
 
 impl SaplingTxList {
+    /// Creates a new [`SaplingTxList`]
     pub fn new(tx: Vec<Option<SaplingCompactTx>>) -> Self {
         Self { tx }
     }
+
+    /// Returns transactions in this item.
     pub fn tx(&self) -> &[Option<SaplingCompactTx>] {
         &self.tx
     }
@@ -2798,9 +2801,12 @@ pub struct OrchardTxList {
 }
 
 impl OrchardTxList {
+    /// Creates a new [`OrchardTxList`]
     pub fn new(tx: Vec<Option<OrchardCompactTx>>) -> Self {
         Self { tx }
     }
+
+    /// Returns transactions in this item.
     pub fn tx(&self) -> &[Option<OrchardCompactTx>] {
         &self.tx
     }

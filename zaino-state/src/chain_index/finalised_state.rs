@@ -1,5 +1,8 @@
 //! Holds the Finalised portion of the chain index on disk.
 
+// TODO / FIX!!! - ROMOVE THIS
+#![allow(dead_code)]
+
 use crate::{
     chain_index::encoding::read_u32_be, config::BlockCacheConfig, error::FinalisedStateError,
     AddrHistRecord, AddrScript, AtomicStatus, ChainBlock, CommitmentTreeData, CompactOrchardAction,
@@ -2405,7 +2408,7 @@ impl ZainoDB {
     /// Used to build addrhist records.
     fn get_previous_output(&self, outpoint: Outpoint) -> Result<TxOutCompact, FinalisedStateError> {
         // Find the tx’s location in the chain
-        let mut prev_txid = Hash::from(*outpoint.prev_txid());
+        let prev_txid = Hash::from(*outpoint.prev_txid());
         let tx_index = self
             .find_txid_index(&prev_txid)?
             .ok_or_else(|| FinalisedStateError::Custom("Previous txid not found".into()))?;
