@@ -402,6 +402,7 @@ impl<T: ToString> From<RpcRequestError<T>> for FinalisedStateError {
 }
 
 /// Errors related to the `FinalisedState`.
+// TODO: Update name to DbError when ZainoDB replaces legacy finalised state.
 #[derive(Debug, thiserror::Error)]
 pub enum FinalisedStateError {
     /// Custom Errors. *Remove before production.
@@ -424,15 +425,18 @@ pub enum FinalisedStateError {
         reason: String,
     },
 
+    // TODO: Add `InvalidRequestError` and return for invalid requests.
     /// Critical Errors, Restart Zaino.
     #[error("Critical error: {0}")]
     Critical(String),
 
     /// Error from the LMDB database.
+    // NOTE: Should this error type be here or should we handle all LMDB errors internally?
     #[error("LMDB database error: {0}")]
     LmdbError(#[from] lmdb::Error),
 
     /// Serde Json serialisation / deserialisation errors.
+    // TODO: Remove when ZainoDB replaces legacy finalised state.
     #[error("LMDB database error: {0}")]
     SerdeJsonError(#[from] serde_json::Error),
 
@@ -441,6 +445,7 @@ pub enum FinalisedStateError {
     StatusError(StatusError),
 
     /// Error from JsonRpcConnector.
+    // TODO: Remove when ZainoDB replaces legacy finalised state.
     #[error("JsonRpcConnector error: {0}")]
     JsonRpcConnectorError(#[from] zaino_fetch::jsonrpsee::error::TransportError),
 

@@ -159,7 +159,7 @@ impl ZainoDB {
     ///
     /// Inputs:
     /// - config: ChainIndexConfig.
-    pub async fn spawn(config: &BlockCacheConfig) -> Result<Self, FinalisedStateError> {
+    pub(crate) async fn spawn(config: &BlockCacheConfig) -> Result<Self, FinalisedStateError> {
         info!("Launching ZainoDB");
 
         // Prepare database details and path.
@@ -241,6 +241,51 @@ impl ZainoDB {
         Ok(zaino_db)
     }
 
+    /// Try graceful shutdown, fall back to abort after a timeout.
+    pub(crate) async fn close(mut self) -> Result<(), FinalisedStateError> {
+        self.status.store(StatusType::Closing as usize);
+
+        if let Some(mut handle) = self.db_handler.take() {
+            let timeout = tokio::time::sleep(Duration::from_secs(5));
+            tokio::pin!(timeout);
+
+            tokio::select! {
+                res = &mut handle => {
+                    match res {
+                        Ok(_) => {}
+                        Err(e) if e.is_cancelled() => {}
+                        Err(e) => warn!("background task ended with error: {e:?}"),
+                    }
+                }
+                _ = &mut timeout => {
+                    warn!("background task didn’t exit in time – aborting");
+                    handle.abort();
+                }
+            }
+        }
+
+        let _ = self.clean_trailing().await;
+        if let Err(e) = self.env.sync(true) {
+            warn!("LMDB fsync before close failed: {e}");
+        }
+        Ok(())
+    }
+
+    /// Returns the status of ZainoDB.
+    pub(crate) async fn status(&self) -> StatusType {
+        self.status.load().into()
+    }
+
+    /// Awaits untile the DB returns a Ready status.
+    pub(crate) async fn wait_until_ready(&self) {
+        loop {
+            if self.status.load() == StatusType::Ready as usize {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }
+
     // *** Internal Control Methods ***
 
     /// Spawns the background validator / maintenance task.
@@ -267,7 +312,7 @@ impl ZainoDB {
             metadata: self.metadata,
             validated_tip: Arc::clone(&self.validated_tip),
             validated_set: self.validated_set.clone(),
-            db_handler: None, // not used inside the task
+            db_handler: None,
             status: self.status.clone(),
             config: self.config.clone(),
         };
@@ -275,7 +320,8 @@ impl ZainoDB {
         let handle = tokio::spawn({
             let zaino_db = zaino_db;
             async move {
-                // ────────────────────────── initial validation ─────────────────────────
+                // *** initial validation ***
+                zaino_db.status.store(StatusType::Syncing.into());
                 let (r1, r2, r3, r4) = tokio::join!(
                     async { zaino_db.initial_root_scan().await },
                     async { zaino_db.initial_spent_scan().await },
@@ -292,7 +338,7 @@ impl ZainoDB {
                     if let Err(e) = result {
                         error!("initial {desc} failed: {e}");
                         zaino_db.status.store(StatusType::CriticalError.into());
-                        // TODO: Handle error better?
+                        // TODO: Handle error better? - Return invalid block error from validate?
                         return;
                     }
                 }
@@ -301,12 +347,17 @@ impl ZainoDB {
                     "initial validation complete – tip={}",
                     zaino_db.validated_tip.load(Ordering::Relaxed)
                 );
+                zaino_db.status.store(StatusType::Ready.into());
 
-                // ────────────────────────── steady-state loop ──────────────────────────
+                // *** steady-state loop ***
                 let mut maintenance = interval(Duration::from_secs(60));
 
                 loop {
-                    // ---------- try to validate the next consecutive block -------------
+                    // Check for closing status.
+                    if zaino_db.status.load() == StatusType::Closing as usize {
+                        break;
+                    }
+                    // try to validate the next consecutive block.
                     let next_h = zaino_db.validated_tip.load(Ordering::Acquire) + 1;
                     let next_height = match Height::try_from(next_h) {
                         Ok(h) => h,
@@ -473,7 +524,7 @@ impl ZainoDB {
     // These should only ever be used in a single DB control task.
 
     /// Writes a given (finalised) [`ChainBlock`] to ZainoDB.
-    pub async fn write_block(&self, block: ChainBlock) -> Result<(), FinalisedStateError> {
+    pub(crate) async fn write_block(&self, block: ChainBlock) -> Result<(), FinalisedStateError> {
         let block_hash = block.index().hash();
         let block_hash_bytes = block_hash.to_bytes()?;
         let block_height = block.index().height().ok_or(FinalisedStateError::Custom(
@@ -849,7 +900,7 @@ impl ZainoDB {
     /// * The value is a `StoredEntryFixed<ShardRoot>`.
     ///
     /// Returns an error if an entry already exists for that index.
-    pub async fn write_root(
+    pub(crate) async fn write_root(
         &self,
         index: Index,
         root: ShardRoot,
@@ -884,7 +935,7 @@ impl ZainoDB {
     ///
     /// NOTE: This is not efficient and could be improved but should never be called on main,
     ///       zcash would probably require a hard fork if it ever was!
-    pub async fn delete_block(&self, id: HashOrHeight) -> Result<(), FinalisedStateError> {
+    pub(crate) async fn delete_block(&self, id: HashOrHeight) -> Result<(), FinalisedStateError> {
         // Resolve the HashOrHeight and find corresponding database hash and height key.
         let (hash_bytes, height_bytes) = {
             match id {
@@ -1130,7 +1181,7 @@ impl ZainoDB {
     /// Removes the `ShardRoot` stored at the specified `Index`.
     ///
     /// Returns an error if no entry exists at that index.
-    pub async fn delete_root(&self, index: Index) -> Result<(), FinalisedStateError> {
+    pub(crate) async fn delete_root(&self, index: Index) -> Result<(), FinalisedStateError> {
         // Reconstruct exactly the same key
         let key = index
             .to_bytes()
@@ -2542,6 +2593,33 @@ impl ZainoDB {
 
     // *** Public fetcher methods - Used by DbReader ***
 
+    /// Returns the greatest `Height` stored in `headers`  
+    /// (`None` if the DB is still empty).
+    pub(crate) async fn tip_height(&self) -> Result<Option<Height>, FinalisedStateError> {
+        let ro = self.env.begin_ro_txn()?;
+        let cur = ro.open_ro_cursor(self.headers)?;
+
+        match cur.get(None, None, lmdb_sys::MDB_LAST) {
+            Ok((key_bytes, _val_bytes)) => {
+                // `key_bytes` is exactly what `Height::to_bytes()` produced
+                let h = Height::from_bytes(
+                    key_bytes.expect("height is always some in the finalised state"),
+                )
+                .map_err(|e| FinalisedStateError::Custom(format!("height decode: {e}")))?;
+                drop(cur);
+                Ok(Some(h))
+            }
+            Err(lmdb::Error::NotFound) => {
+                drop(cur);
+                Ok(None)
+            }
+            Err(e) => {
+                drop(cur);
+                Err(FinalisedStateError::LmdbError(e))
+            }
+        }
+    }
+
     /// Fetch the block height in the main chain for a given block hash.
     async fn get_block_height_by_hash(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
         let height = self
@@ -3892,6 +3970,14 @@ impl ZainoDB {
     }
 }
 
+impl Drop for ZainoDB {
+    fn drop(&mut self) {
+        if let Some(handle) = self.db_handler.take() {
+            handle.abort(); // cannot await here
+        }
+    }
+}
+
 // *** ZainoDB Reader ***
 
 /// Immutable view onto an already-running [`ZainoDB`].
@@ -3905,6 +3991,22 @@ pub(crate) struct DbReader<'a> {
 }
 
 impl<'a> DbReader<'a> {
+    /// Returns the status of the serving ZainoDB.
+    pub(crate) async fn status(&self) -> StatusType {
+        self.inner.status().await
+    }
+
+    /// Returns the greatest `Height` stored in `headers`  
+    /// (`None` if the DB is still empty).
+    pub(crate) async fn tip_height(&self) -> Result<Option<Height>, FinalisedStateError> {
+        self.inner.tip_height().await
+    }
+
+    /// Awaits untile the DB returns a Ready status.
+    pub(crate) async fn wait_until_ready(&self) {
+        self.inner.wait_until_ready().await
+    }
+
     /// Fetch the block height in the main chain for a given block hash.
     pub(crate) async fn get_block_height_by_hash(
         &self,

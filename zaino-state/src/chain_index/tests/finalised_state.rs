@@ -134,6 +134,8 @@ async fn load_vectors_and_spawn_and_sync_zaino_db() -> (
     (blocks, faucet, recipient, db_dir, zaino_db)
 }
 
+// *** ZainoDB Tests ***
+
 #[tokio::test]
 async fn vectors_can_be_loaded_and_deserialised() {
     let (blocks, faucet, recipient) = load_test_vectors().unwrap();
@@ -184,14 +186,15 @@ async fn vectors_can_be_loaded_and_deserialised() {
     println!("addr: {}", addr);
 }
 
-// Writes all blocks to db and validates data.
 #[tokio::test]
 async fn add_blocks_to_db_and_verify() {
-    let (_blocks, _faucet, _recipient, _db_dir, _zaino_db) =
+    let (_blocks, _faucet, _recipient, _db_dir, zaino_db) =
         load_vectors_and_spawn_and_sync_zaino_db().await;
+    zaino_db.wait_until_ready().await;
+    dbg!(zaino_db.status().await);
+    dbg!(zaino_db.tip_height().await.unwrap());
 }
 
-// Deletes all blocks from db.
 #[tokio::test]
 async fn delete_blocks_from_db() {
     let (_blocks, _faucet, _recipient, _db_dir, zaino_db) =
@@ -204,6 +207,87 @@ async fn delete_blocks_from_db() {
             .await
             .unwrap();
     }
+
+    zaino_db.wait_until_ready().await;
+    dbg!(zaino_db.status().await);
+    dbg!(zaino_db.tip_height().await.unwrap());
 }
 
-// fetcher methods
+#[tokio::test]
+async fn load_db_from_file() {
+    let (blocks, _faucet, _recipient) = load_test_vectors().unwrap();
+
+    let temp_dir: TempDir = tempfile::tempdir().unwrap();
+    let db_path: PathBuf = temp_dir.path().to_path_buf();
+    let config = BlockCacheConfig {
+        map_capacity: None,
+        map_shard_amount: None,
+        db_path,
+        db_size: None,
+        network: zebra_chain::parameters::Network::new_regtest(
+            zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                before_overwinter: Some(1),
+                overwinter: Some(1),
+                sapling: Some(1),
+                blossom: Some(1),
+                heartwood: Some(1),
+                canopy: Some(1),
+                nu5: Some(1),
+                nu6: Some(1),
+                // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
+                nu6_1: None,
+                nu7: None,
+            },
+        ),
+        no_sync: false,
+        no_db: false,
+    };
+
+    {
+        let zaino_db = ZainoDB::spawn(&config).await.unwrap();
+        for (_h, chain_block, _compact_block) in blocks.clone() {
+            zaino_db.write_block(chain_block).await.unwrap();
+        }
+
+        zaino_db.wait_until_ready().await;
+        dbg!(zaino_db.status().await);
+        dbg!(zaino_db.tip_height().await.unwrap());
+
+        dbg!(zaino_db.close().await.unwrap());
+    }
+
+    {
+        let zaino_db_2 = ZainoDB::spawn(&config).await.unwrap();
+
+        zaino_db_2.wait_until_ready().await;
+        dbg!(zaino_db_2.status().await);
+        let db_height = dbg!(zaino_db_2.tip_height().await.unwrap()).unwrap();
+
+        assert_eq!(db_height.0, 200);
+
+        dbg!(zaino_db_2.close().await.unwrap());
+    }
+}
+
+// #[tokio::test]
+// async fn try_write_invalid_block() {}
+
+// #[tokio::test]
+// async fn try_delete_invalid_block() {}
+
+// #[tokio::test]
+// async fn create_db_reader() {}
+
+// *** DbReader Tests ***
+
+// #[tokio::test]
+// async fn
+
+// #[tokio::test]
+// async fn
+
+// #[tokio::test]
+// async fn
+
+// #[tokio::test]
+// async fn
