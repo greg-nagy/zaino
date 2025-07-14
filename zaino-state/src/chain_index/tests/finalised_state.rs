@@ -6,7 +6,6 @@ use std::io::BufReader;
 use std::path::Path;
 use std::{fs::File, path::PathBuf};
 use tempfile::TempDir;
-use zebra_state::HashOrHeight;
 
 use zaino_proto::proto::compact_formats::CompactBlock;
 use zebra_rpc::methods::GetAddressUtxos;
@@ -202,7 +201,10 @@ async fn delete_blocks_from_db() {
 
     for h in (1..=200).rev() {
         // dbg!("Deleting block at height {}", h);
-        zaino_db.delete_block(crate::Height(h)).await.unwrap();
+        zaino_db
+            .delete_block_at_height(crate::Height(h))
+            .await
+            .unwrap();
     }
 
     zaino_db.wait_until_ready().await;
@@ -301,7 +303,11 @@ async fn try_delete_block_with_invalid_height() {
 
     let delete_height = height - 1;
 
-    let db_err = dbg!(zaino_db.delete_block(crate::Height(delete_height)).await);
+    let db_err = dbg!(
+        zaino_db
+            .delete_block_at_height(crate::Height(delete_height))
+            .await
+    );
 
     // TODO: Update with concrete err type.
     assert!(db_err.is_err());

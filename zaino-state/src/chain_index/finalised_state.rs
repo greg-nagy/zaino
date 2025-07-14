@@ -642,7 +642,7 @@ impl ZainoDB {
             let tx_index = TxIndex::new(block_height.into(), tx_pos as u16);
 
             // Transparent Outputs: Build Address History
-            ZainoDB::insert_transaction_output_histories(
+            ZainoDB::build_transaction_output_histories(
                 &mut addrhist_outputs_map,
                 tx_index,
                 tx.transparent().outputs().iter().enumerate(),
@@ -670,7 +670,7 @@ impl ZainoDB {
                             {
                                 let prev_output_tx_index =
                                     TxIndex::new(block_height.0, tx_pos as u16);
-                                ZainoDB::insert_input_history(
+                                ZainoDB::build_input_history(
                                     &mut addrhist_inputs_map,
                                     tx_index,
                                     input_index as u16,
@@ -687,7 +687,7 @@ impl ZainoDB {
                         .ok_or_else(|| {
                             FinalisedStateError::Custom("Previous txid not found".into())
                         })?;
-                    ZainoDB::insert_input_history(
+                    ZainoDB::build_input_history(
                         &mut addrhist_inputs_map,
                         tx_index,
                         input_index as u16,
@@ -862,7 +862,8 @@ impl ZainoDB {
         match post_result {
             Ok(_) => Ok(()),
             Err(e) => {
-                let _ = self.delete_block(block_height).await;
+                // let _ = self.delete_block_at_height(block_height).await;
+                let _ = self.delete_block(&block).await;
                 // TODO: Update err string here?
                 Err(FinalisedStateError::InvalidBlock {
                     height: block_height.0,
@@ -910,44 +911,14 @@ impl ZainoDB {
         }
     }
 
-    /// Deletes a block identified by hash *or* height from every finalised table.
-    ///
-    /// NOTE: This is not efficient and could be improved but should never be called on main,
-    ///       zcash would probably require a hard fork if it ever was!
-    ///
-    /// TODO: Handle failures!
-    pub(crate) async fn delete_block(&self, height: Height) -> Result<(), FinalisedStateError> {
-        // Fetch Hash from db.
-        let (hash_bytes, height_bytes) = {
-            let height_bytes = Height::try_from(height.0)
-                .expect("zebra height always fits")
-                .to_bytes()?;
-
-            // Clone header bytes out of the RO txn and fetch height.
-            let header = {
-                let ro = self.env.begin_ro_txn()?;
-                let header_bytes = ro.get(self.headers, &height_bytes).map_err(|e| {
-                    if e == lmdb::Error::NotFound {
-                        // try delete heights db and return err.
-                        FinalisedStateError::Custom("block not found".into())
-                    } else {
-                        FinalisedStateError::LmdbError(e)
-                    }
-                })?;
-
-                let stored: StoredEntryVar<BlockHeaderData> =
-                    StoredEntryVar::from_bytes(header_bytes).map_err(|e| {
-                        FinalisedStateError::Custom(format!("corrupt header CBOR: {e}"))
-                    })?;
-                *stored.inner()
-            };
-
-            let hash_bytes = header.index().hash().to_bytes()?;
-            (hash_bytes, height_bytes)
-        };
-
+    /// Deletes a block identified height from every finalised table.
+    pub(crate) async fn delete_block_at_height(
+        &self,
+        height: Height,
+    ) -> Result<(), FinalisedStateError> {
         // Check block is at the top of the finalised state
         {
+            let height_bytes = height.to_bytes()?;
             let ro = self.env.begin_ro_txn()?;
             let mut cursor = ro.open_ro_cursor(self.headers)?;
 
@@ -971,154 +942,20 @@ impl ZainoDB {
             }
         }
 
-        // Re-construct the TransparentTxList for this height, capture any errors.
-        let transparent =
-            (|| -> Result<Vec<Option<TransparentCompactTx>>, FinalisedStateError> {
-                let ro = self.env.begin_ro_txn()?;
-                let raw = self.block_transparent_raw_txn(&ro, &height_bytes)?;
+        // fetch chain_block from db and delete
+        let chain_block = self.get_chain_block(height).await?;
+        self.delete_block(&chain_block).await?;
 
-                let entry = StoredEntryVar::<TransparentTxList>::from_bytes(&raw).map_err(|e| {
-                    FinalisedStateError::Custom(format!("transparent CBOR decode error: {e:?}"))
-                })?;
+        // update validated_tip / validated_set
+        let validated_tip = self.validated_tip.load(Ordering::Acquire);
+        if height.0 > validated_tip {
+            self.validated_set.remove(&height.0);
+        } else if height.0 == validated_tip {
+            self.validated_tip
+                .store(validated_tip.saturating_sub(1), Ordering::Release);
+        }
 
-                Ok(entry.inner().tx().to_vec())
-            })()?;
-
-        // Re-construct the transparent address indexes for this height, capture any errors.
-        let (spent_outpoints, addrhist_inputs_map, addrhist_output_map) =
-            (|| -> Result<
-                (
-                    Vec<Outpoint>,
-                    HashMap<AddrScript, Vec<(AddrHistRecord, (AddrScript, AddrHistRecord))>>,
-                    HashMap<AddrScript, Vec<AddrHistRecord>>
-                ),
-                FinalisedStateError
-            > {
-                let mut spent_outpoints: Vec<Outpoint> = Vec::new();
-                let mut addrhist_inputs_map: HashMap<
-                    AddrScript,
-                    Vec<(AddrHistRecord, (AddrScript, AddrHistRecord))>,
-                > = HashMap::new();
-                let mut addrhist_output_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
-
-                for (tx_index, tx_opt) in transparent.iter().enumerate() {
-                    let tx_index = TxIndex::new(height.0, tx_index as u16);
-
-                    if let Some(tx) = tx_opt {
-                        // Transparent Inputs: Build Spent Outpoints Index and Address History
-                        for (input_index, input) in tx.inputs().iter().enumerate() {
-                            if input.is_null_prevout() {
-                                continue;
-                            }
-                            let prev_outpoint = Outpoint::new(*input.prevout_txid(), input.prevout_index());
-                            spent_outpoints.push(prev_outpoint);
-
-                            if let Ok(prev_output) = self.get_previous_output(prev_outpoint) {
-                                let prev_output_tx_index = self
-                                    .find_txid_index(&Hash::from(*prev_outpoint.prev_txid()))?
-                                    .ok_or_else(|| {
-                                        FinalisedStateError::Custom("Previous txid not found".into())
-                                    })?;
-                                ZainoDB::insert_input_history(
-                                    &mut addrhist_inputs_map,
-                                    tx_index,
-                                    input_index as u16,
-                                    input,
-                                    &prev_output,
-                                    prev_output_tx_index,
-                                );
-                            }
-                        }
-
-                        // Transparent Outputs: Build Address History
-                        ZainoDB::insert_transaction_output_histories(
-                            &mut addrhist_output_map,
-                            tx_index,
-                            tx.outputs().iter().enumerate(),
-                        );
-                    }
-                }
-
-            Ok((spent_outpoints, addrhist_inputs_map, addrhist_output_map))
-        })()?;
-
-        let post_result: Result<(), FinalisedStateError> = (async {
-            // Delete spent data
-            let mut txn = self.env.begin_rw_txn()?;
-
-            for outpoint in &spent_outpoints {
-                let outpoint_bytes = &outpoint.to_bytes()?;
-                match txn.del(self.spent, outpoint_bytes, None) {
-                    Ok(()) | Err(lmdb::Error::NotFound) => {}
-                    Err(e) => return Err(FinalisedStateError::LmdbError(e)),
-                }
-            }
-            txn.commit()?;
-
-            // Delete addrhist input data and mark old outputs spent in this block as unspent
-            for (addr_script, records) in &addrhist_inputs_map {
-                // Mark outputs spent in this block as unspent
-                for (_record, (prev_output_script, prev_output_record)) in records {
-                    {
-                        let _updated = self
-                            .mark_addr_hist_record_unspent(
-                                prev_output_script,
-                                prev_output_record.tx_index(),
-                                prev_output_record.out_index(),
-                            )
-                            .await?;
-                    }
-                }
-
-                // Delete all input records created in this block.
-                self.delete_addrhist_dups(
-                    &addr_script.to_bytes()?,
-                    height,
-                    true,
-                    false,
-                    records.len(),
-                )?;
-            }
-
-            // Delete addrhist output data
-            for (addr_script, records) in &addrhist_output_map {
-                self.delete_addrhist_dups(
-                    &addr_script.to_bytes()?,
-                    height,
-                    false,
-                    true,
-                    records.len(),
-                )?;
-            }
-
-            // Delete block data
-            let mut txn = self.env.begin_rw_txn()?;
-
-            for &db in &[
-                self.headers,
-                self.txids,
-                self.transparent,
-                self.sapling,
-                self.orchard,
-                self.commitment_tree_data,
-            ] {
-                match txn.del(db, &height_bytes, None) {
-                    Ok(()) | Err(lmdb::Error::NotFound) => {}
-                    Err(e) => return Err(FinalisedStateError::LmdbError(e)),
-                }
-            }
-
-            match txn.del(self.heights, &hash_bytes, None) {
-                Ok(()) | Err(lmdb::Error::NotFound) => {}
-                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
-            }
-
-            txn.commit()?;
-            Ok(())
-        })
-        .await;
-
-        post_result
+        Ok(())
     }
 
     /// Removes the `ShardRoot` stored at the specified `Index`.
@@ -1142,6 +979,257 @@ impl ZainoDB {
             ))),
             Err(e) => Err(FinalisedStateError::LmdbError(e)),
         }
+    }
+
+    /// This is used as a backup when delete_block_at_height fails.
+    ///
+    /// Takes a ChainBlock as input and ensures all data from this block is wiped from the database.
+    ///
+    /// The ChainBlock ir required to ensure that Outputs spent at this block height are re-marked as unspent.
+    ///
+    /// WARNING: No checks are made that this block is at the top of the finalised state, and validated tip is not updated.
+    /// This enables use for correcting corrupt data within the database but it is left to the user to ensure safe use.
+    /// Where possible delete_block_at_height should be used instead.
+    ///
+    /// NOTE: LMDB database errors are propageted as these show serious database errors,
+    /// all other errors are returned as `IncorrectBlock`, if this error is returned the block requested
+    /// should be fetched from the validator and this method called with the correct data.
+    pub(crate) async fn delete_block(&self, block: &ChainBlock) -> Result<(), FinalisedStateError> {
+        // Check block height and hash
+        let block_height = block
+            .index()
+            .height()
+            .ok_or(FinalisedStateError::InvalidBlock {
+                height: 0,
+                hash: *block.hash(),
+                reason: "Invalid block data: Block does not contain finalised height".to_string(),
+            })?;
+        let block_height_bytes =
+            block_height
+                .to_bytes()
+                .map_err(|_| FinalisedStateError::InvalidBlock {
+                    height: block.height().expect("already  checked height is some").0,
+                    hash: *block.hash(),
+                    reason: "Corrupt block data: failed to serialise hash".to_string(),
+                })?;
+
+        let block_hash = block.index().hash();
+        let block_hash_bytes =
+            block_hash
+                .to_bytes()
+                .map_err(|_| FinalisedStateError::InvalidBlock {
+                    height: block.height().expect("already  checked height is some").0,
+                    hash: *block.hash(),
+                    reason: "Corrupt block data: failed to serialise hash".to_string(),
+                })?;
+
+        // Build transaction indexes
+        let tx_len = block.transactions().len();
+        let mut txids = Vec::with_capacity(tx_len);
+        let mut txid_set: HashSet<Hash> = HashSet::with_capacity(tx_len);
+        let mut transparent = Vec::with_capacity(tx_len);
+        let mut spent_map: Vec<Outpoint> = Vec::new();
+        let mut addrhist_inputs_map: HashMap<
+            AddrScript,
+            Vec<(AddrHistRecord, (AddrScript, AddrHistRecord))>,
+        > = HashMap::new();
+        let mut addrhist_outputs_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
+
+        for (tx_pos, tx) in block.transactions().iter().enumerate() {
+            let mut h = Hash::from(*tx.txid());
+            // NOTE: Why do we have to do this here??
+            h.0.reverse();
+
+            if txid_set.insert(h) {
+                txids.push(h);
+            }
+
+            // Transparent transactions
+            let transparent_data =
+                if tx.transparent().inputs().is_empty() && tx.transparent().outputs().is_empty() {
+                    None
+                } else {
+                    Some(tx.transparent().clone())
+                };
+            transparent.push(transparent_data);
+
+            // Transaction index
+            let tx_index = TxIndex::new(block_height.into(), tx_pos as u16);
+
+            // Transparent Outputs: Build Address History
+            ZainoDB::build_transaction_output_histories(
+                &mut addrhist_outputs_map,
+                tx_index,
+                tx.transparent().outputs().iter().enumerate(),
+            );
+
+            // Transparent Inputs: Build Spent Outpoints Index and Address History
+            for (input_index, input) in tx.transparent().inputs().iter().enumerate() {
+                if input.is_null_prevout() {
+                    continue;
+                }
+                let prev_outpoint = Outpoint::new(*input.prevout_txid(), input.prevout_index());
+                spent_map.push(prev_outpoint);
+
+                //Check if output is in *this* block, else fetch from DB.
+                let prev_tx_hash = Hash(*prev_outpoint.prev_txid());
+                if txid_set.contains(&prev_tx_hash) {
+                    // Fetch transaction index within block
+                    if let Some(tx_pos) = txids.iter().position(|h| h == &prev_tx_hash) {
+                        // Fetch Transparent data for transaction
+                        if let Some(Some(prev_transparent)) = transparent.get(tx_pos) {
+                            // Fetch output from transaction
+                            if let Some(prev_output) = prev_transparent
+                                .outputs()
+                                .get(prev_outpoint.prev_index() as usize)
+                            {
+                                let prev_output_tx_index =
+                                    TxIndex::new(block_height.0, tx_pos as u16);
+                                ZainoDB::build_input_history(
+                                    &mut addrhist_inputs_map,
+                                    tx_index,
+                                    input_index as u16,
+                                    input,
+                                    prev_output,
+                                    prev_output_tx_index,
+                                );
+                            }
+                        }
+                    }
+                } else if let Ok(prev_output) = self.get_previous_output(prev_outpoint) {
+                    let prev_output_tx_index = self
+                        .find_txid_index(&Hash::from(*prev_outpoint.prev_txid()))
+                        .map_err(|e| FinalisedStateError::InvalidBlock {
+                            height: block.height().expect("already  checked height is some").0,
+                            hash: *block.hash(),
+                            reason: e.to_string(),
+                        })?
+                        .ok_or_else(|| FinalisedStateError::InvalidBlock {
+                            height: block.height().expect("already  checked height is some").0,
+                            hash: *block.hash(),
+                            reason: "Invalid block data: invalid txid data.".to_string(),
+                        })?;
+                    ZainoDB::build_input_history(
+                        &mut addrhist_inputs_map,
+                        tx_index,
+                        input_index as u16,
+                        input,
+                        &prev_output,
+                        prev_output_tx_index,
+                    );
+                } else {
+                    return Err(FinalisedStateError::InvalidBlock {
+                        height: block.height().expect("already  checked height is some").0,
+                        hash: *block.hash(),
+                        reason: "Invalid block data: invalid transparent input.".to_string(),
+                    });
+                }
+            }
+        }
+
+        // Delete spent data
+        let mut txn = self.env.begin_rw_txn()?;
+
+        for outpoint in &spent_map {
+            let outpoint_bytes =
+                &outpoint
+                    .to_bytes()
+                    .map_err(|_| FinalisedStateError::InvalidBlock {
+                        height: block.height().expect("already  checked height is some").0,
+                        hash: *block.hash(),
+                        reason: "Corrupt block data: failed to serialise outpoint".to_string(),
+                    })?;
+            match txn.del(self.spent, outpoint_bytes, None) {
+                Ok(()) | Err(lmdb::Error::NotFound) => {}
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            }
+        }
+        let _ = txn.commit();
+
+        // Delete addrhist input data and mark old outputs spent in this block as unspent
+        for (addr_script, records) in &addrhist_inputs_map {
+            // Mark outputs spent in this block as unspent
+            for (_record, (prev_output_script, prev_output_record)) in records {
+                {
+                    let _updated = self
+                        .mark_addr_hist_record_unspent(
+                            prev_output_script,
+                            prev_output_record.tx_index(),
+                            prev_output_record.out_index(),
+                        )
+                        .await
+                        // TODO: check internals to propagate important errors.
+                        .map_err(|_| FinalisedStateError::InvalidBlock {
+                            height: block.height().expect("already  checked height is some").0,
+                            hash: *block.hash(),
+                            reason: "Corrupt block data: failed to mark output unspent".to_string(),
+                        })?;
+                }
+            }
+
+            // Delete all input records created in this block.
+            self.delete_addrhist_dups(
+                &addr_script
+                    .to_bytes()
+                    .map_err(|_| FinalisedStateError::InvalidBlock {
+                        height: block.height().expect("already  checked height is some").0,
+                        hash: *block.hash(),
+                        reason: "Corrupt block data: failed to serialise addr_script".to_string(),
+                    })?,
+                block_height,
+                true,
+                false,
+                records.len(),
+            )
+            // TODO: check internals to propagate important errors.
+            .map_err(|_| FinalisedStateError::InvalidBlock {
+                height: block.height().expect("already  checked height is some").0,
+                hash: *block.hash(),
+                reason: "Corrupt block data: failed to delete inputs".to_string(),
+            })?;
+        }
+
+        // Delete addrhist output data
+        for (addr_script, records) in &addrhist_outputs_map {
+            self.delete_addrhist_dups(
+                &addr_script
+                    .to_bytes()
+                    .map_err(|_| FinalisedStateError::InvalidBlock {
+                        height: block.height().expect("already  checked height is some").0,
+                        hash: *block.hash(),
+                        reason: "Corrupt block data: failed to serialise addr_script".to_string(),
+                    })?,
+                block_height,
+                false,
+                true,
+                records.len(),
+            )?;
+        }
+
+        // Delete block data
+        let mut txn = self.env.begin_rw_txn()?;
+
+        for &db in &[
+            self.headers,
+            self.txids,
+            self.transparent,
+            self.sapling,
+            self.orchard,
+            self.commitment_tree_data,
+        ] {
+            match txn.del(db, &block_height_bytes, None) {
+                Ok(()) | Err(lmdb::Error::NotFound) => {}
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            }
+        }
+
+        match txn.del(self.heights, &block_hash_bytes, None) {
+            Ok(()) | Err(lmdb::Error::NotFound) => {}
+            Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+        }
+
+        txn.commit()?;
+        Ok(())
     }
 
     // **** Internal LMDB transaction methods ****
@@ -2088,7 +2176,7 @@ impl ZainoDB {
     // *** Internal DB methods ***
 
     /// Inserts a mined-output record into the address‐history map.
-    fn insert_transaction_output_histories<'a>(
+    fn build_transaction_output_histories<'a>(
         map: &mut HashMap<AddrScript, Vec<AddrHistRecord>>,
         tx_index: TxIndex,
         outputs: impl Iterator<Item = (usize, &'a TxOutCompact)>,
@@ -2112,7 +2200,7 @@ impl ZainoDB {
 
     /// Inserts both the “spend” record and the “mined” previous‐output record
     /// (used to update the output record spent in this transaction).
-    fn insert_input_history(
+    fn build_input_history(
         map: &mut HashMap<AddrScript, Vec<(AddrHistRecord, (AddrScript, AddrHistRecord))>>,
         input_tx_index: TxIndex,
         input_index: u16,
