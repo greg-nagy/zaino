@@ -1213,6 +1213,10 @@ impl<'de> serde::Deserialize<'de> for GetTransactionResponse {
                     outputs.unwrap_or_default(),
                     shielded_spends.unwrap_or_default(),
                     shielded_outputs.unwrap_or_default(),
+                    // TODO: sprout joinsplits
+                    None,
+                    None,
+                    None,
                     // optional
                     orchard,
                     // optional
@@ -1266,6 +1270,10 @@ impl From<GetTransactionResponse> for zebra_rpc::methods::GetRawTransaction {
                     obj.outputs().clone(),
                     obj.shielded_spends().clone(),
                     obj.shielded_outputs().clone(),
+                    //TODO: sprout joinspits
+                    None,
+                    None,
+                    None,
                     obj.orchard().clone(),
                     obj.value_balance(),
                     obj.value_balance_zat(),
