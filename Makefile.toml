@@ -5,6 +5,7 @@ default_to_workspace = false
 
 [env]
 IMAGE_NAME = "zingodevops/zaino-ci"
+TEST_BINARIES_DIR = "/usr/local/bin"
 
 [tasks.help]
 description = "List available commands and usage notes"
@@ -31,7 +32,6 @@ echo "  build-image         Build the Docker image with current artifact version
 echo "  push-image          Push the image (used in CI, can be used manually)"
 echo "  compute-image-tag   Compute the tag for the Docker image based on versions"
 echo "  ensure-image-exists Check if the required image exists locally, build if not"
-echo "  copy-bins           Extract binaries from the image to ./test_binaries/bins"
 echo ""
 echo "Environment:"
 echo "  Defined by: .env.testing-artifacts"
@@ -130,7 +130,10 @@ set -euo pipefail
 
 TAG=$(./utils/get-ci-image-tag.sh)
 
-info "Running tests using image: ${IMAGE_NAME}:$TAG"
+info "Running tests using:"
+info "-- IMAGE             = ${IMAGE_NAME}"
+info "-- TAG               = $TAG"
+# info "-- TEST_BINARIES_DIR = ${TEST_BINARIES_DIR}"
 
 docker run --rm \
   --name zaino-testing \
@@ -138,26 +141,10 @@ docker run --rm \
   -v "$PWD/target":/root/target \
   -v "$PWD/docker_cargo/git":/root/.cargo/git \
   -v "$PWD/docker_cargo/registry":/root/.cargo/registry \
+  -e "TEST_BINARIES_DIR=${TEST_BINARIES_DIR}" \
   -w /app \
   "${IMAGE_NAME}:$TAG" \
   cargo nextest run --profile ci "${@}"
-'''
-script.post = '''
-docker stop zaino-testing
-'''
-
-# -------------------------------------------------------------------
-
-[tasks.copy-bins]
-description = "Copy bins from image into test_binaries/bins"
-extend = "base-script"
-script.main = '''
-set -euo pipefail
-
-docker create --name my_zaino_container zingodevops/zaino-ci:"$TAG"
-docker cp my_zaino_container:/usr/local/bin ./test_binaries/
-cp -r ./test_binaries/bin ./test_binaries/bins
-docker rm my_zaino_container
 '''
 
 # -------------------------------------------------------------------
