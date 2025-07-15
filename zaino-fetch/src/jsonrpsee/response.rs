@@ -1438,3 +1438,18 @@ where
 {
     type RpcError = T::RpcError;
 }
+
+/// Response type for the `getmempoolinfo` RPC request
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct GetMempoolInfoResponse {
+    /// Current tx count
+    pub size: u64,
+    /// Sum of all tx sizes
+    pub bytes: u64,
+    /// Total memory usage for the mempool
+    pub usage: u64,
+}
+
+impl ResponseToError for GetMempoolInfoResponse {
+    type RpcError = Infallible;
+}

@@ -17,7 +17,10 @@ use zebra_rpc::methods::{
 
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
+    jsonrpsee::{
+        connector::{JsonRpSeeConnector, RpcError},
+        response::GetMempoolInfoResponse,
+    },
 };
 
 use zaino_proto::proto::{
@@ -221,6 +224,15 @@ impl ZcashIndexer for FetchServiceSubscriber {
                     ),
                 )
             })?)
+    }
+
+    /// Returns details on the active state of the TX memory pool.
+    ///
+    /// zcashd reference: [`getmempoolinfo`](https://zcash.github.io/rpc/getmempoolinfo.html)
+    /// method: post
+    /// tags: mempool
+    async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error> {
+        Ok(self.fetcher.get_mempool_info().await?.into())
     }
 
     /// Returns the proof-of-work difficulty as a multiple of the minimum difficulty.

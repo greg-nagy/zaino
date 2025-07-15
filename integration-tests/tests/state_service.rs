@@ -512,6 +512,61 @@ async fn state_service_get_raw_mempool(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
+async fn state_service_get_mempool_info(validator: &ValidatorKind) {
+    let (
+        mut test_manager,
+        _fetch_service,
+        fetch_service_subscriber,
+        _state_service,
+        state_service_subscriber,
+    ) = create_test_manager_and_services(validator, None, true, true, None).await;
+
+    let mut clients = test_manager
+        .clients
+        .take()
+        .expect("Clients are not initialized");
+    test_manager.local_net.generate_blocks(1).await.unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+    clients.faucet.sync_and_await().await.unwrap();
+
+    if matches!(validator, ValidatorKind::Zebrad) {
+        test_manager.local_net.generate_blocks(100).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        clients.faucet.sync_and_await().await.unwrap();
+        clients.faucet.quick_shield().await.unwrap();
+        test_manager.local_net.generate_blocks(100).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        clients.faucet.sync_and_await().await.unwrap();
+        clients.faucet.quick_shield().await.unwrap();
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        clients.faucet.sync_and_await().await.unwrap();
+    };
+
+    let recipient_ua = clients.get_recipient_address("unified").await;
+    let recipient_taddr = clients.get_recipient_address("transparent").await;
+    from_inputs::quick_send(&mut clients.faucet, vec![(&recipient_taddr, 250_000, None)])
+        .await
+        .unwrap();
+    from_inputs::quick_send(&mut clients.faucet, vec![(&recipient_ua, 250_000, None)])
+        .await
+        .unwrap();
+
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+    let mut fetch_service_mempool_info = fetch_service_subscriber.get_mempool_info().await.unwrap();
+    let mut state_service_mempool_info = state_service_subscriber.get_mempool_info().await.unwrap();
+
+    dbg!(&fetch_service_mempool_info);
+
+    dbg!(&state_service_mempool_info);
+
+    assert_eq!(fetch_service_mempool_info, state_service_mempool_info);
+
+    test_manager.close().await;
+}
+
 async fn state_service_get_raw_mempool_testnet() {
     let (
         mut test_manager,
@@ -1240,6 +1295,11 @@ mod zebrad {
         #[tokio::test]
         async fn raw_mempool_regtest() {
             state_service_get_raw_mempool(&ValidatorKind::Zebrad).await;
+        }
+
+        #[tokio::test]
+        async fn get_mempool_info() {
+            state_service_get_mempool_info(&ValidatorKind::Zebrad).await;
         }
 
         #[ignore = "requires fully synced testnet."]

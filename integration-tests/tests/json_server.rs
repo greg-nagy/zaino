@@ -382,6 +382,43 @@ async fn get_raw_mempool_inner() {
     test_manager.close().await;
 }
 
+async fn get_mempool_info_inner() {
+    let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
+        create_test_manager_and_fetch_services(false, true).await;
+
+    let mut clients = test_manager
+        .clients
+        .take()
+        .expect("Clients are not initialized");
+
+    test_manager.local_net.generate_blocks(1).await.unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+    clients.faucet.sync_and_await().await.unwrap();
+
+    let recipient_ua = &clients.get_recipient_address("unified").await;
+    let recipient_taddr = &clients.get_recipient_address("transparent").await;
+    from_inputs::quick_send(&mut clients.faucet, vec![(recipient_taddr, 250_000, None)])
+        .await
+        .unwrap();
+    from_inputs::quick_send(&mut clients.faucet, vec![(recipient_ua, 250_000, None)])
+        .await
+        .unwrap();
+
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+    let mut zcashd_mempool_info = zcashd_subscriber.get_mempool_info().await.unwrap();
+    let mut zaino_mempool_info = zaino_subscriber.get_mempool_info().await.unwrap();
+
+    dbg!(&zcashd_mempool_info);
+
+    dbg!(&zaino_mempool_info);
+
+    assert_eq!(zcashd_mempool_info, zaino_mempool_info);
+
+    test_manager.close().await;
+}
+
 async fn z_get_treestate_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
         create_test_manager_and_fetch_services(false, true).await;
@@ -651,6 +688,11 @@ mod zcashd {
         #[tokio::test]
         async fn get_raw_mempool() {
             get_raw_mempool_inner().await;
+        }
+
+        #[tokio::test]
+        async fn get_mempool_info() {
+            get_mempool_info_inner().await;
         }
 
         #[tokio::test]

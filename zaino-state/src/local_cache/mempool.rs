@@ -198,6 +198,11 @@ impl Mempool {
         }
     }
 
+    /// Returns the current tx count
+    pub async fn size(&self) -> Result<usize, MempoolError> {
+        Ok(self.fetcher.get_raw_mempool().await?.transactions.len())
+    }
+
     /// Returns the status of the mempool.
     pub fn status(&self) -> StatusType {
         self.status.load().into()

@@ -24,10 +24,10 @@ use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
     response::{
         GetBalanceError, GetBalanceResponse, GetBlockCountResponse, GetBlockError,
-        GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse, GetSubtreesError,
-        GetSubtreesResponse, GetTransactionResponse, GetTreestateError, GetTreestateResponse,
-        GetUtxosError, GetUtxosResponse, SendTransactionError, SendTransactionResponse, TxidsError,
-        TxidsResponse,
+        GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse, GetMempoolInfoResponse,
+        GetSubtreesError, GetSubtreesResponse, GetTransactionResponse, GetTreestateError,
+        GetTreestateResponse, GetUtxosError, GetUtxosResponse, SendTransactionError,
+        SendTransactionResponse, TxidsError, TxidsResponse,
     },
 };
 
@@ -399,6 +399,18 @@ impl JsonRpSeeConnector {
         &self,
     ) -> Result<GetBlockchainInfoResponse, RpcRequestError<Infallible>> {
         self.send_request::<(), GetBlockchainInfoResponse>("getblockchaininfo", ())
+            .await
+    }
+
+    /// Returns details on the active state of the TX memory pool.
+    ///
+    /// zcashd reference: [`getmempoolinfo`](https://zcash.github.io/rpc/getmempoolinfo.html)
+    /// method: post
+    /// tags: mempool
+    pub async fn get_mempool_info(
+        &self,
+    ) -> Result<GetMempoolInfoResponse, RpcRequestError<Infallible>> {
+        self.send_request::<(), GetMempoolInfoResponse>("getmempoolinfo", ())
             .await
     }
 

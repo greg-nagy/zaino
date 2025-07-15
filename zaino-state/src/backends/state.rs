@@ -24,7 +24,10 @@ use nonempty::NonEmpty;
 use tokio_stream::StreamExt as _;
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
+    jsonrpsee::{
+        connector::{JsonRpSeeConnector, RpcError},
+        response::GetMempoolInfoResponse,
+    },
 };
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
@@ -967,6 +970,14 @@ impl ZcashIndexer for StateServiceSubscriber {
             // be implemented (it's sprout-only in zcashd)
             0,
         ))
+    }
+
+    async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error> {
+        let mut state = self.read_state_service.clone();
+
+        todo!()
+
+        // state.ready().and_then(|service| service.call(ReadRequest::)).await
     }
 
     async fn z_get_address_balance(
