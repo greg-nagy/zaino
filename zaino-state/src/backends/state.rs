@@ -24,10 +24,7 @@ use nonempty::NonEmpty;
 use tokio_stream::StreamExt as _;
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpsee::{
-        connector::{JsonRpSeeConnector, RpcError},
-        error::TransportError,
-    },
+    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
 };
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
@@ -158,11 +155,7 @@ impl ZcashService for StateService {
         )
         .await?;
 
-        let zebra_build_data = rpc_client.get_info().await.map_err(|_| {
-            StateServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
-                "Failed to get info".to_string(),
-            ))
-        })?;
+        let zebra_build_data = rpc_client.get_info().await?;
 
         // This const is optional, as the build script can only
         // generate it from hash-based dependencies.
@@ -210,15 +203,7 @@ impl ZcashService for StateService {
 
         // Wait for ReadStateService to catch up to primary database:
         loop {
-            let server_height = rpc_client
-                .get_blockchain_info()
-                .await
-                .map_err(|_| {
-                    StateServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
-                        "Failed to get blockchain info".to_string(),
-                    ))
-                })?
-                .blocks;
+            let server_height = rpc_client.get_blockchain_info().await?.blocks;
 
             let syncer_response = read_state_service
                 .ready()
@@ -1019,11 +1004,7 @@ impl ZcashIndexer for StateServiceSubscriber {
             .send_raw_transaction(raw_transaction_hex)
             .await
             .map(SentTransactionHash::from)
-            .map_err(|_| {
-                StateServiceError::JsonRpcConnectorError(TransportError::JsonRpSeeClientError(
-                    "Failed to send raw transaction".to_string(),
-                ))
-            })
+            .map_err(Into::into)
     }
 
     async fn z_get_block(
@@ -1106,6 +1087,28 @@ impl ZcashIndexer for StateServiceSubscriber {
             sapling,
             orchard,
         ))
+    }
+
+    // No request parameters.
+    /// Return the hex encoded hash of the best (tip) block, in the longest block chain.
+    /// The Zcash source code is considered canonical:
+    /// [In the rpc definition](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/common.h#L48) there are no required params, or optional params.
+    /// [The function in rpc/blockchain.cpp]https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L325
+    /// where `return chainActive.Tip()->GetBlockHash().GetHex();` is the [return expression](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L339)returning a `std::string`
+    async fn get_best_blockhash(&self) -> Result<GetBlockHash, Self::Error> {
+        // return should be valid hex encoded.
+        // Hash from zebra says:
+        // Return the hash bytes in big-endian byte-order suitable for printing out byte by byte.
+        //
+        // Zebra displays transaction and block hashes in big-endian byte-order,
+        // following the u256 convention set by Bitcoin and zcashd.
+        match self.read_state_service.best_tip() {
+            Some(x) => return Ok(GetBlockHash(x.1)),
+            None => {
+                // try RPC if state read fails:
+                Ok(self.rpc_client.get_best_blockhash().await?.into())
+            }
+        }
     }
 
     /// Returns the current block count in the best valid block chain.

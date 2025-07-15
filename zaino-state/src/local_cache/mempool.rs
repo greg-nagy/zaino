@@ -178,30 +178,11 @@ impl Mempool {
     ) -> Result<Vec<(MempoolKey, MempoolValue)>, MempoolError> {
         let mut transactions = Vec::new();
 
-        for txid in self
-            .fetcher
-            .get_raw_mempool()
-            .await
-            .map_err(|_| {
-                MempoolError::JsonRpcConnectorError(
-                    zaino_fetch::jsonrpsee::error::TransportError::JsonRpSeeClientError(
-                        "Failed to get mempool".to_string(),
-                    ),
-                )
-            })?
-            .transactions
-        {
+        for txid in self.fetcher.get_raw_mempool().await?.transactions {
             let transaction = self
                 .fetcher
                 .get_raw_transaction(txid.clone(), Some(1))
-                .await
-                .map_err(|_| {
-                    MempoolError::JsonRpcConnectorError(
-                        zaino_fetch::jsonrpsee::error::TransportError::JsonRpSeeClientError(
-                            "Failed to get mempool".to_string(),
-                        ),
-                    )
-                })?;
+                .await?;
             transactions.push((MempoolKey(txid), MempoolValue(transaction.into())));
         }
 

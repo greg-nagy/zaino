@@ -1,5 +1,7 @@
 //! Hold error types for the JsonRpSeeConnector and related functionality.
 
+use std::io;
+
 /// Error type for JSON-RPC responses.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct JsonRpcError {
@@ -16,9 +18,9 @@ pub struct JsonRpcError {
 /// General error type for handling JsonRpSeeConnector errors.
 #[derive(Debug, thiserror::Error)]
 pub enum TransportError {
-    /// Type for errors without an underlying source.
-    #[error("Error: {0}")]
-    JsonRpSeeClientError(String),
+    /// The cookie file used to authenticate with zebra could not be read
+    #[error("could not read zebra authentication cookie file: {0}")]
+    CookieReadError(io::Error),
 
     /// Reqwest Based Errors.
     #[error("Error: HTTP Request Error: {0}")]
@@ -32,17 +34,31 @@ pub enum TransportError {
     #[error("Error: Invalid URL:{0}")]
     UrlParseError(#[from] url::ParseError),
 
-    /// std::io::Error
-    #[error("IO error: {0}")]
-    IoError(#[from] std::io::Error),
+    // Above this line, zaino failed to connect to a node
+    // -----------------------------------
+    // below this line, zaino connected to a node which returned a bad response
+    /// Node returned a non-canonical status code
+    #[error("validator returned invalid status code: {0}")]
+    InvalidStatusCode(u16),
+
+    /// Node returned a status code we don't expect
+    #[error("validator returned unexpected status code: {0}")]
+    UnexpectedStatusCode(u16),
+
+    /// Node returned a status code we don't expect
+    #[error("validator returned error code: {0}")]
+    ErrorStatusCode(u16),
+
+    /// The data returned by the validator was invalid.
+    #[error("validator returned invalid data: {0}")]
+    BadNodeData(Box<dyn std::error::Error + Send + Sync + 'static>),
+
+    /// Validator returned empty response body
+    #[error("no response body")]
+    EmptyResponseBody,
 }
 
 impl TransportError {
-    /// Constructor for errors without an underlying source
-    pub fn new(msg: impl Into<String>) -> Self {
-        TransportError::JsonRpSeeClientError(msg.into())
-    }
-
     /// Converts TransportError to tonic::Status
     ///
     /// TODO: This impl should be changed to return the correct status [https://github.com/zcash/lightwalletd/issues/497] before release,
@@ -56,11 +72,5 @@ impl TransportError {
 impl From<TransportError> for tonic::Status {
     fn from(err: TransportError) -> Self {
         err.to_grpc_status()
-    }
-}
-
-impl From<serde_json::Error> for TransportError {
-    fn from(e: serde_json::Error) -> Self {
-        TransportError::JsonRpSeeClientError(e.to_string())
     }
 }
