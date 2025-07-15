@@ -11,7 +11,7 @@ use zaino_proto::proto::compact_formats::CompactBlock;
 use zebra_rpc::methods::GetAddressUtxos;
 
 use crate::bench::BlockCacheConfig;
-use crate::chain_index::finalised_state::ZainoDB;
+use crate::chain_index::finalised_state::{DbReader, ZainoDB};
 use crate::error::FinalisedStateError;
 use crate::{read_u32_le, ChainBlock, CompactSize, ZainoVersionedSerialise as _};
 
@@ -132,6 +132,29 @@ async fn load_vectors_and_spawn_and_sync_zaino_db() -> (
     }
     (blocks, faucet, recipient, db_dir, zaino_db)
 }
+
+// async fn load_vectors_db_and_reader() -> (
+//     Vec<(u32, ChainBlock, CompactBlock)>,
+//     (Vec<String>, Vec<GetAddressUtxos>, u64),
+//     (Vec<String>, Vec<GetAddressUtxos>, u64),
+//     TempDir,
+//     std::sync::Arc<ZainoDB>,
+//     DbReader,
+// ) {
+//     let (blocks, faucet, recipient, db_dir, zaino_db) =
+//         load_vectors_and_spawn_and_sync_zaino_db().await;
+
+//     let zaino_db = std::sync::Arc::new(zaino_db);
+
+//     zaino_db.wait_until_ready().await;
+//     dbg!(zaino_db.status().await);
+//     dbg!(zaino_db.tip_height().await.unwrap()).unwrap();
+
+//     let db_reader = zaino_db.to_reader().await;
+//     dbg!(db_reader.tip_height().await.unwrap()).unwrap();
+
+//     (blocks, faucet, recipient, db_dir, zaino_db, db_reader)
+// }
 
 // *** ZainoDB Tests ***
 
