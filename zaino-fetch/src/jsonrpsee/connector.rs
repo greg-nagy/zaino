@@ -8,6 +8,7 @@ use http::Uri;
 use reqwest::{Client, ClientBuilder, Url};
 use serde::{Deserialize, Serialize};
 use std::{
+    convert::Infallible,
     fmt, fs,
     net::SocketAddr,
     path::Path,
@@ -22,10 +23,9 @@ use tracing::error;
 use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
     response::{
-        GetBalanceError, GetBalanceResponse, GetBlockCountError, GetBlockCountResponse,
-        GetBlockError, GetBlockResponse, GetBlockchainInfoError, GetBlockchainInfoResponse,
-        GetDifficultyError, GetInfoError, GetInfoResponse, GetSubtreesError, GetSubtreesResponse,
-        GetTransactionError, GetTransactionResponse, GetTreestateError, GetTreestateResponse,
+        GetBalanceError, GetBalanceResponse, GetBlockCountResponse, GetBlockError, GetBlockHash,
+        GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse, GetSubtreesError,
+        GetSubtreesResponse, GetTransactionResponse, GetTreestateError, GetTreestateResponse,
         GetUtxosError, GetUtxosResponse, SendTransactionError, SendTransactionResponse, TxidsError,
         TxidsResponse,
     },
@@ -401,7 +401,7 @@ impl JsonRpSeeConnector {
     /// zcashd reference: [`getinfo`](https://zcash.github.io/rpc/getinfo.html)
     /// method: post
     /// tags: control
-    pub async fn get_info(&self) -> Result<GetInfoResponse, RpcRequestError<GetInfoError>> {
+    pub async fn get_info(&self) -> Result<GetInfoResponse, RpcRequestError<Infallible>> {
         self.send_request::<(), GetInfoResponse>("getinfo", ())
             .await
     }
@@ -413,7 +413,7 @@ impl JsonRpSeeConnector {
     /// tags: blockchain
     pub async fn get_blockchain_info(
         &self,
-    ) -> Result<GetBlockchainInfoResponse, RpcRequestError<GetBlockchainInfoError>> {
+    ) -> Result<GetBlockchainInfoResponse, RpcRequestError<Infallible>> {
         self.send_request::<(), GetBlockchainInfoResponse>("getblockchaininfo", ())
             .await
     }
@@ -425,7 +425,7 @@ impl JsonRpSeeConnector {
     /// tags: blockchain
     pub async fn get_difficulty(
         &self,
-    ) -> Result<GetDifficultyResponse, RpcRequestError<GetDifficultyError>> {
+    ) -> Result<GetDifficultyResponse, RpcRequestError<Infallible>> {
         self.send_request::<(), GetDifficultyResponse>("getdifficulty", ())
             .await
     }
@@ -501,6 +501,23 @@ impl JsonRpSeeConnector {
         }
     }
 
+    /// Returns the hash of the best block (tip) of the longest chain.
+    /// zcashd reference: [`getbestblockhash`](https://zcash.github.io/rpc/getbestblockhash.html)
+    /// method: post
+    /// tags: blockchain
+    ///
+    /// # Notes
+    ///
+    /// The zcashd doc reference above says there are no parameters and the result is a "hex" (string) of the block hash hex encoded.
+    /// The Zcash source code is considered canonical.
+    /// [In the rpc definition](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/common.h#L48) there are no required params, or optional params.
+    /// [The function in rpc/blockchain.cpp]https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L325
+    /// where `return chainActive.Tip()->GetBlockHash().GetHex();` is the [return expression](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L339)returning a `std::string`
+    pub async fn get_best_blockhash(&self) -> Result<GetBlockHash, RpcRequestError<Infallible>> {
+        self.send_request::<(), GetBlockHash>("getbestblockhash", ())
+            .await
+    }
+
     /// Returns the height of the most recent block in the best valid block chain
     /// (equivalently, the number of blocks in this chain excluding the genesis block).
     ///
@@ -509,7 +526,7 @@ impl JsonRpSeeConnector {
     /// tags: blockchain
     pub async fn get_block_count(
         &self,
-    ) -> Result<GetBlockCountResponse, RpcRequestError<GetBlockCountError>> {
+    ) -> Result<GetBlockCountResponse, RpcRequestError<Infallible>> {
         self.send_request::<(), GetBlockCountResponse>("getblockcount", ())
             .await
     }
@@ -586,7 +603,7 @@ impl JsonRpSeeConnector {
         &self,
         txid_hex: String,
         verbose: Option<u8>,
-    ) -> Result<GetTransactionResponse, RpcRequestError<GetTransactionError>> {
+    ) -> Result<GetTransactionResponse, RpcRequestError<Infallible>> {
         let params = match verbose {
             Some(v) => vec![
                 serde_json::to_value(txid_hex).map_err(RpcRequestError::JsonRpc)?,
