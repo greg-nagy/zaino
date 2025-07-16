@@ -1,30 +1,35 @@
 //! Holds the Finalised portion of the chain index on disk.
 
-// TODO / FIX!!! - ROMOVE THIS
+// TODO / FIX - ROMOVE THIS ONCE CHAININDEX LANDS!
 #![allow(dead_code)]
 
+use super::{
+    encoding::{
+        read_fixed_le, read_u32_le, version, write_fixed_le, write_u32_le, CompactSize,
+        FixedEncodedLen, ZainoVersionedSerialise,
+    },
+    types::{AddrEventBytes, BlockHeaderData},
+};
 use crate::{
-    chain_index::encoding::read_u32_be, config::BlockCacheConfig, error::FinalisedStateError,
-    AddrHistRecord, AddrScript, AtomicStatus, ChainBlock, CommitmentTreeData, CompactOrchardAction,
-    CompactSaplingOutput, CompactSaplingSpend, CompactTxData, Hash, Height, Index,
-    OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, ShardRoot,
-    StatusType, TransparentCompactTx, TransparentTxList, TxInCompact, TxIndex, TxOutCompact,
-    TxidList,
+    config::BlockCacheConfig, error::FinalisedStateError, AddrHistRecord, AddrScript, AtomicStatus,
+    ChainBlock, CommitmentTreeData, CompactOrchardAction, CompactSaplingOutput,
+    CompactSaplingSpend, CompactTxData, Hash, Height, OrchardCompactTx, OrchardTxList, Outpoint,
+    SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
+    TxInCompact, TxIndex, TxOutCompact, TxidList,
 };
 
-use dashmap::DashSet;
-use sha2::{Digest, Sha256};
-use tokio::time::interval;
-use zebra_chain::parameters::NetworkKind;
+use zebra_state::HashOrHeight;
 
 use blake2::{
     digest::{Update, VariableOutput},
     Blake2bVar,
 };
 use core2::io::{self, Read, Write};
+use dashmap::DashSet;
 use lmdb::{
     Cursor, Database, DatabaseFlags, Environment, EnvironmentFlags, Transaction as _, WriteFlags,
 };
+use sha2::{Digest, Sha256};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     fs,
@@ -34,16 +39,9 @@ use std::{
     },
     time::Duration,
 };
+use tokio::time::interval;
 use tracing::{error, info, warn};
-use zebra_state::HashOrHeight;
-
-use super::{
-    encoding::{
-        read_fixed_le, read_u32_le, version, write_fixed_le, write_u32_le, CompactSize,
-        FixedEncodedLen, ZainoVersionedSerialise,
-    },
-    types::{AddrEventBytes, BlockHeaderData},
-};
+use zebra_chain::parameters::NetworkKind;
 
 // ───────────────────────── Schema v1 constants ─────────────────────────
 
@@ -128,8 +126,6 @@ pub struct ZainoDB {
     ///
     /// Used to search all transparent address indexes (txids, utxos, balances, deltas)
     addrhist: Database,
-    /// Subtree roots: Index -> StoredEntry<ShardRoot>
-    shard_roots: Database,
     /// Metadata: singleton entry "metadata" -> StoredEntry<DbMetadata>
     metadata: Database,
 
@@ -210,8 +206,6 @@ impl ZainoDB {
             DatabaseFlags::DUP_SORT | DatabaseFlags::DUP_FIXED,
         )
         .await?;
-        let shard_roots =
-            Self::open_or_create_db(&env, "shard_roots", DatabaseFlags::empty()).await?;
         let metadata = Self::open_or_create_db(&env, "metadata", DatabaseFlags::empty()).await?;
 
         // Create ZainoDB
@@ -226,7 +220,6 @@ impl ZainoDB {
             heights: hashes,
             spent,
             addrhist,
-            shard_roots,
             metadata,
             validated_tip: Arc::new(AtomicU32::new(0)),
             validated_set: DashSet::new(),
@@ -311,7 +304,6 @@ impl ZainoDB {
             heights: self.heights,
             spent: self.spent,
             addrhist: self.addrhist,
-            shard_roots: self.shard_roots,
             metadata: self.metadata,
             validated_tip: Arc::clone(&self.validated_tip),
             validated_set: self.validated_set.clone(),
@@ -325,18 +317,16 @@ impl ZainoDB {
             async move {
                 // *** initial validation ***
                 zaino_db.status.store(StatusType::Syncing.into());
-                let (r1, r2, r3, r4) = tokio::join!(
-                    async { zaino_db.initial_root_scan().await },
+                let (r1, r2, r3) = tokio::join!(
                     async { zaino_db.initial_spent_scan().await },
                     async { zaino_db.initial_addrhist_scan().await },
                     async { zaino_db.initial_block_scan().await },
                 );
 
                 for (desc, result) in [
-                    ("root scan", r1),
-                    ("spent scan", r2),
-                    ("addrhist scan", r3),
-                    ("block scan", r4),
+                    ("spent scan", r1),
+                    ("addrhist scan", r2),
+                    ("block scan", r3),
                 ] {
                     if let Err(e) = result {
                         error!("initial {desc} failed: {e}");
@@ -417,33 +407,6 @@ impl ZainoDB {
         }
     }
 
-    /// Validate every stored `ShardRoot`.
-    async fn initial_root_scan(&self) -> Result<(), FinalisedStateError> {
-        let env = self.env.clone();
-        let shard_roots = self.shard_roots;
-
-        tokio::task::spawn_blocking(move || {
-            let ro_txn = env.begin_ro_txn()?;
-            let mut cursor = ro_txn.open_ro_cursor(shard_roots)?;
-
-            for (key_bytes, val_bytes) in cursor.iter() {
-                let entry = StoredEntryFixed::<ShardRoot>::from_bytes(val_bytes).map_err(|e| {
-                    FinalisedStateError::Custom(format!("corrupt shard-root entry: {e}"))
-                })?;
-
-                if !entry.verify(key_bytes) {
-                    return Err(FinalisedStateError::Custom(
-                        "shard-root checksum mismatch".into(),
-                    ));
-                }
-            }
-
-            Ok(())
-        })
-        .await
-        .map_err(|e| FinalisedStateError::Custom(format!("Tokio task error: {e}")))?
-    }
-
     /// Validate every stored `TxIndex`.
     async fn initial_spent_scan(&self) -> Result<(), FinalisedStateError> {
         let env = self.env.clone();
@@ -512,7 +475,6 @@ impl ZainoDB {
             heights: self.heights,
             spent: self.spent,
             addrhist: self.addrhist,
-            shard_roots: self.shard_roots,
             metadata: self.metadata,
             validated_tip: Arc::clone(&self.validated_tip),
             validated_set: self.validated_set.clone(),
@@ -769,7 +731,6 @@ impl ZainoDB {
             heights: self.heights,
             spent: self.spent,
             addrhist: self.addrhist,
-            shard_roots: self.shard_roots,
             metadata: self.metadata,
             validated_tip: Arc::clone(&self.validated_tip),
             validated_set: self.validated_set.clone(),
@@ -946,48 +907,6 @@ impl ZainoDB {
         }
     }
 
-    /// Inserts a `ShardRoot` at its numeric `Index`.
-    ///
-    /// * The key is the 4-byte native-endian encoding of `index`, proceeded by a 1 byte version tag.
-    /// * The value is a `StoredEntryFixed<ShardRoot>`.
-    ///
-    /// Returns an error if an entry already exists for that index.
-    pub(crate) async fn write_root(
-        &self,
-        index: Index,
-        root: ShardRoot,
-    ) -> Result<(), FinalisedStateError> {
-        // 1) Build key (tag + BE index)
-        let key = index
-            .to_bytes()
-            .map_err(|e| FinalisedStateError::Custom(format!("index key serialize: {e}")))?;
-
-        // 2) Wrap in StoredEntryFixed (versioned body + checksum), then to_bytes()
-        let entry = StoredEntryFixed::new(&key, root);
-        let val = entry
-            .to_bytes()
-            .map_err(|e| FinalisedStateError::Custom(format!("shard-root serialize: {e}")))?;
-
-        // 3) Insert under NO_OVERWRITE
-        tokio::task::block_in_place(|| {
-            let mut txn = self.env.begin_rw_txn()?;
-            match txn.put(self.shard_roots, &key, &val, WriteFlags::NO_OVERWRITE) {
-                Ok(()) => {
-                    txn.commit()?;
-                    self.env.sync(true).map_err(|e| {
-                        FinalisedStateError::Custom(format!("LMDB sync failed: {e}"))
-                    })?;
-                    Ok(())
-                }
-                Err(lmdb::Error::KeyExist) => Err(FinalisedStateError::Custom(format!(
-                    "shard-root for index {} already present",
-                    index.0
-                ))),
-                Err(e) => Err(FinalisedStateError::LmdbError(e)),
-            }
-        })
-    }
-
     /// Deletes a block identified height from every finalised table.
     pub(crate) async fn delete_block_at_height(
         &self,
@@ -1041,34 +960,6 @@ impl ZainoDB {
         })?;
 
         Ok(())
-    }
-
-    /// Removes the `ShardRoot` stored at the specified `Index`.
-    ///
-    /// Returns an error if no entry exists at that index.
-    pub(crate) async fn delete_root(&self, index: Index) -> Result<(), FinalisedStateError> {
-        // Reconstruct exactly the same key
-        let key = index
-            .to_bytes()
-            .map_err(|e| FinalisedStateError::Custom(format!("index key serialize: {e}")))?;
-
-        tokio::task::block_in_place(|| {
-            let mut txn = self.env.begin_rw_txn()?;
-            match txn.del(self.shard_roots, &key, None) {
-                Ok(()) => {
-                    txn.commit()?;
-                    self.env.sync(true).map_err(|e| {
-                        FinalisedStateError::Custom(format!("LMDB sync failed: {e}"))
-                    })?;
-                    Ok(())
-                }
-                Err(lmdb::Error::NotFound) => Err(FinalisedStateError::Custom(format!(
-                    "no shard-root at index {}",
-                    index.0
-                ))),
-                Err(e) => Err(FinalisedStateError::LmdbError(e)),
-            }
-        })
     }
 
     /// This is used as a backup when delete_block_at_height fails.
@@ -1236,7 +1127,6 @@ impl ZainoDB {
             heights: self.heights,
             spent: self.spent,
             addrhist: self.addrhist,
-            shard_roots: self.shard_roots,
             metadata: self.metadata,
             validated_tip: Arc::clone(&self.validated_tip),
             validated_set: self.validated_set.clone(),
@@ -2586,55 +2476,6 @@ impl ZainoDB {
                 vtx,
                 chain_metadata: Some(chain_metadata),
             })
-        })
-    }
-
-    /// Fetch every `ShardRoot` whose numeric index satisfies  
-    /// `start.index ≤ idx ≤ end.index` (inclusive).  
-    /// If `start > end` an empty `Vec` is returned.
-    async fn get_shard_roots(
-        &self,
-        start: Index,
-        end: Index,
-    ) -> Result<Vec<ShardRoot>, FinalisedStateError> {
-        if start.0 > end.0 {
-            return Ok(Vec::new());
-        }
-
-        // Serialise the first key (version-tag + big-endian u32) so we can
-        // seek directly with `iter_from`.
-        let start_key = start.to_bytes()?;
-        let end_idx = end.0;
-
-        tokio::task::block_in_place(|| {
-            let txn = self.env.begin_ro_txn()?;
-            let mut cur = txn.open_ro_cursor(self.shard_roots)?;
-
-            let mut roots = Vec::new();
-
-            // Cursor walk from `start_key` until we pass `end_idx`.
-            for (key_bytes, val_bytes) in cur.iter_from::<&[u8]>(&start_key) {
-                if key_bytes.len() != Index::VERSIONED_LEN {
-                    break;
-                }
-
-                let idx = {
-                    use core2::io::Cursor;
-                    let mut rdr = Cursor::new(&key_bytes[1..]);
-                    read_u32_be(&mut rdr)?
-                };
-
-                if idx > end_idx {
-                    break;
-                }
-
-                let entry = StoredEntryFixed::<ShardRoot>::from_bytes(val_bytes).map_err(|e| {
-                    FinalisedStateError::Custom(format!("corrupt shard-root entry: {e}"))
-                })?;
-                roots.push(*entry.inner());
-            }
-
-            Ok(roots)
         })
     }
 
@@ -4275,17 +4116,6 @@ impl DbReader {
         height: Height,
     ) -> Result<zaino_proto::proto::compact_formats::CompactBlock, FinalisedStateError> {
         self.inner.get_compact_block(height).await
-    }
-
-    /// Fetch every `ShardRoot` whose numeric index satisfies  
-    /// `start.index ≤ idx ≤ end.index` (inclusive).  
-    /// If `start > end` an empty `Vec` is returned.
-    pub(crate) async fn get_shard_roots(
-        &self,
-        start: Index,
-        end: Index,
-    ) -> Result<Vec<ShardRoot>, FinalisedStateError> {
-        self.inner.get_shard_roots(start, end).await
     }
 
     /// Fetch database metadata.
