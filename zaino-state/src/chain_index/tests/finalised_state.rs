@@ -158,7 +158,7 @@ async fn load_vectors_and_spawn_and_sync_zaino_db() -> (
 
 // *** ZainoDB Tests ***
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn vectors_can_be_loaded_and_deserialised() {
     let (blocks, faucet, recipient) = load_test_vectors().unwrap();
 
@@ -208,7 +208,7 @@ async fn vectors_can_be_loaded_and_deserialised() {
     println!("addr: {}", addr);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn add_blocks_to_db_and_verify() {
     let (_blocks, _faucet, _recipient, _db_dir, zaino_db) =
         load_vectors_and_spawn_and_sync_zaino_db().await;
@@ -217,7 +217,7 @@ async fn add_blocks_to_db_and_verify() {
     dbg!(zaino_db.tip_height().await.unwrap());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn delete_blocks_from_db() {
     let (_blocks, _faucet, _recipient, _db_dir, zaino_db) =
         load_vectors_and_spawn_and_sync_zaino_db().await;
@@ -235,7 +235,7 @@ async fn delete_blocks_from_db() {
     dbg!(zaino_db.tip_height().await.unwrap());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn load_db_from_file() {
     let (blocks, _faucet, _recipient) = load_test_vectors().unwrap();
 
@@ -291,7 +291,7 @@ async fn load_db_from_file() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn try_write_invalid_block() {
     let (blocks, _faucet, _recipient, _db_dir, zaino_db) =
         load_vectors_and_spawn_and_sync_zaino_db().await;
@@ -313,7 +313,7 @@ async fn try_write_invalid_block() {
     dbg!(zaino_db.tip_height().await.unwrap());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn try_delete_block_with_invalid_height() {
     let (blocks, _faucet, _recipient, _db_dir, zaino_db) =
         load_vectors_and_spawn_and_sync_zaino_db().await;
@@ -338,7 +338,7 @@ async fn try_delete_block_with_invalid_height() {
     dbg!(zaino_db.tip_height().await.unwrap());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn create_db_reader() {
     let (_blocks, _faucet, _recipient, _db_dir, zaino_db) =
         load_vectors_and_spawn_and_sync_zaino_db().await;
