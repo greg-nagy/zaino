@@ -24,6 +24,21 @@ impl TryFrom<RpcError> for Infallible {
     }
 }
 
+/// Response to a `getaddressdeltas` RPC request.
+///
+/// This is used for the output parameter of [`JsonRpcConnector::get_address_deltas`].
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct GetAddressDeltasResponse {}
+
+impl ResponseToError for GetAddressDeltasResponse {
+    // type RpcError = GetAddressDeltasError;
+    type RpcError = Infallible;
+}
+
+/// Error type used for the `getaddressdeltas` RPC request.
+#[derive(Debug, thiserror::Error)]
+pub enum GetAddressDeltasError {}
+
 /// Response to a `getinfo` RPC request.
 ///
 /// This is used for the output parameter of [`JsonRpcConnector::get_info`].

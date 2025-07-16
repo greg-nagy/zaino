@@ -31,7 +31,7 @@ use crate::jsonrpsee::{
     },
 };
 
-use super::response::GetDifficultyResponse;
+use super::response::{GetAddressDeltasResponse, GetDifficultyResponse};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RpcRequest<T> {
@@ -394,6 +394,27 @@ impl JsonRpSeeConnector {
         request_builder = request_builder.body(request_body);
 
         Ok(request_builder)
+    }
+
+    /// Returns all changes for an address.
+    ///
+    /// Returns information about all changes to the given transparent addresses within the given (inclusive)
+    ///
+    /// block height range, default is the full blockchain.
+    /// If start or end are not specified, they default to zero.
+    /// If start is greater than the latest block height, it's interpreted as that height.
+    ///
+    /// If end is zero, it's interpreted as the latest block height.
+    ///
+    /// [Original zcashd implementation](https://github.com/zcash/zcash/blob/18238d90cd0b810f5b07d5aaa1338126aa128c06/src/rpc/misc.cpp#L881)
+    ///
+    /// zcashd reference: [`getaddressdeltas`](https://zcash.github.io/rpc/getaddressdeltas.html)
+    /// method: post
+    /// tags: address
+    pub async fn get_address_deltas(
+        &self,
+    ) -> Result<GetAddressDeltasResponse, RpcRequestError<Infallible>> {
+        todo!()
     }
 
     /// Returns software information from the RPC server, as a [`GetInfo`] JSON struct.
