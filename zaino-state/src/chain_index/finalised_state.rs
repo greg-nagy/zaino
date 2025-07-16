@@ -531,6 +531,7 @@ impl ZainoDB {
 
     /// Writes a given (finalised) [`ChainBlock`] to ZainoDB.
     pub(crate) async fn write_block(&self, block: ChainBlock) -> Result<(), FinalisedStateError> {
+        self.status.store(StatusType::Syncing.into());
         let block_hash = *block.index().hash();
         let block_hash_bytes = block_hash.to_bytes()?;
         let block_height = block.index().height().ok_or(FinalisedStateError::Custom(
@@ -892,12 +893,14 @@ impl ZainoDB {
             Ok(_) => {
                 tokio::task::block_in_place(|| self.env.sync(true))
                     .map_err(|e| FinalisedStateError::Custom(format!("LMDB sync failed: {e}")))?;
+                self.status.store(StatusType::Ready.into());
                 Ok(())
             }
             Err(e) => {
                 let _ = self.delete_block(&block).await;
                 tokio::task::block_in_place(|| self.env.sync(true))
                     .map_err(|e| FinalisedStateError::Custom(format!("LMDB sync failed: {e}")))?;
+                self.status.store(StatusType::RecoverableError.into());
                 Err(FinalisedStateError::InvalidBlock {
                     height: block_height.0,
                     hash: block_hash,
