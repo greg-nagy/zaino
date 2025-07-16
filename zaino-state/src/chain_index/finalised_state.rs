@@ -2417,36 +2417,88 @@ impl ZainoDB {
                 .clone();
             let orchard = orchard_list.tx();
 
+            // let vtx: Vec<zaino_proto::proto::compact_formats::CompactTx> = txids
+            //     .iter()
+            //     .enumerate()
+            //     .map(|(i, txid)| {
+            //         let spends = sapling
+            //             .get(i)
+            //             .and_then(|opt| opt.as_ref())
+            //             .map(|s| s.spends().iter().map(|sp| sp.into_compact()).collect())
+            //             .unwrap_or_default();
+
+            //         let outputs = sapling
+            //             .get(i)
+            //             .and_then(|opt| opt.as_ref())
+            //             .map(|s| s.outputs().iter().map(|o| o.into_compact()).collect())
+            //             .unwrap_or_default();
+
+            //         let actions = orchard
+            //             .get(i)
+            //             .and_then(|opt| opt.as_ref())
+            //             .map(|o| o.actions().iter().map(|a| a.into_compact()).collect())
+            //             .unwrap_or_default();
+
+            //         zaino_proto::proto::compact_formats::CompactTx {
+            //             index: i as u64,
+            //             hash: txid.0.to_vec(),
+            //             fee: 0,
+            //             spends,
+            //             outputs,
+            //             actions,
+            //         }
+            //     })
+            //     .collect();
             let vtx: Vec<zaino_proto::proto::compact_formats::CompactTx> = txids
                 .iter()
                 .enumerate()
-                .map(|(i, txid)| {
+                .filter_map(|(i, txid)| {
                     let spends = sapling
                         .get(i)
                         .and_then(|opt| opt.as_ref())
-                        .map(|s| s.spends().iter().map(|sp| sp.into_compact()).collect())
+                        .map(|s| {
+                            s.spends()
+                                .iter()
+                                .map(|sp| sp.into_compact())
+                                .collect::<Vec<_>>()
+                        })
                         .unwrap_or_default();
 
                     let outputs = sapling
                         .get(i)
                         .and_then(|opt| opt.as_ref())
-                        .map(|s| s.outputs().iter().map(|o| o.into_compact()).collect())
+                        .map(|s| {
+                            s.outputs()
+                                .iter()
+                                .map(|o| o.into_compact())
+                                .collect::<Vec<_>>()
+                        })
                         .unwrap_or_default();
 
                     let actions = orchard
                         .get(i)
                         .and_then(|opt| opt.as_ref())
-                        .map(|o| o.actions().iter().map(|a| a.into_compact()).collect())
+                        .map(|o| {
+                            o.actions()
+                                .iter()
+                                .map(|a| a.into_compact())
+                                .collect::<Vec<_>>()
+                        })
                         .unwrap_or_default();
 
-                    zaino_proto::proto::compact_formats::CompactTx {
+                    // SKIP transparent-only txs:
+                    if spends.is_empty() && outputs.is_empty() && actions.is_empty() {
+                        return None;
+                    }
+
+                    Some(zaino_proto::proto::compact_formats::CompactTx {
                         index: i as u64,
                         hash: txid.0.to_vec(),
                         fee: 0,
                         spends,
                         outputs,
                         actions,
-                    }
+                    })
                 })
                 .collect();
 

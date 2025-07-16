@@ -4,7 +4,6 @@ use core2::io::{self, Read};
 use prost::Message;
 use std::io::BufReader;
 use std::path::Path;
-use std::sync::Arc;
 use std::{fs::File, path::PathBuf};
 use tempfile::TempDir;
 
@@ -14,7 +13,10 @@ use zebra_rpc::methods::GetAddressUtxos;
 use crate::bench::BlockCacheConfig;
 use crate::chain_index::finalised_state::{DbReader, ZainoDB};
 use crate::error::FinalisedStateError;
-use crate::{read_u32_le, ChainBlock, CompactSize, ZainoVersionedSerialise as _};
+use crate::{
+    read_u32_le, AddrScript, ChainBlock, CompactSize, CompactTxData, Height,
+    ZainoVersionedSerialise as _,
+};
 
 /// Reads test data from file.
 fn read_vectors_from_file<P: AsRef<Path>>(
@@ -354,21 +356,101 @@ async fn create_db_reader() {
 
 // *** DbReader Tests ***
 
-// chain block
-// compact block
-// txids
-// utxos
-// balance
-// spent
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_chain_blocks() {
+    let (blocks, _faucet, _recipient, _db_dir, _zaino_db, db_reader) =
+        load_vectors_db_and_reader().await;
 
-// #[tokio::test]
-// async fn
+    for (height, chain_block, _) in blocks.iter() {
+        // TODO / FIX: check why we have to do this? are chainblock recorded correct?
+        let mut txid_reversed_chain_block = chain_block.clone();
+        for tx in txid_reversed_chain_block.transactions.iter_mut() {
+            let mut reversed_txid = *tx.txid();
+            reversed_txid.reverse();
+            *tx = CompactTxData::new(
+                tx.index(),
+                reversed_txid,
+                tx.transparent().clone(),
+                tx.sapling().clone(),
+                tx.orchard().clone(),
+            );
+        }
+        let reader_chain_block = db_reader.get_chain_block(Height(*height)).await.unwrap();
+        assert_eq!(txid_reversed_chain_block, reader_chain_block);
+        println!("ChainBlock at height {} OK", height);
+    }
+}
 
-// #[tokio::test]
-// async fn
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_compact_blocks() {
+    let (blocks, _faucet, _recipient, _db_dir, _zaino_db, db_reader) =
+        load_vectors_db_and_reader().await;
 
-// #[tokio::test]
-// async fn
+    for (height, _, compact_block) in blocks.iter() {
+        let mut reader_compact_block = db_reader.get_compact_block(Height(*height)).await.unwrap();
+        // TODO / FIX: check why we have to do this? are chainblock recorded correct?
+        for tx in reader_compact_block.vtx.iter_mut() {
+            tx.hash.reverse();
+        }
+        assert_eq!(compact_block, &reader_compact_block);
+        println!("CompactBlock at height {} OK", height);
+    }
+}
 
-// #[tokio::test]
-// async fn
+// #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+// async fn get_txids() {
+//     let (blocks, faucet, recipient, _db_dir, _zaino_db, db_reader) =
+//         load_vectors_db_and_reader().await;
+
+//     let start = Height(blocks.first().unwrap().0);
+//     let end = Height(blocks.last().unwrap().0);
+
+//     // Check faucet
+
+//     let (faucet_txids, faucet_utxos, _faucet_balance) = faucet;
+//     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
+//         faucet_utxos.first().unwrap().into_parts();
+//     let faucet_hash_bytes: [u8; 20] = faucet_script.as_raw_bytes()[0..20].try_into().unwrap();
+//     let faucet_addr_script = AddrScript::new(faucet_hash_bytes);
+
+//     let reader_faucet_tx_indexes = db_reader
+//         .addr_tx_indexes_by_range(faucet_addr_script, start, end)
+//         .await
+//         .unwrap()
+//         .unwrap();
+
+//     let mut reader_faucet_txids = Vec::new();
+//     for index in reader_faucet_tx_indexes {
+//         let txid = db_reader.get_txid(index).await.unwrap();
+//         reader_faucet_txids.push(txid.to_string());
+//     }
+//     assert_eq!(faucet_txids.len(), reader_faucet_txids.len());
+//     assert_eq!(faucet_txids, reader_faucet_txids);
+
+//     // Check recipient
+
+//     let (recipient_txids, recipient_utxos, _recipient_balance) = recipient;
+//     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
+//         recipient_utxos.first().unwrap().into_parts();
+//     let recipient_hash_bytes: [u8; 20] = recipient_script.as_raw_bytes()[0..20].try_into().unwrap();
+//     let recipient_addr_script = AddrScript::new(recipient_hash_bytes);
+
+//     let reader_recipient_tx_indexes = db_reader
+//         .addr_tx_indexes_by_range(recipient_addr_script, start, end)
+//         .await
+//         .unwrap()
+//         .unwrap();
+
+//     let mut reader_recipient_txids = Vec::new();
+//     for index in reader_recipient_tx_indexes {
+//         let txid = db_reader.get_txid(index).await.unwrap();
+//         reader_recipient_txids.push(txid.to_string());
+//     }
+
+//     assert_eq!(recipient_txids.len(), reader_recipient_txids.len());
+//     assert_eq!(recipient_txids, reader_recipient_txids);
+// }
+
+// async fn get_utxos() {}
+// async fn get_balance() {}
+// async fn get_spent() {}
