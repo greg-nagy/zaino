@@ -29,8 +29,8 @@ zingolib = { git = "https://github.com/zingolabs/zingolib.git", tag = "2.0.0-bet
     "test-elevation",
 ] }
 testvectors = { git = "https://github.com/zingolabs/zingolib.git", tag = "2.0.0-beta2" }
-zingo-infra-testutils = { git = "https://github.com/zingolabs/infrastructure.git", rev = "c078e87d6e42e41586bdd9b07924644369736726" }
-zingo-infra-services = { git = "https://github.com/zingolabs/infrastructure.git", rev = "c078e87d6e42e41586bdd9b07924644369736726" }
+zingo-infra-testutils = { git = "https://github.com/zingolabs/infrastructure.git", rev = "c0bd5d250da1639da7c38940d91e9895d57f6013" }
+zingo-infra-services = { git = "https://github.com/zingolabs/infrastructure.git", rev = "c0bd5d250da1639da7c38940d91e9895d57f6013" }
 
 # Librustzcash
 zcash_client_backend = { version = "0.18.0", features = ["lightwalletd-tonic"] }

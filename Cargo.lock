@@ -6860,7 +6860,7 @@ dependencies = [
 [[package]]
 name = "zingo-infra-fetcher-core"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?rev=c078e87d6e42e41586bdd9b07924644369736726#c078e87d6e42e41586bdd9b07924644369736726"
+source = "git+https://github.com/zingolabs/infrastructure.git?rev=c0bd5d250da1639da7c38940d91e9895d57f6013#c0bd5d250da1639da7c38940d91e9895d57f6013"
 dependencies = [
  "hex",
  "reqwest",
@@ -6871,7 +6871,7 @@ dependencies = [
 [[package]]
 name = "zingo-infra-services"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?rev=c078e87d6e42e41586bdd9b07924644369736726#c078e87d6e42e41586bdd9b07924644369736726"
+source = "git+https://github.com/zingolabs/infrastructure.git?rev=c0bd5d250da1639da7c38940d91e9895d57f6013#c0bd5d250da1639da7c38940d91e9895d57f6013"
 dependencies = [
  "getset",
  "hex",
@@ -6896,7 +6896,7 @@ dependencies = [
 [[package]]
 name = "zingo-infra-testutils"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?rev=c078e87d6e42e41586bdd9b07924644369736726#c078e87d6e42e41586bdd9b07924644369736726"
+source = "git+https://github.com/zingolabs/infrastructure.git?rev=c0bd5d250da1639da7c38940d91e9895d57f6013#c0bd5d250da1639da7c38940d91e9895d57f6013"
 dependencies = [
  "http",
  "portpicker",
