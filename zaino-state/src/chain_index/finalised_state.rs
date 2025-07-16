@@ -2656,8 +2656,10 @@ impl ZainoDB {
     // *** DbReader creation ***
 
     /// Create a read-only facade backed by *this* live database.
-    pub(crate) async fn to_reader(&self) -> DbReader<'_> {
-        DbReader { inner: self }
+    pub(crate) fn to_reader(self: &Arc<Self>) -> DbReader {
+        DbReader {
+            inner: Arc::clone(self),
+        }
     }
 
     // *** Internal DB validation / varification ***
@@ -3942,11 +3944,11 @@ impl Drop for ZainoDB {
 ///   therefore:
 ///   * absolutely no cloning / ARC-ing of LMDB handles,
 ///   * compile-time guarantee that the reader cannot mutate state.
-pub(crate) struct DbReader<'a> {
-    inner: &'a ZainoDB,
+pub(crate) struct DbReader {
+    inner: Arc<ZainoDB>,
 }
 
-impl<'a> DbReader<'a> {
+impl DbReader {
     /// Returns the status of the serving ZainoDB.
     pub(crate) async fn status(&self) -> StatusType {
         self.inner.status().await
