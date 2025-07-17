@@ -518,6 +518,57 @@ async fn get_recipient_txids() {
 }
 
 // #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+// async fn get_faucet_utxos() {
+//     let (blocks, faucet, _recipient, _db_dir, _zaino_db, db_reader) =
+//         load_vectors_db_and_reader().await;
+
+//     let start = Height(blocks.first().unwrap().0);
+//     let end = Height(blocks.last().unwrap().0);
+
+//     let (_faucet_txids, faucet_utxos, _faucet_balance) = faucet;
+//     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
+//         faucet_utxos.first().unwrap().into_parts();
+//     let faucet_hash_bytes: [u8; 20] = faucet_script.as_raw_bytes()[0..20].try_into().unwrap();
+//     let faucet_addr_script = AddrScript::new(faucet_hash_bytes);
+
+//     // Filter recipient utxoss for txids that exist in our test data,
+//     // it appears that several utxoss were returned by the StateService that do not exist in the cached block range??
+//     let mut chain_txids = Vec::new();
+//     for (_height, chain_block, _compact_block) in blocks {
+//         let block_txids: Vec<String> = chain_block
+//             .transactions()
+//             .iter()
+//             .map(|tx_data| hex::encode(tx_data.txid()))
+//             .collect();
+//         chain_txids.extend(block_txids.iter().cloned());
+//     }
+//     let mut filtered_utxos = Vec::new();
+//     for utxo in faucet_utxos.iter() {
+//         let (_faucet_address, txid, output_index, _faucet_script, satoshis, _height) =
+//             utxo.into_parts();
+//         let txid_string = txid.to_string();
+//         if chain_txids.contains(&txid_string) {
+//             filtered_utxos.push((txid_string, output_index.index(), satoshis));
+//         }
+//     }
+
+//     let reader_faucet_utxo_indexes = db_reader
+//         .addr_utxos_by_range(faucet_addr_script, start, end)
+//         .await
+//         .unwrap()
+//         .unwrap();
+
+//     let mut reader_faucet_utxos = Vec::new();
+
+//     for (index, vout, value) in reader_faucet_utxo_indexes {
+//         let txid = db_reader.get_txid(index).await.unwrap().to_string();
+//         reader_faucet_utxos.push((txid, vout as u32, value));
+//     }
+
+//     assert_eq!(filtered_utxos.len(), reader_faucet_utxos.len());
+// }
+
+// #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 // async fn get_balance() {
 //     let (blocks, faucet, recipient, _db_dir, _zaino_db, db_reader) =
 //         load_vectors_db_and_reader().await;
@@ -556,5 +607,4 @@ async fn get_recipient_txids() {
 //     assert_eq!(recipient_balance, reader_recipient_balance);
 // }
 
-// async fn get_utxos() {}
 // async fn get_spent() {}
