@@ -973,11 +973,19 @@ impl ZcashIndexer for StateServiceSubscriber {
     }
 
     async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error> {
-        let mut state = self.read_state_service.clone();
+        let mempool_state = self.mempool.get_mempool().await;
 
-        todo!()
-
-        // state.ready().and_then(|service| service.call(ReadRequest::)).await
+        Ok(GetMempoolInfoResponse {
+            size: mempool_state.len() as u64,
+            bytes: mempool_state
+                .iter()
+                .map(|tx| match &tx.1 .0 {
+                    GetRawTransaction::Object(tx) => tx.hex.as_ref().len() as u64,
+                    GetRawTransaction::Raw(tx) => tx.as_ref().len() as u64,
+                })
+                .sum(),
+            usage: 0, // TODO: How do I get the mempool's memory usage?
+        })
     }
 
     async fn z_get_address_balance(

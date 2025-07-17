@@ -555,8 +555,8 @@ async fn state_service_get_mempool_info(validator: &ValidatorKind) {
 
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    let mut fetch_service_mempool_info = fetch_service_subscriber.get_mempool_info().await.unwrap();
-    let mut state_service_mempool_info = state_service_subscriber.get_mempool_info().await.unwrap();
+    let fetch_service_mempool_info = fetch_service_subscriber.get_mempool_info().await.unwrap();
+    let state_service_mempool_info = state_service_subscriber.get_mempool_info().await.unwrap();
 
     dbg!(&fetch_service_mempool_info);
 

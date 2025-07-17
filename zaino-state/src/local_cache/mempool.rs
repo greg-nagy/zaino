@@ -8,7 +8,7 @@ use crate::{
     status::{AtomicStatus, StatusType},
 };
 use tracing::{info, warn};
-use zaino_fetch::jsonrpsee::connector::JsonRpSeeConnector;
+use zaino_fetch::jsonrpsee::{connector::JsonRpSeeConnector, response::GetMempoolInfoResponse};
 use zebra_chain::block::Hash;
 use zebra_rpc::methods::GetRawTransaction;
 
@@ -201,6 +201,11 @@ impl Mempool {
     /// Returns the current tx count
     pub async fn size(&self) -> Result<usize, MempoolError> {
         Ok(self.fetcher.get_raw_mempool().await?.transactions.len())
+    }
+
+    /// Returns information about the mempool. Used by the `getmempool` rpc.
+    pub async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, MempoolError> {
+        Ok(self.fetcher.get_mempool_info().await?)
     }
 
     /// Returns the status of the mempool.

@@ -407,8 +407,8 @@ async fn get_mempool_info_inner() {
 
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    let mut zcashd_mempool_info = zcashd_subscriber.get_mempool_info().await.unwrap();
-    let mut zaino_mempool_info = zaino_subscriber.get_mempool_info().await.unwrap();
+    let zcashd_mempool_info = zcashd_subscriber.get_mempool_info().await.unwrap();
+    let zaino_mempool_info = zaino_subscriber.get_mempool_info().await.unwrap();
 
     dbg!(&zcashd_mempool_info);
 
