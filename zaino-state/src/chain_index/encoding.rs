@@ -83,13 +83,13 @@ pub trait ZainoVersionedSerialise: Sized {
 
     #[inline(always)]
     #[allow(unused)]
-    /// Decode V1 of this struct.
+    /// Decode a v1 body
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         Err(io::Error::new(io::ErrorKind::InvalidData, "v1 unsupported"))
     }
     #[inline(always)]
     #[allow(unused)]
-    /// Decode V2 of this struct.
+    /// Decode a v2 body
     fn decode_v2<R: Read>(r: &mut R) -> io::Result<Self> {
         Err(io::Error::new(io::ErrorKind::InvalidData, "v2 unsupported"))
     }
@@ -97,7 +97,7 @@ pub trait ZainoVersionedSerialise: Sized {
     /*──────────── router ────────────*/
 
     #[inline]
-    /// Decodes struct based on version tag.
+    /// Given a version tag, decode a body
     fn decode_body<R: Read>(r: &mut R, version_tag: u8) -> io::Result<Self> {
         if version_tag == Self::VERSION {
             Self::decode_latest(r)
@@ -159,10 +159,11 @@ pub trait FixedEncodedLen {
 }
 
 /* ──────────────────────────── CompactSize helpers ────────────────────────────── */
-/// Zcash compact size encoding
+/// a compact representation of a u32 taking up 1-4 bytes based on size
+/// common in the zcash ecosystem
 pub struct CompactSize;
 
-/// CompactSize maximum size.
+/// The larges value representable as a compact size
 pub const MAX_COMPACT_SIZE: u32 = 0x0200_0000;
 
 impl CompactSize {
