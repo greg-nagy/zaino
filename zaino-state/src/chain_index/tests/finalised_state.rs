@@ -13,10 +13,8 @@ use zebra_rpc::methods::GetAddressUtxos;
 use crate::bench::BlockCacheConfig;
 use crate::chain_index::finalised_state::{DbReader, ZainoDB};
 use crate::error::FinalisedStateError;
-use crate::Hash;
 use crate::{
-    read_u32_le, AddrScript, ChainBlock, CompactSize, CompactTxData, Height,
-    ZainoVersionedSerialise as _,
+    read_u32_le, AddrScript, ChainBlock, CompactSize, Height, ZainoVersionedSerialise as _,
 };
 
 /// Reads test data from file.
@@ -395,6 +393,10 @@ async fn get_faucet_txids() {
     let faucet_hash_bytes: [u8; 20] = faucet_script.as_raw_bytes()[0..20].try_into().unwrap();
     let faucet_addr_script = AddrScript::new(faucet_hash_bytes);
 
+    // Filter recipient txids for txids that exist in our test data,
+    // it appears that several txids were returned by the StateService that do not exist in the cached block range??
+    let mut filtered_faucet_txids = Vec::new();
+
     for (height, chain_block, _compact_block) in blocks {
         println!("Checking faucet txids at height {}", height);
         let block_height = Height(height);
@@ -403,7 +405,13 @@ async fn get_faucet_txids() {
             .iter()
             .map(|tx_data| hex::encode(tx_data.txid()))
             .collect();
-        dbg!(&block_txids);
+        let filtered_block_txids: Vec<String> = block_txids
+            .into_iter()
+            .filter(|txid| faucet_txids.contains(txid))
+            .collect();
+        dbg!(&filtered_block_txids);
+
+        filtered_faucet_txids.extend(filtered_block_txids.iter().cloned());
 
         let reader_faucet_tx_indexes = db_reader
             .addr_tx_indexes_by_range(faucet_addr_script, block_height, block_height)
@@ -417,8 +425,8 @@ async fn get_faucet_txids() {
         }
         dbg!(&reader_block_txids);
 
-        assert_eq!(block_txids.len(), reader_block_txids.len());
-        assert_eq!(block_txids, reader_block_txids);
+        assert_eq!(filtered_block_txids.len(), reader_block_txids.len());
+        assert_eq!(filtered_block_txids, reader_block_txids);
     }
 
     println!("Checking full faucet data");
@@ -433,8 +441,8 @@ async fn get_faucet_txids() {
         reader_faucet_txids.push(txid.to_string());
     }
 
-    assert_eq!(faucet_txids.len(), reader_faucet_txids.len());
-    assert_eq!(faucet_txids, reader_faucet_txids);
+    assert_eq!(filtered_faucet_txids.len(), reader_faucet_txids.len());
+    assert_eq!(filtered_faucet_txids, reader_faucet_txids);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -451,6 +459,10 @@ async fn get_recipient_txids() {
     let recipient_hash_bytes: [u8; 20] = recipient_script.as_raw_bytes()[0..20].try_into().unwrap();
     let recipient_addr_script = AddrScript::new(recipient_hash_bytes);
 
+    // Filter recipient txids for txids that exist in our test data,
+    // it appears that several txids were returned by the StateService that do not exist in the cached block range??
+    let mut filtered_recipient_txids = Vec::new();
+
     for (height, chain_block, _compact_block) in blocks {
         println!("Checking recipient txids at height {}", height);
         let block_height = Height(height);
@@ -459,7 +471,15 @@ async fn get_recipient_txids() {
             .iter()
             .map(|tx_data| hex::encode(tx_data.txid()))
             .collect();
-        dbg!(&block_txids);
+
+        // Get block txids that are relevant to recipient.
+        let filtered_block_txids: Vec<String> = block_txids
+            .into_iter()
+            .filter(|txid| recipient_txids.contains(txid))
+            .collect();
+        dbg!(&filtered_block_txids);
+
+        filtered_recipient_txids.extend(filtered_block_txids.iter().cloned());
 
         let reader_recipient_tx_indexes = match db_reader
             .addr_tx_indexes_by_range(recipient_addr_script, block_height, block_height)
@@ -476,8 +496,8 @@ async fn get_recipient_txids() {
         }
         dbg!(&reader_block_txids);
 
-        assert_eq!(block_txids.len(), reader_block_txids.len());
-        assert_eq!(block_txids, reader_block_txids);
+        assert_eq!(filtered_block_txids.len(), reader_block_txids.len());
+        assert_eq!(filtered_block_txids, reader_block_txids);
     }
 
     println!("Checking full faucet data");
@@ -493,8 +513,8 @@ async fn get_recipient_txids() {
         reader_recipient_txids.push(txid.to_string());
     }
 
-    assert_eq!(recipient_txids.len(), reader_recipient_txids.len());
-    assert_eq!(recipient_txids, reader_recipient_txids);
+    assert_eq!(filtered_recipient_txids.len(), reader_recipient_txids.len());
+    assert_eq!(filtered_recipient_txids, reader_recipient_txids);
 }
 
 // #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
