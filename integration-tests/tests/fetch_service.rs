@@ -1546,7 +1546,7 @@ mod zebrad {
             fetch_service_get_raw_mempool(&ValidatorKind::Zebrad).await;
         }
 
-        /// TODO: Test fails because Zebra does not expose a `getmempool` endpoint
+        /// TODO: Test fails because Zebra does not expose a `getmempoolinfo` endpoint
         #[tokio::test]
         pub(crate) async fn mempool_info() {
             fetch_service_get_mempool_info(&ValidatorKind::Zebrad).await;
