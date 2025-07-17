@@ -357,129 +357,145 @@ async fn create_db_reader() {
 
 // *** DbReader Tests ***
 
-// #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-// async fn get_chain_blocks() {
-//     let (blocks, _faucet, _recipient, _db_dir, _zaino_db, db_reader) =
-//         load_vectors_db_and_reader().await;
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_chain_blocks() {
+    let (blocks, _faucet, _recipient, _db_dir, _zaino_db, db_reader) =
+        load_vectors_db_and_reader().await;
 
-//     for (height, chain_block, _) in blocks.iter() {
-//         // TODO / FIX: check why we have to do this? are chainblock recorded correct?
-//         let mut txid_reversed_chain_block = chain_block.clone();
-//         for tx in txid_reversed_chain_block.transactions.iter_mut() {
-//             let mut reversed_txid = *tx.txid();
-//             reversed_txid.reverse();
-//             *tx = CompactTxData::new(
-//                 tx.index(),
-//                 reversed_txid,
-//                 tx.transparent().clone(),
-//                 tx.sapling().clone(),
-//                 tx.orchard().clone(),
-//             );
-//         }
-//         let reader_chain_block = db_reader.get_chain_block(Height(*height)).await.unwrap();
-//         assert_eq!(txid_reversed_chain_block, reader_chain_block);
-//         println!("ChainBlock at height {} OK", height);
-//     }
-// }
+    for (height, chain_block, _) in blocks.iter() {
+        let reader_chain_block = db_reader.get_chain_block(Height(*height)).await.unwrap();
+        assert_eq!(chain_block, &reader_chain_block);
+        println!("ChainBlock at height {} OK", height);
+    }
+}
 
-// #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-// async fn get_compact_blocks() {
-//     let (blocks, _faucet, _recipient, _db_dir, _zaino_db, db_reader) =
-//         load_vectors_db_and_reader().await;
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_compact_blocks() {
+    let (blocks, _faucet, _recipient, _db_dir, _zaino_db, db_reader) =
+        load_vectors_db_and_reader().await;
 
-//     for (height, _, compact_block) in blocks.iter() {
-//         let mut reader_compact_block = db_reader.get_compact_block(Height(*height)).await.unwrap();
-//         // TODO / FIX: check why we have to do this? are chainblock recorded correct?
-//         for tx in reader_compact_block.vtx.iter_mut() {
-//             tx.hash.reverse();
-//         }
-//         assert_eq!(compact_block, &reader_compact_block);
-//         println!("CompactBlock at height {} OK", height);
-//     }
-// }
+    for (height, _, compact_block) in blocks.iter() {
+        let reader_compact_block = db_reader.get_compact_block(Height(*height)).await.unwrap();
+        assert_eq!(compact_block, &reader_compact_block);
+        println!("CompactBlock at height {} OK", height);
+    }
+}
 
-// #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-// async fn get_txids() {
-//     let (blocks, faucet, recipient, _db_dir, _zaino_db, db_reader) =
-//         load_vectors_db_and_reader().await;
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_faucet_txids() {
+    let (blocks, faucet, _recipient, _db_dir, _zaino_db, db_reader) =
+        load_vectors_db_and_reader().await;
 
-//     let start = Height(0); // Height(blocks.first().unwrap().0);
-//     let end = Height(201); // Height(blocks.last().unwrap().0);
+    let start = Height(blocks.first().unwrap().0);
+    let end = Height(blocks.last().unwrap().0);
 
-//     // Check faucet
+    let (faucet_txids, faucet_utxos, _faucet_balance) = faucet;
+    let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
+        faucet_utxos.first().unwrap().into_parts();
+    let faucet_hash_bytes: [u8; 20] = faucet_script.as_raw_bytes()[0..20].try_into().unwrap();
+    let faucet_addr_script = AddrScript::new(faucet_hash_bytes);
 
-//     let (mut faucet_txids, faucet_utxos, _faucet_balance) = faucet;
-//     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
-//         faucet_utxos.first().unwrap().into_parts();
-//     let faucet_hash_bytes: [u8; 20] = faucet_script.as_raw_bytes()[0..20].try_into().unwrap();
-//     let faucet_addr_script = AddrScript::new(faucet_hash_bytes);
+    for (height, chain_block, _compact_block) in blocks {
+        println!("Checking faucet txids at height {}", height);
+        let block_height = Height(height);
+        let block_txids: Vec<String> = chain_block
+            .transactions()
+            .iter()
+            .map(|tx_data| hex::encode(tx_data.txid()))
+            .collect();
+        dbg!(&block_txids);
 
-//     for (height, chain_block, _compact_block) in blocks {
-//         println!("Checking faucet txids at height {}", height);
-//         let block_height = Height(height);
-//         let block_txids: Vec<String> = chain_block
-//             .transactions()
-//             .iter()
-//             .map(|tx_data| Hash(*tx_data.txid()).to_string())
-//             .collect();
+        let reader_faucet_tx_indexes = db_reader
+            .addr_tx_indexes_by_range(faucet_addr_script, block_height, block_height)
+            .await
+            .unwrap()
+            .unwrap();
+        let mut reader_block_txids = Vec::new();
+        for index in reader_faucet_tx_indexes {
+            let txid = db_reader.get_txid(index).await.unwrap();
+            reader_block_txids.push(txid.to_string());
+        }
+        dbg!(&reader_block_txids);
 
-//         let reader_faucet_tx_indexes = db_reader
-//             .addr_tx_indexes_by_range(faucet_addr_script, block_height, block_height)
-//             .await
-//             .unwrap()
-//             .unwrap();
-//         let mut reader_block_txids = Vec::new();
-//         for index in reader_faucet_tx_indexes {
-//             let txid = db_reader.get_txid(index).await.unwrap();
-//             reader_block_txids.push(txid.to_string());
-//         }
+        assert_eq!(block_txids.len(), reader_block_txids.len());
+        assert_eq!(block_txids, reader_block_txids);
+    }
 
-//         assert_eq!(block_txids.len(), reader_block_txids.len());
-//         assert_eq!(block_txids, reader_block_txids);
-//     }
+    println!("Checking full faucet data");
+    let reader_faucet_tx_indexes = db_reader
+        .addr_tx_indexes_by_range(faucet_addr_script, start, end)
+        .await
+        .unwrap()
+        .unwrap();
+    let mut reader_faucet_txids = Vec::new();
+    for index in reader_faucet_tx_indexes {
+        let txid = db_reader.get_txid(index).await.unwrap();
+        reader_faucet_txids.push(txid.to_string());
+    }
 
-//     faucet_txids.sort();
-//     faucet_txids.dedup();
+    assert_eq!(faucet_txids.len(), reader_faucet_txids.len());
+    assert_eq!(faucet_txids, reader_faucet_txids);
+}
 
-//     // let reader_faucet_tx_indexes = db_reader
-//     //     .addr_tx_indexes_by_range(faucet_addr_script, start, end)
-//     //     .await
-//     //     .unwrap()
-//     //     .unwrap();
-//     // let mut reader_faucet_txids = Vec::new();
-//     // for index in reader_faucet_tx_indexes {
-//     //     let txid = db_reader.get_txid(index).await.unwrap();
-//     //     reader_faucet_txids.push(txid.to_string());
-//     // }
-//     // reader_faucet_txids.sort();
-//     // reader_faucet_txids.dedup();
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_recipient_txids() {
+    let (blocks, _faucet, recipient, _db_dir, _zaino_db, db_reader) =
+        load_vectors_db_and_reader().await;
 
-//     // assert_eq!(faucet_txids.len(), reader_faucet_txids.len());
-//     // assert_eq!(faucet_txids, reader_faucet_txids);
+    let start = Height(blocks.first().unwrap().0);
+    let end = Height(blocks.last().unwrap().0);
 
-//     // Check recipient
+    let (recipient_txids, recipient_utxos, _recipient_balance) = recipient;
+    let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
+        recipient_utxos.first().unwrap().into_parts();
+    let recipient_hash_bytes: [u8; 20] = recipient_script.as_raw_bytes()[0..20].try_into().unwrap();
+    let recipient_addr_script = AddrScript::new(recipient_hash_bytes);
 
-//     let (recipient_txids, recipient_utxos, _recipient_balance) = recipient;
-//     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
-//         recipient_utxos.first().unwrap().into_parts();
-//     let recipient_hash_bytes: [u8; 20] = recipient_script.as_raw_bytes()[0..20].try_into().unwrap();
-//     let recipient_addr_script = AddrScript::new(recipient_hash_bytes);
+    for (height, chain_block, _compact_block) in blocks {
+        println!("Checking recipient txids at height {}", height);
+        let block_height = Height(height);
+        let block_txids: Vec<String> = chain_block
+            .transactions()
+            .iter()
+            .map(|tx_data| hex::encode(tx_data.txid()))
+            .collect();
+        dbg!(&block_txids);
 
-//     let reader_recipient_tx_indexes = db_reader
-//         .addr_tx_indexes_by_range(recipient_addr_script, start, end)
-//         .await
-//         .unwrap()
-//         .unwrap();
+        let reader_recipient_tx_indexes = match db_reader
+            .addr_tx_indexes_by_range(recipient_addr_script, block_height, block_height)
+            .await
+            .unwrap()
+        {
+            Some(v) => v,
+            None => continue,
+        };
+        let mut reader_block_txids = Vec::new();
+        for index in reader_recipient_tx_indexes {
+            let txid = db_reader.get_txid(index).await.unwrap();
+            reader_block_txids.push(txid.to_string());
+        }
+        dbg!(&reader_block_txids);
 
-//     let mut reader_recipient_txids = Vec::new();
-//     for index in reader_recipient_tx_indexes {
-//         let txid = db_reader.get_txid(index).await.unwrap();
-//         reader_recipient_txids.push(txid.to_string());
-//     }
+        assert_eq!(block_txids.len(), reader_block_txids.len());
+        assert_eq!(block_txids, reader_block_txids);
+    }
 
-//     assert_eq!(recipient_txids.len(), reader_recipient_txids.len());
-//     assert_eq!(recipient_txids, reader_recipient_txids);
-// }
+    println!("Checking full faucet data");
+    let reader_recipient_tx_indexes = db_reader
+        .addr_tx_indexes_by_range(recipient_addr_script, start, end)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let mut reader_recipient_txids = Vec::new();
+    for index in reader_recipient_tx_indexes {
+        let txid = db_reader.get_txid(index).await.unwrap();
+        reader_recipient_txids.push(txid.to_string());
+    }
+
+    assert_eq!(recipient_txids.len(), reader_recipient_txids.len());
+    assert_eq!(recipient_txids, reader_recipient_txids);
+}
 
 // #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 // async fn get_balance() {

@@ -609,9 +609,7 @@ impl ZainoDB {
         let mut addrhist_outputs_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
 
         for (tx_pos, tx) in block.transactions().iter().enumerate() {
-            let mut h = Hash::from(*tx.txid());
-            // NOTE: Why do we have to do this here? / TODO: Investigate!
-            h.0.reverse();
+            let h = Hash::from_bytes_in_display_order(tx.txid());
 
             if txid_set.insert(h) {
                 txids.push(h);
@@ -1020,9 +1018,7 @@ impl ZainoDB {
         let mut addrhist_outputs_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
 
         for (tx_pos, tx) in block.transactions().iter().enumerate() {
-            let mut h = Hash::from(*tx.txid());
-            // NOTE: Why do we have to do this here??
-            h.0.reverse();
+            let h = Hash::from_bytes_in_display_order(tx.txid());
 
             if txid_set.insert(h) {
                 txids.push(h);
@@ -2340,7 +2336,7 @@ impl ZainoDB {
 
             let txs: Vec<CompactTxData> = (0..len)
                 .map(|i| {
-                    let txid = txids[i].0;
+                    let txid = txids[i].bytes_in_display_order();
 
                     let transparent_tx = transparent[i]
                         .clone()
@@ -2417,38 +2413,6 @@ impl ZainoDB {
                 .clone();
             let orchard = orchard_list.tx();
 
-            // let vtx: Vec<zaino_proto::proto::compact_formats::CompactTx> = txids
-            //     .iter()
-            //     .enumerate()
-            //     .map(|(i, txid)| {
-            //         let spends = sapling
-            //             .get(i)
-            //             .and_then(|opt| opt.as_ref())
-            //             .map(|s| s.spends().iter().map(|sp| sp.into_compact()).collect())
-            //             .unwrap_or_default();
-
-            //         let outputs = sapling
-            //             .get(i)
-            //             .and_then(|opt| opt.as_ref())
-            //             .map(|s| s.outputs().iter().map(|o| o.into_compact()).collect())
-            //             .unwrap_or_default();
-
-            //         let actions = orchard
-            //             .get(i)
-            //             .and_then(|opt| opt.as_ref())
-            //             .map(|o| o.actions().iter().map(|a| a.into_compact()).collect())
-            //             .unwrap_or_default();
-
-            //         zaino_proto::proto::compact_formats::CompactTx {
-            //             index: i as u64,
-            //             hash: txid.0.to_vec(),
-            //             fee: 0,
-            //             spends,
-            //             outputs,
-            //             actions,
-            //         }
-            //     })
-            //     .collect();
             let vtx: Vec<zaino_proto::proto::compact_formats::CompactTx> = txids
                 .iter()
                 .enumerate()
@@ -2493,7 +2457,7 @@ impl ZainoDB {
 
                     Some(zaino_proto::proto::compact_formats::CompactTx {
                         index: i as u64,
-                        hash: txid.0.to_vec(),
+                        hash: txid.bytes_in_display_order().to_vec().to_vec(),
                         fee: 0,
                         spends,
                         outputs,

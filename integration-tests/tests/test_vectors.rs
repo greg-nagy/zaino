@@ -155,7 +155,7 @@ async fn create_201_block_regtest_chain_vectors() {
     clients.faucet.quick_shield().await.unwrap();
 
     // Generate block
-    test_manager.local_net.generate_blocks(1).await.unwrap();
+    test_manager.local_net.generate_blocks(1).await.unwrap(); // Block 102
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
     // sync wallets
@@ -171,7 +171,7 @@ async fn create_201_block_regtest_chain_vectors() {
     .unwrap();
 
     // Generate block
-    test_manager.local_net.generate_blocks(1).await.unwrap();
+    test_manager.local_net.generate_blocks(1).await.unwrap(); // Block 103
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
     // sync wallets
@@ -202,7 +202,7 @@ async fn create_201_block_regtest_chain_vectors() {
     .unwrap();
 
     // Generate block
-    test_manager.local_net.generate_blocks(1).await.unwrap();
+    test_manager.local_net.generate_blocks(1).await.unwrap(); // Block 104
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
     // sync wallets
@@ -234,7 +234,7 @@ async fn create_201_block_regtest_chain_vectors() {
     .unwrap();
 
     // Generate block
-    test_manager.local_net.generate_blocks(1).await.unwrap();
+    test_manager.local_net.generate_blocks(1).await.unwrap(); // Block 105
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
     for _i in 0..48 {
