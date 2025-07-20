@@ -1,16 +1,13 @@
 //! Zcash chain fetch and tx submission service backed by Zebras [`ReadStateService`].
 
 use crate::{
+    chain_index::mempool::{Mempool, MempoolSubscriber},
     config::StateServiceConfig,
     error::{BlockCacheError, StateServiceError},
     indexer::{
         handle_raw_transaction, IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService,
     },
-    local_cache::{
-        compact_block_to_nullifiers,
-        mempool::{Mempool, MempoolSubscriber},
-        BlockCache, BlockCacheSubscriber,
-    },
+    local_cache::{compact_block_to_nullifiers, BlockCache, BlockCacheSubscriber},
     status::{AtomicStatus, StatusType},
     stream::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,

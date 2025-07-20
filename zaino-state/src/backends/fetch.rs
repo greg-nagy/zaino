@@ -33,15 +33,13 @@ use zaino_proto::proto::{
 };
 
 use crate::{
+    chain_index::mempool::{Mempool, MempoolSubscriber},
     config::FetchServiceConfig,
     error::{BlockCacheError, FetchServiceError},
     indexer::{
         handle_raw_transaction, IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService,
     },
-    local_cache::{
-        mempool::{Mempool, MempoolSubscriber},
-        BlockCache, BlockCacheSubscriber,
-    },
+    local_cache::{BlockCache, BlockCacheSubscriber},
     status::StatusType,
     stream::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
