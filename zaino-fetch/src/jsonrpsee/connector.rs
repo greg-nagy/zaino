@@ -9,6 +9,7 @@ use reqwest::{Client, ClientBuilder, Url};
 use serde::{Deserialize, Serialize};
 use std::{
     any::type_name,
+    convert::Infallible,
     fmt, fs,
     net::SocketAddr,
     path::Path,

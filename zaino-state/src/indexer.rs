@@ -18,7 +18,7 @@ use zebra_rpc::{
     client::{GetSubtreesByIndexResponse, GetTreestateResponse},
     methods::{
         AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
-        GetBlockchainInfoResponse, GetInfo, GetRawTransaction, SentTransactionHash,
+        GetBlockHash, GetBlockchainInfoResponse, GetInfo, GetRawTransaction, SentTransactionHash,
     },
 };
 

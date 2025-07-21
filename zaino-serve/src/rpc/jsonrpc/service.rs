@@ -7,8 +7,8 @@ use zebra_rpc::client::{
     GetBlockchainInfoResponse, GetSubtreesByIndexResponse, GetTreestateResponse,
 };
 use zebra_rpc::methods::{
-    AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock, GetInfo,
-    GetRawTransaction, SentTransactionHash,
+    AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
+    GetBlockHash, GetInfo, GetRawTransaction, SentTransactionHash,
 };
 
 use jsonrpsee::types::ErrorObjectOwned;
@@ -295,6 +295,20 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
         self.service_subscriber
             .inner_ref()
             .get_info()
+            .await
+            .map_err(|e| {
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
+            })
+    }
+
+    async fn get_best_blockhash(&self) -> Result<GetBlockHash, ErrorObjectOwned> {
+        self.service_subscriber
+            .inner_ref()
+            .get_best_blockhash()
             .await
             .map_err(|e| {
                 ErrorObjectOwned::owned(
