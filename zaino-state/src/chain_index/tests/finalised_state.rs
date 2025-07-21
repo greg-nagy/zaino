@@ -14,7 +14,8 @@ use crate::bench::BlockCacheConfig;
 use crate::chain_index::finalised_state::{DbReader, ZainoDB};
 use crate::error::FinalisedStateError;
 use crate::{
-    read_u32_le, AddrScript, ChainBlock, CompactSize, Height, ZainoVersionedSerialise as _,
+    read_u32_le, AddrScript, ChainBlock, CompactSize, Height, Outpoint,
+    ZainoVersionedSerialise as _,
 };
 
 /// Reads test data from file.
@@ -631,4 +632,196 @@ async fn get_balance() {
     assert_eq!(recipient_balance, reader_recipient_balance);
 }
 
-// async fn get_spent() {}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn check_faucet_spent_map() {
+    let (blocks, faucet, _recipient, _db_dir, _zaino_db, db_reader) =
+        load_vectors_db_and_reader().await;
+
+    let (_faucet_txids, faucet_utxos, _faucet_balance) = faucet;
+    let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
+        faucet_utxos.first().unwrap().into_parts();
+    // TODO / FIX: update addrhist to inlcude script type byte or use full addr.
+    let faucet_hash_bytes: [u8; 20] = faucet_script.as_raw_bytes()[3..23].try_into().unwrap();
+
+    // collect faucet outpoints
+    let mut faucet_outpoints = Vec::new();
+    let mut faucet_ouptpoints_spent_status = Vec::new();
+    for (_height, chain_block, _compact_block) in blocks.clone() {
+        for tx in chain_block.transactions() {
+            let txid = tx.txid();
+            let outputs = tx.transparent().outputs();
+            for (vout_idx, output) in outputs.iter().enumerate() {
+                if output.script_hash() == &faucet_hash_bytes {
+                    let outpoint = Outpoint::new_from_be(txid, vout_idx as u32);
+
+                    let spender = db_reader.get_outpoint_spender(outpoint).await.unwrap();
+
+                    faucet_outpoints.push(outpoint);
+                    faucet_ouptpoints_spent_status.push(spender);
+                }
+            }
+        }
+    }
+
+    // collect faucet txids holding utxos
+    let mut faucet_utxo_indexes = Vec::new();
+    for utxo in faucet_utxos.iter() {
+        let (_faucet_address, txid, output_index, _faucet_script, _satoshis, _height) =
+            utxo.into_parts();
+        faucet_utxo_indexes.push((txid.to_string(), output_index.index()));
+    }
+
+    // check full spent outpoints map
+    let faucet_spent_map = db_reader
+        .get_outpoint_spenders(faucet_outpoints.clone())
+        .await
+        .unwrap();
+    assert_eq!(&faucet_ouptpoints_spent_status, &faucet_spent_map);
+
+    for (outpoint, spender_option) in faucet_outpoints
+        .iter()
+        .zip(faucet_ouptpoints_spent_status.iter())
+    {
+        let outpoint_tuple = (
+            crate::Hash::from(*outpoint.prev_txid()).to_string(),
+            outpoint.prev_index(),
+        );
+        match spender_option {
+            Some(spender_index) => {
+                let spender_tx = blocks.iter().find_map(|(_h, chain_block, _cb)| {
+                    chain_block.transactions().iter().find(|tx| {
+                        let (block_height, tx_idx) =
+                            (spender_index.block_index(), spender_index.tx_index());
+                        chain_block.index().height() == Some(Height(block_height))
+                            && tx.index() == tx_idx as u64
+                    })
+                });
+                assert!(
+                    spender_tx.is_some(),
+                    "Spender transaction not found in blocks!"
+                );
+
+                let spender_tx = spender_tx.unwrap();
+                let matches = spender_tx.transparent().inputs().iter().any(|input| {
+                    input.prevout_txid() == outpoint.prev_txid()
+                        && input.prevout_index() == outpoint.prev_index()
+                });
+                assert!(
+                    matches,
+                    "Spender transaction does not actually spend the outpoint: {:?}",
+                    outpoint
+                );
+
+                assert!(
+                    !faucet_utxo_indexes.contains(&outpoint_tuple),
+                    "Spent outpoint should NOT be in UTXO set, but found: {:?}",
+                    outpoint_tuple
+                );
+            }
+            None => {
+                assert!(
+                    faucet_utxo_indexes.contains(&outpoint_tuple),
+                    "Unspent outpoint should be in UTXO set, but NOT found: {:?}",
+                    outpoint_tuple
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn check_recipient_spent_map() {
+    let (blocks, _faucet, recipient, _db_dir, _zaino_db, db_reader) =
+        load_vectors_db_and_reader().await;
+
+    let (_recipient_txids, recipient_utxos, _recipient_balance) = recipient;
+    let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
+        recipient_utxos.first().unwrap().into_parts();
+    // TODO / FIX: update addrhist to inlcude script type byte or use full addr.
+    let recipient_hash_bytes: [u8; 20] = recipient_script.as_raw_bytes()[3..23].try_into().unwrap();
+
+    // collect faucet outpoints
+    let mut recipient_outpoints = Vec::new();
+    let mut recipient_ouptpoints_spent_status = Vec::new();
+    for (_height, chain_block, _compact_block) in blocks.clone() {
+        for tx in chain_block.transactions() {
+            let txid = tx.txid();
+            let outputs = tx.transparent().outputs();
+            for (vout_idx, output) in outputs.iter().enumerate() {
+                if output.script_hash() == &recipient_hash_bytes {
+                    let outpoint = Outpoint::new_from_be(txid, vout_idx as u32);
+
+                    let spender = db_reader.get_outpoint_spender(outpoint).await.unwrap();
+
+                    recipient_outpoints.push(outpoint);
+                    recipient_ouptpoints_spent_status.push(spender);
+                }
+            }
+        }
+    }
+
+    // collect faucet txids holding utxos
+    let mut recipient_utxo_indexes = Vec::new();
+    for utxo in recipient_utxos.iter() {
+        let (_recipient_address, txid, output_index, _recipient_script, _satoshis, _height) =
+            utxo.into_parts();
+        recipient_utxo_indexes.push((txid.to_string(), output_index.index()));
+    }
+
+    // check full spent outpoints map
+    let recipient_spent_map = db_reader
+        .get_outpoint_spenders(recipient_outpoints.clone())
+        .await
+        .unwrap();
+    assert_eq!(&recipient_ouptpoints_spent_status, &recipient_spent_map);
+
+    for (outpoint, spender_option) in recipient_outpoints
+        .iter()
+        .zip(recipient_ouptpoints_spent_status.iter())
+    {
+        let outpoint_tuple = (
+            crate::Hash::from(*outpoint.prev_txid()).to_string(),
+            outpoint.prev_index(),
+        );
+        match spender_option {
+            Some(spender_index) => {
+                let spender_tx = blocks.iter().find_map(|(_h, chain_block, _cb)| {
+                    chain_block.transactions().iter().find(|tx| {
+                        let (block_height, tx_idx) =
+                            (spender_index.block_index(), spender_index.tx_index());
+                        chain_block.index().height() == Some(Height(block_height))
+                            && tx.index() == tx_idx as u64
+                    })
+                });
+                assert!(
+                    spender_tx.is_some(),
+                    "Spender transaction not found in blocks!"
+                );
+
+                let spender_tx = spender_tx.unwrap();
+                let matches = spender_tx.transparent().inputs().iter().any(|input| {
+                    input.prevout_txid() == outpoint.prev_txid()
+                        && input.prevout_index() == outpoint.prev_index()
+                });
+                assert!(
+                    matches,
+                    "Spender transaction does not actually spend the outpoint: {:?}",
+                    outpoint
+                );
+
+                assert!(
+                    !recipient_utxo_indexes.contains(&outpoint_tuple),
+                    "Spent outpoint should NOT be in UTXO set, but found: {:?}",
+                    outpoint_tuple
+                );
+            }
+            None => {
+                assert!(
+                    recipient_utxo_indexes.contains(&outpoint_tuple),
+                    "Unspent outpoint should be in UTXO set, but NOT found: {:?}",
+                    outpoint_tuple
+                );
+            }
+        }
+    }
+}

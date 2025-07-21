@@ -379,6 +379,12 @@ impl Outpoint {
         }
     }
 
+    /// Build from a *display-order* txid.
+    pub fn new_from_be(txid_be: &[u8; 32], index: u32) -> Self {
+        let le = Hash::from_bytes_in_display_order(txid_be).0;
+        Self::new(le, index)
+    }
+
     /// Returns the txid of the transaction being spent.
     pub fn prev_txid(&self) -> &[u8; 32] {
         &self.prev_txid

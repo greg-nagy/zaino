@@ -1951,7 +1951,7 @@ impl ZainoDB {
     /// - `Ok(Some(TxIndex))` if the outpoint is spent.
     /// - `Ok(None)` if no entry exists (not spent or not known).
     /// - `Err(...)` on deserialization or DB error.
-    async fn prev_output_index(
+    async fn get_outpoint_spender(
         &self,
         outpoint: Outpoint,
     ) -> Result<Option<TxIndex>, FinalisedStateError> {
@@ -1976,7 +1976,7 @@ impl ZainoDB {
     /// - Returns `Some(TxIndex)` if spent,
     /// - `None` if not found,
     /// - or returns `Err` immediately if any DB or decode error occurs.
-    async fn prev_outputs_index(
+    async fn get_outpoint_spenders(
         &self,
         outpoints: Vec<Outpoint>,
     ) -> Result<Vec<Option<TxIndex>>, FinalisedStateError> {
@@ -4012,11 +4012,11 @@ impl DbReader {
     /// - `Ok(Some(TxIndex))` if the outpoint is spent.
     /// - `Ok(None)` if no entry exists (not spent or not known).
     /// - `Err(...)` on deserialization or DB error.
-    pub(crate) async fn prev_output_index(
+    pub(crate) async fn get_outpoint_spender(
         &self,
         outpoint: Outpoint,
     ) -> Result<Option<TxIndex>, FinalisedStateError> {
-        self.inner.prev_output_index(outpoint).await
+        self.inner.get_outpoint_spender(outpoint).await
     }
 
     /// Fetch the `TxIndex` entries for a batch of outpoints.
@@ -4025,11 +4025,11 @@ impl DbReader {
     /// - Returns `Some(TxIndex)` if spent,
     /// - `None` if not found,
     /// - or returns `Err` immediately if any DB or decode error occurs.
-    pub(crate) async fn prev_outputs_index(
+    pub(crate) async fn get_outpoint_spenders(
         &self,
         outpoints: Vec<Outpoint>,
     ) -> Result<Vec<Option<TxIndex>>, FinalisedStateError> {
-        self.inner.prev_outputs_index(outpoints).await
+        self.inner.get_outpoint_spenders(outpoints).await
     }
 
     /// Fetch all address history records for a given transparent address.
