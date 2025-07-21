@@ -2105,6 +2105,7 @@ impl ZainoDB {
         start_height: Height,
         end_height: Height,
     ) -> Result<Option<Vec<TxIndex>>, FinalisedStateError> {
+        dbg!(&addr_script, &start_height, &end_height);
         let addr_bytes = addr_script.to_bytes()?;
 
         tokio::task::block_in_place(|| {

@@ -130,6 +130,9 @@ async fn load_vectors_and_spawn_and_sync_zaino_db() -> (
     let (db_dir, zaino_db) = spawn_default_zaino_db().await.unwrap();
     for (_h, chain_block, _compact_block) in blocks.clone() {
         // dbg!("Writing block at height {}", _h);
+        // if _h == 1 {
+        //     dbg!(&chain_block);
+        // }
         zaino_db.write_block(chain_block).await.unwrap();
     }
     (blocks, faucet, recipient, db_dir, zaino_db)
@@ -390,12 +393,10 @@ async fn get_faucet_txids() {
     let (faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
         faucet_utxos.first().unwrap().into_parts();
-    let faucet_hash_bytes: [u8; 20] = faucet_script.as_raw_bytes()[0..20].try_into().unwrap();
-    let faucet_addr_script = AddrScript::new(faucet_hash_bytes);
+    // TODO / FIX: update addrhist to inlcude script type byte or use full addr.
+    let faucet_hash_bytes: [u8; 20] = faucet_script.as_raw_bytes()[3..23].try_into().unwrap();
 
-    // Filter recipient txids for txids that exist in our test data,
-    // it appears that several txids were returned by the StateService that do not exist in the cached block range??
-    let mut filtered_faucet_txids = Vec::new();
+    let faucet_addr_script = AddrScript::new(faucet_hash_bytes);
 
     for (height, chain_block, _compact_block) in blocks {
         println!("Checking faucet txids at height {}", height);
@@ -410,8 +411,6 @@ async fn get_faucet_txids() {
             .filter(|txid| faucet_txids.contains(txid))
             .collect();
         dbg!(&filtered_block_txids);
-
-        filtered_faucet_txids.extend(filtered_block_txids.iter().cloned());
 
         let reader_faucet_tx_indexes = db_reader
             .addr_tx_indexes_by_range(faucet_addr_script, block_height, block_height)
@@ -441,8 +440,8 @@ async fn get_faucet_txids() {
         reader_faucet_txids.push(txid.to_string());
     }
 
-    assert_eq!(filtered_faucet_txids.len(), reader_faucet_txids.len());
-    assert_eq!(filtered_faucet_txids, reader_faucet_txids);
+    assert_eq!(faucet_txids.len(), reader_faucet_txids.len());
+    assert_eq!(faucet_txids, reader_faucet_txids);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -456,12 +455,10 @@ async fn get_recipient_txids() {
     let (recipient_txids, recipient_utxos, _recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
         recipient_utxos.first().unwrap().into_parts();
-    let recipient_hash_bytes: [u8; 20] = recipient_script.as_raw_bytes()[0..20].try_into().unwrap();
-    let recipient_addr_script = AddrScript::new(recipient_hash_bytes);
+    // TODO / FIX: update addrhist to inlcude script type byte or use full addr.
+    let recipient_hash_bytes: [u8; 20] = recipient_script.as_raw_bytes()[3..23].try_into().unwrap();
 
-    // Filter recipient txids for txids that exist in our test data,
-    // it appears that several txids were returned by the StateService that do not exist in the cached block range??
-    let mut filtered_recipient_txids = Vec::new();
+    let recipient_addr_script = AddrScript::new(recipient_hash_bytes);
 
     for (height, chain_block, _compact_block) in blocks {
         println!("Checking recipient txids at height {}", height);
@@ -478,8 +475,6 @@ async fn get_recipient_txids() {
             .filter(|txid| recipient_txids.contains(txid))
             .collect();
         dbg!(&filtered_block_txids);
-
-        filtered_recipient_txids.extend(filtered_block_txids.iter().cloned());
 
         let reader_recipient_tx_indexes = match db_reader
             .addr_tx_indexes_by_range(recipient_addr_script, block_height, block_height)
@@ -513,98 +508,127 @@ async fn get_recipient_txids() {
         reader_recipient_txids.push(txid.to_string());
     }
 
-    assert_eq!(filtered_recipient_txids.len(), reader_recipient_txids.len());
-    assert_eq!(filtered_recipient_txids, reader_recipient_txids);
+    assert_eq!(recipient_txids.len(), reader_recipient_txids.len());
+    assert_eq!(recipient_txids, reader_recipient_txids);
 }
 
-// #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-// async fn get_faucet_utxos() {
-//     let (blocks, faucet, _recipient, _db_dir, _zaino_db, db_reader) =
-//         load_vectors_db_and_reader().await;
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_faucet_utxos() {
+    let (blocks, faucet, _recipient, _db_dir, _zaino_db, db_reader) =
+        load_vectors_db_and_reader().await;
 
-//     let start = Height(blocks.first().unwrap().0);
-//     let end = Height(blocks.last().unwrap().0);
+    let start = Height(blocks.first().unwrap().0);
+    let end = Height(blocks.last().unwrap().0);
 
-//     let (_faucet_txids, faucet_utxos, _faucet_balance) = faucet;
-//     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
-//         faucet_utxos.first().unwrap().into_parts();
-//     let faucet_hash_bytes: [u8; 20] = faucet_script.as_raw_bytes()[0..20].try_into().unwrap();
-//     let faucet_addr_script = AddrScript::new(faucet_hash_bytes);
+    let (_faucet_txids, faucet_utxos, _faucet_balance) = faucet;
+    let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
+        faucet_utxos.first().unwrap().into_parts();
+    // TODO / FIX: update addrhist to inlcude script type byte or use full addr.
+    let faucet_hash_bytes: [u8; 20] = faucet_script.as_raw_bytes()[3..23].try_into().unwrap();
+    let faucet_addr_script = AddrScript::new(faucet_hash_bytes);
 
-//     // Filter recipient utxoss for txids that exist in our test data,
-//     // it appears that several utxoss were returned by the StateService that do not exist in the cached block range??
-//     let mut chain_txids = Vec::new();
-//     for (_height, chain_block, _compact_block) in blocks {
-//         let block_txids: Vec<String> = chain_block
-//             .transactions()
-//             .iter()
-//             .map(|tx_data| hex::encode(tx_data.txid()))
-//             .collect();
-//         chain_txids.extend(block_txids.iter().cloned());
-//     }
-//     let mut filtered_utxos = Vec::new();
-//     for utxo in faucet_utxos.iter() {
-//         let (_faucet_address, txid, output_index, _faucet_script, satoshis, _height) =
-//             utxo.into_parts();
-//         let txid_string = txid.to_string();
-//         if chain_txids.contains(&txid_string) {
-//             filtered_utxos.push((txid_string, output_index.index(), satoshis));
-//         }
-//     }
+    let mut cleaned_utxos = Vec::new();
+    for utxo in faucet_utxos.iter() {
+        let (_faucet_address, txid, output_index, _faucet_script, satoshis, _height) =
+            utxo.into_parts();
+        cleaned_utxos.push((txid.to_string(), output_index.index(), satoshis));
+    }
 
-//     let reader_faucet_utxo_indexes = db_reader
-//         .addr_utxos_by_range(faucet_addr_script, start, end)
-//         .await
-//         .unwrap()
-//         .unwrap();
+    let reader_faucet_utxo_indexes = db_reader
+        .addr_utxos_by_range(faucet_addr_script, start, end)
+        .await
+        .unwrap()
+        .unwrap();
 
-//     let mut reader_faucet_utxos = Vec::new();
+    let mut reader_faucet_utxos = Vec::new();
 
-//     for (index, vout, value) in reader_faucet_utxo_indexes {
-//         let txid = db_reader.get_txid(index).await.unwrap().to_string();
-//         reader_faucet_utxos.push((txid, vout as u32, value));
-//     }
+    for (index, vout, value) in reader_faucet_utxo_indexes {
+        let txid = db_reader.get_txid(index).await.unwrap().to_string();
+        reader_faucet_utxos.push((txid, vout as u32, value));
+    }
 
-//     assert_eq!(filtered_utxos.len(), reader_faucet_utxos.len());
-// }
+    assert_eq!(cleaned_utxos.len(), reader_faucet_utxos.len());
+    assert_eq!(cleaned_utxos, reader_faucet_utxos);
+}
 
-// #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-// async fn get_balance() {
-//     let (blocks, faucet, recipient, _db_dir, _zaino_db, db_reader) =
-//         load_vectors_db_and_reader().await;
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_recipient_utxos() {
+    let (blocks, _faucet, recipient, _db_dir, _zaino_db, db_reader) =
+        load_vectors_db_and_reader().await;
 
-//     let start = Height(0); // Height(blocks.first().unwrap().0);
-//     let end = Height(201); // Height(blocks.last().unwrap().0);
+    let start = Height(blocks.first().unwrap().0);
+    let end = Height(blocks.last().unwrap().0);
 
-//     // Check faucet
+    let (_recipient_txids, recipient_utxos, _recipient_balance) = recipient;
+    let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
+        recipient_utxos.first().unwrap().into_parts();
+    // TODO / FIX: update addrhist to inlcude script type byte or use full addr.
+    let recipient_hash_bytes: [u8; 20] = recipient_script.as_raw_bytes()[3..23].try_into().unwrap();
+    let recipient_addr_script = AddrScript::new(recipient_hash_bytes);
 
-//     let (_faucet_txids, faucet_utxos, faucet_balance) = faucet;
-//     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
-//         faucet_utxos.first().unwrap().into_parts();
-//     let faucet_hash_bytes: [u8; 20] = faucet_script.as_raw_bytes()[0..20].try_into().unwrap();
-//     let faucet_addr_script = AddrScript::new(faucet_hash_bytes);
+    let mut cleaned_utxos = Vec::new();
+    for utxo in recipient_utxos.iter() {
+        let (_recipient_address, txid, output_index, _recipient_script, satoshis, _height) =
+            utxo.into_parts();
+        cleaned_utxos.push((txid.to_string(), output_index.index(), satoshis));
+    }
 
-//     let reader_faucet_balance = dbg!(db_reader
-//         .addr_balance_by_range(faucet_addr_script, start, end)
-//         .await
-//         .unwrap()) as u64;
+    let reader_recipient_utxo_indexes = db_reader
+        .addr_utxos_by_range(recipient_addr_script, start, end)
+        .await
+        .unwrap()
+        .unwrap();
 
-//     assert_eq!(faucet_balance, reader_faucet_balance);
+    let mut reader_recipient_utxos = Vec::new();
 
-//     // Check recipient
+    for (index, vout, value) in reader_recipient_utxo_indexes {
+        let txid = db_reader.get_txid(index).await.unwrap().to_string();
+        reader_recipient_utxos.push((txid, vout as u32, value));
+    }
 
-//     let (_recipient_txids, recipient_utxos, recipient_balance) = recipient;
-//     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
-//         recipient_utxos.first().unwrap().into_parts();
-//     let recipient_hash_bytes: [u8; 20] = recipient_script.as_raw_bytes()[0..20].try_into().unwrap();
-//     let recipient_addr_script = AddrScript::new(recipient_hash_bytes);
+    assert_eq!(cleaned_utxos.len(), reader_recipient_utxos.len());
+    assert_eq!(cleaned_utxos, reader_recipient_utxos);
+}
 
-//     let reader_recipient_balance = dbg!(db_reader
-//         .addr_balance_by_range(recipient_addr_script, start, end)
-//         .await
-//         .unwrap()) as u64;
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_balance() {
+    let (blocks, faucet, recipient, _db_dir, _zaino_db, db_reader) =
+        load_vectors_db_and_reader().await;
 
-//     assert_eq!(recipient_balance, reader_recipient_balance);
-// }
+    let start = Height(blocks.first().unwrap().0);
+    let end = Height(blocks.last().unwrap().0);
+
+    // Check faucet
+
+    let (_faucet_txids, faucet_utxos, faucet_balance) = faucet;
+    let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
+        faucet_utxos.first().unwrap().into_parts();
+    // TODO / FIX: update addrhist to inlcude script type byte or use full addr.
+    let faucet_hash_bytes: [u8; 20] = faucet_script.as_raw_bytes()[3..23].try_into().unwrap();
+    let faucet_addr_script = AddrScript::new(faucet_hash_bytes);
+
+    let reader_faucet_balance = dbg!(db_reader
+        .addr_balance_by_range(faucet_addr_script, start, end)
+        .await
+        .unwrap()) as u64;
+
+    assert_eq!(faucet_balance, reader_faucet_balance);
+
+    // Check recipient
+
+    let (_recipient_txids, recipient_utxos, recipient_balance) = recipient;
+    let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
+        recipient_utxos.first().unwrap().into_parts();
+    // TODO / FIX: update addrhist to inlcude script type byte or use full addr.
+    let recipient_hash_bytes: [u8; 20] = recipient_script.as_raw_bytes()[3..23].try_into().unwrap();
+    let recipient_addr_script = AddrScript::new(recipient_hash_bytes);
+
+    let reader_recipient_balance = dbg!(db_reader
+        .addr_balance_by_range(recipient_addr_script, start, end)
+        .await
+        .unwrap()) as u64;
+
+    assert_eq!(recipient_balance, reader_recipient_balance);
+}
 
 // async fn get_spent() {}

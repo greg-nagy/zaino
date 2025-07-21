@@ -124,7 +124,7 @@ async fn create_test_manager_and_services(
 
 #[tokio::test]
 #[ignore = "Not a test! Used to build test vector data for zaino_state::chain_index unit tests."]
-async fn create_201_block_regtest_chain_vectors() {
+async fn create_200_block_regtest_chain_vectors() {
     let (mut test_manager, _state_service, state_service_subscriber) =
         create_test_manager_and_services(&ValidatorKind::Zebrad, None, true, true, None).await;
 
@@ -242,6 +242,12 @@ async fn create_201_block_regtest_chain_vectors() {
         clients.faucet.sync_and_await().await.unwrap();
         clients.recipient.sync_and_await().await.unwrap();
 
+        tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+        let chain_height = dbg!(state_service_subscriber.chain_height().await.unwrap());
+        if chain_height.0 >= 200 {
+            break;
+        }
+
         // create transactions
         clients.faucet.quick_shield().await.unwrap();
         clients.recipient.quick_shield().await.unwrap();
@@ -279,6 +285,12 @@ async fn create_201_block_regtest_chain_vectors() {
         // sync wallets
         clients.faucet.sync_and_await().await.unwrap();
         clients.recipient.sync_and_await().await.unwrap();
+
+        tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+        let chain_height = dbg!(state_service_subscriber.chain_height().await.unwrap());
+        if chain_height.0 >= 200 {
+            break;
+        }
 
         // create transactions
         clients.faucet.quick_shield().await.unwrap();
@@ -320,10 +332,10 @@ async fn create_201_block_regtest_chain_vectors() {
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     }
-    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(10000)).await;
 
     // *** Fetch chain data ***
-    let chain_height = state_service_subscriber.chain_height().await.unwrap();
+    let chain_height = dbg!(state_service_subscriber.chain_height().await.unwrap());
 
     //fetch  and build block data
     let block_data = {
@@ -332,7 +344,7 @@ async fn create_201_block_regtest_chain_vectors() {
         let mut parent_block_sapling_tree_size: u32 = 0;
         let mut parent_block_orchard_tree_size: u32 = 0;
 
-        for height in 1..chain_height.0 {
+        for height in 1..=chain_height.0 {
             let (chain_block, compact_block) = {
                 // Fetch block data
                 let (_hash, tx, trees) = state_service_subscriber
