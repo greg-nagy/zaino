@@ -289,7 +289,7 @@ impl ZainoDB {
     /// *   **Startup** – runs a full‐DB validation pass (`initial_root_scan` →
     ///     `initial_block_scan`).
     /// *   **Steady-state** – every 5 s tries to validate the next block that
-    ///     appeared after the current `validated_tip`.  
+    ///     appeared after the current `validated_tip`.
     ///     Every 60 s it also calls `clean_trailing()` to purge stale reader slots.
     async fn spawn_handler(&mut self) -> Result<(), FinalisedStateError> {
         // Clone everything the task needs so we can move it into the async block.
@@ -493,9 +493,7 @@ impl ZainoDB {
                     .map_err(|e| FinalisedStateError::Custom(format!("corrupt height entry: {e}")))?
                     .inner();
 
-                if let Err(e) = zaino_db.validate_block_blocking(height, hash) {
-                    return Err(e);
-                }
+                zaino_db.validate_block_blocking(height, hash)?
             }
 
             Ok(())
@@ -602,6 +600,7 @@ impl ZainoDB {
         let mut orchard = Vec::with_capacity(tx_len);
 
         let mut spent_map: HashMap<Outpoint, TxIndex> = HashMap::new();
+        #[allow(clippy::type_complexity)]
         let mut addrhist_inputs_map: HashMap<
             AddrScript,
             Vec<(AddrHistRecord, (AddrScript, AddrHistRecord))>,
@@ -799,7 +798,7 @@ impl ZainoDB {
             for (outpoint, tx_index) in spent_map {
                 let outpoint_bytes = &outpoint.to_bytes()?;
                 let tx_index_entry_bytes =
-                    StoredEntryFixed::new(&outpoint_bytes, tx_index).to_bytes()?;
+                    StoredEntryFixed::new(outpoint_bytes, tx_index).to_bytes()?;
                 txn.put(
                     zaino_db.spent,
                     &outpoint_bytes,
@@ -1011,6 +1010,7 @@ impl ZainoDB {
         let mut txid_set: HashSet<Hash> = HashSet::with_capacity(tx_len);
         let mut transparent = Vec::with_capacity(tx_len);
         let mut spent_map: Vec<Outpoint> = Vec::new();
+        #[allow(clippy::type_complexity)]
         let mut addrhist_inputs_map: HashMap<
             AddrScript,
             Vec<(AddrHistRecord, (AddrScript, AddrHistRecord))>,
@@ -1254,7 +1254,7 @@ impl ZainoDB {
 
     // *** Public fetcher methods - Used by DbReader ***
 
-    /// Returns the greatest `Height` stored in `headers`  
+    /// Returns the greatest `Height` stored in `headers`
     /// (`None` if the DB is still empty).
     pub(crate) async fn tip_height(&self) -> Result<Option<Height>, FinalisedStateError> {
         tokio::task::block_in_place(|| {
@@ -1325,7 +1325,7 @@ impl ZainoDB {
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
             let raw = txn.get(self.headers, &height_bytes)?;
-            let entry = StoredEntryVar::from_bytes(&raw)
+            let entry = StoredEntryVar::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("header decode error: {e}")))?;
 
             Ok(*entry.inner())
@@ -1439,7 +1439,7 @@ impl ZainoDB {
             let txn = self.env.begin_ro_txn()?;
             let raw = txn.get(self.txids, &height_bytes)?;
 
-            let entry: StoredEntryVar<TxidList> = StoredEntryVar::from_bytes(&raw)
+            let entry: StoredEntryVar<TxidList> = StoredEntryVar::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("txids decode error: {e}")))?;
 
             Ok(entry.inner().clone())
@@ -1571,7 +1571,7 @@ impl ZainoDB {
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
             let raw = txn.get(self.transparent, &height_bytes)?;
-            let entry: StoredEntryVar<TransparentTxList> = StoredEntryVar::from_bytes(&raw)
+            let entry: StoredEntryVar<TransparentTxList> = StoredEntryVar::from_bytes(raw)
                 .map_err(|e| {
                     FinalisedStateError::Custom(format!("transparent decode error: {e}"))
                 })?;
@@ -1710,7 +1710,7 @@ impl ZainoDB {
             let txn = self.env.begin_ro_txn()?;
             let raw = txn.get(self.sapling, &height_bytes)?;
 
-            let entry: StoredEntryVar<SaplingTxList> = StoredEntryVar::from_bytes(&raw)
+            let entry: StoredEntryVar<SaplingTxList> = StoredEntryVar::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("sapling decode error: {e}")))?;
 
             Ok(entry.inner().clone())
@@ -1844,7 +1844,7 @@ impl ZainoDB {
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
             let raw = txn.get(self.orchard, &height_bytes)?;
-            let entry: StoredEntryVar<OrchardTxList> = StoredEntryVar::from_bytes(&raw)
+            let entry: StoredEntryVar<OrchardTxList> = StoredEntryVar::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("orchard decode error: {e}")))?;
 
             Ok(entry.inner().clone())
@@ -1900,7 +1900,7 @@ impl ZainoDB {
             let txn = self.env.begin_ro_txn()?;
             let raw = txn.get(self.commitment_tree_data, &height_bytes)?;
 
-            let entry = StoredEntryFixed::from_bytes(&raw).map_err(|e| {
+            let entry = StoredEntryFixed::from_bytes(raw).map_err(|e| {
                 FinalisedStateError::Custom(format!("commitment_tree decode error: {e}"))
             })?;
 
@@ -1937,7 +1937,7 @@ impl ZainoDB {
             .into_iter()
             .map(|bytes| {
                 StoredEntryFixed::<CommitmentTreeData>::from_bytes(&bytes)
-                    .map(|e| e.item.clone())
+                    .map(|e| e.item)
                     .map_err(|e| {
                         FinalisedStateError::Custom(format!("commitment_tree decode error: {e}"))
                     })
@@ -2293,13 +2293,13 @@ impl ZainoDB {
 
             // Fetch header data
             let raw = txn.get(self.headers, &height_bytes)?;
-            let header: BlockHeaderData = *StoredEntryVar::from_bytes(&raw)
+            let header: BlockHeaderData = *StoredEntryVar::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("header decode error: {e}")))?
                 .inner();
 
             // fetch transaction data
             let raw = txn.get(self.txids, &height_bytes)?;
-            let txids_list = StoredEntryVar::<TxidList>::from_bytes(&raw)
+            let txids_list = StoredEntryVar::<TxidList>::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("txids decode error: {e}")))?
                 .inner()
                 .clone();
@@ -2307,21 +2307,21 @@ impl ZainoDB {
 
             let raw = txn.get(self.transparent, &height_bytes)?;
 
-            let transparent_list = StoredEntryVar::<TransparentTxList>::from_bytes(&raw)
+            let transparent_list = StoredEntryVar::<TransparentTxList>::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("transparent decode error: {e}")))?
                 .inner()
                 .clone();
             let transparent = transparent_list.tx();
 
             let raw = txn.get(self.sapling, &height_bytes)?;
-            let sapling_list = StoredEntryVar::<SaplingTxList>::from_bytes(&raw)
+            let sapling_list = StoredEntryVar::<SaplingTxList>::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("sapling decode error: {e}")))?
                 .inner()
                 .clone();
             let sapling = sapling_list.tx();
 
             let raw = txn.get(self.orchard, &height_bytes)?;
-            let orchard_list = StoredEntryVar::<OrchardTxList>::from_bytes(&raw)
+            let orchard_list = StoredEntryVar::<OrchardTxList>::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("orchard decode error: {e}")))?
                 .inner()
                 .clone();
@@ -2355,7 +2355,7 @@ impl ZainoDB {
 
             // fetch commitment tree data
             let raw = txn.get(self.commitment_tree_data, &height_bytes)?;
-            let commitment_tree_data: CommitmentTreeData = *StoredEntryFixed::from_bytes(&raw)
+            let commitment_tree_data: CommitmentTreeData = *StoredEntryFixed::from_bytes(raw)
                 .map_err(|e| {
                     FinalisedStateError::Custom(format!("commitment_tree decode error: {e}"))
                 })?
@@ -2388,27 +2388,27 @@ impl ZainoDB {
 
             // Fetch header data
             let raw = txn.get(self.headers, &height_bytes)?;
-            let header: BlockHeaderData = *StoredEntryVar::from_bytes(&raw)
+            let header: BlockHeaderData = *StoredEntryVar::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("header decode error: {e}")))?
                 .inner();
 
             // fetch transaction data
             let raw = txn.get(self.txids, &height_bytes)?;
-            let txids_list = StoredEntryVar::<TxidList>::from_bytes(&raw)
+            let txids_list = StoredEntryVar::<TxidList>::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("txids decode error: {e}")))?
                 .inner()
                 .clone();
             let txids = txids_list.tx();
 
             let raw = txn.get(self.sapling, &height_bytes)?;
-            let sapling_list = StoredEntryVar::<SaplingTxList>::from_bytes(&raw)
+            let sapling_list = StoredEntryVar::<SaplingTxList>::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("sapling decode error: {e}")))?
                 .inner()
                 .clone();
             let sapling = sapling_list.tx();
 
             let raw = txn.get(self.orchard, &height_bytes)?;
-            let orchard_list = StoredEntryVar::<OrchardTxList>::from_bytes(&raw)
+            let orchard_list = StoredEntryVar::<OrchardTxList>::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("orchard decode error: {e}")))?
                 .inner()
                 .clone();
@@ -2469,7 +2469,7 @@ impl ZainoDB {
 
             // fetch commitment tree data
             let raw = txn.get(self.commitment_tree_data, &height_bytes)?;
-            let commitment_tree_data: CommitmentTreeData = *StoredEntryFixed::from_bytes(&raw)
+            let commitment_tree_data: CommitmentTreeData = *StoredEntryFixed::from_bytes(raw)
                 .map_err(|e| {
                     FinalisedStateError::Custom(format!("commitment_tree decode error: {e}"))
                 })?
@@ -2507,7 +2507,7 @@ impl ZainoDB {
                 .get(self.metadata, b"metadata")
                 .map_err(FinalisedStateError::LmdbError)?;
 
-            let entry = StoredEntryFixed::from_bytes(&raw)
+            let entry = StoredEntryFixed::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("metadata decode error: {e}")))?;
 
             Ok(entry.item)
@@ -2606,7 +2606,7 @@ impl ZainoDB {
         let header_entry = {
             let raw = ro
                 .get(self.headers, &height_key)
-                .map_err(|e| FinalisedStateError::LmdbError(e))?;
+                .map_err(FinalisedStateError::LmdbError)?;
             let entry = StoredEntryVar::<BlockHeaderData>::from_bytes(raw)
                 .map_err(|e| fail(&format!("header corrupt data: {e}")))?;
             if !entry.verify(&height_key) {
@@ -2619,7 +2619,7 @@ impl ZainoDB {
         let txid_list_entry = {
             let raw = ro
                 .get(self.txids, &height_key)
-                .map_err(|e| FinalisedStateError::LmdbError(e))?;
+                .map_err(FinalisedStateError::LmdbError)?;
             let entry = StoredEntryVar::<TxidList>::from_bytes(raw)
                 .map_err(|e| fail(&format!("txids corrupt data: {e}")))?;
             if !entry.verify(&height_key) {
@@ -2643,7 +2643,7 @@ impl ZainoDB {
         {
             let raw = ro
                 .get(self.sapling, &height_key)
-                .map_err(|e| FinalisedStateError::LmdbError(e))?;
+                .map_err(FinalisedStateError::LmdbError)?;
             let entry = StoredEntryVar::<SaplingTxList>::from_bytes(raw)
                 .map_err(|e| fail(&format!("sapling corrupt data: {e}")))?;
             if !entry.verify(&height_key) {
@@ -2655,7 +2655,7 @@ impl ZainoDB {
         {
             let raw = ro
                 .get(self.orchard, &height_key)
-                .map_err(|e| FinalisedStateError::LmdbError(e))?;
+                .map_err(FinalisedStateError::LmdbError)?;
             let entry = StoredEntryVar::<OrchardTxList>::from_bytes(raw)
                 .map_err(|e| fail(&format!("orchard corrupt data: {e}")))?;
             if !entry.verify(&height_key) {
@@ -2667,7 +2667,7 @@ impl ZainoDB {
         {
             let raw = ro
                 .get(self.commitment_tree_data, &height_key)
-                .map_err(|e| FinalisedStateError::LmdbError(e))?;
+                .map_err(FinalisedStateError::LmdbError)?;
             let entry = StoredEntryFixed::<CommitmentTreeData>::from_bytes(raw)
                 .map_err(|e| fail(&format!("commitment_tree corrupt bytes: {e}")))?;
             if !entry.verify(&height_key) {
@@ -2679,7 +2679,7 @@ impl ZainoDB {
         {
             let raw = ro
                 .get(self.heights, &hash_key)
-                .map_err(|e| FinalisedStateError::LmdbError(e))?;
+                .map_err(FinalisedStateError::LmdbError)?;
             let entry = StoredEntryFixed::<Height>::from_bytes(raw)
                 .map_err(|e| fail(&format!("hash -> height corrupt bytes: {e}")))?;
             if !entry.verify(&hash_key) {
@@ -2824,7 +2824,7 @@ impl ZainoDB {
         let mut hasher = Sha256::new();
         Digest::update(&mut hasher, data); // first pass
         let first = hasher.finalize_reset();
-        Digest::update(&mut hasher, &first); // second pass
+        Digest::update(&mut hasher, first); // second pass
         let second = hasher.finalize();
 
         let mut out = [0u8; 32];
@@ -2843,7 +2843,7 @@ impl ZainoDB {
 
         // Iterate until we have reduced to one hash.
         while layer.len() > 1 {
-            let mut next = Vec::with_capacity((layer.len() + 1) / 2);
+            let mut next = Vec::with_capacity(layer.len().div_ceil(2));
 
             // Combine pairs (duplicate the last when the count is odd).
             for chunk in layer.chunks(2) {
@@ -2869,7 +2869,7 @@ impl ZainoDB {
 
     /// Validate a contiguous range of block heights `[start, end]` inclusive.
     ///
-    /// Optimized to skip blocks already known to be validated.  
+    /// Optimized to skip blocks already known to be validated.
     /// Returns the full requested `(start, end)` range on success.
     async fn validate_block_range(
         &self,
@@ -2986,7 +2986,7 @@ impl ZainoDB {
 
     /// Resolve a `HashOrHeight` to the block height stored on disk.
     ///
-    /// * Height  ->  returned unchanged (zero cost).  
+    /// * Height  ->  returned unchanged (zero cost).
     /// * Hash ->  lookup in `hashes` db.
     ///
     /// TODO: Remove HashOrHeight?
@@ -3001,8 +3001,7 @@ impl ZainoDB {
 
             // Height lookup path.
             HashOrHeight::Hash(z_hash) => {
-                let hash = Hash::try_from(z_hash.0)
-                    .map_err(|_| FinalisedStateError::Custom("incorrect hash".into()))?;
+                let hash = Hash::from(z_hash.0);
                 let hkey = hash.to_bytes()?;
 
                 let height: Height = tokio::task::block_in_place(|| {
@@ -3316,6 +3315,7 @@ impl ZainoDB {
     /// Inserts both the “spend” record and the “mined” previous‐output record
     /// (used to update the output record spent in this transaction).
     #[inline]
+    #[allow(clippy::type_complexity)]
     fn build_input_history(
         map: &mut HashMap<AddrScript, Vec<(AddrHistRecord, (AddrScript, AddrHistRecord))>>,
         input_tx_index: TxIndex,
@@ -3818,7 +3818,7 @@ impl DbReader {
         self.inner.status().await
     }
 
-    /// Returns the greatest `Height` stored in `headers`  
+    /// Returns the greatest `Height` stored in `headers`
     /// (`None` if the DB is still empty).
     pub(crate) async fn tip_height(&self) -> Result<Option<Height>, FinalisedStateError> {
         self.inner.tip_height().await
