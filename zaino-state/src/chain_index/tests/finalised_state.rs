@@ -394,10 +394,8 @@ async fn get_faucet_txids() {
     let (faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
         faucet_utxos.first().unwrap().into_parts();
-    // TODO / FIX: update addrhist to inlcude script type byte or use full addr.
-    let faucet_hash_bytes: [u8; 20] = faucet_script.as_raw_bytes()[3..23].try_into().unwrap();
-
-    let faucet_addr_script = AddrScript::new(faucet_hash_bytes);
+    let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
+        .expect("faucet script must be standard P2PKH or P2SH");
 
     for (height, chain_block, _compact_block) in blocks {
         println!("Checking faucet txids at height {}", height);
@@ -456,10 +454,8 @@ async fn get_recipient_txids() {
     let (recipient_txids, recipient_utxos, _recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
         recipient_utxos.first().unwrap().into_parts();
-    // TODO / FIX: update addrhist to inlcude script type byte or use full addr.
-    let recipient_hash_bytes: [u8; 20] = recipient_script.as_raw_bytes()[3..23].try_into().unwrap();
-
-    let recipient_addr_script = AddrScript::new(recipient_hash_bytes);
+    let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
+        .expect("faucet script must be standard P2PKH or P2SH");
 
     for (height, chain_block, _compact_block) in blocks {
         println!("Checking recipient txids at height {}", height);
@@ -524,9 +520,8 @@ async fn get_faucet_utxos() {
     let (_faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
         faucet_utxos.first().unwrap().into_parts();
-    // TODO / FIX: update addrhist to inlcude script type byte or use full addr.
-    let faucet_hash_bytes: [u8; 20] = faucet_script.as_raw_bytes()[3..23].try_into().unwrap();
-    let faucet_addr_script = AddrScript::new(faucet_hash_bytes);
+    let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
+        .expect("faucet script must be standard P2PKH or P2SH");
 
     let mut cleaned_utxos = Vec::new();
     for utxo in faucet_utxos.iter() {
@@ -563,9 +558,8 @@ async fn get_recipient_utxos() {
     let (_recipient_txids, recipient_utxos, _recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
         recipient_utxos.first().unwrap().into_parts();
-    // TODO / FIX: update addrhist to inlcude script type byte or use full addr.
-    let recipient_hash_bytes: [u8; 20] = recipient_script.as_raw_bytes()[3..23].try_into().unwrap();
-    let recipient_addr_script = AddrScript::new(recipient_hash_bytes);
+    let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
+        .expect("faucet script must be standard P2PKH or P2SH");
 
     let mut cleaned_utxos = Vec::new();
     for utxo in recipient_utxos.iter() {
@@ -604,9 +598,8 @@ async fn get_balance() {
     let (_faucet_txids, faucet_utxos, faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
         faucet_utxos.first().unwrap().into_parts();
-    // TODO / FIX: update addrhist to inlcude script type byte or use full addr.
-    let faucet_hash_bytes: [u8; 20] = faucet_script.as_raw_bytes()[3..23].try_into().unwrap();
-    let faucet_addr_script = AddrScript::new(faucet_hash_bytes);
+    let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
+        .expect("faucet script must be standard P2PKH or P2SH");
 
     let reader_faucet_balance = dbg!(db_reader
         .addr_balance_by_range(faucet_addr_script, start, end)
@@ -620,9 +613,8 @@ async fn get_balance() {
     let (_recipient_txids, recipient_utxos, recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
         recipient_utxos.first().unwrap().into_parts();
-    // TODO / FIX: update addrhist to inlcude script type byte or use full addr.
-    let recipient_hash_bytes: [u8; 20] = recipient_script.as_raw_bytes()[3..23].try_into().unwrap();
-    let recipient_addr_script = AddrScript::new(recipient_hash_bytes);
+    let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
+        .expect("faucet script must be standard P2PKH or P2SH");
 
     let reader_recipient_balance = dbg!(db_reader
         .addr_balance_by_range(recipient_addr_script, start, end)
@@ -640,8 +632,8 @@ async fn check_faucet_spent_map() {
     let (_faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
         faucet_utxos.first().unwrap().into_parts();
-    // TODO / FIX: update addrhist to inlcude script type byte or use full addr.
-    let faucet_hash_bytes: [u8; 20] = faucet_script.as_raw_bytes()[3..23].try_into().unwrap();
+    let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
+        .expect("faucet script must be standard P2PKH or P2SH");
 
     // collect faucet outpoints
     let mut faucet_outpoints = Vec::new();
@@ -651,7 +643,7 @@ async fn check_faucet_spent_map() {
             let txid = tx.txid();
             let outputs = tx.transparent().outputs();
             for (vout_idx, output) in outputs.iter().enumerate() {
-                if output.script_hash() == &faucet_hash_bytes {
+                if output.script_hash() == faucet_addr_script.hash() {
                     let outpoint = Outpoint::new_from_be(txid, vout_idx as u32);
 
                     let spender = db_reader.get_outpoint_spender(outpoint).await.unwrap();
@@ -737,8 +729,8 @@ async fn check_recipient_spent_map() {
     let (_recipient_txids, recipient_utxos, _recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
         recipient_utxos.first().unwrap().into_parts();
-    // TODO / FIX: update addrhist to inlcude script type byte or use full addr.
-    let recipient_hash_bytes: [u8; 20] = recipient_script.as_raw_bytes()[3..23].try_into().unwrap();
+    let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
+        .expect("faucet script must be standard P2PKH or P2SH");
 
     // collect faucet outpoints
     let mut recipient_outpoints = Vec::new();
@@ -748,7 +740,7 @@ async fn check_recipient_spent_map() {
             let txid = tx.txid();
             let outputs = tx.transparent().outputs();
             for (vout_idx, output) in outputs.iter().enumerate() {
-                if output.script_hash() == &recipient_hash_bytes {
+                if output.script_hash() == recipient_addr_script.hash() {
                     let outpoint = Outpoint::new_from_be(txid, vout_idx as u32);
 
                     let spender = db_reader.get_outpoint_spender(outpoint).await.unwrap();

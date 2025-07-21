@@ -2736,7 +2736,8 @@ impl ZainoDB {
 
             // Outputs: check addrhist mined record
             for (vout, output) in tx.outputs().iter().enumerate() {
-                let addr_bytes = AddrScript::new(*output.script_hash()).to_bytes()?;
+                let addr_bytes =
+                    AddrScript::new(*output.script_hash(), output.script_type()).to_bytes()?;
                 let rec_bytes =
                     self.addr_hist_records_by_addr_and_index_blocking(&addr_bytes, txid_index)?;
 
@@ -2785,7 +2786,9 @@ impl ZainoDB {
 
                 // Check addrhist input record
                 let prev_output = self.get_previous_output_blocking(outpoint)?;
-                let addr_bytes = AddrScript::new(*prev_output.script_hash()).to_bytes()?;
+                let addr_bytes =
+                    AddrScript::new(*prev_output.script_hash(), prev_output.script_type())
+                        .to_bytes()?;
                 let rec_bytes =
                     self.addr_hist_records_by_addr_and_index_blocking(&addr_bytes, txid_index)?;
 
@@ -3294,7 +3297,7 @@ impl ZainoDB {
         outputs: impl Iterator<Item = (usize, &'a TxOutCompact)>,
     ) {
         for (output_idx, output) in outputs {
-            let addr_script = AddrScript::new(*output.script_hash());
+            let addr_script = AddrScript::new(*output.script_hash(), output.script_type());
             let output_record = AddrHistRecord::new(
                 tx_index,
                 output_idx as u16,
@@ -3321,7 +3324,7 @@ impl ZainoDB {
         prev_output: &TxOutCompact,
         prev_output_tx_index: TxIndex,
     ) {
-        let addr_script = AddrScript::new(*prev_output.script_hash());
+        let addr_script = AddrScript::new(*prev_output.script_hash(), prev_output.script_type());
         let input_record = AddrHistRecord::new(
             input_tx_index,
             input_index,
@@ -3329,7 +3332,7 @@ impl ZainoDB {
             AddrHistRecord::FLAG_IS_INPUT,
         );
         let prev_output_record = (
-            AddrScript::new(*prev_output.script_hash()),
+            AddrScript::new(*prev_output.script_hash(), prev_output.script_type()),
             AddrHistRecord::new(
                 prev_output_tx_index,
                 input.prevout_index() as u16,

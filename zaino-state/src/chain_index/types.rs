@@ -279,20 +279,55 @@ impl FixedEncodedLen for Index {
     const ENCODED_LEN: usize = 4;
 }
 
-/// 20-byte hash (RIPEMD-160 or Blake2b-160) of a transparent output script.
+/// A 20-byte hash160 *plus* a 1-byte ScriptType tag.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub struct AddrScript([u8; 20]);
+pub struct AddrScript {
+    hash: [u8; 20],
+    script_type: u8,
+}
 
 impl AddrScript {
-    /// Create from raw bytes.
-    pub fn new(bytes: [u8; 20]) -> Self {
-        Self(bytes)
+    /// Create from raw 20-byte hash + type byte.
+    pub fn new(hash: [u8; 20], script_type: u8) -> Self {
+        Self { hash, script_type }
     }
 
-    /// Borrow the inner bytes.
-    pub fn as_bytes(&self) -> &[u8; 20] {
-        &self.0
+    /// Borrow the 20-byte hash.
+    pub fn hash(&self) -> &[u8; 20] {
+        &self.hash
+    }
+
+    /// The raw type byte (0x00 = P2PKH, 0x01 = P2SH, 0xFF = NonStandard).
+    pub fn script_type(&self) -> u8 {
+        self.script_type
+    }
+
+    /// Serialize into exactly 21 bytes: [hash‖type].
+    pub fn to_raw_bytes(&self) -> [u8; 21] {
+        let mut b = [0u8; 21];
+        b[..20].copy_from_slice(&self.hash);
+        b[20] = self.script_type;
+        b
+    }
+
+    /// Parse from exactly 21 raw bytes.
+    pub fn from_raw_bytes(b: &[u8; 21]) -> Self {
+        let mut hash = [0u8; 20];
+        hash.copy_from_slice(&b[..20]);
+        let script_type = b[20];
+        Self { hash, script_type }
+    }
+
+    /// Try to extract an AddrScript (20-byte hash + type) from a full locking script.
+    pub fn from_script(script: &[u8]) -> Option<Self> {
+        parse_standard_script(script).map(|(hash, stype)| AddrScript::new(hash, stype as u8))
+    }
+
+    /// Rebuild the canonical P2PKH or P2SH scriptPubKey bytes for this AddrScript.
+    pub fn to_script_pubkey(&self) -> Option<Vec<u8>> {
+        let stype = ScriptType::try_from(self.script_type).ok()?;
+        build_standard_script(self.hash, stype)
     }
 }
 
@@ -304,10 +339,10 @@ impl fmt::Display for AddrScript {
 
 impl ToHex for &AddrScript {
     fn encode_hex<T: FromIterator<char>>(&self) -> T {
-        self.0.encode_hex()
+        self.to_raw_bytes().encode_hex()
     }
     fn encode_hex_upper<T: FromIterator<char>>(&self) -> T {
-        self.0.encode_hex_upper()
+        self.to_raw_bytes().encode_hex_upper()
     }
 }
 impl ToHex for AddrScript {
@@ -320,20 +355,23 @@ impl ToHex for AddrScript {
 }
 
 impl FromHex for AddrScript {
-    type Error = <[u8; 20] as FromHex>::Error;
+    type Error = <[u8; 21] as FromHex>::Error;
+
     fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, Self::Error> {
-        Ok(Self(<[u8; 20]>::from_hex(hex)?))
+        let raw: [u8; 21] = <[u8; 21]>::from_hex(hex)?;
+        Ok(AddrScript::from_raw_bytes(&raw))
     }
 }
 
-impl From<[u8; 20]> for AddrScript {
-    fn from(b: [u8; 20]) -> Self {
-        Self(b)
+impl From<[u8; 21]> for AddrScript {
+    fn from(raw: [u8; 21]) -> Self {
+        AddrScript::from_raw_bytes(&raw)
     }
 }
-impl From<AddrScript> for [u8; 20] {
+
+impl From<AddrScript> for [u8; 21] {
     fn from(a: AddrScript) -> Self {
-        a.0
+        a.to_raw_bytes()
     }
 }
 
@@ -341,12 +379,18 @@ impl ZainoVersionedSerialise for AddrScript {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        write_fixed_le::<20, _>(w, &self.0)
+        write_fixed_le::<20, _>(&mut *w, &self.hash)?;
+        w.write_all(&[self.script_type])
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let bytes = read_fixed_le::<20, _>(r)?;
-        Ok(AddrScript(bytes))
+        let hash = read_fixed_le::<20, _>(&mut *r)?;
+        let mut buf = [0u8; 1];
+        r.read_exact(&mut buf)?;
+        Ok(AddrScript {
+            hash,
+            script_type: buf[0],
+        })
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
@@ -354,10 +398,10 @@ impl ZainoVersionedSerialise for AddrScript {
     }
 }
 
-/// AddrScript = 20 bytes of body data.
+/// AddrScript = 21 bytes of body data.
 impl FixedEncodedLen for AddrScript {
-    /// 20 bytes, LE
-    const ENCODED_LEN: usize = 20;
+    /// 20 bytes, LE + 1 byte script type
+    const ENCODED_LEN: usize = 21;
 }
 
 /// Reference to a spent transparent UTXO.
@@ -1770,6 +1814,38 @@ pub(crate) fn parse_standard_script(script: &[u8]) -> Option<([u8; 20], ScriptTy
         return Some((hash, ScriptType::P2SH));
     }
     None
+}
+
+/// Reconstruct the canonical P2PKH or P2SH scriptPubKey for a 20-byte payload.
+/// Returns `None` if given `ScriptType::NonStandard` (or any other unknown type).
+pub(crate) fn build_standard_script(hash: [u8; 20], stype: ScriptType) -> Option<Vec<u8>> {
+    const P2PKH_PREFIX: &[u8] = &[0x76, 0xa9, 0x14];
+    const P2PKH_SUFFIX: &[u8] = &[0x88, 0xac];
+    const P2PKH_LEN: usize = 25;
+
+    const P2SH_PREFIX: &[u8] = &[0xa9, 0x14];
+    const P2SH_SUFFIX: u8 = 0x87;
+    const P2SH_LEN: usize = 23;
+
+    match stype {
+        ScriptType::P2PKH => {
+            let mut script = Vec::with_capacity(P2PKH_LEN);
+            script.extend_from_slice(P2PKH_PREFIX);
+            script.extend_from_slice(&hash);
+            script.extend_from_slice(P2PKH_SUFFIX);
+            debug_assert!(script.len() == P2PKH_LEN);
+            Some(script)
+        }
+        ScriptType::P2SH => {
+            let mut script = Vec::with_capacity(P2SH_LEN);
+            script.extend_from_slice(P2SH_PREFIX);
+            script.extend_from_slice(&hash);
+            script.push(P2SH_SUFFIX);
+            debug_assert!(script.len() == P2SH_LEN);
+            Some(script)
+        }
+        ScriptType::NonStandard => None,
+    }
 }
 
 /// Compact representation of a transparent output, optimized for indexing and efficient querying.
