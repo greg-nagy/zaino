@@ -26,7 +26,7 @@ use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
-        response::GetAddressDeltasResponse,
+        response::{AddressDelta, GetAddressDeltasResponse},
     },
 };
 use zaino_proto::proto::{
@@ -64,7 +64,7 @@ use zebra_state::{
 };
 
 use chrono::{DateTime, Utc};
-use futures::{TryFutureExt as _, TryStreamExt as _};
+use futures::{stream, TryFutureExt as _, TryStreamExt as _};
 use hex::{FromHex as _, ToHex};
 use indexmap::IndexMap;
 use std::{collections::HashSet, future::poll_fn, str::FromStr, sync::Arc};
@@ -841,8 +841,32 @@ impl ZcashIndexer for StateServiceSubscriber {
     /// zcashd reference: [`getaddressdeltas`](https://zcash.github.io/rpc/getaddressdeltas.html)
     /// method: post
     /// tags: address
-    async fn get_address_deltas(&self) -> Result<GetAddressDeltasResponse, Self::Error> {
-        todo!()
+    async fn get_address_deltas(
+        &self,
+        request: GetAddressTxIdsRequest,
+    ) -> Result<GetAddressDeltasResponse, Self::Error> {
+        let txids = self.get_address_tx_ids(request).await?;
+
+        let tx_fetches = stream::iter(txids.into_iter())
+            .then(|txid| async move { self.get_raw_transaction(txid.to_string(), Some(1)).await });
+
+        let txs_result: Result<Vec<_>, Self::Error> = tx_fetches
+            .map(|res| {
+                res.and_then(|raw_tx| match raw_tx {
+                    GetRawTransaction::Raw(_) => Ok(None), // Unexpected raw, treat as None
+                    GetRawTransaction::Object(tx) => Ok(Some(tx)), // Proper object
+                })
+            })
+            .try_filter_map(|tx_opt| async { Ok(tx_opt) })
+            .try_collect()
+            .await;
+
+        let deltas: Vec<AddressDelta> = todo!();
+
+        match txs_result {
+            Ok(txs) => Ok(GetAddressDeltasResponse { deltas }),
+            Err(e) => Err(e),
+        }
     }
 
     async fn get_difficulty(&self) -> Result<f64, Self::Error> {

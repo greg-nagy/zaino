@@ -201,7 +201,10 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// zcashd reference: [`getaddressdeltas`](https://zcash.github.io/rpc/getaddressdeltas.html)
     /// method: post
     /// tags: address
-    async fn get_address_deltas(&self) -> Result<GetAddressDeltasResponse, Self::Error> {
+    async fn get_address_deltas(
+        &self,
+        request: GetAddressTxIdsRequest,
+    ) -> Result<GetAddressDeltasResponse, Self::Error> {
         todo!()
     }
 

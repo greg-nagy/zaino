@@ -24,11 +24,15 @@ impl TryFrom<RpcError> for Infallible {
     }
 }
 
+// todo! add intermediate struct with variants
 /// Response to a `getaddressdeltas` RPC request.
 ///
 /// This is used for the output parameter of [`JsonRpcConnector::get_address_deltas`].
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct GetAddressDeltasResponse {}
+pub struct GetAddressDeltasResponse {
+    deltas: Vec<AddressDelta>,
+    // todo! fill the rest of the fields
+}
 
 impl ResponseToError for GetAddressDeltasResponse {
     // type RpcError = GetAddressDeltasError;
@@ -38,6 +42,20 @@ impl ResponseToError for GetAddressDeltasResponse {
 /// Error type used for the `getaddressdeltas` RPC request.
 #[derive(Debug, thiserror::Error)]
 pub enum GetAddressDeltasError {}
+
+#[derive(Debug, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct AddressDelta {
+    /// The difference in zatoshis (or satoshis equivalent in Zcash)
+    satoshis: i64,
+    /// The related transaction ID in hex string format
+    txid: String,
+    /// The related input or output index
+    index: u32,
+    /// The block height where the change occurred
+    height: u32,
+    /// The base58check encoded address
+    address: String,
+}
 
 /// Response to a `getinfo` RPC request.
 ///

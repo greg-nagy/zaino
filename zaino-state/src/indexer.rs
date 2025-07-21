@@ -166,7 +166,10 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// zcashd reference: [`getaddressdeltas`](https://zcash.github.io/rpc/getaddressdeltas.html)
     /// method: post
     /// tags: address
-    async fn get_address_deltas(&self) -> Result<GetAddressDeltasResponse, Self::Error> {
+    async fn get_address_deltas(
+        &self,
+        request: GetAddressTxIdsRequest, // todo! expand this type to also take in chainInfo field
+    ) -> Result<GetAddressDeltasResponse, Self::Error> {
         todo!()
     }
 
