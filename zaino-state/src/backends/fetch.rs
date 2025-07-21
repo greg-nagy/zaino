@@ -232,7 +232,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
     ///
     /// Original implementation: [`getmempoolinfo`](https://github.com/zcash/zcash/blob/18238d90cd0b810f5b07d5aaa1338126aa128c06/src/rpc/blockchain.cpp#L1555)
     async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error> {
-        Ok(self.fetcher.get_mempool_info().await?.into())
+        Ok(self.fetcher.get_mempool_info().await?)
     }
 
     /// Returns the proof-of-work difficulty as a multiple of the minimum difficulty.
