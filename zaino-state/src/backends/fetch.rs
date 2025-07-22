@@ -231,7 +231,10 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// tags: mempool
     ///
     /// Original implementation: [`getmempoolinfo`](https://github.com/zcash/zcash/blob/18238d90cd0b810f5b07d5aaa1338126aa128c06/src/rpc/blockchain.cpp#L1555)
+    ///
+    /// Zebra does not support this RPC call directly.
     async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error> {
+        dbg!("entering get_mempool_info in fetch");
         Ok(self.fetcher.get_mempool_info().await?)
     }
 
