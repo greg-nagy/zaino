@@ -294,7 +294,7 @@ impl JsonRpSeeConnector {
 
             let request_builder = self
                 .build_request(method, &params, id)
-                .map_err(|e| RpcRequestError::JsonRpc(e))?;
+                .map_err(RpcRequestError::JsonRpc)?;
 
             let response = request_builder
                 .send()
@@ -425,6 +425,8 @@ impl JsonRpSeeConnector {
     /// tags: mempool
     ///
     /// Original implementation: [`getmempoolinfo`](https://github.com/zcash/zcash/blob/18238d90cd0b810f5b07d5aaa1338126aa128c06/src/rpc/blockchain.cpp#L1555)
+    ///
+    /// Zebra does not support this RPC directly.
     pub async fn get_mempool_info(
         &self,
     ) -> Result<GetMempoolInfoResponse, RpcRequestError<Infallible>> {
