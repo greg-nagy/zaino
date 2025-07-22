@@ -556,7 +556,6 @@ async fn state_service_get_mempool_info(validator: &ValidatorKind) {
     // because Zebra does not support this RPC
     if let FetchServiceError::Critical(_) = result {
         // Test passes
-        assert!(true);
     } else {
         dbg!(&result);
         panic!("Expected error variant not found");
