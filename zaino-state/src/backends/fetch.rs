@@ -234,7 +234,6 @@ impl ZcashIndexer for FetchServiceSubscriber {
     ///
     /// Zebra does not support this RPC call directly.
     async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error> {
-        dbg!("entering get_mempool_info in fetch");
         Ok(self.fetcher.get_mempool_info().await?)
     }
 

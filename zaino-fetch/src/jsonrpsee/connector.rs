@@ -430,8 +430,6 @@ impl JsonRpSeeConnector {
     pub async fn get_mempool_info(
         &self,
     ) -> Result<GetMempoolInfoResponse, RpcRequestError<Infallible>> {
-        dbg!("entering in connector!");
-        // since zebra does not support this, we may need a handle before we get here.
         self.send_request::<(), GetMempoolInfoResponse>("getmempoolinfo", ())
             .await
     }
