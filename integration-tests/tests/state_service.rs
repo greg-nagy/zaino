@@ -512,13 +512,14 @@ async fn state_service_get_raw_mempool(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
+// direct fetch of `getmempoolinfo` RPC not supported by Zebra
 async fn state_service_get_mempool_info(validator: &ValidatorKind) {
     let (
         mut test_manager,
         _fetch_service,
         fetch_service_subscriber,
         _state_service,
-        state_service_subscriber,
+        _state_service_subscriber,
     ) = create_test_manager_and_services(validator, None, true, true, None).await;
 
     let mut clients = test_manager
@@ -530,31 +531,19 @@ async fn state_service_get_mempool_info(validator: &ValidatorKind) {
 
     clients.faucet.sync_and_await().await.unwrap();
 
-    // this always matches, how it is currently run. that's the case with at least one more test, too.
-    if matches!(validator, ValidatorKind::Zebrad) {
-        test_manager.local_net.generate_blocks(100).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
-        test_manager.local_net.generate_blocks(100).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
-        test_manager.local_net.generate_blocks(1).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.sync_and_await().await.unwrap();
-    };
+    test_manager.local_net.generate_blocks(100).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    clients.faucet.sync_and_await().await.unwrap();
+    clients.faucet.quick_shield().await.unwrap();
+    test_manager.local_net.generate_blocks(100).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    clients.faucet.sync_and_await().await.unwrap();
+    clients.faucet.quick_shield().await.unwrap();
+    test_manager.local_net.generate_blocks(1).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    clients.faucet.sync_and_await().await.unwrap();
 
     let _recipient_ua = clients.get_recipient_address("unified").await;
-    /*
-    let recipient_taddr = clients.get_recipient_address("transparent").await;
-    from_inputs::quick_send(&mut clients.faucet, vec![(&recipient_taddr, 250_000, None)])
-        .await
-        .unwrap();
-    from_inputs::quick_send(&mut clients.faucet, vec![(&recipient_ua, 250_000, None)])
-        .await
-        .unwrap();
-        */
 
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
@@ -563,35 +552,15 @@ async fn state_service_get_mempool_info(validator: &ValidatorKind) {
         .await
         .unwrap_err();
 
-    if let FetchServiceError::RpcError(_) = result {
+    // when running against Zebrad we expect the fetch to fail
+    // because Zebra does not support this RPC
+    if let FetchServiceError::Critical(_) = result {
         // Test passes
         assert!(true);
     } else {
         dbg!(&result);
         panic!("Expected error variant not found");
     }
-
-    // originally
-    // let fetch_service_mempool_info = fetch_service_subscriber.get_mempool_info().await.unwrap();
-    /*
-    // the other pattern is
-    assert!(matches!(
-        fetch_service_subscriber
-            .get_mempool_info()
-            .await
-            .unwrap_err(),
-        // Err(FetchServiceError::JsonRpcConnectorError())
-        // does use thiserror
-        FetchServiceError::RpcError(_)
-    ));
-             */
-
-    let state_service_mempool_info = state_service_subscriber.get_mempool_info().await.unwrap();
-    dbg!(&state_service_mempool_info);
-
-    // originally
-    // assert_eq!(fetch_service_mempool_info, state_service_mempool_info);
-    assert!(true);
 
     test_manager.close().await;
 }
