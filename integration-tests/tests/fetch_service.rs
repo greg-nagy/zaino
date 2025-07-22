@@ -5,8 +5,8 @@ use zaino_proto::proto::service::{
     TransparentAddressBlockFilter, TxFilter,
 };
 use zaino_state::{
-    BackendType, FetchService, FetchServiceConfig, FetchServiceSubscriber, LightWalletIndexer,
-    StatusType, ZcashIndexer, ZcashService as _,
+    BackendType, FetchService, FetchServiceConfig, FetchServiceError, FetchServiceSubscriber,
+    LightWalletIndexer, StatusType, ZcashIndexer, ZcashService as _,
 };
 use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind};
@@ -242,6 +242,7 @@ async fn fetch_service_get_raw_mempool(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
+// Zebra does not support the `getmempoolinfo` RPC
 async fn fetch_service_get_mempool_info(validator: &ValidatorKind) {
     let (mut test_manager, _fetch_service, fetch_service_subscriber) =
         create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
@@ -301,13 +302,31 @@ async fn fetch_service_get_mempool_info(validator: &ValidatorKind) {
 
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    let fetch_service_mempool_info = fetch_service_subscriber.get_mempool_info().await.unwrap();
-    let json_service_mempool_info = json_service.get_mempool_info().await.unwrap();
+    if matches!(validator, ValidatorKind::Zebrad) {
+        // when running against Zebrad we expect the fetch to fail
+        // because Zebra does not support this RPC
+        let result = fetch_service_subscriber
+            .get_mempool_info()
+            .await
+            .unwrap_err();
 
-    dbg!(&fetch_service_mempool_info);
-    dbg!(&json_service_mempool_info);
+        if let FetchServiceError::Critical(_) = result {
+            // Test passes
+        } else {
+            dbg!(&result);
+            panic!("Expected error variant not found");
+        }
+        // test for failure
+    } else if matches!(validator, ValidatorKind::Zcashd) {
+        let fetch_service_mempool_info = fetch_service_subscriber.get_mempool_info().await.unwrap();
+        let json_service_mempool_info = json_service.get_mempool_info().await.unwrap();
+        dbg!(&fetch_service_mempool_info);
+        dbg!(&json_service_mempool_info);
 
-    assert_eq!(json_service_mempool_info, fetch_service_mempool_info);
+        assert_eq!(json_service_mempool_info, fetch_service_mempool_info);
+    } else {
+        panic!("unexpected validator!")
+    }
 
     test_manager.close().await;
 }
