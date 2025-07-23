@@ -302,31 +302,28 @@ async fn fetch_service_get_mempool_info(validator: &ValidatorKind) {
 
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    if matches!(validator, ValidatorKind::Zebrad) {
-        // when running against Zebrad we expect the fetch to fail
-        // because Zebra does not support this RPC
-        let result = fetch_service_subscriber
-            .get_mempool_info()
-            .await
-            .unwrap_err();
+    match validator {
+        ValidatorKind::Zebrad => {
+            // Zebra doesn’t implement this RPC, so we expect a failure.
+            let err = fetch_service_subscriber
+                .get_mempool_info()
+                .await
+                .expect_err("Zebrad should return an error for get_mempool_info.");
 
-        if let FetchServiceError::Critical(_) = result {
-            // Test passes
-        } else {
-            dbg!(&result);
-            panic!("Expected error variant not found");
+            assert!(
+                matches!(err, FetchServiceError::Critical(_)),
+                "Unexpected error variant: {err:?}"
+            );
         }
-        // test for failure
-    } else if matches!(validator, ValidatorKind::Zcashd) {
-        let fetch_service_mempool_info = fetch_service_subscriber.get_mempool_info().await.unwrap();
-        let json_service_mempool_info = json_service.get_mempool_info().await.unwrap();
-        dbg!(&fetch_service_mempool_info);
-        dbg!(&json_service_mempool_info);
+        ValidatorKind::Zcashd => {
+            // Zcashd implements the RPC, so the call should succeed and match JSON-RPC output.
+            let fetch_info = fetch_service_subscriber.get_mempool_info().await.unwrap();
 
-        assert_eq!(json_service_mempool_info, fetch_service_mempool_info);
-    } else {
-        panic!("unexpected validator!")
-    }
+            let json_info = json_service.get_mempool_info().await.unwrap();
+
+            assert_eq!(json_info, fetch_info);
+        }
+    };
 
     test_manager.close().await;
 }
