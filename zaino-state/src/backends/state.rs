@@ -980,7 +980,7 @@ impl ZcashIndexer for StateServiceSubscriber {
                     GetRawTransaction::Raw(tx) => tx.as_ref().len() as u64,
                 })
                 .sum(),
-            usage: 0, // TODO: How do I get the mempool's memory usage?
+            usage: std::mem::size_of_val(&self.mempool) as u64,
         })
     }
 
