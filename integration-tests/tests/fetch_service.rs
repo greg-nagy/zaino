@@ -271,7 +271,8 @@ async fn fetch_service_get_mempool_info(validator: &ValidatorKind) {
 
     clients.faucet.sync_and_await().await.unwrap();
 
-    // TODO: check if this is necessary
+    // We do this because Zebra does not support mine-to-Orchard
+    // so we need to shield it manually.
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
