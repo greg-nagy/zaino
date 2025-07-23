@@ -537,7 +537,7 @@ async fn create_200_block_regtest_chain_vectors() {
     assert_eq!(recipient_data, re_recipient, "recipient tuple mismatch");
 }
 
-// Test-only helper: takes big-endian hex‐encoded txids (`Vec<Vec<u8>>`)
+/// Test-only helper: takes big-endian hex‐encoded txids (`Vec<Vec<u8>>`)
 /// and returns them as little-endian raw-byte vectors.
 fn display_txids_to_server(txids: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
     txids
