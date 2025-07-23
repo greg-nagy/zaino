@@ -32,7 +32,7 @@ impl Hash {
         reversed_bytes
     }
 
-    /// Convert bytes in big-endian byte-order into a [`block::Hash`](crate::block::Hash).
+    /// Convert bytes in big-endian byte-order into a [`block::Hash`](crate::Hash).
     pub fn from_bytes_in_display_order(bytes_in_display_order: &[u8; 32]) -> Hash {
         let mut internal_byte_order = *bytes_in_display_order;
         internal_byte_order.reverse();
@@ -646,8 +646,8 @@ pub struct BlockData {
     /// Merkle root hash of all transaction IDs in the block (used for quick tx inclusion proofs).
     pub(super) merkle_root: [u8; 32],
     /// Digest representing the block-commitments Merkle root (commitment to note states).
-    /// - < V4: [`hashFinalSaplingRoot`] - Sapling note commitment tree root.
-    /// - => V4: [`hashBlockCommitments`] - digest over hashLightClientRoot and hashAuthDataRoot.``
+    /// - < V4: `hashFinalSaplingRoot` - Sapling note commitment tree root.
+    /// - => V4: `hashBlockCommitments` - digest over hashLightClientRoot and hashAuthDataRoot.``
     pub(super) block_commitments: [u8; 32],
     /// Compact difficulty target used for proof-of-work and difficulty calculation.
     pub(super) bits: u32,
