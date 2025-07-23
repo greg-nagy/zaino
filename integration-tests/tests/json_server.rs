@@ -422,10 +422,6 @@ async fn get_mempool_info_inner() {
     let zcashd_mempool_info = zcashd_subscriber.get_mempool_info().await.unwrap();
     let zaino_mempool_info = zaino_subscriber.get_mempool_info().await.unwrap();
 
-    dbg!(&zcashd_mempool_info);
-
-    dbg!(&zaino_mempool_info);
-
     assert_eq!(zcashd_mempool_info, zaino_mempool_info);
 
     test_manager.close().await;

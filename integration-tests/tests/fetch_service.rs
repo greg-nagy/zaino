@@ -271,6 +271,7 @@ async fn fetch_service_get_mempool_info(validator: &ValidatorKind) {
 
     clients.faucet.sync_and_await().await.unwrap();
 
+    // TODO: check if this is necessary
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -283,7 +284,7 @@ async fn fetch_service_get_mempool_info(validator: &ValidatorKind) {
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.sync_and_await().await.unwrap();
-    };
+    }
 
     let recipient_ua = clients.get_recipient_address("unified").await;
     let recipient_taddr = clients.get_recipient_address("transparent").await;
@@ -321,7 +322,15 @@ async fn fetch_service_get_mempool_info(validator: &ValidatorKind) {
 
             let json_info = json_service.get_mempool_info().await.unwrap();
 
-            assert_eq!(json_info, fetch_info);
+            // We only assert that the size (number of transactions) and bytes match.
+            assert_eq!(json_info.size, fetch_info.size);
+            assert_eq!(json_info.bytes, fetch_info.bytes);
+
+            // The memory usage is tied to how it was implemented,
+            // and cannot be guaranteed to be the same set of transactions.
+            // We only test that the memory usage is non-zero.
+            assert!(fetch_info.usage > 0);
+            assert!(json_info.usage > 0);
         }
     };
 
