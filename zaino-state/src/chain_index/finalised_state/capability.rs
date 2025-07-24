@@ -22,6 +22,7 @@ bitflags! {
     /// (`writer()`, `block_core()`, …) it may expose.
     ///
     /// Each flag corresponds 1-for-1 with an extension trait.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
     pub struct Capability: u32 {
         /* ------ core database functionality ------ */
         /// Implements `DbRead`.
@@ -234,9 +235,6 @@ impl core::fmt::Display for DbVersion {
 /// Read-only operations that *every* ZainoDB version must support.
 #[async_trait]
 pub trait DbRead: Send + Sync {
-    /// Returns the current runtime status (`Starting`, `Syncing`, `Ready`, …).
-    async fn status(&self) -> StatusType;
-
     /// Highest block height stored (or `None` if DB empty).
     async fn db_height(&self) -> Result<Option<Height>, FinalisedStateError>;
 
@@ -270,8 +268,13 @@ pub trait DbWrite: Send + Sync {
 /// Core database functionality that *every* ZainoDB version must support.
 #[async_trait]
 pub trait DbCore: DbRead + DbWrite + Send + Sync {
+    /// Returns the current runtime status (`Starting`, `Syncing`, `Ready`, …).
+    async fn status(&self) -> StatusType;
+
     /// Stops background tasks, syncs, etc.
-    async fn shutdown(&mut self) -> Result<(), FinalisedStateError>;
+    async fn shutdown(&self) -> Result<(), FinalisedStateError>;
+
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 // ***** Database Extension traits *****

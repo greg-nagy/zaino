@@ -95,10 +95,6 @@ pub const DB_METADATA_V1: DbMetadata = DbMetadata {
 
 #[async_trait]
 impl DbRead for DbV1 {
-    async fn status(&self) -> StatusType {
-        self.status().await
-    }
-
     async fn db_height(&self) -> Result<Option<Height>, FinalisedStateError> {
         self.tip_height().await
     }
@@ -133,33 +129,28 @@ impl DbWrite for DbV1 {
 
 #[async_trait]
 impl DbCore for DbV1 {
-    async fn shutdown(&mut self) -> Result<(), FinalisedStateError> {
+    async fn status(&self) -> StatusType {
+        self.status().await
+    }
+
+    async fn shutdown(&self) -> Result<(), FinalisedStateError> {
         self.status.store(StatusType::Closing as usize);
 
-        if let Some(mut handle) = self.db_handler.take() {
+        if let Some(handle) = &self.db_handler {
             let timeout = tokio::time::sleep(Duration::from_secs(5));
-            tokio::pin!(timeout);
-
-            tokio::select! {
-                res = &mut handle => {
-                    match res {
-                        Ok(_) => {}
-                        Err(e) if e.is_cancelled() => {}
-                        Err(e) => warn!("background task ended with error: {e:?}"),
-                    }
-                }
-                _ = &mut timeout => {
-                    warn!("background task didn’t exit in time – aborting");
-                    handle.abort();
-                }
-            }
+            timeout.await;
+            // TODO: Check if handle is returned else abort
+            handle.abort();
         }
-
         let _ = self.clean_trailing().await;
         if let Err(e) = self.env.sync(true) {
             warn!("LMDB fsync before close failed: {e}");
         }
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -523,7 +514,7 @@ impl DbV1 {
     }
 
     /// Try graceful shutdown, fall back to abort after a timeout.
-    pub(crate) async fn close(mut self) -> Result<(), FinalisedStateError> {
+    pub(crate) async fn close(&mut self) -> Result<(), FinalisedStateError> {
         self.status.store(StatusType::Closing as usize);
 
         if let Some(mut handle) = self.db_handler.take() {
@@ -4075,7 +4066,7 @@ impl DbV1 {
 impl Drop for DbV1 {
     fn drop(&mut self) {
         if let Some(handle) = self.db_handler.take() {
-            handle.abort(); // cannot await here
+            handle.abort();
         }
     }
 }
