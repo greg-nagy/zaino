@@ -988,9 +988,13 @@ impl ZcashIndexer for StateServiceSubscriber {
             size: mempool_state.len() as u64,
             bytes: mempool_state
                 .iter()
-                .map(|tx| match &tx.1 .0 {
-                    GetRawTransaction::Object(tx) => tx.hex.as_ref().len() as u64,
-                    GetRawTransaction::Raw(tx) => tx.as_ref().len() as u64,
+                .map(|tx| {
+                    // First item = txid, second item = GetRawTransaction
+                    let raw_txn = &tx.1 .0;
+                    match raw_txn {
+                        GetRawTransaction::Object(tx) => tx.hex.as_ref().len() as u64,
+                        GetRawTransaction::Raw(tx) => tx.as_ref().len() as u64,
+                    }
                 })
                 .sum(),
             usage: std::mem::size_of_val(&self.mempool) as u64,
