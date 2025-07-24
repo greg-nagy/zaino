@@ -1,36 +1,31 @@
-//! Holds the Finalised portion of the chain index on disk.
+//! ZainoDB V1 Implementation
 
-// TODO / FIX - ROMOVE THIS ONCE CHAININDEX LANDS!
-#![allow(dead_code)]
-
-pub(crate) mod capability;
-pub(crate) mod db;
-pub(crate) mod entry;
-pub(crate) mod migrations;
-pub(crate) mod reader;
-
-use super::{
-    encoding::{
-        read_fixed_le, read_u32_le, version, write_fixed_le, write_u32_le, CompactSize,
-        FixedEncodedLen, ZainoVersionedSerialise,
-    },
-    types::{AddrEventBytes, BlockHeaderData},
-};
 use crate::{
-    config::BlockCacheConfig, error::FinalisedStateError, AddrHistRecord, AddrScript, AtomicStatus,
-    ChainBlock, CommitmentTreeData, CompactOrchardAction, CompactSaplingOutput,
-    CompactSaplingSpend, CompactTxData, Hash, Height, OrchardCompactTx, OrchardTxList, Outpoint,
+    chain_index::{
+        finalised_state::{
+            capability::{
+                BlockCoreExt, BlockShieldedExt, BlockTransparentExt, ChainBlockExt,
+                CompactBlockExt, DbCore, DbMetadata, DbRead, DbVersion, DbWrite,
+                TransparentHistExt,
+            },
+            entry::{StoredEntryFixed, StoredEntryVar},
+        },
+        types::AddrEventBytes,
+    },
+    config::BlockCacheConfig,
+    error::FinalisedStateError,
+    AddrHistRecord, AddrScript, AtomicStatus, BlockHeaderData, ChainBlock, CommitmentTreeData,
+    CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactSize, CompactTxData,
+    FixedEncodedLen as _, Hash, Height, OrchardCompactTx, OrchardTxList, Outpoint,
     SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
-    TxInCompact, TxIndex, TxOutCompact, TxidList,
+    TxInCompact, TxIndex, TxOutCompact, TxidList, ZainoVersionedSerialise as _,
 };
 
+use zebra_chain::parameters::NetworkKind;
 use zebra_state::HashOrHeight;
 
-use blake2::{
-    digest::{Update, VariableOutput},
-    Blake2bVar,
-};
-use core2::io::{self, Read, Write};
+use async_trait::async_trait;
+use core2::io::{self, Read};
 use dashmap::DashSet;
 use lmdb::{
     Cursor, Database, DatabaseFlags, Environment, EnvironmentFlags, Transaction as _, WriteFlags,
@@ -47,7 +42,6 @@ use std::{
 };
 use tokio::time::interval;
 use tracing::{error, info, warn};
-use zebra_chain::parameters::NetworkKind;
 
 // ───────────────────────── Schema v1 constants ─────────────────────────
 
@@ -84,15 +78,300 @@ pub const DB_SCHEMA_V1_HASH: [u8; 32] = [
     0x2a, 0x69, 0x67, 0x51, 0x8c, 0xce, 0xaa, 0x59, 0xc5, 0xbc, 0x82, 0x7c, 0xe1, 0x46, 0xfe, 0x93,
 ];
 
-/// Database V1 vesrion data.
-pub const DB_SCHEMA_V1: DbVersion = DbVersion {
-    version: 1,
+/// Database V1 version data.
+pub const DB_VERSION_V1: DbVersion = DbVersion {
+    major: 1,
+    minor: 0,
+    patch: 0,
+};
+
+/// Database V1 Metadata.
+pub const DB_METADATA_V1: DbMetadata = DbMetadata {
+    version: DB_VERSION_V1,
     schema_hash: DB_SCHEMA_V1_HASH,
 };
 
-/// Zaino’s Finalised state.
+// ───────────────────────── ZainoDb v1 Capabilities ─────────────────────────
+
+#[async_trait]
+impl DbRead for DbV1 {
+    async fn status(&self) -> StatusType {
+        self.status().await
+    }
+
+    async fn db_height(&self) -> Result<Option<Height>, FinalisedStateError> {
+        self.tip_height().await
+    }
+
+    async fn get_block_height(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
+        self.get_block_height_by_hash(hash).await
+    }
+
+    async fn get_block_hash(&self, height: Height) -> Result<Hash, FinalisedStateError> {
+        Ok(*self.get_block_header_data(height).await?.index().hash())
+    }
+
+    async fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
+        self.get_metadata().await
+    }
+}
+
+#[async_trait]
+impl DbWrite for DbV1 {
+    async fn write_block(&self, block: ChainBlock) -> Result<(), FinalisedStateError> {
+        self.write_block(block).await
+    }
+
+    async fn delete_block_at_height(&self, height: Height) -> Result<(), FinalisedStateError> {
+        self.delete_block_at_height(height).await
+    }
+
+    async fn delete_block(&self, block: &ChainBlock) -> Result<(), FinalisedStateError> {
+        self.delete_block(block).await
+    }
+}
+
+#[async_trait]
+impl DbCore for DbV1 {
+    async fn shutdown(&mut self) -> Result<(), FinalisedStateError> {
+        self.status.store(StatusType::Closing as usize);
+
+        if let Some(mut handle) = self.db_handler.take() {
+            let timeout = tokio::time::sleep(Duration::from_secs(5));
+            tokio::pin!(timeout);
+
+            tokio::select! {
+                res = &mut handle => {
+                    match res {
+                        Ok(_) => {}
+                        Err(e) if e.is_cancelled() => {}
+                        Err(e) => warn!("background task ended with error: {e:?}"),
+                    }
+                }
+                _ = &mut timeout => {
+                    warn!("background task didn’t exit in time – aborting");
+                    handle.abort();
+                }
+            }
+        }
+
+        let _ = self.clean_trailing().await;
+        if let Err(e) = self.env.sync(true) {
+            warn!("LMDB fsync before close failed: {e}");
+        }
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl BlockCoreExt for DbV1 {
+    async fn get_block_header(
+        &self,
+        height: Height,
+    ) -> Result<BlockHeaderData, FinalisedStateError> {
+        self.get_block_header_data(height).await
+    }
+
+    async fn get_block_range_headers(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<BlockHeaderData>, FinalisedStateError> {
+        self.get_block_range_headers(start, end).await
+    }
+
+    async fn get_block_txids(&self, height: Height) -> Result<TxidList, FinalisedStateError> {
+        self.get_block_txids(height).await
+    }
+
+    async fn get_block_range_txids(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<TxidList>, FinalisedStateError> {
+        self.get_block_range_txids(start, end).await
+    }
+
+    async fn get_txid(&self, tx_index: TxIndex) -> Result<Hash, FinalisedStateError> {
+        self.get_txid(tx_index).await
+    }
+
+    async fn get_tx_index(&self, txid: &Hash) -> Result<Option<TxIndex>, FinalisedStateError> {
+        self.get_tx_index(txid).await
+    }
+}
+
+#[async_trait]
+impl BlockTransparentExt for DbV1 {
+    async fn get_transparent(
+        &self,
+        tx_index: TxIndex,
+    ) -> Result<Option<TransparentCompactTx>, FinalisedStateError> {
+        self.get_transparent(tx_index).await
+    }
+
+    async fn get_block_transparent(
+        &self,
+        height: Height,
+    ) -> Result<TransparentTxList, FinalisedStateError> {
+        self.get_block_transparent(height).await
+    }
+
+    async fn get_block_range_transparent(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<TransparentTxList>, FinalisedStateError> {
+        self.get_block_range_transparent(start, end).await
+    }
+}
+
+#[async_trait]
+impl BlockShieldedExt for DbV1 {
+    async fn get_sapling(
+        &self,
+        tx_index: TxIndex,
+    ) -> Result<Option<SaplingCompactTx>, FinalisedStateError> {
+        self.get_sapling(tx_index).await
+    }
+
+    async fn get_block_sapling(
+        &self,
+        height: Height,
+    ) -> Result<SaplingTxList, FinalisedStateError> {
+        self.get_block_sapling(height).await
+    }
+
+    async fn get_block_range_sapling(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<SaplingTxList>, FinalisedStateError> {
+        self.get_block_range_sapling(start, end).await
+    }
+
+    async fn get_orchard(
+        &self,
+        tx_index: TxIndex,
+    ) -> Result<Option<OrchardCompactTx>, FinalisedStateError> {
+        self.get_orchard(tx_index).await
+    }
+
+    async fn get_block_orchard(
+        &self,
+        height: Height,
+    ) -> Result<OrchardTxList, FinalisedStateError> {
+        self.get_block_orchard(height).await
+    }
+
+    async fn get_block_range_orchard(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<OrchardTxList>, FinalisedStateError> {
+        self.get_block_range_orchard(start, end).await
+    }
+
+    async fn get_block_commitment_tree_data(
+        &self,
+        height: Height,
+    ) -> Result<CommitmentTreeData, FinalisedStateError> {
+        self.get_block_commitment_tree_data(height).await
+    }
+
+    async fn get_block_range_commitment_tree_data(
+        &self,
+        start: Height,
+        end: Height,
+    ) -> Result<Vec<CommitmentTreeData>, FinalisedStateError> {
+        self.get_block_range_commitment_tree_data(start, end).await
+    }
+}
+
+#[async_trait]
+impl CompactBlockExt for DbV1 {
+    async fn get_compact_block(
+        &self,
+        height: Height,
+    ) -> Result<zaino_proto::proto::compact_formats::CompactBlock, FinalisedStateError> {
+        self.get_compact_block(height).await
+    }
+}
+
+#[async_trait]
+impl ChainBlockExt for DbV1 {
+    async fn get_chain_block(&self, height: Height) -> Result<ChainBlock, FinalisedStateError> {
+        self.get_chain_block(height).await
+    }
+}
+
+#[async_trait]
+impl TransparentHistExt for DbV1 {
+    async fn addr_records(
+        &self,
+        addr_script: AddrScript,
+    ) -> Result<Option<Vec<AddrEventBytes>>, FinalisedStateError> {
+        self.addr_records(addr_script).await
+    }
+
+    async fn addr_and_index_records(
+        &self,
+        addr_script: AddrScript,
+        tx_index: TxIndex,
+    ) -> Result<Option<Vec<AddrEventBytes>>, FinalisedStateError> {
+        self.addr_and_index_records(addr_script, tx_index).await
+    }
+
+    async fn addr_tx_indexes_by_range(
+        &self,
+        addr_script: AddrScript,
+        start_height: Height,
+        end_height: Height,
+    ) -> Result<Option<Vec<TxIndex>>, FinalisedStateError> {
+        self.addr_tx_indexes_by_range(addr_script, start_height, end_height)
+            .await
+    }
+
+    async fn addr_utxos_by_range(
+        &self,
+        addr_script: AddrScript,
+        start_height: Height,
+        end_height: Height,
+    ) -> Result<Option<Vec<(TxIndex, u16, u64)>>, FinalisedStateError> {
+        self.addr_utxos_by_range(addr_script, start_height, end_height)
+            .await
+    }
+
+    async fn addr_balance_by_range(
+        &self,
+        addr_script: AddrScript,
+        start_height: Height,
+        end_height: Height,
+    ) -> Result<i64, FinalisedStateError> {
+        self.addr_balance_by_range(addr_script, start_height, end_height)
+            .await
+    }
+
+    async fn get_outpoint_spender(
+        &self,
+        outpoint: Outpoint,
+    ) -> Result<Option<TxIndex>, FinalisedStateError> {
+        self.get_outpoint_spender(outpoint).await
+    }
+
+    async fn get_outpoint_spenders(
+        &self,
+        outpoints: Vec<Outpoint>,
+    ) -> Result<Vec<Option<TxIndex>>, FinalisedStateError> {
+        self.get_outpoint_spenders(outpoints).await
+    }
+}
+
+// ───────────────────────── ZainoDb v1 Implementation ─────────────────────────
+
+/// Zaino’s Finalised state database V1.
 /// Implements a persistent LMDB-backed chain index for fast read access and verified data.
-pub struct ZainoDB {
+pub struct DbV1 {
     /// Shared LMDB environment.
     env: Arc<Environment>,
 
@@ -157,7 +436,7 @@ pub struct ZainoDB {
     config: BlockCacheConfig,
 }
 
-impl ZainoDB {
+impl DbV1 {
     /// Spawns a new [`ZainoDB`] and syncs the FinalisedState to the servers finalised state.
     ///
     /// Uses ReadStateService to fetch chain data if given else uses JsonRPC client.
@@ -649,7 +928,7 @@ impl ZainoDB {
             let tx_index = TxIndex::new(block_height.into(), tx_pos as u16);
 
             // Transparent Outputs: Build Address History
-            ZainoDB::build_transaction_output_histories(
+            DbV1::build_transaction_output_histories(
                 &mut addrhist_outputs_map,
                 tx_index,
                 tx.transparent().outputs().iter().enumerate(),
@@ -677,7 +956,7 @@ impl ZainoDB {
                             {
                                 let prev_output_tx_index =
                                     TxIndex::new(block_height.0, tx_pos as u16);
-                                ZainoDB::build_input_history(
+                                DbV1::build_input_history(
                                     &mut addrhist_inputs_map,
                                     tx_index,
                                     input_index as u16,
@@ -699,7 +978,7 @@ impl ZainoDB {
                         Ok::<(_, _), FinalisedStateError>((prev_output, prev_output_tx_index))
                     })
                 {
-                    ZainoDB::build_input_history(
+                    DbV1::build_input_history(
                         &mut addrhist_inputs_map,
                         tx_index,
                         input_index as u16,
@@ -1043,7 +1322,7 @@ impl ZainoDB {
             let tx_index = TxIndex::new(block_height.into(), tx_pos as u16);
 
             // Transparent Outputs: Build Address History
-            ZainoDB::build_transaction_output_histories(
+            DbV1::build_transaction_output_histories(
                 &mut addrhist_outputs_map,
                 tx_index,
                 tx.transparent().outputs().iter().enumerate(),
@@ -1071,7 +1350,7 @@ impl ZainoDB {
                             {
                                 let prev_output_tx_index =
                                     TxIndex::new(block_height.0, tx_pos as u16);
-                                ZainoDB::build_input_history(
+                                DbV1::build_input_history(
                                     &mut addrhist_inputs_map,
                                     tx_index,
                                     input_index as u16,
@@ -1102,7 +1381,7 @@ impl ZainoDB {
                         Ok::<(_, _), FinalisedStateError>((prev_output, prev_output_tx_index))
                     })
                 {
-                    ZainoDB::build_input_history(
+                    DbV1::build_input_history(
                         &mut addrhist_inputs_map,
                         tx_index,
                         input_index as u16,
@@ -2522,12 +2801,12 @@ impl ZainoDB {
 
     // *** DbReader creation ***
 
-    /// Create a read-only facade backed by *this* live database.
-    pub(crate) fn to_reader(self: &Arc<Self>) -> DbReader {
-        DbReader {
-            inner: Arc::clone(self),
-        }
-    }
+    // /// Create a read-only facade backed by *this* live database.
+    // pub(crate) fn to_reader(self: &Arc<Self>) -> DbReader {
+    //     DbReader {
+    //         inner: Arc::clone(self),
+    //     }
+    // }
 
     // *** Internal DB validation / varification ***
 
@@ -3052,13 +3331,13 @@ impl ZainoDB {
 
                     let meta = stored.item;
 
-                    if meta.version.version != DB_SCHEMA_V1.version {
+                    if meta.version != DB_METADATA_V1.version {
                         return Err(FinalisedStateError::Custom(format!(
                             "unsupported schema version {} (expected v{})",
-                            meta.version.version, DB_SCHEMA_V1.version
+                            meta.version, DB_METADATA_V1.version
                         )));
                     }
-                    if meta.version.schema_hash != DB_SCHEMA_V1.schema_hash {
+                    if meta.schema_hash != DB_METADATA_V1.schema_hash {
                         return Err(FinalisedStateError::Custom(
                         "schema hash mismatch – db_schema_v1.txt edited without bumping version"
                             .into(),
@@ -3068,12 +3347,7 @@ impl ZainoDB {
 
                 // *** Fresh DB (key not found) ***
                 Err(lmdb::Error::NotFound) => {
-                    let entry = StoredEntryFixed::new(
-                        b"metadata",
-                        DbMetadata {
-                            version: DB_SCHEMA_V1,
-                        },
-                    );
+                    let entry = StoredEntryFixed::new(b"metadata", DB_METADATA_V1);
                     txn.put(
                         self.metadata,
                         b"metadata",
@@ -3798,592 +4072,10 @@ impl ZainoDB {
     }
 }
 
-impl Drop for ZainoDB {
+impl Drop for DbV1 {
     fn drop(&mut self) {
         if let Some(handle) = self.db_handler.take() {
             handle.abort(); // cannot await here
         }
     }
-}
-
-// *** ZainoDB Reader ***
-
-/// Immutable view onto an already-running [`ZainoDB`].
-///
-/// * Carries a plain reference with the same lifetime as the parent DB,
-///   therefore:
-///   * absolutely no cloning / ARC-ing of LMDB handles,
-///   * compile-time guarantee that the reader cannot mutate state.
-pub(crate) struct DbReader {
-    inner: Arc<ZainoDB>,
-}
-
-impl DbReader {
-    /// Returns the status of the serving ZainoDB.
-    pub(crate) async fn status(&self) -> StatusType {
-        self.inner.status().await
-    }
-
-    /// Returns the greatest `Height` stored in `headers`
-    /// (`None` if the DB is still empty).
-    pub(crate) async fn tip_height(&self) -> Result<Option<Height>, FinalisedStateError> {
-        self.inner.tip_height().await
-    }
-
-    /// Awaits untile the DB returns a Ready status.
-    pub(crate) async fn wait_until_ready(&self) {
-        self.inner.wait_until_ready().await
-    }
-
-    /// Fetch the block height in the main chain for a given block hash.
-    pub(crate) async fn get_block_height_by_hash(
-        &self,
-        hash: Hash,
-    ) -> Result<Height, FinalisedStateError> {
-        self.inner.get_block_height_by_hash(hash).await
-    }
-
-    /// Fetch the height range for the given block hashes.
-    pub(crate) async fn get_block_range_by_hash(
-        &self,
-        start_hash: Hash,
-        end_hash: Hash,
-    ) -> Result<(Height, Height), FinalisedStateError> {
-        self.inner
-            .get_block_range_by_hash(start_hash, end_hash)
-            .await
-    }
-
-    /// Fetch the TxIndex for the given txid, transaction data is indexed by Txidex internally.
-    pub(crate) async fn get_tx_index(
-        &self,
-        txid: &Hash,
-    ) -> Result<Option<TxIndex>, FinalisedStateError> {
-        self.inner.get_tx_index(txid).await
-    }
-
-    /// Fetch block header data by height.
-    pub(crate) async fn get_block_header_data(
-        &self,
-        height: Height,
-    ) -> Result<BlockHeaderData, FinalisedStateError> {
-        self.inner.get_block_header_data(height).await
-    }
-
-    /// Fetches block headers for the given height range.
-    ///
-    /// Uses cursor based fetch.
-    pub(crate) async fn get_block_range_headers(
-        &self,
-        start: Height,
-        end: Height,
-    ) -> Result<Vec<BlockHeaderData>, FinalisedStateError> {
-        self.inner.get_block_range_headers(start, end).await
-    }
-
-    /// Fetch the txid bytes for a given TxIndex.
-    ///
-    /// This uses an optimized lookup without decoding the full TxidList.
-    pub(crate) async fn get_txid(&self, tx_index: TxIndex) -> Result<Hash, FinalisedStateError> {
-        self.inner.get_txid(tx_index).await
-    }
-
-    /// Fetch block txids by height.
-    pub(crate) async fn get_block_txids(
-        &self,
-        height: Height,
-    ) -> Result<TxidList, FinalisedStateError> {
-        self.inner.get_block_txids(height).await
-    }
-
-    /// Fetches block txids for the given height range.
-    ///
-    /// Uses cursor based fetch.
-    pub(crate) async fn get_block_range_txids(
-        &self,
-        start: Height,
-        end: Height,
-    ) -> Result<Vec<TxidList>, FinalisedStateError> {
-        self.inner.get_block_range_txids(start, end).await
-    }
-
-    /// Fetch the serialized TransparentCompactTx for the given TxIndex, if present.
-    ///
-    /// This uses an optimized lookup without decoding the full TxidList.
-    pub(crate) async fn get_transparent(
-        &self,
-        tx_index: TxIndex,
-    ) -> Result<Option<TransparentCompactTx>, FinalisedStateError> {
-        self.inner.get_transparent(tx_index).await
-    }
-
-    /// Fetch block transparent transaction data by height.
-    pub(crate) async fn get_block_transparent(
-        &self,
-        height: Height,
-    ) -> Result<TransparentTxList, FinalisedStateError> {
-        self.inner.get_block_transparent(height).await
-    }
-
-    /// Fetches block transparent tx data for the given height range.
-    ///
-    /// Uses cursor based fetch.
-    pub(crate) async fn get_block_range_transparent(
-        &self,
-        start: Height,
-        end: Height,
-    ) -> Result<Vec<TransparentTxList>, FinalisedStateError> {
-        self.inner.get_block_range_transparent(start, end).await
-    }
-
-    /// Fetch the serialized SaplingCompactTx for the given TxIndex, if present.
-    ///
-    /// This uses an optimized lookup without decoding the full TxidList.
-    pub(crate) async fn get_sapling(
-        &self,
-        tx_index: TxIndex,
-    ) -> Result<Option<SaplingCompactTx>, FinalisedStateError> {
-        self.inner.get_sapling(tx_index).await
-    }
-
-    /// Fetch block sapling transaction data by height.
-    pub(crate) async fn get_block_sapling(
-        &self,
-        height: Height,
-    ) -> Result<SaplingTxList, FinalisedStateError> {
-        self.inner.get_block_sapling(height).await
-    }
-
-    /// Fetches block sapling tx data for the given height range.
-    ///
-    /// Uses cursor based fetch.
-    pub(crate) async fn get_block_range_sapling(
-        &self,
-        start: Height,
-        end: Height,
-    ) -> Result<Vec<SaplingTxList>, FinalisedStateError> {
-        self.inner.get_block_range_sapling(start, end).await
-    }
-
-    /// Fetch the serialized OrchardCompactTx for the given TxIndex, if present.
-    ///
-    /// This uses an optimized lookup without decoding the full TxidList.
-    pub(crate) async fn get_orchard(
-        &self,
-        tx_index: TxIndex,
-    ) -> Result<Option<OrchardCompactTx>, FinalisedStateError> {
-        self.inner.get_orchard(tx_index).await
-    }
-
-    /// Fetch block orchard transaction data by height.
-    pub(crate) async fn get_block_orchard(
-        &self,
-        height: Height,
-    ) -> Result<OrchardTxList, FinalisedStateError> {
-        self.inner.get_block_orchard(height).await
-    }
-
-    /// Fetches block orchard tx data for the given height range.
-    ///
-    /// Uses cursor based fetch.
-    pub(crate) async fn get_block_range_orchard(
-        &self,
-        start: Height,
-        end: Height,
-    ) -> Result<Vec<OrchardTxList>, FinalisedStateError> {
-        self.inner.get_block_range_orchard(start, end).await
-    }
-
-    /// Fetch block commitment tree data by height.
-    pub(crate) async fn get_block_commitment_tree_data(
-        &self,
-        height: Height,
-    ) -> Result<CommitmentTreeData, FinalisedStateError> {
-        self.inner.get_block_commitment_tree_data(height).await
-    }
-
-    /// Fetches block commitment tree data for the given height range.
-    ///
-    /// Uses cursor based fetch.
-    pub(crate) async fn get_block_range_commitment_tree_data(
-        &self,
-        start: Height,
-        end: Height,
-    ) -> Result<Vec<CommitmentTreeData>, FinalisedStateError> {
-        self.inner
-            .get_block_range_commitment_tree_data(start, end)
-            .await
-    }
-
-    /// Fetch the `TxIndex` that spent a given outpoint, if any.
-    ///
-    /// Returns:
-    /// - `Ok(Some(TxIndex))` if the outpoint is spent.
-    /// - `Ok(None)` if no entry exists (not spent or not known).
-    /// - `Err(...)` on deserialization or DB error.
-    pub(crate) async fn get_outpoint_spender(
-        &self,
-        outpoint: Outpoint,
-    ) -> Result<Option<TxIndex>, FinalisedStateError> {
-        self.inner.get_outpoint_spender(outpoint).await
-    }
-
-    /// Fetch the `TxIndex` entries for a batch of outpoints.
-    ///
-    /// For each input:
-    /// - Returns `Some(TxIndex)` if spent,
-    /// - `None` if not found,
-    /// - or returns `Err` immediately if any DB or decode error occurs.
-    pub(crate) async fn get_outpoint_spenders(
-        &self,
-        outpoints: Vec<Outpoint>,
-    ) -> Result<Vec<Option<TxIndex>>, FinalisedStateError> {
-        self.inner.get_outpoint_spenders(outpoints).await
-    }
-
-    /// Fetch all address history records for a given transparent address.
-    ///
-    /// Returns:
-    /// - `Ok(Some(records))` if one or more valid records exist,
-    /// - `Ok(None)` if no records exist (not an error),
-    /// - `Err(...)` if any decoding or DB error occurs.
-    pub(crate) async fn addr_records(
-        &self,
-        addr_script: AddrScript,
-    ) -> Result<Option<Vec<AddrEventBytes>>, FinalisedStateError> {
-        self.inner.addr_records(addr_script).await
-    }
-
-    /// Fetch all address history records for a given address and TxIndex.
-    ///
-    /// Returns:
-    /// - `Ok(Some(records))` if one or more matching records are found at that index,
-    /// - `Ok(None)` if no matching records exist (not an error),
-    /// - `Err(...)` on decode or DB failure.
-    pub(crate) async fn addr_and_index_records(
-        &self,
-        addr_script: AddrScript,
-        tx_index: TxIndex,
-    ) -> Result<Option<Vec<AddrEventBytes>>, FinalisedStateError> {
-        self.inner
-            .addr_and_index_records(addr_script, tx_index)
-            .await
-    }
-
-    /// Fetch all distinct `TxIndex` values for `addr_script` within the
-    /// height range `[start_height, end_height]` (inclusive).
-    ///
-    /// Returns:
-    /// - `Ok(Some(vec))` if one or more matching records are found,
-    /// - `Ok(None)` if no matches found (not an error),
-    /// - `Err(...)` on decode or DB failure.
-    pub(crate) async fn addr_tx_indexes_by_range(
-        &self,
-        addr_script: AddrScript,
-        start_height: Height,
-        end_height: Height,
-    ) -> Result<Option<Vec<TxIndex>>, FinalisedStateError> {
-        self.inner
-            .addr_tx_indexes_by_range(addr_script, start_height, end_height)
-            .await
-    }
-
-    /// Fetch all UTXOs (unspent mined outputs) for `addr_script` within the
-    /// height range `[start_height, end_height]` (inclusive).
-    ///
-    /// Each entry is `(TxIndex, vout, value)`.
-    ///
-    /// Returns:
-    /// - `Ok(Some(vec))` if one or more UTXOs are found,
-    /// - `Ok(None)` if none found (not an error),
-    /// - `Err(...)` on decode or DB failure.
-    pub(crate) async fn addr_utxos_by_range(
-        &self,
-        addr_script: AddrScript,
-        start_height: Height,
-        end_height: Height,
-    ) -> Result<Option<Vec<(TxIndex, u16, u64)>>, FinalisedStateError> {
-        self.inner
-            .addr_utxos_by_range(addr_script, start_height, end_height)
-            .await
-    }
-
-    /// Computes the transparent balance change for `addr_script` over the
-    /// height range `[start_height, end_height]` (inclusive).
-    ///
-    /// Includes:
-    /// - `+value` for mined outputs
-    /// - `−value` for spent inputs
-    ///
-    /// Returns the signed net value as `i64`, or error on failure.
-    pub(crate) async fn addr_balance_by_range(
-        &self,
-        addr_script: AddrScript,
-        start_height: Height,
-        end_height: Height,
-    ) -> Result<i64, FinalisedStateError> {
-        self.inner
-            .addr_balance_by_range(addr_script, start_height, end_height)
-            .await
-    }
-
-    /// Returns the ChainBlock for the given Height.
-    ///
-    /// TODO: Add separate range fetch method!
-    pub(crate) async fn get_chain_block(
-        &self,
-        height: Height,
-    ) -> Result<ChainBlock, FinalisedStateError> {
-        self.inner.get_chain_block(height).await
-    }
-
-    /// Returns the CompactBlock for the given Height.
-    ///
-    /// TODO: Add separate range fetch method!
-    pub(crate) async fn get_compact_block(
-        &self,
-        height: Height,
-    ) -> Result<zaino_proto::proto::compact_formats::CompactBlock, FinalisedStateError> {
-        self.inner.get_compact_block(height).await
-    }
-
-    /// Fetch database metadata.
-    pub(crate) async fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
-        self.inner.get_metadata().await
-    }
-}
-
-// *** DB validation and varification ***
-
-/// A fixed length database entry.
-/// This is an important distinction for correct usage of DUP_SORT and DUP_FIXED
-/// LMDB database flags.
-///
-/// Encoded Format:
-///
-/// ┌─────── byte 0 ───────┬───── byte 1 ─────┬───── T::raw_len() bytes ──────┬─── 32 bytes ────┐
-/// │ StoredEntry version  │  Record version  │             Body              │ B2B256 hash     │
-/// └──────────────────────┴──────────────────┴───────────────────────────────┴─────────────────┘
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StoredEntryFixed<T: ZainoVersionedSerialise + FixedEncodedLen> {
-    /// Inner record
-    pub item: T,
-    /// Entry checksum
-    pub checksum: [u8; 32],
-}
-
-impl<T: ZainoVersionedSerialise + FixedEncodedLen> StoredEntryFixed<T> {
-    /// Create a new entry, hashing `key || encoded_item`.
-    pub fn new<K: AsRef<[u8]>>(key: K, item: T) -> Self {
-        let body = {
-            let mut v = Vec::with_capacity(T::VERSIONED_LEN);
-            item.serialize(&mut v).unwrap();
-            v
-        };
-        let checksum = Self::blake2b256(&[key.as_ref(), &body].concat());
-        Self { item, checksum }
-    }
-
-    /// Verify checksum given the DB key.
-    /// Returns `true` if `self.checksum == blake2b256(key || item.serialize())`.
-    pub fn verify<K: AsRef<[u8]>>(&self, key: K) -> bool {
-        let body = {
-            let mut v = Vec::with_capacity(T::VERSIONED_LEN);
-            self.item.serialize(&mut v).unwrap();
-            v
-        };
-        let candidate = Self::blake2b256(&[key.as_ref(), &body].concat());
-        candidate == self.checksum
-    }
-
-    /// Returns a reference to the inner item.
-    pub fn inner(&self) -> &T {
-        &self.item
-    }
-
-    /// Computes a BLAKE2b-256 checksum.
-    fn blake2b256(data: &[u8]) -> [u8; 32] {
-        let mut hasher = Blake2bVar::new(32).expect("Failed to create hasher");
-        hasher.update(data);
-        let mut output = [0u8; 32];
-        hasher
-            .finalize_variable(&mut output)
-            .expect("Failed to finalize hash");
-        output
-    }
-}
-
-impl<T: ZainoVersionedSerialise + FixedEncodedLen> ZainoVersionedSerialise for StoredEntryFixed<T> {
-    const VERSION: u8 = version::V1;
-
-    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        self.item.serialize(&mut *w)?;
-        write_fixed_le::<32, _>(&mut *w, &self.checksum)
-    }
-
-    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let mut body = vec![0u8; T::VERSIONED_LEN];
-        r.read_exact(&mut body)?;
-        let item = T::deserialize(&body[..])?;
-
-        let checksum = read_fixed_le::<32, _>(r)?;
-        Ok(Self { item, checksum })
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
-    }
-}
-
-impl<T: ZainoVersionedSerialise + FixedEncodedLen> FixedEncodedLen for StoredEntryFixed<T> {
-    const ENCODED_LEN: usize = T::VERSIONED_LEN + 32;
-}
-
-/// Variable-length database value.
-/// Layout (little-endian unless noted):
-///
-/// ┌────── byte 0 ───────┬─────── CompactSize(len) ─────┬──── 1 byte ────┬── len - 1 bytes ───┬─ 32 bytes ─┐
-/// │ StoredEntry version │ (length of item.serialize()) │ Record version │        Body        │    Hash    │
-/// └─────────────────────┴──────────────────────────────┴────────────────┴────────────────────┴────────────┘
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StoredEntryVar<T: ZainoVersionedSerialise> {
-    /// Inner record
-    pub item: T,
-    /// Entry checksum
-    pub checksum: [u8; 32],
-}
-
-impl<T: ZainoVersionedSerialise> StoredEntryVar<T> {
-    /// Create a new entry, hashing `encoded_key || encoded_item`.
-    pub fn new<K: AsRef<[u8]>>(key: K, item: T) -> Self {
-        let body = {
-            let mut v = Vec::new();
-            item.serialize(&mut v).unwrap();
-            v
-        };
-        let checksum = Self::blake2b256(&[key.as_ref(), &body].concat());
-        Self { item, checksum }
-    }
-
-    /// Verify checksum given the DB key.
-    /// Returns `true` if `self.checksum == blake2b256(key || item.serialize())`.
-    pub fn verify<K: AsRef<[u8]>>(&self, key: K) -> bool {
-        let mut body = Vec::new();
-        self.item.serialize(&mut body).unwrap();
-        let candidate = Self::blake2b256(&[key.as_ref(), &body].concat());
-        candidate == self.checksum
-    }
-
-    /// Returns a reference to the inner item.
-    pub fn inner(&self) -> &T {
-        &self.item
-    }
-
-    /// Computes a BLAKE2b-256 checksum.
-    fn blake2b256(data: &[u8]) -> [u8; 32] {
-        let mut hasher = Blake2bVar::new(32).expect("Failed to create hasher");
-        hasher.update(data);
-        let mut output = [0u8; 32];
-        hasher
-            .finalize_variable(&mut output)
-            .expect("Failed to finalize hash");
-        output
-    }
-}
-
-impl<T: ZainoVersionedSerialise> ZainoVersionedSerialise for StoredEntryVar<T> {
-    const VERSION: u8 = version::V1;
-
-    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        let mut body = Vec::new();
-        self.item.serialize(&mut body)?;
-
-        CompactSize::write(&mut *w, body.len())?;
-        w.write_all(&body)?;
-        write_fixed_le::<32, _>(&mut *w, &self.checksum)
-    }
-
-    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let len = CompactSize::read(&mut *r)? as usize;
-
-        let mut body = vec![0u8; len];
-        r.read_exact(&mut body)?;
-        let item = T::deserialize(&body[..])?;
-
-        let checksum = read_fixed_le::<32, _>(r)?;
-        Ok(Self { item, checksum })
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
-    }
-}
-
-/// Top-level database metadata entry, storing the current schema version.
-///
-/// Stored under the fixed key `"metadata"` in the LMDB metadata database.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DbMetadata {
-    /// Encodes the version and schema hash.
-    pub version: DbVersion,
-}
-
-impl ZainoVersionedSerialise for DbMetadata {
-    const VERSION: u8 = version::V1;
-
-    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        self.version.serialize(&mut *w)
-    }
-
-    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let version = DbVersion::deserialize(&mut *r)?;
-        Ok(DbMetadata { version })
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
-    }
-}
-
-/* DbMetadata: its body is one *versioned* DbVersion (36 + 1 tag) = 37 */
-impl FixedEncodedLen for DbMetadata {
-    const ENCODED_LEN: usize = DbVersion::VERSIONED_LEN;
-}
-
-/// Database schema version information.
-///
-/// This is used for schema migration safety and compatibility checks.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DbVersion {
-    /// Monotonically increasing version number (e.g., 1, 2, ...)
-    pub version: u32,
-    /// BLAKE2b-256 hash of the schema definition (includes struct layout, types, etc.)
-    pub schema_hash: [u8; 32],
-}
-
-impl ZainoVersionedSerialise for DbVersion {
-    const VERSION: u8 = version::V1;
-
-    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        write_u32_le(&mut *w, self.version)?;
-        write_fixed_le::<32, _>(&mut *w, &self.schema_hash)
-    }
-
-    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let version = read_u32_le(&mut *r)?;
-        let schema_hash = read_fixed_le::<32, _>(&mut *r)?;
-        Ok(DbVersion {
-            version,
-            schema_hash,
-        })
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
-    }
-}
-
-/* DbVersion: body = 4-byte u32 + 32-byte hash - 36 bytes */
-impl FixedEncodedLen for DbVersion {
-    const ENCODED_LEN: usize = 4 + 32;
 }

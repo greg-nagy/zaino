@@ -109,6 +109,7 @@ hex = "0.4"
 toml = "0.5"
 primitive-types = "0.13"
 bs58 = "0.5"
+bitflags = "2.9"
 
 # Test
 portpicker = "0.1"

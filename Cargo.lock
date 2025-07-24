@@ -5866,6 +5866,7 @@ version = "0.1.2"
 dependencies = [
  "arc-swap",
  "async-trait",
+ "bitflags 2.9.1",
  "blake2",
  "bs58",
  "byteorder",
