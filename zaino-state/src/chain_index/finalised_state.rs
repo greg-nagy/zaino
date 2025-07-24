@@ -31,21 +31,35 @@ pub struct ZainoDB {
 
 impl ZainoDB {
     // ***** Db Control *****
-    pub(crate) async fn spawn(cfg: BlockCacheConfig) -> Result<Self, FinalisedStateError> {
-        // TODO: remove path, look in cfg..
-        let meta = Self::peek_metadata(&cfg.db_path).await?;
-        let caps = meta.version.capability();
 
-        let db: Arc<dyn DbCore + Send + Sync> = match meta.version.major() {
-            1 => Arc::new(DbV1::spawn(&cfg).await?) as _,
-            _ => {
-                return Err(FinalisedStateError::Custom(
-                    "unsupported version found".to_string(),
-                ))
+    pub(crate) async fn spawn(cfg: BlockCacheConfig) -> Result<Self, FinalisedStateError> {
+        let meta_opt = Self::peek_metadata(&cfg.db_path).await?;
+
+        let (backend, caps): (Arc<dyn DbCore + Send + Sync>, Capability) = match meta_opt {
+            Some(meta) => {
+                let caps = meta.version.capability();
+                let db: Arc<dyn DbCore + Send + Sync> = match meta.version.major() {
+                    1 => Arc::new(DbV1::spawn(&cfg).await?) as _,
+                    _ => {
+                        return Err(FinalisedStateError::Custom(format!(
+                            "unsupported version {}",
+                            meta.version
+                        )))
+                    }
+                };
+                (db, caps)
+            }
+            None => {
+                let db = Arc::new(DbV1::spawn(&cfg).await?) as _;
+                (db, Capability::LATEST)
             }
         };
 
-        Ok(Self { db, caps, cfg })
+        Ok(Self {
+            db: backend,
+            caps,
+            cfg,
+        })
     }
 
     pub(crate) async fn shutdown(&self) -> Result<(), FinalisedStateError> {
@@ -71,20 +85,39 @@ impl ZainoDB {
         }
     }
 
-    async fn peek_metadata(path: &Path) -> Result<DbMetadata, FinalisedStateError> {
-        let env = Environment::new()
+    /// Try to read the metadata entry.
+    ///
+    /// * `Ok(Some(meta))` – DB exists, metadata decoded.
+    /// * `Ok(None)`      – directory or key is missing ⇒ fresh DB.
+    /// * `Err(e)`        – any other LMDB / decode failure.
+    async fn peek_metadata(path: &Path) -> Result<Option<DbMetadata>, FinalisedStateError> {
+        if !path.exists() {
+            return Ok(None); // brand-new DB
+        }
+
+        let env = match Environment::new()
             .set_max_dbs(4)
             .set_flags(EnvironmentFlags::READ_ONLY)
             .open(path)
-            .map_err(FinalisedStateError::LmdbError)?;
+        {
+            Ok(env) => env,
+            Err(lmdb::Error::Other(2)) => return Ok(None),
+            Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+        };
 
         tokio::task::block_in_place(|| {
-            let meta_dbi = env.open_db(Some("metadata"))?;
+            let meta_dbi = env.open_db(Some("metadata"))?; // if DBI missing, lmdb::NotFound
             let txn = env.begin_ro_txn()?;
-            let raw = txn.get(meta_dbi, b"metadata")?;
-            let entry = StoredEntryFixed::<DbMetadata>::from_bytes(raw)
-                .map_err(|e| FinalisedStateError::Custom(format!("metadata decode error: {e}")))?;
-            Ok(entry.item)
+            match txn.get(meta_dbi, b"metadata") {
+                Ok(raw) => {
+                    let entry = StoredEntryFixed::<DbMetadata>::from_bytes(raw).map_err(|e| {
+                        FinalisedStateError::Custom(format!("metadata decode error: {e}"))
+                    })?;
+                    Ok(Some(entry.item))
+                }
+                Err(lmdb::Error::NotFound) => Ok(None), // key missing
+                Err(e) => Err(FinalisedStateError::LmdbError(e)),
+            }
         })
     }
 

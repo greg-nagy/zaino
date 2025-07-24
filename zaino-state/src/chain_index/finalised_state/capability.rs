@@ -47,6 +47,16 @@ bitflags! {
 }
 
 impl Capability {
+    /// All features supported by a **fresh v1** database.
+    pub const LATEST: Capability = Capability::READ_CORE
+        .union(Capability::WRITE_CORE)
+        .union(Capability::BLOCK_CORE_EXT)
+        .union(Capability::BLOCK_TRANSPARENT_EXT)
+        .union(Capability::BLOCK_SHIELDED_EXT)
+        .union(Capability::COMPACT_BLOCK_EXT)
+        .union(Capability::CHAIN_BLOCK_EXT)
+        .union(Capability::TRANSPARENT_HIST_EXT);
+
     #[inline]
     pub const fn has(self, other: Capability) -> bool {
         self.contains(other)

@@ -11,7 +11,8 @@ use zaino_proto::proto::compact_formats::CompactBlock;
 use zebra_rpc::methods::GetAddressUtxos;
 
 use crate::bench::BlockCacheConfig;
-use crate::chain_index::finalised_state::{DbReader, ZainoDB};
+use crate::chain_index::finalised_state::reader::DbReader;
+use crate::chain_index::finalised_state::ZainoDB;
 use crate::error::FinalisedStateError;
 use crate::{
     read_u32_le, AddrScript, ChainBlock, CompactSize, Height, Outpoint,
@@ -115,7 +116,7 @@ async fn spawn_default_zaino_db() -> Result<(TempDir, ZainoDB), FinalisedStateEr
         no_db: false,
     };
 
-    let zaino_db = ZainoDB::spawn(&config).await.unwrap();
+    let zaino_db = ZainoDB::spawn(config).await.unwrap();
 
     Ok((temp_dir, zaino_db))
 }
@@ -154,10 +155,10 @@ async fn load_vectors_db_and_reader() -> (
 
     zaino_db.wait_until_ready().await;
     dbg!(zaino_db.status().await);
-    dbg!(zaino_db.tip_height().await.unwrap()).unwrap();
+    dbg!(zaino_db.db_height().await.unwrap()).unwrap();
 
     let db_reader = zaino_db.to_reader();
-    dbg!(db_reader.tip_height().await.unwrap()).unwrap();
+    dbg!(db_reader.db_height().await.unwrap()).unwrap();
 
     (blocks, faucet, recipient, db_dir, zaino_db, db_reader)
 }
@@ -220,7 +221,7 @@ async fn add_blocks_to_db_and_verify() {
         load_vectors_and_spawn_and_sync_zaino_db().await;
     zaino_db.wait_until_ready().await;
     dbg!(zaino_db.status().await);
-    dbg!(zaino_db.tip_height().await.unwrap());
+    dbg!(zaino_db.db_height().await.unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -238,7 +239,7 @@ async fn delete_blocks_from_db() {
 
     zaino_db.wait_until_ready().await;
     dbg!(zaino_db.status().await);
-    dbg!(zaino_db.tip_height().await.unwrap());
+    dbg!(zaino_db.db_height().await.unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -272,28 +273,28 @@ async fn load_db_from_file() {
     };
 
     {
-        let zaino_db = ZainoDB::spawn(&config).await.unwrap();
+        let zaino_db = ZainoDB::spawn(config.clone()).await.unwrap();
         for (_h, chain_block, _compact_block) in blocks.clone() {
             zaino_db.write_block(chain_block).await.unwrap();
         }
 
         zaino_db.wait_until_ready().await;
         dbg!(zaino_db.status().await);
-        dbg!(zaino_db.tip_height().await.unwrap());
+        dbg!(zaino_db.db_height().await.unwrap());
 
-        dbg!(zaino_db.close().await.unwrap());
+        dbg!(zaino_db.shutdown().await.unwrap());
     }
 
     {
-        let zaino_db_2 = ZainoDB::spawn(&config).await.unwrap();
+        let zaino_db_2 = ZainoDB::spawn(config).await.unwrap();
 
         zaino_db_2.wait_until_ready().await;
         dbg!(zaino_db_2.status().await);
-        let db_height = dbg!(zaino_db_2.tip_height().await.unwrap()).unwrap();
+        let db_height = dbg!(zaino_db_2.db_height().await.unwrap()).unwrap();
 
         assert_eq!(db_height.0, 200);
 
-        dbg!(zaino_db_2.close().await.unwrap());
+        dbg!(zaino_db_2.shutdown().await.unwrap());
     }
 }
 
@@ -304,7 +305,7 @@ async fn try_write_invalid_block() {
 
     zaino_db.wait_until_ready().await;
     dbg!(zaino_db.status().await);
-    dbg!(zaino_db.tip_height().await.unwrap());
+    dbg!(zaino_db.db_height().await.unwrap());
 
     let (height, mut chain_block, _compact_block) = blocks.last().unwrap().clone();
 
@@ -316,7 +317,7 @@ async fn try_write_invalid_block() {
     // TODO: Update with concrete err type.
     assert!(db_err.is_err());
 
-    dbg!(zaino_db.tip_height().await.unwrap());
+    dbg!(zaino_db.db_height().await.unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -326,7 +327,7 @@ async fn try_delete_block_with_invalid_height() {
 
     zaino_db.wait_until_ready().await;
     dbg!(zaino_db.status().await);
-    dbg!(zaino_db.tip_height().await.unwrap());
+    dbg!(zaino_db.db_height().await.unwrap());
 
     let (height, _chain_block, _compact_block) = blocks.last().unwrap().clone();
 
@@ -341,7 +342,7 @@ async fn try_delete_block_with_invalid_height() {
     // TODO: Update with concrete err type.
     assert!(db_err.is_err());
 
-    dbg!(zaino_db.tip_height().await.unwrap());
+    dbg!(zaino_db.db_height().await.unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -350,8 +351,8 @@ async fn create_db_reader() {
         load_vectors_db_and_reader().await;
 
     let (data_height, _, _) = blocks.last().unwrap();
-    let db_height = dbg!(zaino_db.tip_height().await.unwrap()).unwrap();
-    let db_reader_height = dbg!(db_reader.tip_height().await.unwrap()).unwrap();
+    let db_height = dbg!(zaino_db.db_height().await.unwrap()).unwrap();
+    let db_reader_height = dbg!(db_reader.db_height().await.unwrap()).unwrap();
 
     assert_eq!(data_height, &db_height.0);
     assert_eq!(db_height, db_reader_height);
