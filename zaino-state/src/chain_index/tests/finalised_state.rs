@@ -18,8 +18,15 @@ use crate::{
     ZainoVersionedSerialise as _,
 };
 
+#[derive(Clone)]
+struct Block {
+    height: u32,
+    chain_block: ChainBlock,
+    compact_block: CompactBlock,
+}
+
 struct Vectors {
-    blocks: Vec<(u32, ChainBlock, CompactBlock)>,
+    blocks: Vec<Block>,
     faucet: (Vec<String>, Vec<GetAddressUtxos>, u64),
     recipient: (Vec<String>, Vec<GetAddressUtxos>, u64),
 }
@@ -45,7 +52,7 @@ fn read_vectors_from_file<P: AsRef<Path>>(base_dir: P) -> io::Result<Vectors> {
         }
     }
 
-    let mut full_blocks = Vec::<(u32, ChainBlock, CompactBlock)>::with_capacity(chain_blocks.len());
+    let mut full_blocks = Vec::<Block>::with_capacity(chain_blocks.len());
     {
         let mut r = BufReader::new(File::open(base.join("compact_blocks.dat"))?);
         for (h1, chain) in chain_blocks {
@@ -61,7 +68,11 @@ fn read_vectors_from_file<P: AsRef<Path>>(base_dir: P) -> io::Result<Vectors> {
             r.read_exact(&mut buf)?;
             let compact = CompactBlock::decode(&*buf)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-            full_blocks.push((h1, chain, compact));
+            full_blocks.push(Block {
+                height: h1,
+                chain_block: chain,
+                compact_block: compact,
+            });
         }
     }
 
