@@ -232,27 +232,27 @@ async fn vectors_can_be_loaded_and_deserialised() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn add_blocks_to_db_and_verify() {
-    let (_, _, zaino_db) = load_vectors_and_spawn_and_sync_zaino_db().await;
-    zaino_db.wait_until_ready().await;
-    dbg!(zaino_db.status().await);
-    dbg!(zaino_db.tip_height().await.unwrap());
+    let (_, db) = load_vectors_and_spawn_and_sync_zaino_db().await;
+    db.handle.wait_until_ready().await;
+    dbg!(db.handle.status().await);
+    dbg!(db.handle.tip_height().await.unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn delete_blocks_from_db() {
-    let (_, _, zaino_db) = load_vectors_and_spawn_and_sync_zaino_db().await;
+    let (_, db) = load_vectors_and_spawn_and_sync_zaino_db().await;
 
     for h in (1..=200).rev() {
         // dbg!("Deleting block at height {}", h);
-        zaino_db
+        db.handle
             .delete_block_at_height(crate::Height(h))
             .await
             .unwrap();
     }
 
-    zaino_db.wait_until_ready().await;
-    dbg!(zaino_db.status().await);
-    dbg!(zaino_db.tip_height().await.unwrap());
+    db.handle.wait_until_ready().await;
+    dbg!(db.handle.status().await);
+    dbg!(db.handle.tip_height().await.unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -313,39 +313,39 @@ async fn load_db_from_file() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn try_write_invalid_block() {
-    let (Vectors { blocks, .. }, _, zaino_db) = load_vectors_and_spawn_and_sync_zaino_db().await;
+    let (Vectors { blocks, .. }, db) = load_vectors_and_spawn_and_sync_zaino_db().await;
 
-    zaino_db.wait_until_ready().await;
-    dbg!(zaino_db.status().await);
-    dbg!(zaino_db.tip_height().await.unwrap());
+    db.handle.wait_until_ready().await;
+    dbg!(db.handle.status().await);
+    dbg!(db.handle.tip_height().await.unwrap());
 
     let (height, mut chain_block, _compact_block) = blocks.last().unwrap().clone();
 
     chain_block.index.height = Some(crate::Height(height + 1));
     dbg!(chain_block.index.height);
 
-    let db_err = dbg!(zaino_db.write_block(chain_block).await);
+    let db_err = dbg!(db.handle.write_block(chain_block).await);
 
     // TODO: Update with concrete err type.
     assert!(db_err.is_err());
 
-    dbg!(zaino_db.tip_height().await.unwrap());
+    dbg!(db.handle.tip_height().await.unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn try_delete_block_with_invalid_height() {
-    let (Vectors { blocks, .. }, _, zaino_db) = load_vectors_and_spawn_and_sync_zaino_db().await;
+    let (Vectors { blocks, .. }, db) = load_vectors_and_spawn_and_sync_zaino_db().await;
 
-    zaino_db.wait_until_ready().await;
-    dbg!(zaino_db.status().await);
-    dbg!(zaino_db.tip_height().await.unwrap());
+    db.handle.wait_until_ready().await;
+    dbg!(db.handle.status().await);
+    dbg!(db.handle.tip_height().await.unwrap());
 
     let (height, _chain_block, _compact_block) = blocks.last().unwrap().clone();
 
     let delete_height = height - 1;
 
     let db_err = dbg!(
-        zaino_db
+        db.handle
             .delete_block_at_height(crate::Height(delete_height))
             .await
     );
@@ -353,16 +353,16 @@ async fn try_delete_block_with_invalid_height() {
     // TODO: Update with concrete err type.
     assert!(db_err.is_err());
 
-    dbg!(zaino_db.tip_height().await.unwrap());
+    dbg!(db.handle.tip_height().await.unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn create_db_reader() {
-    let (Vectors { blocks, .. }, _, zaino_db, db_reader) = load_vectors_db_and_reader().await;
+    let (vectors, db) = load_vectors_db_and_reader().await;
 
-    let (data_height, _, _) = blocks.last().unwrap();
-    let db_height = dbg!(zaino_db.tip_height().await.unwrap()).unwrap();
-    let db_reader_height = dbg!(db_reader.tip_height().await.unwrap()).unwrap();
+    let (data_height, _, _) = vectors.blocks.last().unwrap();
+    let db_height = dbg!(db.handle.tip_height().await.unwrap()).unwrap();
+    let db_reader_height = dbg!(db.reader.tip_height().await.unwrap()).unwrap();
 
     assert_eq!(data_height, &db_height.0);
     assert_eq!(db_height, db_reader_height);
@@ -372,10 +372,10 @@ async fn create_db_reader() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_chain_blocks() {
-    let (Vectors { blocks, .. }, _, _, db_reader) = load_vectors_db_and_reader().await;
+    let (vectors, db) = load_vectors_db_and_reader().await;
 
-    for (height, chain_block, _) in blocks.iter() {
-        let reader_chain_block = db_reader.get_chain_block(Height(*height)).await.unwrap();
+    for (height, chain_block, _) in vectors.blocks.iter() {
+        let reader_chain_block = db.reader.get_chain_block(Height(*height)).await.unwrap();
         assert_eq!(chain_block, &reader_chain_block);
         println!("ChainBlock at height {} OK", height);
     }
@@ -383,10 +383,10 @@ async fn get_chain_blocks() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_compact_blocks() {
-    let (Vectors { blocks, .. }, _, _, db_reader) = load_vectors_db_and_reader().await;
+    let (vectors, db) = load_vectors_db_and_reader().await;
 
-    for (height, _, compact_block) in blocks.iter() {
-        let reader_compact_block = db_reader.get_compact_block(Height(*height)).await.unwrap();
+    for (height, _, compact_block) in vectors.blocks.iter() {
+        let reader_compact_block = db.reader.get_compact_block(Height(*height)).await.unwrap();
         assert_eq!(compact_block, &reader_compact_block);
         println!("CompactBlock at height {} OK", height);
     }
@@ -394,7 +394,7 @@ async fn get_compact_blocks() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_faucet_txids() {
-    let (Vectors { blocks, faucet, .. }, _, _, db_reader) = load_vectors_db_and_reader().await;
+    let (Vectors { blocks, faucet, .. }, db) = load_vectors_db_and_reader().await;
 
     let start = Height(blocks.first().unwrap().0);
     let end = Height(blocks.last().unwrap().0);
@@ -419,14 +419,15 @@ async fn get_faucet_txids() {
             .collect();
         dbg!(&filtered_block_txids);
 
-        let reader_faucet_tx_indexes = db_reader
+        let reader_faucet_tx_indexes = db
+            .reader
             .addr_tx_indexes_by_range(faucet_addr_script, block_height, block_height)
             .await
             .unwrap()
             .unwrap();
         let mut reader_block_txids = Vec::new();
         for index in reader_faucet_tx_indexes {
-            let txid = db_reader.get_txid(index).await.unwrap();
+            let txid = db.reader.get_txid(index).await.unwrap();
             reader_block_txids.push(txid.to_string());
         }
         dbg!(&reader_block_txids);
@@ -436,14 +437,15 @@ async fn get_faucet_txids() {
     }
 
     println!("Checking full faucet data");
-    let reader_faucet_tx_indexes = db_reader
+    let reader_faucet_tx_indexes = db
+        .reader
         .addr_tx_indexes_by_range(faucet_addr_script, start, end)
         .await
         .unwrap()
         .unwrap();
     let mut reader_faucet_txids = Vec::new();
     for index in reader_faucet_tx_indexes {
-        let txid = db_reader.get_txid(index).await.unwrap();
+        let txid = db.reader.get_txid(index).await.unwrap();
         reader_faucet_txids.push(txid.to_string());
     }
 
@@ -457,9 +459,7 @@ async fn get_recipient_txids() {
         Vectors {
             blocks, recipient, ..
         },
-        _,
-        _,
-        db_reader,
+        db,
     ) = load_vectors_db_and_reader().await;
 
     let start = Height(blocks.first().unwrap().0);
@@ -487,7 +487,8 @@ async fn get_recipient_txids() {
             .collect();
         dbg!(&filtered_block_txids);
 
-        let reader_recipient_tx_indexes = match db_reader
+        let reader_recipient_tx_indexes = match db
+            .reader
             .addr_tx_indexes_by_range(recipient_addr_script, block_height, block_height)
             .await
             .unwrap()
@@ -497,7 +498,7 @@ async fn get_recipient_txids() {
         };
         let mut reader_block_txids = Vec::new();
         for index in reader_recipient_tx_indexes {
-            let txid = db_reader.get_txid(index).await.unwrap();
+            let txid = db.reader.get_txid(index).await.unwrap();
             reader_block_txids.push(txid.to_string());
         }
         dbg!(&reader_block_txids);
@@ -507,7 +508,8 @@ async fn get_recipient_txids() {
     }
 
     println!("Checking full faucet data");
-    let reader_recipient_tx_indexes = db_reader
+    let reader_recipient_tx_indexes = db
+        .reader
         .addr_tx_indexes_by_range(recipient_addr_script, start, end)
         .await
         .unwrap()
@@ -515,7 +517,7 @@ async fn get_recipient_txids() {
 
     let mut reader_recipient_txids = Vec::new();
     for index in reader_recipient_tx_indexes {
-        let txid = db_reader.get_txid(index).await.unwrap();
+        let txid = db.reader.get_txid(index).await.unwrap();
         reader_recipient_txids.push(txid.to_string());
     }
 
@@ -525,7 +527,7 @@ async fn get_recipient_txids() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_faucet_utxos() {
-    let (Vectors { blocks, faucet, .. }, _, _, db_reader) = load_vectors_db_and_reader().await;
+    let (Vectors { blocks, faucet, .. }, db) = load_vectors_db_and_reader().await;
 
     let start = Height(blocks.first().unwrap().0);
     let end = Height(blocks.last().unwrap().0);
@@ -543,7 +545,8 @@ async fn get_faucet_utxos() {
         cleaned_utxos.push((txid.to_string(), output_index.index(), satoshis));
     }
 
-    let reader_faucet_utxo_indexes = db_reader
+    let reader_faucet_utxo_indexes = db
+        .reader
         .addr_utxos_by_range(faucet_addr_script, start, end)
         .await
         .unwrap()
@@ -552,7 +555,7 @@ async fn get_faucet_utxos() {
     let mut reader_faucet_utxos = Vec::new();
 
     for (index, vout, value) in reader_faucet_utxo_indexes {
-        let txid = db_reader.get_txid(index).await.unwrap().to_string();
+        let txid = db.reader.get_txid(index).await.unwrap().to_string();
         reader_faucet_utxos.push((txid, vout as u32, value));
     }
 
@@ -566,9 +569,7 @@ async fn get_recipient_utxos() {
         Vectors {
             blocks, recipient, ..
         },
-        _,
-        _,
-        db_reader,
+        db,
     ) = load_vectors_db_and_reader().await;
 
     let start = Height(blocks.first().unwrap().0);
@@ -587,7 +588,8 @@ async fn get_recipient_utxos() {
         cleaned_utxos.push((txid.to_string(), output_index.index(), satoshis));
     }
 
-    let reader_recipient_utxo_indexes = db_reader
+    let reader_recipient_utxo_indexes = db
+        .reader
         .addr_utxos_by_range(recipient_addr_script, start, end)
         .await
         .unwrap()
@@ -596,7 +598,7 @@ async fn get_recipient_utxos() {
     let mut reader_recipient_utxos = Vec::new();
 
     for (index, vout, value) in reader_recipient_utxo_indexes {
-        let txid = db_reader.get_txid(index).await.unwrap().to_string();
+        let txid = db.reader.get_txid(index).await.unwrap().to_string();
         reader_recipient_utxos.push((txid, vout as u32, value));
     }
 
@@ -612,9 +614,7 @@ async fn get_balance() {
             faucet,
             recipient,
         },
-        _,
-        _,
-        db_reader,
+        db,
     ) = load_vectors_db_and_reader().await;
 
     let start = Height(blocks.first().unwrap().0);
@@ -628,7 +628,8 @@ async fn get_balance() {
     let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
-    let reader_faucet_balance = dbg!(db_reader
+    let reader_faucet_balance = dbg!(db
+        .reader
         .addr_balance_by_range(faucet_addr_script, start, end)
         .await
         .unwrap()) as u64;
@@ -643,7 +644,8 @@ async fn get_balance() {
     let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
-    let reader_recipient_balance = dbg!(db_reader
+    let reader_recipient_balance = dbg!(db
+        .reader
         .addr_balance_by_range(recipient_addr_script, start, end)
         .await
         .unwrap()) as u64;
@@ -653,7 +655,7 @@ async fn get_balance() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn check_faucet_spent_map() {
-    let (Vectors { blocks, faucet, .. }, _, _, db_reader) = load_vectors_db_and_reader().await;
+    let (Vectors { blocks, faucet, .. }, db) = load_vectors_db_and_reader().await;
 
     let (_faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
@@ -672,7 +674,7 @@ async fn check_faucet_spent_map() {
                 if output.script_hash() == faucet_addr_script.hash() {
                     let outpoint = Outpoint::new_from_be(txid, vout_idx as u32);
 
-                    let spender = db_reader.get_outpoint_spender(outpoint).await.unwrap();
+                    let spender = db.reader.get_outpoint_spender(outpoint).await.unwrap();
 
                     faucet_outpoints.push(outpoint);
                     faucet_ouptpoints_spent_status.push(spender);
@@ -690,7 +692,8 @@ async fn check_faucet_spent_map() {
     }
 
     // check full spent outpoints map
-    let faucet_spent_map = db_reader
+    let faucet_spent_map = db
+        .reader
         .get_outpoint_spenders(faucet_outpoints.clone())
         .await
         .unwrap();
@@ -753,9 +756,7 @@ async fn check_recipient_spent_map() {
         Vectors {
             blocks, recipient, ..
         },
-        _,
-        _,
-        db_reader,
+        db,
     ) = load_vectors_db_and_reader().await;
 
     let (_recipient_txids, recipient_utxos, _recipient_balance) = recipient;
@@ -775,7 +776,7 @@ async fn check_recipient_spent_map() {
                 if output.script_hash() == recipient_addr_script.hash() {
                     let outpoint = Outpoint::new_from_be(txid, vout_idx as u32);
 
-                    let spender = db_reader.get_outpoint_spender(outpoint).await.unwrap();
+                    let spender = db.reader.get_outpoint_spender(outpoint).await.unwrap();
 
                     recipient_outpoints.push(outpoint);
                     recipient_ouptpoints_spent_status.push(spender);
@@ -793,7 +794,8 @@ async fn check_recipient_spent_map() {
     }
 
     // check full spent outpoints map
-    let recipient_spent_map = db_reader
+    let recipient_spent_map = db
+        .reader
         .get_outpoint_spenders(recipient_outpoints.clone())
         .await
         .unwrap();
