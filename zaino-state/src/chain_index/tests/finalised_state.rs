@@ -87,7 +87,12 @@ fn load_test_vectors() -> io::Result<Vectors> {
     read_vectors_from_file(&base_dir)
 }
 
-async fn spawn_default_zaino_db() -> Result<(TempDir, ZainoDB), FinalisedStateError> {
+struct DefaultZainoDbProcess {
+    dir: TempDir,
+    handle: ZainoDB,
+}
+
+async fn spawn_default_zaino_db() -> Result<DefaultZainoDbProcess, FinalisedStateError> {
     let temp_dir: TempDir = tempfile::tempdir().unwrap();
     let db_path: PathBuf = temp_dir.path().to_path_buf();
 
@@ -117,35 +122,56 @@ async fn spawn_default_zaino_db() -> Result<(TempDir, ZainoDB), FinalisedStateEr
 
     let zaino_db = ZainoDB::spawn(&config).await.unwrap();
 
-    Ok((temp_dir, zaino_db))
+    Ok(DefaultZainoDbProcess {
+        dir: temp_dir,
+        handle: zaino_db,
+    })
 }
 
-async fn load_vectors_and_spawn_and_sync_zaino_db() -> (Vectors, TempDir, ZainoDB) {
+async fn load_vectors_and_spawn_and_sync_zaino_db() -> (Vectors, DefaultZainoDbProcess) {
     let vectors = load_test_vectors().unwrap();
-    let (db_dir, zaino_db) = spawn_default_zaino_db().await.unwrap();
+    let default_zaino_db = spawn_default_zaino_db().await.unwrap();
     for (_h, chain_block, _compact_block) in vectors.blocks.clone() {
         // dbg!("Writing block at height {}", _h);
         // if _h == 1 {
         //     dbg!(&chain_block);
         // }
-        zaino_db.write_block(chain_block).await.unwrap();
+        default_zaino_db
+            .handle
+            .write_block(chain_block)
+            .await
+            .unwrap();
     }
-    (vectors, db_dir, zaino_db)
+    (vectors, default_zaino_db)
 }
 
-async fn load_vectors_db_and_reader() -> (Vectors, TempDir, std::sync::Arc<ZainoDB>, DbReader) {
-    let (vectors, db_dir, zaino_db) = load_vectors_and_spawn_and_sync_zaino_db().await;
+struct SyncedZainoDbProcess {
+    dir: TempDir,
+    handle: std::sync::Arc<ZainoDB>,
+    reader: DbReader,
+}
 
-    let zaino_db = std::sync::Arc::new(zaino_db);
+async fn load_vectors_db_and_reader() -> (Vectors, SyncedZainoDbProcess) {
+    let (vectors, DefaultZainoDbProcess { dir, handle }) =
+        load_vectors_and_spawn_and_sync_zaino_db().await;
 
-    zaino_db.wait_until_ready().await;
-    dbg!(zaino_db.status().await);
-    dbg!(zaino_db.tip_height().await.unwrap()).unwrap();
+    let handle = std::sync::Arc::new(handle);
 
-    let db_reader = zaino_db.to_reader();
+    handle.wait_until_ready().await;
+    dbg!(handle.status().await);
+    dbg!(handle.tip_height().await.unwrap()).unwrap();
+
+    let db_reader = handle.to_reader();
     dbg!(db_reader.tip_height().await.unwrap()).unwrap();
 
-    (vectors, db_dir, zaino_db, db_reader)
+    (
+        vectors,
+        SyncedZainoDbProcess {
+            dir,
+            handle,
+            reader: db_reader,
+        },
+    )
 }
 
 // *** ZainoDB Tests ***
