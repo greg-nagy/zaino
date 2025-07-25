@@ -715,6 +715,37 @@ impl TransactionData {
     }
 }
 
+// TODO:
+// - v1 / v2: should be merged. Seems that v1 is never present in mainnet?
+// - v3: Overwinter
+// - v4: Sapling (Canopy)
+// - v5: Orchard (NU5)
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum TxVersion {
+    V1,
+    V2,
+    V3,
+    V4,
+    V5,
+}
+
+impl TryFrom<i32> for TxVersion {
+    type Error = ParseError;
+    fn try_from(v: i32) -> Result<Self, Self::Error> {
+        match v {
+            1 => Ok(TxVersion::V1),
+            2 => Ok(TxVersion::V2),
+            3 => Ok(TxVersion::V3),
+            4 => Ok(TxVersion::V4),
+            5 => Ok(TxVersion::V5),
+            _ => Err(ParseError::InvalidData(format!(
+                "Unsupported tx version {}",
+                v
+            ))),
+        }
+    }
+}
+
 /// Zingo-Indexer struct for a full zcash transaction.
 #[derive(Debug, Clone)]
 pub struct FullTransaction {
@@ -734,6 +765,7 @@ impl ParseFromSlice for FullTransaction {
         txid: Option<Vec<Vec<u8>>>,
         tx_version: Option<u32>,
     ) -> Result<(&[u8], Self), ParseError> {
+        todo!("Implement FullTransaction::parse_from_slice");
         let txid = txid.ok_or_else(|| {
             ParseError::InvalidData(
                 "txid must be used for FullTransaction::parse_from_slice".to_string(),
@@ -789,6 +821,41 @@ impl ParseFromSlice for FullTransaction {
 }
 
 impl FullTransaction {
+    pub(crate) fn parse_v1<'a>(
+        data: &'a [u8],
+        txid: &'a [Vec<u8>],
+    ) -> Result<(&'a [u8], Self), ParseError> {
+        todo!()
+    }
+
+    pub(crate) fn parse_v2<'a>(
+        data: &'a [u8],
+        txid: &'a [Vec<u8>],
+    ) -> Result<(&'a [u8], Self), ParseError> {
+        todo!()
+    }
+
+    pub(crate) fn parse_v3<'a>(
+        data: &'a [u8],
+        txid: &'a [Vec<u8>],
+    ) -> Result<(&'a [u8], Self), ParseError> {
+        todo!()
+    }
+
+    pub(crate) fn parse_v4<'a>(
+        data: &'a [u8],
+        txid: &'a [Vec<u8>],
+    ) -> Result<(&'a [u8], Self), ParseError> {
+        todo!()
+    }
+
+    pub(crate) fn parse_v5<'a>(
+        data: &'a [u8],
+        txid: &'a [Vec<u8>],
+    ) -> Result<(&'a [u8], Self), ParseError> {
+        todo!()
+    }
+
     /// Returns overwintered bool
     pub fn f_overwintered(&self) -> bool {
         self.raw_transaction.f_overwintered
