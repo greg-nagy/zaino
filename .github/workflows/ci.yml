@@ -229,7 +229,7 @@ jobs:
         if: env.GITHUB_TOKEN == null
         run: cargo clippy --all-targets -- --deny warnings
 
-      - name: Output clippy to Github
+      - name: Run clippy and annotate PR (internal contributors)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         if: env.GITHUB_TOKEN != null
