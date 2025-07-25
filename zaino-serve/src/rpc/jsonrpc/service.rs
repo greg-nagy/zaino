@@ -53,11 +53,11 @@ pub trait ZcashIndexerRpc {
 
     /// Returns details on the active state of the TX memory pool.
     ///
-    /// zcashd reference: [`getmempoolinfo`](https://zcash.github.io/rpc/getmempoolinfo.html)
+    /// online zcash rpc reference: [`getmempoolinfo`](https://zcash.github.io/rpc/getmempoolinfo.html)
     /// method: post
     /// tags: mempool
     ///
-    /// Original implementation: [`getmempoolinfo`](https://github.com/zcash/zcash/blob/18238d90cd0b810f5b07d5aaa1338126aa128c06/src/rpc/blockchain.cpp#L1555)
+    /// Canonical source code implementation: [`getmempoolinfo`](https://github.com/zcash/zcash/blob/18238d90cd0b810f5b07d5aaa1338126aa128c06/src/rpc/blockchain.cpp#L1555)
     #[method(name = "getmempoolinfo")]
     async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, ErrorObjectOwned>;
 
