@@ -142,14 +142,14 @@ async fn spawn_default_zaino_db() -> Result<DefaultZainoDbProcess, FinalisedStat
 async fn load_vectors_and_spawn_and_sync_zaino_db() -> (Vectors, DefaultZainoDbProcess) {
     let vectors = load_test_vectors().unwrap();
     let default_zaino_db = spawn_default_zaino_db().await.unwrap();
-    for (_h, chain_block, _compact_block) in vectors.blocks.clone() {
+    for block in vectors.blocks.clone() {
         // dbg!("Writing block at height {}", _h);
         // if _h == 1 {
         //     dbg!(&chain_block);
         // }
         default_zaino_db
             .handle
-            .write_block(chain_block)
+            .write_block(block.chain_block)
             .await
             .unwrap();
     }
@@ -201,7 +201,12 @@ async fn vectors_can_be_loaded_and_deserialised() {
         "expected at least one block in test-vectors"
     );
     let mut prev_h: u32 = 0;
-    for (h, chain_block, compact_block) in &blocks {
+    for Block {
+        height: h,
+        chain_block,
+        compact_block,
+    } in &blocks
+    {
         // println!("Checking block at height {h}");
 
         assert_eq!(
@@ -298,8 +303,8 @@ async fn load_db_from_file() {
 
     {
         let zaino_db = ZainoDB::spawn(&config).await.unwrap();
-        for (_h, chain_block, _compact_block) in blocks.clone() {
-            zaino_db.write_block(chain_block).await.unwrap();
+        for block in blocks.clone() {
+            zaino_db.write_block(block.chain_block).await.unwrap();
         }
 
         zaino_db.wait_until_ready().await;
@@ -330,7 +335,11 @@ async fn try_write_invalid_block() {
     dbg!(db.handle.status().await);
     dbg!(db.handle.tip_height().await.unwrap());
 
-    let (height, mut chain_block, _compact_block) = blocks.last().unwrap().clone();
+    let Block {
+        height,
+        mut chain_block,
+        ..
+    } = blocks.last().unwrap().clone();
 
     chain_block.index.height = Some(crate::Height(height + 1));
     dbg!(chain_block.index.height);
@@ -351,7 +360,7 @@ async fn try_delete_block_with_invalid_height() {
     dbg!(db.handle.status().await);
     dbg!(db.handle.tip_height().await.unwrap());
 
-    let (height, _chain_block, _compact_block) = blocks.last().unwrap().clone();
+    let Block { height, .. } = blocks.last().unwrap().clone();
 
     let delete_height = height - 1;
 
@@ -371,11 +380,11 @@ async fn try_delete_block_with_invalid_height() {
 async fn create_db_reader() {
     let (vectors, db) = load_vectors_db_and_reader().await;
 
-    let (data_height, _, _) = vectors.blocks.last().unwrap();
+    let data_height = vectors.blocks.last().unwrap().height;
     let db_height = dbg!(db.handle.tip_height().await.unwrap()).unwrap();
     let db_reader_height = dbg!(db.reader.tip_height().await.unwrap()).unwrap();
 
-    assert_eq!(data_height, &db_height.0);
+    assert_eq!(data_height, db_height.0);
     assert_eq!(db_height, db_reader_height);
 }
 
@@ -385,7 +394,12 @@ async fn create_db_reader() {
 async fn get_chain_blocks() {
     let (vectors, db) = load_vectors_db_and_reader().await;
 
-    for (height, chain_block, _) in vectors.blocks.iter() {
+    for Block {
+        height,
+        chain_block,
+        ..
+    } in vectors.blocks.iter()
+    {
         let reader_chain_block = db.reader.get_chain_block(Height(*height)).await.unwrap();
         assert_eq!(chain_block, &reader_chain_block);
         println!("ChainBlock at height {} OK", height);
@@ -396,10 +410,14 @@ async fn get_chain_blocks() {
 async fn get_compact_blocks() {
     let (vectors, db) = load_vectors_db_and_reader().await;
 
-    for (height, _, compact_block) in vectors.blocks.iter() {
-        let reader_compact_block = db.reader.get_compact_block(Height(*height)).await.unwrap();
-        assert_eq!(compact_block, &reader_compact_block);
-        println!("CompactBlock at height {} OK", height);
+    for block in vectors.blocks.iter() {
+        let reader_compact_block = db
+            .reader
+            .get_compact_block(Height(block.height))
+            .await
+            .unwrap();
+        assert_eq!(block.compact_block, reader_compact_block);
+        println!("CompactBlock at height {} OK", block.height);
     }
 }
 
@@ -407,8 +425,8 @@ async fn get_compact_blocks() {
 async fn get_faucet_txids() {
     let (Vectors { blocks, faucet, .. }, db) = load_vectors_db_and_reader().await;
 
-    let start = Height(blocks.first().unwrap().0);
-    let end = Height(blocks.last().unwrap().0);
+    let start = Height(blocks.first().unwrap().height);
+    let end = Height(blocks.last().unwrap().height);
 
     let (faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
@@ -416,7 +434,12 @@ async fn get_faucet_txids() {
     let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
-    for (height, chain_block, _compact_block) in blocks {
+    for Block {
+        height,
+        chain_block,
+        ..
+    } in blocks
+    {
         println!("Checking faucet txids at height {}", height);
         let block_height = Height(height);
         let block_txids: Vec<String> = chain_block
@@ -473,8 +496,8 @@ async fn get_recipient_txids() {
         db,
     ) = load_vectors_db_and_reader().await;
 
-    let start = Height(blocks.first().unwrap().0);
-    let end = Height(blocks.last().unwrap().0);
+    let start = Height(blocks.first().unwrap().height);
+    let end = Height(blocks.last().unwrap().height);
 
     let (recipient_txids, recipient_utxos, _recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
@@ -482,7 +505,12 @@ async fn get_recipient_txids() {
     let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
-    for (height, chain_block, _compact_block) in blocks {
+    for Block {
+        height,
+        chain_block,
+        ..
+    } in blocks
+    {
         println!("Checking recipient txids at height {}", height);
         let block_height = Height(height);
         let block_txids: Vec<String> = chain_block
@@ -540,8 +568,8 @@ async fn get_recipient_txids() {
 async fn get_faucet_utxos() {
     let (Vectors { blocks, faucet, .. }, db) = load_vectors_db_and_reader().await;
 
-    let start = Height(blocks.first().unwrap().0);
-    let end = Height(blocks.last().unwrap().0);
+    let start = Height(blocks.first().unwrap().height);
+    let end = Height(blocks.last().unwrap().height);
 
     let (_faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
@@ -583,8 +611,8 @@ async fn get_recipient_utxos() {
         db,
     ) = load_vectors_db_and_reader().await;
 
-    let start = Height(blocks.first().unwrap().0);
-    let end = Height(blocks.last().unwrap().0);
+    let start = Height(blocks.first().unwrap().height);
+    let end = Height(blocks.last().unwrap().height);
 
     let (_recipient_txids, recipient_utxos, _recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
@@ -628,8 +656,8 @@ async fn get_balance() {
         db,
     ) = load_vectors_db_and_reader().await;
 
-    let start = Height(blocks.first().unwrap().0);
-    let end = Height(blocks.last().unwrap().0);
+    let start = Height(blocks.first().unwrap().height);
+    let end = Height(blocks.last().unwrap().height);
 
     // Check faucet
 
@@ -677,7 +705,7 @@ async fn check_faucet_spent_map() {
     // collect faucet outpoints
     let mut faucet_outpoints = Vec::new();
     let mut faucet_ouptpoints_spent_status = Vec::new();
-    for (_height, chain_block, _compact_block) in blocks.clone() {
+    for Block { chain_block, .. } in blocks.clone() {
         for tx in chain_block.transactions() {
             let txid = tx.txid();
             let outputs = tx.transparent().outputs();
@@ -720,7 +748,7 @@ async fn check_faucet_spent_map() {
         );
         match spender_option {
             Some(spender_index) => {
-                let spender_tx = blocks.iter().find_map(|(_h, chain_block, _cb)| {
+                let spender_tx = blocks.iter().find_map(|Block { chain_block, .. }| {
                     chain_block.transactions().iter().find(|tx| {
                         let (block_height, tx_idx) =
                             (spender_index.block_index(), spender_index.tx_index());
@@ -779,7 +807,7 @@ async fn check_recipient_spent_map() {
     // collect faucet outpoints
     let mut recipient_outpoints = Vec::new();
     let mut recipient_ouptpoints_spent_status = Vec::new();
-    for (_height, chain_block, _compact_block) in blocks.clone() {
+    for Block { chain_block, .. } in blocks.clone() {
         for tx in chain_block.transactions() {
             let txid = tx.txid();
             let outputs = tx.transparent().outputs();
@@ -822,7 +850,7 @@ async fn check_recipient_spent_map() {
         );
         match spender_option {
             Some(spender_index) => {
-                let spender_tx = blocks.iter().find_map(|(_h, chain_block, _cb)| {
+                let spender_tx = blocks.iter().find_map(|Block { chain_block, .. }| {
                     chain_block.transactions().iter().find(|tx| {
                         let (block_height, tx_idx) =
                             (spender_index.block_index(), spender_index.tx_index());
