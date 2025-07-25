@@ -220,6 +220,7 @@ jobs:
 
       - name: Run clippy with console output
         run: cargo clippy --all-targets -- --deny warnings
+        continue-on-error: true
 
       - name: Output clippy to Github
         uses: actions-rs/clippy-check@v1
