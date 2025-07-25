@@ -18,14 +18,14 @@ use crate::{
     ZainoVersionedSerialise as _,
 };
 
+struct Vectors {
+    blocks: Vec<(u32, ChainBlock, CompactBlock)>,
+    faucet: (Vec<String>, Vec<GetAddressUtxos>, u64),
+    recipient: (Vec<String>, Vec<GetAddressUtxos>, u64),
+}
+
 /// Reads test data from file.
-fn read_vectors_from_file<P: AsRef<Path>>(
-    base_dir: P,
-) -> io::Result<(
-    Vec<(u32, ChainBlock, CompactBlock)>,
-    (Vec<String>, Vec<GetAddressUtxos>, u64),
-    (Vec<String>, Vec<GetAddressUtxos>, u64),
-)> {
+fn read_vectors_from_file<P: AsRef<Path>>(base_dir: P) -> io::Result<Vectors> {
     let base = base_dir.as_ref();
 
     let mut chain_blocks = Vec::<(u32, ChainBlock)>::new();
@@ -70,14 +70,14 @@ fn read_vectors_from_file<P: AsRef<Path>>(
     let recipient = serde_json::from_reader(File::open(base.join("recipient_data.json"))?)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-    Ok((full_blocks, faucet, recipient))
+    Ok(Vectors {
+        blocks: full_blocks,
+        faucet,
+        recipient,
+    })
 }
 
-fn load_test_vectors() -> io::Result<(
-    Vec<(u32, ChainBlock, CompactBlock)>,
-    (Vec<String>, Vec<GetAddressUtxos>, u64),
-    (Vec<String>, Vec<GetAddressUtxos>, u64),
-)> {
+fn load_test_vectors() -> io::Result<Vectors> {
     // <repo>/zaino-state/src/chain_index/tests/vectors
     let base_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("src")
@@ -120,35 +120,21 @@ async fn spawn_default_zaino_db() -> Result<(TempDir, ZainoDB), FinalisedStateEr
     Ok((temp_dir, zaino_db))
 }
 
-async fn load_vectors_and_spawn_and_sync_zaino_db() -> (
-    Vec<(u32, ChainBlock, CompactBlock)>,
-    (Vec<String>, Vec<GetAddressUtxos>, u64),
-    (Vec<String>, Vec<GetAddressUtxos>, u64),
-    TempDir,
-    ZainoDB,
-) {
-    let (blocks, faucet, recipient) = load_test_vectors().unwrap();
+async fn load_vectors_and_spawn_and_sync_zaino_db() -> (Vectors, TempDir, ZainoDB) {
+    let vectors = load_test_vectors().unwrap();
     let (db_dir, zaino_db) = spawn_default_zaino_db().await.unwrap();
-    for (_h, chain_block, _compact_block) in blocks.clone() {
+    for (_h, chain_block, _compact_block) in vectors.blocks.clone() {
         // dbg!("Writing block at height {}", _h);
         // if _h == 1 {
         //     dbg!(&chain_block);
         // }
         zaino_db.write_block(chain_block).await.unwrap();
     }
-    (blocks, faucet, recipient, db_dir, zaino_db)
+    (vectors, db_dir, zaino_db)
 }
 
-async fn load_vectors_db_and_reader() -> (
-    Vec<(u32, ChainBlock, CompactBlock)>,
-    (Vec<String>, Vec<GetAddressUtxos>, u64),
-    (Vec<String>, Vec<GetAddressUtxos>, u64),
-    TempDir,
-    std::sync::Arc<ZainoDB>,
-    DbReader,
-) {
-    let (blocks, faucet, recipient, db_dir, zaino_db) =
-        load_vectors_and_spawn_and_sync_zaino_db().await;
+async fn load_vectors_db_and_reader() -> (Vectors, TempDir, std::sync::Arc<ZainoDB>, DbReader) {
+    let (vectors, db_dir, zaino_db) = load_vectors_and_spawn_and_sync_zaino_db().await;
 
     let zaino_db = std::sync::Arc::new(zaino_db);
 
@@ -159,14 +145,18 @@ async fn load_vectors_db_and_reader() -> (
     let db_reader = zaino_db.to_reader();
     dbg!(db_reader.tip_height().await.unwrap()).unwrap();
 
-    (blocks, faucet, recipient, db_dir, zaino_db, db_reader)
+    (vectors, db_dir, zaino_db, db_reader)
 }
 
 // *** ZainoDB Tests ***
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn vectors_can_be_loaded_and_deserialised() {
-    let (blocks, faucet, recipient) = load_test_vectors().unwrap();
+    let Vectors {
+        blocks,
+        faucet,
+        recipient,
+    } = load_test_vectors().unwrap();
 
     // Chech block data..
     assert!(
@@ -216,8 +206,7 @@ async fn vectors_can_be_loaded_and_deserialised() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn add_blocks_to_db_and_verify() {
-    let (_blocks, _faucet, _recipient, _db_dir, zaino_db) =
-        load_vectors_and_spawn_and_sync_zaino_db().await;
+    let (_, _, zaino_db) = load_vectors_and_spawn_and_sync_zaino_db().await;
     zaino_db.wait_until_ready().await;
     dbg!(zaino_db.status().await);
     dbg!(zaino_db.tip_height().await.unwrap());
@@ -225,8 +214,7 @@ async fn add_blocks_to_db_and_verify() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn delete_blocks_from_db() {
-    let (_blocks, _faucet, _recipient, _db_dir, zaino_db) =
-        load_vectors_and_spawn_and_sync_zaino_db().await;
+    let (_, _, zaino_db) = load_vectors_and_spawn_and_sync_zaino_db().await;
 
     for h in (1..=200).rev() {
         // dbg!("Deleting block at height {}", h);
@@ -243,7 +231,7 @@ async fn delete_blocks_from_db() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn load_db_from_file() {
-    let (blocks, _faucet, _recipient) = load_test_vectors().unwrap();
+    let Vectors { blocks, .. } = load_test_vectors().unwrap();
 
     let temp_dir: TempDir = tempfile::tempdir().unwrap();
     let db_path: PathBuf = temp_dir.path().to_path_buf();
@@ -299,8 +287,7 @@ async fn load_db_from_file() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn try_write_invalid_block() {
-    let (blocks, _faucet, _recipient, _db_dir, zaino_db) =
-        load_vectors_and_spawn_and_sync_zaino_db().await;
+    let (Vectors { blocks, .. }, _, zaino_db) = load_vectors_and_spawn_and_sync_zaino_db().await;
 
     zaino_db.wait_until_ready().await;
     dbg!(zaino_db.status().await);
@@ -321,8 +308,7 @@ async fn try_write_invalid_block() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn try_delete_block_with_invalid_height() {
-    let (blocks, _faucet, _recipient, _db_dir, zaino_db) =
-        load_vectors_and_spawn_and_sync_zaino_db().await;
+    let (Vectors { blocks, .. }, _, zaino_db) = load_vectors_and_spawn_and_sync_zaino_db().await;
 
     zaino_db.wait_until_ready().await;
     dbg!(zaino_db.status().await);
@@ -346,8 +332,7 @@ async fn try_delete_block_with_invalid_height() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn create_db_reader() {
-    let (blocks, _faucet, _recipient, _db_dir, zaino_db, db_reader) =
-        load_vectors_db_and_reader().await;
+    let (Vectors { blocks, .. }, _, zaino_db, db_reader) = load_vectors_db_and_reader().await;
 
     let (data_height, _, _) = blocks.last().unwrap();
     let db_height = dbg!(zaino_db.tip_height().await.unwrap()).unwrap();
@@ -361,8 +346,7 @@ async fn create_db_reader() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_chain_blocks() {
-    let (blocks, _faucet, _recipient, _db_dir, _zaino_db, db_reader) =
-        load_vectors_db_and_reader().await;
+    let (Vectors { blocks, .. }, _, _, db_reader) = load_vectors_db_and_reader().await;
 
     for (height, chain_block, _) in blocks.iter() {
         let reader_chain_block = db_reader.get_chain_block(Height(*height)).await.unwrap();
@@ -373,8 +357,7 @@ async fn get_chain_blocks() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_compact_blocks() {
-    let (blocks, _faucet, _recipient, _db_dir, _zaino_db, db_reader) =
-        load_vectors_db_and_reader().await;
+    let (Vectors { blocks, .. }, _, _, db_reader) = load_vectors_db_and_reader().await;
 
     for (height, _, compact_block) in blocks.iter() {
         let reader_compact_block = db_reader.get_compact_block(Height(*height)).await.unwrap();
@@ -385,8 +368,7 @@ async fn get_compact_blocks() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_faucet_txids() {
-    let (blocks, faucet, _recipient, _db_dir, _zaino_db, db_reader) =
-        load_vectors_db_and_reader().await;
+    let (Vectors { blocks, faucet, .. }, _, _, db_reader) = load_vectors_db_and_reader().await;
 
     let start = Height(blocks.first().unwrap().0);
     let end = Height(blocks.last().unwrap().0);
@@ -445,8 +427,14 @@ async fn get_faucet_txids() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_recipient_txids() {
-    let (blocks, _faucet, recipient, _db_dir, _zaino_db, db_reader) =
-        load_vectors_db_and_reader().await;
+    let (
+        Vectors {
+            blocks, recipient, ..
+        },
+        _,
+        _,
+        db_reader,
+    ) = load_vectors_db_and_reader().await;
 
     let start = Height(blocks.first().unwrap().0);
     let end = Height(blocks.last().unwrap().0);
@@ -511,8 +499,7 @@ async fn get_recipient_txids() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_faucet_utxos() {
-    let (blocks, faucet, _recipient, _db_dir, _zaino_db, db_reader) =
-        load_vectors_db_and_reader().await;
+    let (Vectors { blocks, faucet, .. }, _, _, db_reader) = load_vectors_db_and_reader().await;
 
     let start = Height(blocks.first().unwrap().0);
     let end = Height(blocks.last().unwrap().0);
@@ -549,8 +536,14 @@ async fn get_faucet_utxos() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_recipient_utxos() {
-    let (blocks, _faucet, recipient, _db_dir, _zaino_db, db_reader) =
-        load_vectors_db_and_reader().await;
+    let (
+        Vectors {
+            blocks, recipient, ..
+        },
+        _,
+        _,
+        db_reader,
+    ) = load_vectors_db_and_reader().await;
 
     let start = Height(blocks.first().unwrap().0);
     let end = Height(blocks.last().unwrap().0);
@@ -587,8 +580,16 @@ async fn get_recipient_utxos() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_balance() {
-    let (blocks, faucet, recipient, _db_dir, _zaino_db, db_reader) =
-        load_vectors_db_and_reader().await;
+    let (
+        Vectors {
+            blocks,
+            faucet,
+            recipient,
+        },
+        _,
+        _,
+        db_reader,
+    ) = load_vectors_db_and_reader().await;
 
     let start = Height(blocks.first().unwrap().0);
     let end = Height(blocks.last().unwrap().0);
@@ -626,8 +627,7 @@ async fn get_balance() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn check_faucet_spent_map() {
-    let (blocks, faucet, _recipient, _db_dir, _zaino_db, db_reader) =
-        load_vectors_db_and_reader().await;
+    let (Vectors { blocks, faucet, .. }, _, _, db_reader) = load_vectors_db_and_reader().await;
 
     let (_faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
@@ -723,8 +723,14 @@ async fn check_faucet_spent_map() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn check_recipient_spent_map() {
-    let (blocks, _faucet, recipient, _db_dir, _zaino_db, db_reader) =
-        load_vectors_db_and_reader().await;
+    let (
+        Vectors {
+            blocks, recipient, ..
+        },
+        _,
+        _,
+        db_reader,
+    ) = load_vectors_db_and_reader().await;
 
     let (_recipient_txids, recipient_utxos, _recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
