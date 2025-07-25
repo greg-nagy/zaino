@@ -1312,12 +1312,6 @@ mod zebrad {
             assert!(result.is_err());
             let error = result.unwrap_err();
             assert!(matches!(error, FetchServiceError::Critical(_)));
-            // if let FetchServiceError::Critical(_) = result {
-            //     // Test passes
-            // } else {
-            //     dbg!(&result);
-            //     panic!("Expected error variant not found");
-            // }
 
             test_manager.close().await;
         }
