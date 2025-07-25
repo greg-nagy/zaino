@@ -2,6 +2,7 @@
 
 use core2::io::{self, Read};
 use prost::Message;
+use serde::Deserialize;
 use std::io::BufReader;
 use std::path::Path;
 use std::{fs::File, path::PathBuf};
@@ -25,10 +26,17 @@ struct Block {
     compact_block: CompactBlock,
 }
 
+#[derive(Deserialize)]
+struct AddressData {
+    txids: Vec<String>,
+    utxos: Vec<GetAddressUtxos>,
+    balance: u64,
+}
+
 struct Vectors {
     blocks: Vec<Block>,
-    faucet: (Vec<String>, Vec<GetAddressUtxos>, u64),
-    recipient: (Vec<String>, Vec<GetAddressUtxos>, u64),
+    faucet: AddressData,
+    recipient: AddressData,
 }
 
 /// Reads test data from file.
@@ -233,16 +241,12 @@ async fn vectors_can_be_loaded_and_deserialised() {
         );
     }
 
-    // check taddrs.
-    let (_, utxos_f, _) = faucet;
-    let (_, utxos_r, _) = recipient;
-
     println!("\nFaucet UTXO address:");
-    let (addr, _hash, _outindex, _script, _value, _height) = utxos_f[0].into_parts();
+    let (addr, _hash, _outindex, _script, _value, _height) = faucet.utxos[0].into_parts();
     println!("addr: {}", addr);
 
     println!("\nRecipient UTXO address:");
-    let (addr, _hash, _outindex, _script, _value, _height) = utxos_r[0].into_parts();
+    let (addr, _hash, _outindex, _script, _value, _height) = recipient.utxos[0].into_parts();
     println!("addr: {}", addr);
 }
 
@@ -428,9 +432,8 @@ async fn get_faucet_txids() {
     let start = Height(blocks.first().unwrap().height);
     let end = Height(blocks.last().unwrap().height);
 
-    let (faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
-        faucet_utxos.first().unwrap().into_parts();
+        faucet.utxos.first().unwrap().into_parts();
     let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
@@ -449,7 +452,7 @@ async fn get_faucet_txids() {
             .collect();
         let filtered_block_txids: Vec<String> = block_txids
             .into_iter()
-            .filter(|txid| faucet_txids.contains(txid))
+            .filter(|txid| faucet.txids.contains(txid))
             .collect();
         dbg!(&filtered_block_txids);
 
@@ -483,8 +486,8 @@ async fn get_faucet_txids() {
         reader_faucet_txids.push(txid.to_string());
     }
 
-    assert_eq!(faucet_txids.len(), reader_faucet_txids.len());
-    assert_eq!(faucet_txids, reader_faucet_txids);
+    assert_eq!(faucet.txids.len(), reader_faucet_txids.len());
+    assert_eq!(faucet.txids, reader_faucet_txids);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -499,9 +502,8 @@ async fn get_recipient_txids() {
     let start = Height(blocks.first().unwrap().height);
     let end = Height(blocks.last().unwrap().height);
 
-    let (recipient_txids, recipient_utxos, _recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
-        recipient_utxos.first().unwrap().into_parts();
+        recipient.utxos.first().unwrap().into_parts();
     let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
@@ -522,7 +524,7 @@ async fn get_recipient_txids() {
         // Get block txids that are relevant to recipient.
         let filtered_block_txids: Vec<String> = block_txids
             .into_iter()
-            .filter(|txid| recipient_txids.contains(txid))
+            .filter(|txid| recipient.txids.contains(txid))
             .collect();
         dbg!(&filtered_block_txids);
 
@@ -560,8 +562,8 @@ async fn get_recipient_txids() {
         reader_recipient_txids.push(txid.to_string());
     }
 
-    assert_eq!(recipient_txids.len(), reader_recipient_txids.len());
-    assert_eq!(recipient_txids, reader_recipient_txids);
+    assert_eq!(recipient.txids.len(), reader_recipient_txids.len());
+    assert_eq!(recipient.txids, reader_recipient_txids);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -571,14 +573,13 @@ async fn get_faucet_utxos() {
     let start = Height(blocks.first().unwrap().height);
     let end = Height(blocks.last().unwrap().height);
 
-    let (_faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
-        faucet_utxos.first().unwrap().into_parts();
+        faucet.utxos.first().unwrap().into_parts();
     let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     let mut cleaned_utxos = Vec::new();
-    for utxo in faucet_utxos.iter() {
+    for utxo in faucet.utxos.iter() {
         let (_faucet_address, txid, output_index, _faucet_script, satoshis, _height) =
             utxo.into_parts();
         cleaned_utxos.push((txid.to_string(), output_index.index(), satoshis));
@@ -614,14 +615,13 @@ async fn get_recipient_utxos() {
     let start = Height(blocks.first().unwrap().height);
     let end = Height(blocks.last().unwrap().height);
 
-    let (_recipient_txids, recipient_utxos, _recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
-        recipient_utxos.first().unwrap().into_parts();
+        recipient.utxos.first().unwrap().into_parts();
     let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     let mut cleaned_utxos = Vec::new();
-    for utxo in recipient_utxos.iter() {
+    for utxo in recipient.utxos.iter() {
         let (_recipient_address, txid, output_index, _recipient_script, satoshis, _height) =
             utxo.into_parts();
         cleaned_utxos.push((txid.to_string(), output_index.index(), satoshis));
@@ -661,9 +661,8 @@ async fn get_balance() {
 
     // Check faucet
 
-    let (_faucet_txids, faucet_utxos, faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
-        faucet_utxos.first().unwrap().into_parts();
+        faucet.utxos.first().unwrap().into_parts();
     let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
@@ -673,13 +672,12 @@ async fn get_balance() {
         .await
         .unwrap()) as u64;
 
-    assert_eq!(faucet_balance, reader_faucet_balance);
+    assert_eq!(faucet.balance, reader_faucet_balance);
 
     // Check recipient
 
-    let (_recipient_txids, recipient_utxos, recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
-        recipient_utxos.first().unwrap().into_parts();
+        recipient.utxos.first().unwrap().into_parts();
     let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
@@ -689,16 +687,15 @@ async fn get_balance() {
         .await
         .unwrap()) as u64;
 
-    assert_eq!(recipient_balance, reader_recipient_balance);
+    assert_eq!(recipient.balance, reader_recipient_balance);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn check_faucet_spent_map() {
     let (Vectors { blocks, faucet, .. }, db) = load_vectors_db_and_reader().await;
 
-    let (_faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
-        faucet_utxos.first().unwrap().into_parts();
+        faucet.utxos.first().unwrap().into_parts();
     let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
@@ -724,7 +721,7 @@ async fn check_faucet_spent_map() {
 
     // collect faucet txids holding utxos
     let mut faucet_utxo_indexes = Vec::new();
-    for utxo in faucet_utxos.iter() {
+    for utxo in faucet.utxos.iter() {
         let (_faucet_address, txid, output_index, _faucet_script, _satoshis, _height) =
             utxo.into_parts();
         faucet_utxo_indexes.push((txid.to_string(), output_index.index()));
@@ -798,9 +795,8 @@ async fn check_recipient_spent_map() {
         db,
     ) = load_vectors_db_and_reader().await;
 
-    let (_recipient_txids, recipient_utxos, _recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
-        recipient_utxos.first().unwrap().into_parts();
+        recipient.utxos.first().unwrap().into_parts();
     let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
@@ -826,7 +822,7 @@ async fn check_recipient_spent_map() {
 
     // collect faucet txids holding utxos
     let mut recipient_utxo_indexes = Vec::new();
-    for utxo in recipient_utxos.iter() {
+    for utxo in recipient.utxos.iter() {
         let (_recipient_address, txid, output_index, _recipient_script, _satoshis, _height) =
             utxo.into_parts();
         recipient_utxo_indexes.push((txid.to_string(), output_index.index()));
