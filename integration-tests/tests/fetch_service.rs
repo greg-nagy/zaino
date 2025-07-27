@@ -242,8 +242,8 @@ async fn fetch_service_get_raw_mempool(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-// Zebra does not support the `getmempoolinfo` RPC
-async fn fetch_service_get_mempool_info(validator: &ValidatorKind) {
+// Zebra hasn't yet implemented the `getmempoolinfo` RPC.
+async fn test_get_mempool_info(validator: &ValidatorKind) {
     let (mut test_manager, _fetch_service, fetch_service_subscriber) =
         create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
     let mut clients = test_manager
@@ -1389,7 +1389,7 @@ mod zcashd {
 
         #[tokio::test]
         pub(crate) async fn mempool_info() {
-            fetch_service_get_mempool_info(&ValidatorKind::Zcashd).await;
+            test_get_mempool_info(&ValidatorKind::Zcashd).await;
         }
 
         mod z {
@@ -1575,7 +1575,7 @@ mod zebrad {
         /// TODO: Test fails because Zebra does not expose a `getmempoolinfo` endpoint
         #[tokio::test]
         pub(crate) async fn mempool_info() {
-            fetch_service_get_mempool_info(&ValidatorKind::Zebrad).await;
+            test_get_mempool_info(&ValidatorKind::Zebrad).await;
         }
 
         mod z {
