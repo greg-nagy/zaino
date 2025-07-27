@@ -146,6 +146,10 @@ fn parse_transparent(data: &[u8]) -> Result<(&[u8], Vec<TxIn>, Vec<TxOut>), Pars
     Ok((&data[cursor.position() as usize..], tx_ins, tx_outs))
 }
 
+fn parse_joinsplits(data: &[u8], version: u32) -> Result<(&[u8], Vec<JoinSplit>), ParseError> {
+    todo!()
+}
+
 /// spend is a Sapling Spend Description as described in 7.3 of the Zcash
 /// protocol specification.
 #[derive(Debug, Clone)]
@@ -395,7 +399,7 @@ impl ParseFromSlice for Action {
     }
 }
 
-/// Full Zcash Transactrion data.
+/// Full Zcash transaction data.
 #[derive(Debug, Clone)]
 struct TransactionData {
     /// Indicates if the transaction is an Overwinter-enabled transaction.
@@ -409,7 +413,7 @@ struct TransactionData {
     /// Version group ID, used to specify transaction type and validate its components.
     ///
     /// Size\[bytes\]: 4
-    n_version_group_id: u32,
+    n_version_group_id: Option<u32>,
     /// Consensus branch ID, used to identify the network upgrade that the transaction is valid for.
     ///
     /// Size\[bytes\]: 4
@@ -422,6 +426,10 @@ struct TransactionData {
     ///
     /// Size\[bytes\]: Vec<8+CompactSize>
     transparent_outputs: Vec<TxOut>,
+    // /// Unix-epoch UTC time or block height, encoded as in Bitcoin (TODO: what does this mean?).
+    // ///
+    // /// Size\[bytes\]: 4
+    // lock_time: Option<u32>,
     // NLockTime \[IGNORED\] - Size\[bytes\]: 4
     // NExpiryHeight \[IGNORED\] - Size\[bytes\]: 4
     // ValueBalanceSapling - Size\[bytes\]: 8
@@ -458,6 +466,86 @@ struct TransactionData {
 }
 
 impl TransactionData {
+    /// Parses a v1 transaction.
+    ///
+    /// A v1 transactions contains the following fields:
+    ///
+    /// - header: u32
+    /// - tx_in_count: usize
+    /// - tx_in: tx_in
+    /// - tx_out_count: usize
+    /// - tx_out: tx_out
+    /// - lock_time: u32
+    pub(crate) fn parse_v1(data: &[u8], version: u32) -> Result<(&[u8], Self), ParseError> {
+        let mut cursor = Cursor::new(data);
+
+        let (remaining_data, transparent_inputs, transparent_outputs) =
+            parse_transparent(&data[cursor.position() as usize..])?;
+        cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
+
+        let lock_time = read_u32(&mut cursor, "Error reading TransactionData::lock_time")?;
+
+        Ok((
+            &data[cursor.position() as usize..],
+            TransactionData {
+                f_overwintered: true,
+                version,
+                consensus_branch_id: 0,
+                transparent_inputs,
+                transparent_outputs,
+                // lock_time: Some(lock_time),
+                n_version_group_id: None,
+                value_balance_sapling: None,
+                shielded_spends: Vec::new(),
+                shielded_outputs: Vec::new(),
+                join_splits: Vec::new(),
+                orchard_actions: Vec::new(),
+                value_balance_orchard: None,
+                anchor_orchard: None,
+            },
+        ))
+    }
+
+    pub(crate) fn parse_v2(data: &[u8], version: u32) -> Result<(&[u8], Self), ParseError> {
+        let mut cursor = Cursor::new(data);
+
+        let (remaining_data, transparent_inputs, transparent_outputs) =
+            parse_transparent(&data[cursor.position() as usize..])?;
+        cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
+
+        let lock_time = read_u32(&mut cursor, "Error reading TransactionData::lock_time")?;
+
+        let joinsplit_data = parse_joinsplits(data, version)?.1;
+
+        Ok((
+            &data[cursor.position() as usize..],
+            TransactionData {
+                f_overwintered: true,
+                version,
+                consensus_branch_id: 0,
+                transparent_inputs,
+                transparent_outputs,
+                // lock_time: Some(lock_time),
+                join_splits: joinsplit_data,
+                n_version_group_id: None,
+                value_balance_sapling: None,
+                shielded_spends: Vec::new(),
+                shielded_outputs: Vec::new(),
+                orchard_actions: Vec::new(),
+                value_balance_orchard: None,
+                anchor_orchard: None,
+            },
+        ))
+    }
+
+    pub(crate) fn parse_v3(
+        data: &[u8],
+        version: u32,
+        n_version_group_id: u32,
+    ) -> Result<(&[u8], Self), ParseError> {
+        todo!()
+    }
+
     fn parse_v4(
         data: &[u8],
         version: u32,
@@ -535,7 +623,7 @@ impl TransactionData {
             TransactionData {
                 f_overwintered: true,
                 version,
-                n_version_group_id,
+                n_version_group_id: Some(n_version_group_id),
                 consensus_branch_id: 0,
                 transparent_inputs,
                 transparent_outputs,
@@ -699,7 +787,7 @@ impl TransactionData {
             TransactionData {
                 f_overwintered: true,
                 version,
-                n_version_group_id,
+                n_version_group_id: Some(n_version_group_id),
                 consensus_branch_id,
                 transparent_inputs,
                 transparent_outputs,
@@ -765,7 +853,6 @@ impl ParseFromSlice for FullTransaction {
         txid: Option<Vec<Vec<u8>>>,
         tx_version: Option<u32>,
     ) -> Result<(&[u8], Self), ParseError> {
-        todo!("Implement FullTransaction::parse_from_slice");
         let txid = txid.ok_or_else(|| {
             ParseError::InvalidData(
                 "txid must be used for FullTransaction::parse_from_slice".to_string(),
@@ -780,35 +867,82 @@ impl ParseFromSlice for FullTransaction {
 
         let header = read_u32(&mut cursor, "Error reading FullTransaction::header")?;
         let f_overwintered = (header >> 31) == 1;
-        if !f_overwintered {
-            return Err(ParseError::InvalidData(
-                "fOverwinter flag must be set".to_string(),
-            ));
-        }
+
         let version = header & 0x7FFFFFFF;
-        if version < 4 {
-            return Err(ParseError::InvalidData(format!(
-                "version number {version} must be greater or equal to 4"
-            )));
+
+        match version {
+            1 | 2 => {
+                if f_overwintered {
+                    return Err(ParseError::InvalidData(
+                        "fOverwintered must be unset for tx versions 1 and 2".to_string(),
+                    ));
+                }
+            }
+            3 | 4 | 5 => {
+                if !f_overwintered {
+                    return Err(ParseError::InvalidData(
+                        "fOverwintered must be set for tx versions 3 and above".to_string(),
+                    ));
+                }
+            }
+            _ => {
+                return Err(ParseError::InvalidData(format!(
+                    "Unsupported tx version {}",
+                    version
+                )))
+            }
         }
+
         let n_version_group_id = read_u32(
             &mut cursor,
             "Error reading FullTransaction::n_version_group_id",
         )?;
 
-        let (remaining_data, transaction_data) = if version <= 4 {
-            TransactionData::parse_v4(
+        let (remaining_data, transaction_data) = match version {
+            1 => TransactionData::parse_v1(&data[cursor.position() as usize..], version)?,
+            2 => TransactionData::parse_v2(&data[cursor.position() as usize..], version)?,
+            3 => TransactionData::parse_v3(
                 &data[cursor.position() as usize..],
                 version,
                 n_version_group_id,
-            )?
-        } else {
-            TransactionData::parse_v5(
+            )?,
+            4 => TransactionData::parse_v4(
                 &data[cursor.position() as usize..],
                 version,
                 n_version_group_id,
-            )?
+            )?,
+            5 => TransactionData::parse_v5(
+                &data[cursor.position() as usize..],
+                version,
+                n_version_group_id,
+            )?,
+
+            _ => {
+                return Err(ParseError::InvalidData(format!(
+                    "Unsupported tx version {}",
+                    version
+                )))
+            }
         };
+        // if version < 4 {
+        //     return Err(ParseError::InvalidData(format!(
+        //         "version number {version} must be greater or equal to 4"
+        //     )));
+        // }
+
+        // let (remaining_data, transaction_data) = if version <= 4 {
+        //     TransactionData::parse_v4(
+        //         &data[cursor.position() as usize..],
+        //         version,
+        //         n_version_group_id,
+        //     )?
+        // } else {
+        //     TransactionData::parse_v5(
+        //         &data[cursor.position() as usize..],
+        //         version,
+        //         n_version_group_id,
+        //     )?
+        // };
 
         let full_transaction = FullTransaction {
             raw_transaction: transaction_data,
@@ -867,7 +1001,7 @@ impl FullTransaction {
     }
 
     /// Returns the transaction version group id.
-    pub fn n_version_group_id(&self) -> u32 {
+    pub fn n_version_group_id(&self) -> Option<u32> {
         self.raw_transaction.n_version_group_id
     }
 
