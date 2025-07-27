@@ -1276,7 +1276,7 @@ mod zebrad {
                 _fetch_service,
                 fetch_service_subscriber,
                 _state_service,
-                _state_service_subscriber,
+                state_service_subscriber,
             ) = create_test_manager_and_services(&ValidatorKind::Zebrad, None, true, true, None)
                 .await;
 
@@ -1284,15 +1284,10 @@ mod zebrad {
                 .clients
                 .take()
                 .expect("Clients are not initialized");
-            test_manager.local_net.generate_blocks(1).await.unwrap();
-            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            let recipient_taddr = clients.get_recipient_address("transparent").await;
 
             clients.faucet.sync_and_await().await.unwrap();
 
-            test_manager.local_net.generate_blocks(100).await.unwrap();
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-            clients.faucet.sync_and_await().await.unwrap();
-            clients.faucet.quick_shield().await.unwrap();
             test_manager.local_net.generate_blocks(100).await.unwrap();
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             clients.faucet.sync_and_await().await.unwrap();
@@ -1301,17 +1296,34 @@ mod zebrad {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             clients.faucet.sync_and_await().await.unwrap();
 
-            let _recipient_ua = clients.get_recipient_address("unified").await;
+            from_inputs::quick_send(
+                &mut clients.faucet,
+                vec![(recipient_taddr.as_str(), 250_000, None)],
+            )
+            .await
+            .unwrap();
 
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-            let result = fetch_service_subscriber.get_mempool_info().await;
+            let fetch_service_result = fetch_service_subscriber.get_mempool_info().await;
+            let state_service_result = state_service_subscriber.get_mempool_info().await;
 
             // Zebra does not support this RPC.
             // When they implement it, this will start failing and will need to be updated.
-            assert!(result.is_err());
-            let error = result.unwrap_err();
-            assert!(matches!(error, FetchServiceError::Critical(_)));
+            assert!(fetch_service_result.is_err());
+            let fetch_service_error = fetch_service_result.unwrap_err();
+            assert!(matches!(
+                fetch_service_error,
+                FetchServiceError::Critical(_)
+            ));
+
+            // The state service does not fail.
+            assert!(state_service_result.is_ok());
+            let state_service_result = state_service_result.unwrap();
+            dbg!(&state_service_result);
+            assert_eq!(state_service_result.bytes, 1);
+            assert!(state_service_result.size > 0);
+            assert!(state_service_result.usage > 0);
 
             test_manager.close().await;
         }
