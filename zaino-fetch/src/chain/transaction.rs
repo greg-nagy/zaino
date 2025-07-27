@@ -955,41 +955,6 @@ impl ParseFromSlice for FullTransaction {
 }
 
 impl FullTransaction {
-    pub(crate) fn parse_v1<'a>(
-        data: &'a [u8],
-        txid: &'a [Vec<u8>],
-    ) -> Result<(&'a [u8], Self), ParseError> {
-        todo!()
-    }
-
-    pub(crate) fn parse_v2<'a>(
-        data: &'a [u8],
-        txid: &'a [Vec<u8>],
-    ) -> Result<(&'a [u8], Self), ParseError> {
-        todo!()
-    }
-
-    pub(crate) fn parse_v3<'a>(
-        data: &'a [u8],
-        txid: &'a [Vec<u8>],
-    ) -> Result<(&'a [u8], Self), ParseError> {
-        todo!()
-    }
-
-    pub(crate) fn parse_v4<'a>(
-        data: &'a [u8],
-        txid: &'a [Vec<u8>],
-    ) -> Result<(&'a [u8], Self), ParseError> {
-        todo!()
-    }
-
-    pub(crate) fn parse_v5<'a>(
-        data: &'a [u8],
-        txid: &'a [Vec<u8>],
-    ) -> Result<(&'a [u8], Self), ParseError> {
-        todo!()
-    }
-
     /// Returns overwintered bool
     pub fn f_overwintered(&self) -> bool {
         self.raw_transaction.f_overwintered
