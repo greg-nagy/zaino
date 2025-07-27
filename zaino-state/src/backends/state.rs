@@ -14,7 +14,7 @@ use crate::{
         UtxoReplyStream,
     },
     utils::{blockid_to_hashorheight, get_build_info, ServiceMetadata},
-    MempoolKey,
+    MempoolKey, MempoolValue,
 };
 
 use nonempty::NonEmpty;
@@ -984,6 +984,9 @@ impl ZcashIndexer for StateServiceSubscriber {
     async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error> {
         let mempool_state = self.mempool.get_mempool().await;
 
+        let aprox_mem_usage = std::mem::size_of::<Vec<(MempoolKey, MempoolValue)>>()
+            + mempool_state.capacity() * std::mem::size_of::<(MempoolKey, MempoolValue)>();
+
         Ok(GetMempoolInfoResponse {
             size: mempool_state.len() as u64,
             bytes: mempool_state
@@ -997,7 +1000,7 @@ impl ZcashIndexer for StateServiceSubscriber {
                     }
                 })
                 .sum(),
-            usage: std::mem::size_of_val(&self.mempool) as u64,
+            usage: aprox_mem_usage as u64,
         })
     }
 
