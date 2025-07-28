@@ -1321,8 +1321,8 @@ mod zebrad {
             assert!(state_service_result.is_ok());
             let state_service_result = state_service_result.unwrap();
             dbg!(&state_service_result);
-            assert_eq!(state_service_result.bytes, 1);
-            assert!(state_service_result.size > 0);
+            assert_eq!(state_service_result.size, 1);
+            assert!(state_service_result.bytes > 0);
             assert!(state_service_result.usage > 0);
 
             test_manager.close().await;
