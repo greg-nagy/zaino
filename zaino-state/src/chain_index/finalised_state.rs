@@ -3642,7 +3642,7 @@ impl ZainoDB {
     /// Finds a TxIndex [block_height, tx_index] from a given txid.
     /// Used for Txid based lookup in transaction DBs.
     ///
-    /// WARNINNG: This is a blocking function and **MUST** be called within a blocking thread / task.
+    /// WARNING: This is a blocking function and **MUST** be called within a blocking thread / task.
     fn find_txid_index_blocking(
         &self,
         txid: &Hash,
