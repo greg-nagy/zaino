@@ -984,23 +984,23 @@ impl ZcashIndexer for StateServiceSubscriber {
     async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error> {
         let mempool_state = self.mempool.get_mempool().await;
 
-        let aprox_mem_usage = std::mem::size_of::<Vec<(MempoolKey, MempoolValue)>>()
+        let approx_mem_usage = std::mem::size_of::<Vec<(MempoolKey, MempoolValue)>>()
             + mempool_state.capacity() * std::mem::size_of::<(MempoolKey, MempoolValue)>();
 
         Ok(GetMempoolInfoResponse {
             size: mempool_state.len() as u64,
             bytes: mempool_state
                 .iter()
-                .map(|tx| {
-                    // First item = txid, second item = GetRawTransaction
-                    let raw_txn = &tx.1 .0;
-                    match raw_txn {
+                .map(|mempool_entry| {
+                    // mempool_entry.1 is a MempoolValue, .0 is the first (and only) field, a GetRawTransaction.
+                    match &mempool_entry.1 .0 {
+                        // .as_ref() is a slice of bytes, a view into a contiguous block of memory
                         GetRawTransaction::Object(tx) => tx.hex.as_ref().len() as u64,
                         GetRawTransaction::Raw(tx) => tx.as_ref().len() as u64,
                     }
                 })
                 .sum(),
-            usage: aprox_mem_usage as u64,
+            usage: approx_mem_usage as u64,
         })
     }
 
