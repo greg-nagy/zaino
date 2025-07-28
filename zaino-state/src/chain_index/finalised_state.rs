@@ -272,7 +272,7 @@ impl ZainoDB {
         self.status.load().into()
     }
 
-    /// Awaits untile the DB returns a Ready status.
+    /// Awaits until the DB returns a Ready status.
     pub(crate) async fn wait_until_ready(&self) {
         loop {
             if self.status.load() == StatusType::Ready as usize {
