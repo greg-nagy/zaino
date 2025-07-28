@@ -208,11 +208,11 @@ async fn vectors_can_be_loaded_and_deserialised() {
 
     println!("\nFaucet UTXO address:");
     let (addr, _hash, _outindex, _script, _value, _height) = utxos_f[0].into_parts();
-    println!("addr: {}", addr);
+    println!("addr: {addr}");
 
     println!("\nRecipient UTXO address:");
     let (addr, _hash, _outindex, _script, _value, _height) = utxos_r[0].into_parts();
-    println!("addr: {}", addr);
+    println!("addr: {addr}");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -368,7 +368,7 @@ async fn get_chain_blocks() {
     for (height, chain_block, _) in blocks.iter() {
         let reader_chain_block = db_reader.get_chain_block(Height(*height)).await.unwrap();
         assert_eq!(chain_block, &reader_chain_block);
-        println!("ChainBlock at height {} OK", height);
+        println!("ChainBlock at height {height} OK");
     }
 }
 
@@ -380,7 +380,7 @@ async fn get_compact_blocks() {
     for (height, _, compact_block) in blocks.iter() {
         let reader_compact_block = db_reader.get_compact_block(Height(*height)).await.unwrap();
         assert_eq!(compact_block, &reader_compact_block);
-        println!("CompactBlock at height {} OK", height);
+        println!("CompactBlock at height {height} OK");
     }
 }
 
@@ -395,11 +395,11 @@ async fn get_faucet_txids() {
     let (faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
         faucet_utxos.first().unwrap().into_parts();
-    let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
+    let faucet_addr_script = AddrScript::from_script(faucet_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     for (height, chain_block, _compact_block) in blocks {
-        println!("Checking faucet txids at height {}", height);
+        println!("Checking faucet txids at height {height}");
         let block_height = Height(height);
         let block_txids: Vec<String> = chain_block
             .transactions()
@@ -455,11 +455,11 @@ async fn get_recipient_txids() {
     let (recipient_txids, recipient_utxos, _recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
         recipient_utxos.first().unwrap().into_parts();
-    let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
+    let recipient_addr_script = AddrScript::from_script(recipient_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     for (height, chain_block, _compact_block) in blocks {
-        println!("Checking recipient txids at height {}", height);
+        println!("Checking recipient txids at height {height}");
         let block_height = Height(height);
         let block_txids: Vec<String> = chain_block
             .transactions()
@@ -521,7 +521,7 @@ async fn get_faucet_utxos() {
     let (_faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
         faucet_utxos.first().unwrap().into_parts();
-    let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
+    let faucet_addr_script = AddrScript::from_script(faucet_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     let mut cleaned_utxos = Vec::new();
@@ -559,7 +559,7 @@ async fn get_recipient_utxos() {
     let (_recipient_txids, recipient_utxos, _recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
         recipient_utxos.first().unwrap().into_parts();
-    let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
+    let recipient_addr_script = AddrScript::from_script(recipient_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     let mut cleaned_utxos = Vec::new();
@@ -599,7 +599,7 @@ async fn get_balance() {
     let (_faucet_txids, faucet_utxos, faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
         faucet_utxos.first().unwrap().into_parts();
-    let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
+    let faucet_addr_script = AddrScript::from_script(faucet_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     let reader_faucet_balance = dbg!(db_reader
@@ -614,7 +614,7 @@ async fn get_balance() {
     let (_recipient_txids, recipient_utxos, recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
         recipient_utxos.first().unwrap().into_parts();
-    let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
+    let recipient_addr_script = AddrScript::from_script(recipient_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     let reader_recipient_balance = dbg!(db_reader
@@ -633,7 +633,7 @@ async fn check_faucet_spent_map() {
     let (_faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
         faucet_utxos.first().unwrap().into_parts();
-    let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
+    let faucet_addr_script = AddrScript::from_script(faucet_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     // collect faucet outpoints
@@ -701,21 +701,18 @@ async fn check_faucet_spent_map() {
                 });
                 assert!(
                     matches,
-                    "Spender transaction does not actually spend the outpoint: {:?}",
-                    outpoint
+                    "Spender transaction does not actually spend the outpoint: {outpoint:?}"
                 );
 
                 assert!(
                     !faucet_utxo_indexes.contains(&outpoint_tuple),
-                    "Spent outpoint should NOT be in UTXO set, but found: {:?}",
-                    outpoint_tuple
+                    "Spent outpoint should NOT be in UTXO set, but found: {outpoint_tuple:?}"
                 );
             }
             None => {
                 assert!(
                     faucet_utxo_indexes.contains(&outpoint_tuple),
-                    "Unspent outpoint should be in UTXO set, but NOT found: {:?}",
-                    outpoint_tuple
+                    "Unspent outpoint should be in UTXO set, but NOT found: {outpoint_tuple:?}"
                 );
             }
         }
@@ -730,7 +727,7 @@ async fn check_recipient_spent_map() {
     let (_recipient_txids, recipient_utxos, _recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
         recipient_utxos.first().unwrap().into_parts();
-    let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
+    let recipient_addr_script = AddrScript::from_script(recipient_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     // collect faucet outpoints
@@ -798,21 +795,18 @@ async fn check_recipient_spent_map() {
                 });
                 assert!(
                     matches,
-                    "Spender transaction does not actually spend the outpoint: {:?}",
-                    outpoint
+                    "Spender transaction does not actually spend the outpoint: {outpoint:?}"
                 );
 
                 assert!(
                     !recipient_utxo_indexes.contains(&outpoint_tuple),
-                    "Spent outpoint should NOT be in UTXO set, but found: {:?}",
-                    outpoint_tuple
+                    "Spent outpoint should NOT be in UTXO set, but found: {outpoint_tuple:?}"
                 );
             }
             None => {
                 assert!(
                     recipient_utxo_indexes.contains(&outpoint_tuple),
-                    "Unspent outpoint should be in UTXO set, but NOT found: {:?}",
-                    outpoint_tuple
+                    "Unspent outpoint should be in UTXO set, but NOT found: {outpoint_tuple:?}"
                 );
             }
         }

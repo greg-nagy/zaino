@@ -133,7 +133,7 @@ impl core::fmt::Display for DbMetadata {
         )?;
 
         for byte in &self.schema_hash[..4] {
-            write!(f, "{:02x}", byte)?;
+            write!(f, "{byte:02x}")?;
         }
 
         write!(f, "… }}")

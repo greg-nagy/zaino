@@ -829,9 +829,8 @@ impl DbV1 {
                     // Height must be exactly +1 over the current tip
                     if block_height.0 != last_height.0 + 1 {
                         return Err(FinalisedStateError::Custom(format!(
-                            "cannot write block at height {:?}; \
-                     current tip is {:?}",
-                            block_height, last_height
+                            "cannot write block at height {block_height:?}; \
+                     current tip is {last_height:?}"
                         )));
                     }
                 }
@@ -839,8 +838,7 @@ impl DbV1 {
                 Err(lmdb::Error::NotFound) => {
                     if block_height.0 != 1 {
                         return Err(FinalisedStateError::Custom(format!(
-                            "first block must be height 1, got {:?}",
-                            block_height
+                            "first block must be height 1, got {block_height:?}"
                         )));
                     }
                 }
@@ -3049,7 +3047,7 @@ impl DbV1 {
                 let outpoint = Outpoint::new(*input.prevout_txid(), input.prevout_index());
                 let outpoint_bytes = outpoint.to_bytes()?;
                 let val = ro.get(self.spent, &outpoint_bytes).map_err(|_| {
-                    fail(&format!("missing spent index for outpoint {:?}", outpoint))
+                    fail(&format!("missing spent index for outpoint {outpoint:?}"))
                 })?;
                 let entry = StoredEntryFixed::<TxIndex>::from_bytes(val)
                     .map_err(|e| fail(&format!("corrupt spent entry: {e}")))?;
