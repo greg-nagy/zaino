@@ -3614,7 +3614,7 @@ impl ZainoDB {
     ///
     /// Used to build addrhist records.
     ///
-    /// WARNINNG: This is a blocking function and **MUST** be called within a blocking thread / task.
+    /// WARNING: This is a blocking function and **MUST** be called within a blocking thread / task.
     fn get_previous_output_blocking(
         &self,
         outpoint: Outpoint,
