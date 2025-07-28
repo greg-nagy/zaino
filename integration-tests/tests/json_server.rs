@@ -419,10 +419,13 @@ async fn get_mempool_info_inner() {
 
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    let zcashd_mempool_info = zcashd_subscriber.get_mempool_info().await.unwrap();
-    let zaino_mempool_info = zaino_subscriber.get_mempool_info().await.unwrap();
+    let zcashd_subscriber_mempool_info = zcashd_subscriber.get_mempool_info().await.unwrap();
+    let zaino_subscriber_mempool_info = zaino_subscriber.get_mempool_info().await.unwrap();
 
-    assert_eq!(zcashd_mempool_info, zaino_mempool_info);
+    assert_eq!(
+        zcashd_subscriber_mempool_info,
+        zaino_subscriber_mempool_info
+    );
 
     test_manager.close().await;
 }
