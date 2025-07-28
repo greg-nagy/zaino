@@ -2448,11 +2448,13 @@ impl FixedEncodedLen for AddrHistRecord {
 /// AddrHistRecord database byte array.
 ///
 /// Layout (all big-endian except `value`):
-/// [0..4]  height
-/// [4..6]  tx_index
-/// [6..8]  vout
-/// [8]     flags
-/// [9..17] value  (little-endian, matches Zcashd)
+/// ```text
+/// [0..4]   height
+/// [4..6]   tx_index
+/// [6..8]   vout
+/// [8]      flags
+/// [9..17]  value   (little-endian, matches Zcashd)
+/// ```
 ///
 /// Note when flag is set to IS_INPUT, vout is actually the index of the input event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2525,13 +2527,16 @@ impl ZainoVersionedSerialise for AddrEventBytes {
     }
 }
 
-/// 17 byte body
+/// 17 byte body:
+///
+/// ```text
+/// [0..4]   block_height (BE u32) | Block height
+/// [4..6]   tx_index     (BE u16) | Transaction index within block
+/// [6..8]   vout         (BE u16) | Input/output index within transaction
+/// [8]      flags        ( u8 )   | Bitflags (mined/spent/input masks)
+/// [9..17]  value        (LE u64) | Amount in zatoshi, little-endian
+/// ```
 impl FixedEncodedLen for AddrEventBytes {
-    /// [0..4]   block_height (BE u32) | Block height
-    /// [4..6]   tx_index     (BE u16) | Transaction index within block
-    /// [6..8]   vout         (BE u16) | Input/output index within transaction
-    /// [8]      flags        ( u8 )   | Bitflags (mined/spent/input masks)
-    /// [9..17]  value        (LE u64) | Amount in zatoshi, little-endian
     const ENCODED_LEN: usize = 17;
 }
 
@@ -2653,7 +2658,7 @@ impl ZainoVersionedSerialise for BlockHeaderData {
     }
 }
 
-/// Database wrapper for Vec<Txid>.
+/// Database wrapper for `Vec<Txid>`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct TxidList {
@@ -2700,9 +2705,9 @@ impl ZainoVersionedSerialise for TxidList {
 ///
 /// **Serialization layout for `TransparentTxList` (implements `ZainoVersionedSerialise`)**
 ///
-/// ┌──────────── byte 0 ─────────────┬────────── CompactSize ─────────────┬──────────── entries ─────────────┐
-/// │ TransparentTxList version tag   │ num_txs (CompactSize) = N          │ [Option<TransparentCompactTx>; N]│
-/// └─────────────────────────────────┴────────────────────────────────────┴──────────────────────────────────┘
+/// ┌──────────── byte 0 ─────────────┬────────── CompactSize ─────────────┬──────────── entries ───────────────┐
+/// │ TransparentTxList version tag   │ num_txs (CompactSize) = N          │ [`Option<TransparentCompactTx>`; N]│
+/// └─────────────────────────────────┴────────────────────────────────────┴────────────────────────────────────┘
 ///
 /// Each `Option<TransparentCompactTx>` is serialized as:
 ///
@@ -2775,9 +2780,9 @@ impl ZainoVersionedSerialise for TransparentTxList {
 ///
 /// **Serialization layout for `SaplingTxList` (implements `ZainoVersionedSerialise`)**
 ///
-/// ┌──────────── byte 0 ─────────────┬────────── CompactSize ─────────────┬──────────── entries ─────────────┐
-/// │ SaplingTxList version tag = 1   │ num_txs (CompactSize) = N          │ [Option<SaplingCompactTx>; N]    │
-/// └─────────────────────────────────┴────────────────────────────────────┴──────────────────────────────────┘
+/// ┌──────────── byte 0 ─────────────┬────────── CompactSize ─────────────┬──────────── entries ───────────────┐
+/// │ SaplingTxList version tag = 1   │ num_txs (CompactSize) = N          │ [`Option<SaplingCompactTx>`; N]    │
+/// └─────────────────────────────────┴────────────────────────────────────┴────────────────────────────────────┘
 ///
 /// Each `Option<SaplingCompactTx>` is serialized as:
 ///
@@ -2786,9 +2791,9 @@ impl ZainoVersionedSerialise for TransparentTxList {
 /// └────────────┴──────────────────────────────────────────────┘
 ///
 /// SaplingCompactTx:
-/// ┌── version ─┬──── 1 byte opt ─────┬──── CompactSize ──────┬──── spend entries ─────┬──── CompactSize ─────┬──── output entries ───────┐
-/// │   0x01     │ 0 or 1 + i64 (value)│ N1 = num_spends       │ [CompactSaplingSpend;N1] │ N2 = num_outputs   │ [CompactSaplingOutput;N2] │
-/// └────────────┴─────────────────────┴───────────────────────┴────────────────────────┴──────────────────────┴───────────────────────────┘
+/// ┌── version ─┬──── 1 byte opt ─────┬──── CompactSize ──┬──── spend entries ─────────┬──── CompactSize ───┬──── output entries ─────────┐
+/// │   0x01     │ 0 or 1 + i64 (value)│ N1 = num_spends   │ `[CompactSaplingSpend;N1]` │ N2 = num_outputs   │ `[CompactSaplingOutput;N2]` │
+/// └────────────┴─────────────────────┴───────────────────┴────────────────────────────┴────────────────────┴─────────────────────────────┘
 ///
 /// - The **Sapling value** is encoded as an `Option<i64>` using:
 ///     - 0 = None
@@ -2852,9 +2857,9 @@ impl ZainoVersionedSerialise for SaplingTxList {
 ///
 /// **Serialization layout for `OrchardTxList` (implements `ZainoVersionedSerialise`)**
 ///
-/// ┌──────────── byte 0 ─────────────┬────────── CompactSize ─────────────┬──────────── entries ─────────────┐
-/// │ OrchardTxList version tag = 1   │ num_txs (CompactSize) = N          │ [Option<OrchardCompactTx>; N]    │
-/// └─────────────────────────────────┴────────────────────────────────────┴──────────────────────────────────┘
+/// ┌──────────── byte 0 ─────────────┬────────── CompactSize ─────────────┬──────────── entries ───────────────┐
+/// │ OrchardTxList version tag = 1   │ num_txs (CompactSize) = N          │ [`Option<OrchardCompactTx>`; N]    │
+/// └─────────────────────────────────┴────────────────────────────────────┴────────────────────────────────────┘
 ///
 /// Each `Option<OrchardCompactTx>` is serialized as:
 ///

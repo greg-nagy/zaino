@@ -90,43 +90,43 @@ pub struct ZainoDB {
     /// Shared LMDB environment.
     env: Arc<Environment>,
 
-    /// Block headers: Height -> StoredEntry<BlockHeaderData>
+    /// Block headers: `Height` -> `StoredEntry<BlockHeaderData>`
     ///
     /// Stored per-block, in order.
     headers: Database,
-    /// Txids: Height -> StoredEntry<TxidList>
+    /// Txids: `Height` -> `StoredEntry<TxidList>`
     ///
     /// Stored per-block, in order.
     txids: Database,
-    /// Transparent: Height -> StoredEntry<Vec<TransparentTxList>>
+    /// Transparent: `Height` -> `StoredEntry<Vec<TransparentTxList>>`
     ///
     /// Stored per-block, in order.
     transparent: Database,
-    /// Sapling: Height -> StoredEntry<Vec<TxData>>
+    /// Sapling: `Height` -> `StoredEntry<Vec<TxData>>`
     ///
     /// Stored per-block, in order.
     sapling: Database,
-    /// Orchard: Height -> StoredEntry<Vec<TxData>>
+    /// Orchard: `Height` -> `StoredEntry<Vec<TxData>>`
     ///
     /// Stored per-block, in order.
     orchard: Database,
-    /// Block commitment tree data: Height -> StoredEntry<Vec<CommitmentTreeData>>
+    /// Block commitment tree data: `Height` -> `StoredEntry<Vec<CommitmentTreeData>>`
     ///
     /// Stored per-block, in order.
     commitment_tree_data: Database,
-    /// Heights: Hash -> SotredEntry<Height>
+    /// Heights: `Hash` -> `StoredEntry<Height>`
     ///
     /// Used for hash based fetch of the best chain (and random access).
     heights: Database,
-    /// Spent outpoints: Outpoint -> StoredEntry<Vec<TxIndex>>
+    /// Spent outpoints: `Outpoint` -> `StoredEntry<Vec<TxIndex>>`
     ///
     /// Used to check spent status of given outpoints, retuning spending tx.
     spent: Database,
-    /// Transparent address history: AddrScript -> StoredEntry<AddrEventBytes>
+    /// Transparent address history: `AddrScript` -> `StoredEntry<AddrEventBytes>`
     ///
     /// Used to search all transparent address indexes (txids, utxos, balances, deltas)
     address_history: Database,
-    /// Metadata: singleton entry "metadata" -> StoredEntry<DbMetadata>
+    /// Metadata: singleton entry "metadata" -> `StoredEntry<DbMetadata>`
     metadata: Database,
 
     /// Contiguous **water-mark**: every height ≤ `validated_tip` is known-good.
@@ -3096,7 +3096,7 @@ impl ZainoDB {
     /// Skips one `Option<TransparentCompactTx>` entry from the current cursor position.
     ///
     /// The input should be a cursor over just the inner item "list" bytes of a:
-    /// - StoredEntryVar<TransparentTxList>
+    /// - `StoredEntryVar<TransparentTxList>`
     ///
     /// Advances the cursor past either:
     /// - 1 byte (`0x00`) if `None`, or
@@ -3144,7 +3144,7 @@ impl ZainoDB {
     /// Skips one `Option<SaplingCompactTx>` from the current cursor position.
     ///
     /// The input should be a cursor over just the inner item "list" bytes of a:
-    /// - StoredEntryVar<SaplingTxList>
+    /// - `StoredEntryVar<SaplingTxList>`
     ///
     /// Advances past:
     /// - 1 byte `0x00` if None, or
@@ -3198,7 +3198,7 @@ impl ZainoDB {
     /// Skips one `Option<OrchardCompactTx>` from the current cursor position.
     ///
     /// The input should be a cursor over just the inner item "list" bytes of a:
-    /// - StoredEntryVar<OrchardTxList>
+    /// - `StoredEntryVar<OrchardTxList>`
     ///
     /// Advances past:
     /// - 1 byte `0x00` if None, or
