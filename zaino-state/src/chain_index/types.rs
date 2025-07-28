@@ -2355,13 +2355,13 @@ pub struct AddrHistRecord {
 /* ----- flag helpers ----- */
 impl AddrHistRecord {
     /// Flag mask for is_mined.
-    pub const FLAG_MINED: u8 = 0x01;
+    pub const FLAG_MINED: u8 = 0b00000001;
 
     /// Flag mask for is_spent.
-    pub const FLAG_SPENT: u8 = 0x02;
+    pub const FLAG_SPENT: u8 = 0b00000010;
 
     /// Flag mask for is_input.
-    pub const FLAG_IS_INPUT: u8 = 0x04;
+    pub const FLAG_IS_INPUT: u8 = 0b00000100;
 
     /// Creatues a new AddrHistRecord instance.
     pub fn new(tx_index: TxIndex, out_index: u16, value: u64, flags: u8) -> Self {
