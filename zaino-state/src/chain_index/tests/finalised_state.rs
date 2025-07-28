@@ -20,6 +20,7 @@ use crate::{
 };
 
 /// Reads test data from file.
+#[allow(clippy::type_complexity)]
 fn read_vectors_from_file<P: AsRef<Path>>(
     base_dir: P,
 ) -> io::Result<(
@@ -74,6 +75,7 @@ fn read_vectors_from_file<P: AsRef<Path>>(
     Ok((full_blocks, faucet, recipient))
 }
 
+#[allow(clippy::type_complexity)]
 fn load_test_vectors() -> io::Result<(
     Vec<(u32, ChainBlock, CompactBlock)>,
     (Vec<String>, Vec<GetAddressUtxos>, u64),
@@ -395,7 +397,7 @@ async fn get_faucet_txids() {
     let (faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
         faucet_utxos.first().unwrap().into_parts();
-    let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
+    let faucet_addr_script = AddrScript::from_script(faucet_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     for (height, chain_block, _compact_block) in blocks {
@@ -455,7 +457,7 @@ async fn get_recipient_txids() {
     let (recipient_txids, recipient_utxos, _recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
         recipient_utxos.first().unwrap().into_parts();
-    let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
+    let recipient_addr_script = AddrScript::from_script(recipient_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     for (height, chain_block, _compact_block) in blocks {
@@ -521,7 +523,7 @@ async fn get_faucet_utxos() {
     let (_faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
         faucet_utxos.first().unwrap().into_parts();
-    let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
+    let faucet_addr_script = AddrScript::from_script(faucet_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     let mut cleaned_utxos = Vec::new();
@@ -559,7 +561,7 @@ async fn get_recipient_utxos() {
     let (_recipient_txids, recipient_utxos, _recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
         recipient_utxos.first().unwrap().into_parts();
-    let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
+    let recipient_addr_script = AddrScript::from_script(recipient_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     let mut cleaned_utxos = Vec::new();
@@ -599,7 +601,7 @@ async fn get_balance() {
     let (_faucet_txids, faucet_utxos, faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
         faucet_utxos.first().unwrap().into_parts();
-    let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
+    let faucet_addr_script = AddrScript::from_script(faucet_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     let reader_faucet_balance = dbg!(db_reader
@@ -614,7 +616,7 @@ async fn get_balance() {
     let (_recipient_txids, recipient_utxos, recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
         recipient_utxos.first().unwrap().into_parts();
-    let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
+    let recipient_addr_script = AddrScript::from_script(recipient_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     let reader_recipient_balance = dbg!(db_reader
@@ -633,7 +635,7 @@ async fn check_faucet_spent_map() {
     let (_faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
         faucet_utxos.first().unwrap().into_parts();
-    let faucet_addr_script = AddrScript::from_script(&faucet_script.as_raw_bytes())
+    let faucet_addr_script = AddrScript::from_script(faucet_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     // collect faucet outpoints
@@ -730,7 +732,7 @@ async fn check_recipient_spent_map() {
     let (_recipient_txids, recipient_utxos, _recipient_balance) = recipient;
     let (_recipient_address, _txid, _output_index, recipient_script, _satoshis, _height) =
         recipient_utxos.first().unwrap().into_parts();
-    let recipient_addr_script = AddrScript::from_script(&recipient_script.as_raw_bytes())
+    let recipient_addr_script = AddrScript::from_script(recipient_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
     // collect faucet outpoints
