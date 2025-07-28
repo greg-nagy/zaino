@@ -1320,10 +1320,11 @@ mod zebrad {
             // The state service does not fail.
             assert!(state_service_result.is_ok());
             let state_service_result = state_service_result.unwrap();
-            dbg!(&state_service_result);
             assert_eq!(state_service_result.size, 1);
             assert!(state_service_result.bytes > 0);
+            assert_eq!(state_service_result.bytes, 9199);
             assert!(state_service_result.usage > 0);
+            assert_eq!(state_service_result.usage, 216);
 
             test_manager.close().await;
         }
