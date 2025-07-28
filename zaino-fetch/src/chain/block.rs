@@ -382,10 +382,6 @@ impl FullBlock {
         Ok(full_block)
     }
 
-    pub fn parse_pre_v4(data: &[u8]) -> Result<(&[u8], Self), ParseError> {
-        todo!()
-    }
-
     /// Converts a zcash full block into a compact block.
     pub fn into_compact(
         self,
