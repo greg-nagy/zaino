@@ -561,9 +561,8 @@ impl ZainoDB {
                     // Height must be exactly +1 over the current tip
                     if block_height.0 != last_height.0 + 1 {
                         return Err(FinalisedStateError::Custom(format!(
-                            "cannot write block at height {:?}; \
-                     current tip is {:?}",
-                            block_height, last_height
+                            "cannot write block at height {block_height:?}; \
+                     current tip is {last_height:?}"
                         )));
                     }
                 }
@@ -571,8 +570,7 @@ impl ZainoDB {
                 Err(lmdb::Error::NotFound) => {
                     if block_height.0 != 1 {
                         return Err(FinalisedStateError::Custom(format!(
-                            "first block must be height 1, got {:?}",
-                            block_height
+                            "first block must be height 1, got {block_height:?}"
                         )));
                     }
                 }
