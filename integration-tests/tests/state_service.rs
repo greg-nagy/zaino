@@ -1333,7 +1333,7 @@ mod zebrad {
                 zebra_rpc::methods::GetRawTransaction::Object(inner) => {
                     assert_eq!(inner.size.expect("Some size instead of None"), 9199);
                 }
-                _ => panic!("expected getrawtx: {:?} to be an Object", getrawtx),
+                _ => panic!("expected getrawtx: {getrawtx:?} to be an Object"),
             }
 
             test_manager.close().await;
