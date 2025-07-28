@@ -185,7 +185,7 @@ fn parse_joinsplits(data: &[u8], version: u32) -> Result<(&[u8], Vec<JoinSplit>)
     Ok((&data[cursor.position() as usize..], join_splits))
 }
 
-/// spend is a Sapling Spend Description as described in 7.3 of the Zcash
+/// Spend is a Sapling Spend Description as described in 7.3 of the Zcash
 /// protocol specification.
 #[derive(Debug, Clone)]
 struct Spend {
@@ -518,7 +518,8 @@ impl TransactionData {
             parse_transparent(&data[cursor.position() as usize..])?;
         cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
 
-        let lock_time = read_u32(&mut cursor, "Error reading TransactionData::lock_time")?;
+        // let lock_time = read_u32(&mut cursor, "Error reading TransactionData::lock_time")?;
+        skip_bytes(&mut cursor, 4, "Error skipping TransactionData::nLockTime")?;
 
         Ok((
             &data[cursor.position() as usize..],
@@ -608,7 +609,7 @@ impl TransactionData {
         version: u32,
         n_version_group_id: u32,
     ) -> Result<(&[u8], Self), ParseError> {
-        if !(n_version_group_id == 0x03C48270) {
+        if n_version_group_id != 0x03C48270 {
             return Err(ParseError::InvalidData(
                 "n_version_group_id must be 0x03C48270".to_string(),
             ));
@@ -932,8 +933,7 @@ impl TryFrom<i32> for TxVersion {
             4 => Ok(TxVersion::V4),
             5 => Ok(TxVersion::V5),
             _ => Err(ParseError::InvalidData(format!(
-                "Unsupported tx version {}",
-                v
+                "Unsupported tx version {v}"
             ))),
         }
     }
@@ -983,7 +983,7 @@ impl ParseFromSlice for FullTransaction {
                     ));
                 }
             }
-            3 | 4 | 5 => {
+            3..=5 => {
                 if !f_overwintered {
                     return Err(ParseError::InvalidData(
                         "fOverwintered must be set for tx versions 3 and above".to_string(),
@@ -992,14 +992,13 @@ impl ParseFromSlice for FullTransaction {
             }
             _ => {
                 return Err(ParseError::InvalidData(format!(
-                    "Unsupported tx version {}",
-                    version
+                    "Unsupported tx version {version}"
                 )))
             }
         }
 
         let n_version_group_id: Option<u32> = match version {
-            3 | 4 | 5 => Some(read_u32(
+            3..=5 => Some(read_u32(
                 &mut cursor,
                 "Error reading FullTransaction::n_version_group_id",
             )?),
@@ -1027,8 +1026,7 @@ impl ParseFromSlice for FullTransaction {
 
             _ => {
                 return Err(ParseError::InvalidData(format!(
-                    "Unsupported tx version {}",
-                    version
+                    "Unsupported tx version {version}"
                 )))
             }
         };
