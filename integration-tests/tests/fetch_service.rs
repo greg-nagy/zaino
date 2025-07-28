@@ -326,7 +326,6 @@ async fn test_get_mempool_info(validator: &ValidatorKind) {
             assert_eq!(json_info.bytes, fetch_info.bytes);
             assert_eq!(json_info.usage, fetch_info.usage);
             assert!(fetch_info.usage > 0);
-            assert!(json_info.usage > 0);
         }
     };
 
