@@ -981,17 +981,17 @@ impl ParseFromSlice for FullTransaction {
             3 => TransactionData::parse_v3(
                 &data[cursor.position() as usize..],
                 version,
-                n_version_group_id.unwrap(),
+                n_version_group_id.unwrap(), // This won't fail, because of the above match
             )?,
             4 => TransactionData::parse_v4(
                 &data[cursor.position() as usize..],
                 version,
-                n_version_group_id.unwrap(),
+                n_version_group_id.unwrap(), // This won't fail, because of the above match
             )?,
             5 => TransactionData::parse_v5(
                 &data[cursor.position() as usize..],
                 version,
-                n_version_group_id.unwrap(),
+                n_version_group_id.unwrap(), // This won't fail, because of the above match
             )?,
 
             _ => {
@@ -1000,25 +1000,6 @@ impl ParseFromSlice for FullTransaction {
                 )))
             }
         };
-        // if version < 4 {
-        //     return Err(ParseError::InvalidData(format!(
-        //         "version number {version} must be greater or equal to 4"
-        //     )));
-        // }
-
-        // let (remaining_data, transaction_data) = if version <= 4 {
-        //     TransactionData::parse_v4(
-        //         &data[cursor.position() as usize..],
-        //         version,
-        //         n_version_group_id,
-        //     )?
-        // } else {
-        //     TransactionData::parse_v5(
-        //         &data[cursor.position() as usize..],
-        //         version,
-        //         n_version_group_id,
-        //     )?
-        // };
 
         let full_transaction = FullTransaction {
             raw_transaction: transaction_data,
