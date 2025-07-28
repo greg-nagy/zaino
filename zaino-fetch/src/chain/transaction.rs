@@ -146,8 +146,43 @@ fn parse_transparent(data: &[u8]) -> Result<(&[u8], Vec<TxIn>, Vec<TxOut>), Pars
     Ok((&data[cursor.position() as usize..], tx_ins, tx_outs))
 }
 
+/// Parses JoinSplits from raw transaction bytes.
+///
+/// The fields that this function parses are:
+///
+/// - nJoinSplit: compactSize
+/// - vJoinSplit: JSDescriptionBCTV14[nJoinSplit] (if version 1 < tx_version < 4)
+/// - vJoinSplit: JSDescriptionGroth16[nJoinSplit] (if tx_version >= 4)
+/// - joinSplitPubKey: byte[32]
+/// - joinSplitSig: byte[64]
+///
+/// TODO: Enable skipped fields (all of them currently).
 fn parse_joinsplits(data: &[u8], version: u32) -> Result<(&[u8], Vec<JoinSplit>), ParseError> {
-    todo!()
+    let mut cursor = Cursor::new(data);
+
+    let join_split_count = CompactSize::read(&mut cursor)?;
+    let mut join_splits = Vec::with_capacity(join_split_count as usize);
+    for _ in 0..join_split_count {
+        let (remaining_data, join_split) =
+            JoinSplit::parse_from_slice(&data[cursor.position() as usize..], None, Some(version))?;
+        join_splits.push(join_split);
+        cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
+    }
+
+    if join_split_count > 0 {
+        skip_bytes(
+            &mut cursor,
+            32,
+            "Error skipping TransactionData::joinSplitPubKey",
+        )?;
+        skip_bytes(
+            &mut cursor,
+            64,
+            "could not skip TransactionData::joinSplitSig",
+        )?;
+    };
+
+    Ok((&data[cursor.position() as usize..], join_splits))
 }
 
 /// spend is a Sapling Spend Description as described in 7.3 of the Zcash
