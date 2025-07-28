@@ -468,7 +468,7 @@ struct TransactionData {
 impl TransactionData {
     /// Parses a v1 transaction.
     ///
-    /// A v1 transactions contains the following fields:
+    /// A v1 transaction contains the following fields:
     ///
     /// - header: u32
     /// - tx_in_count: usize
@@ -506,6 +506,20 @@ impl TransactionData {
         ))
     }
 
+    /// Parses a v2 transaction.
+    ///
+    /// A v2 transaction contains the following fields:
+    ///
+    /// - header: u32
+    /// - tx_in_count: usize
+    /// - tx_in: tx_in
+    /// - tx_out_count: usize
+    /// - tx_out: tx_out
+    /// - lock_time: u32
+    /// - nJoinSplit: compactSize <- New
+    /// - vJoinSplit: JSDescriptionBCTV14[nJoinSplit] <- New
+    /// - joinSplitPubKey: byte[32] <- New
+    /// - joinSplitSig: byte[64] <- New
     pub(crate) fn parse_v2(data: &[u8], version: u32) -> Result<(&[u8], Self), ParseError> {
         let mut cursor = Cursor::new(data);
 
@@ -513,7 +527,7 @@ impl TransactionData {
             parse_transparent(&data[cursor.position() as usize..])?;
         cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
 
-        let lock_time = read_u32(&mut cursor, "Error reading TransactionData::lock_time")?;
+        let _lock_time = read_u32(&mut cursor, "Error reading TransactionData::lock_time")?;
 
         let joinsplit_data = parse_joinsplits(data, version)?.1;
 
@@ -538,12 +552,68 @@ impl TransactionData {
         ))
     }
 
+    /// Parses a v3 transaction.
+    ///
+    /// A v3 transaction contains the following fields:
+    ///
+    /// - header: u32
+    /// - nVersionGroupId: u32 = 0x03C48270 <- New
+    /// - tx_in_count: usize
+    /// - tx_in: tx_in
+    /// - tx_out_count: usize
+    /// - tx_out: tx_out
+    /// - lock_time: u32
+    /// - nExpiryHeight: u32 <- New
+    /// - nJoinSplit: compactSize
+    /// - vJoinSplit: JSDescriptionBCTV14[nJoinSplit]
+    /// - joinSplitPubKey: byte[32]
+    /// - joinSplitSig: byte[64]
     pub(crate) fn parse_v3(
         data: &[u8],
         version: u32,
         n_version_group_id: u32,
     ) -> Result<(&[u8], Self), ParseError> {
-        todo!()
+        if !(n_version_group_id == 0x03C48270) {
+            return Err(ParseError::InvalidData(
+                "n_version_group_id must be 0x03C48270".to_string(),
+            ));
+        }
+        let mut cursor = Cursor::new(data);
+
+        let (remaining_data, transparent_inputs, transparent_outputs) =
+            parse_transparent(&data[cursor.position() as usize..])?;
+        cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
+
+        // let _lock_time = read_u32(&mut cursor, "Error reading TransactionData::lock_time")?;
+        skip_bytes(&mut cursor, 4, "Error skipping TransactionData::nLockTime")?;
+        // let _expiry_height = read_u32(&mut cursor, "Error reading TransactionData::expiry_height")?;
+        skip_bytes(
+            &mut cursor,
+            4,
+            "Error skipping TransactionData::nExpiryHeight",
+        )?;
+
+        let joinsplit_data = parse_joinsplits(data, version)?.1;
+
+        Ok((
+            &data[cursor.position() as usize..],
+            TransactionData {
+                f_overwintered: true,
+                version,
+                consensus_branch_id: 0,
+                transparent_inputs,
+                transparent_outputs,
+                // lock_time: Some(lock_time),
+                join_splits: joinsplit_data,
+                n_version_group_id: None,
+                value_balance_sapling: None,
+                shielded_spends: Vec::new(),
+                shielded_outputs: Vec::new(),
+                orchard_actions: Vec::new(),
+                value_balance_orchard: None,
+                anchor_orchard: None,
+            },
+        ))
     }
 
     fn parse_v4(
@@ -893,10 +963,13 @@ impl ParseFromSlice for FullTransaction {
             }
         }
 
-        let n_version_group_id = read_u32(
-            &mut cursor,
-            "Error reading FullTransaction::n_version_group_id",
-        )?;
+        let n_version_group_id: Option<u32> = match version {
+            3 | 4 | 5 => Some(read_u32(
+                &mut cursor,
+                "Error reading FullTransaction::n_version_group_id",
+            )?),
+            _ => None,
+        };
 
         let (remaining_data, transaction_data) = match version {
             1 => TransactionData::parse_v1(&data[cursor.position() as usize..], version)?,
@@ -904,17 +977,17 @@ impl ParseFromSlice for FullTransaction {
             3 => TransactionData::parse_v3(
                 &data[cursor.position() as usize..],
                 version,
-                n_version_group_id,
+                n_version_group_id.unwrap(),
             )?,
             4 => TransactionData::parse_v4(
                 &data[cursor.position() as usize..],
                 version,
-                n_version_group_id,
+                n_version_group_id.unwrap(),
             )?,
             5 => TransactionData::parse_v5(
                 &data[cursor.position() as usize..],
                 version,
-                n_version_group_id,
+                n_version_group_id.unwrap(),
             )?,
 
             _ => {
