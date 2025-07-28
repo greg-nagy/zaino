@@ -1326,6 +1326,16 @@ mod zebrad {
             assert!(state_service_result.usage > 0);
             assert_eq!(state_service_result.usage, 216);
 
+            // accessing the transaction JSON Object
+            let getrawtx = &state_service_subscriber.mempool.get_mempool().await[0].1 .0;
+            // ...and its boxed inner field
+            match getrawtx {
+                zebra_rpc::methods::GetRawTransaction::Object(inner) => {
+                    assert_eq!(inner.size.expect("Some size instead of None"), 9199);
+                }
+                _ => panic!("expected getrawtx: {:?} to be an Object", getrawtx),
+            }
+
             test_manager.close().await;
         }
 
