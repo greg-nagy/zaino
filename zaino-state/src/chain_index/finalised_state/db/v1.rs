@@ -2797,15 +2797,6 @@ impl DbV1 {
         })
     }
 
-    // *** DbReader creation *** TODO: remove?
-
-    // /// Create a read-only facade backed by *this* live database.
-    // pub(crate) fn to_reader(self: &Arc<Self>) -> DbReader {
-    //     DbReader {
-    //         inner: Arc::clone(self),
-    //     }
-    // }
-
     // *** Internal DB validation / varification ***
 
     /// Return `true` if *height* is already known-good.

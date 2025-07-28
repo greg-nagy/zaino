@@ -57,6 +57,7 @@ impl Capability {
         .union(Capability::CHAIN_BLOCK_EXT)
         .union(Capability::TRANSPARENT_HIST_EXT);
 
+    /// Checks for the given capability.
     #[inline]
     pub const fn has(self, other: Capability) -> bool {
         self.contains(other)
@@ -85,7 +86,7 @@ impl DbMetadata {
     }
 
     /// Returns the version data.
-    pub(crate) fn verison(&self) -> DbVersion {
+    pub(crate) fn version(&self) -> DbVersion {
         self.version
     }
 
@@ -284,6 +285,7 @@ pub trait DbCore: DbRead + DbWrite + Send + Sync {
     /// Stops background tasks, syncs, etc.
     async fn shutdown(&self) -> Result<(), FinalisedStateError>;
 
+    /// Return `std::any::Any`
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
@@ -349,8 +351,6 @@ pub trait BlockTransparentExt: Send + Sync {
 #[async_trait]
 pub trait BlockShieldedExt: Send + Sync {
     /// Fetch the serialized SaplingCompactTx for the given TxIndex, if present.
-    ///
-    /// This uses an optimized lookup without decoding the full TxidList.
     async fn get_sapling(
         &self,
         tx_index: TxIndex,
@@ -361,8 +361,6 @@ pub trait BlockShieldedExt: Send + Sync {
         -> Result<SaplingTxList, FinalisedStateError>;
 
     /// Fetches block sapling tx data for the given height range.
-    ///
-    /// Uses cursor based fetch.
     async fn get_block_range_sapling(
         &self,
         start: Height,
@@ -370,8 +368,6 @@ pub trait BlockShieldedExt: Send + Sync {
     ) -> Result<Vec<SaplingTxList>, FinalisedStateError>;
 
     /// Fetch the serialized OrchardCompactTx for the given TxIndex, if present.
-    ///
-    /// This uses an optimized lookup without decoding the full TxidList.
     async fn get_orchard(
         &self,
         tx_index: TxIndex,
@@ -382,8 +378,6 @@ pub trait BlockShieldedExt: Send + Sync {
         -> Result<OrchardTxList, FinalisedStateError>;
 
     /// Fetches block orchard tx data for the given height range.
-    ///
-    /// Uses cursor based fetch.
     async fn get_block_range_orchard(
         &self,
         start: Height,
@@ -397,8 +391,6 @@ pub trait BlockShieldedExt: Send + Sync {
     ) -> Result<CommitmentTreeData, FinalisedStateError>;
 
     /// Fetches block commitment tree data for the given height range.
-    ///
-    /// Uses cursor based fetch.
     async fn get_block_range_commitment_tree_data(
         &self,
         start: Height,

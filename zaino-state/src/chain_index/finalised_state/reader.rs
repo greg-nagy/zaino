@@ -60,17 +60,6 @@ impl DbReader {
         self.inner.get_block_hash(height).await
     }
 
-    // /// Fetch the height range for the given block hashes.
-    // pub(crate) async fn get_block_range_by_hash(
-    //     &self,
-    //     start_hash: Hash,
-    //     end_hash: Hash,
-    // ) -> Result<(Height, Height), FinalisedStateError> {
-    //     self.inner
-    //         .get_block_range_by_hash(start_hash, end_hash)
-    //         .await
-    // }
-
     // ***** Block Core Ext *****
 
     fn block_core_ext(&self) -> Result<&dyn BlockCoreExt, FinalisedStateError> {
