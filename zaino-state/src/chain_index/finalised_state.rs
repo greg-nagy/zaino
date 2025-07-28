@@ -273,7 +273,7 @@ impl ZainoDB {
 
     /// Returns the status of ZainoDB.
     pub(crate) async fn status(&self) -> StatusType {
-        self.status.load().into()
+        (&self.status).into()
     }
 
     /// Awaits until the DB returns a Ready status.
