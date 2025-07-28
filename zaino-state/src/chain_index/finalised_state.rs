@@ -2778,9 +2778,9 @@ impl ZainoDB {
                 // Check spent record
                 let outpoint = Outpoint::new(*input.prevout_txid(), input.prevout_index());
                 let outpoint_bytes = outpoint.to_bytes()?;
-                let val = ro.get(self.spent, &outpoint_bytes).map_err(|_| {
-                    fail(&format!("missing spent index for outpoint {:?}", outpoint))
-                })?;
+                let val = ro
+                    .get(self.spent, &outpoint_bytes)
+                    .map_err(|_| fail(&format!("missing spent index for outpoint {outpoint:?}")))?;
                 let entry = StoredEntryFixed::<TxIndex>::from_bytes(val)
                     .map_err(|e| fail(&format!("corrupt spent entry: {e}")))?;
                 if !entry.verify(&outpoint_bytes) {
