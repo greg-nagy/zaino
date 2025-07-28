@@ -320,16 +320,11 @@ async fn test_get_mempool_info(validator: &ValidatorKind) {
         ValidatorKind::Zcashd => {
             // Zcashd implements the RPC, so the call should succeed and match JSON-RPC output.
             let fetch_info = fetch_service_subscriber.get_mempool_info().await.unwrap();
-
             let json_info = json_service.get_mempool_info().await.unwrap();
 
-            // We only assert that the size (number of transactions) and bytes match.
             assert_eq!(json_info.size, fetch_info.size);
             assert_eq!(json_info.bytes, fetch_info.bytes);
-
-            // The memory usage is tied to how it was implemented,
-            // and cannot be guaranteed to be the same set of transactions.
-            // We only test that the memory usage is non-zero.
+            assert_eq!(json_info.usage, fetch_info.usage);
             assert!(fetch_info.usage > 0);
             assert!(json_info.usage > 0);
         }
@@ -1572,7 +1567,6 @@ mod zebrad {
             fetch_service_get_raw_mempool(&ValidatorKind::Zebrad).await;
         }
 
-        /// TODO: Test fails because Zebra does not expose a `getmempoolinfo` endpoint
         #[tokio::test]
         pub(crate) async fn mempool_info() {
             test_get_mempool_info(&ValidatorKind::Zebrad).await;
