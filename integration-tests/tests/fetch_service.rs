@@ -712,7 +712,6 @@ async fn fetch_service_get_block_count(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
-/// TODO: This test started failing for some reason
 async fn fetch_service_validate_address(validator: &ValidatorKind) {
     let (mut test_manager, _fetch_service, fetch_service_subscriber) =
         create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
