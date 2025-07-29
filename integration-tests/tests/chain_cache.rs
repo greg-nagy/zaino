@@ -120,7 +120,10 @@ mod chain_query_interface {
 
     use futures::TryStreamExt as _;
     use zaino_state::{
-        bench::chain_index::interface::{ChainIndex, NodeBackedChainIndex},
+        bench::chain_index::{
+            self,
+            interface::{ChainIndex, NodeBackedChainIndex},
+        },
         StateService, StateServiceConfig, ZcashService as _,
     };
     use zebra_chain::serialization::ZcashDeserializeInto;
@@ -236,6 +239,46 @@ mod chain_query_interface {
             let block = block
                 .zcash_deserialize_into::<zebra_chain::block::Block>()
                 .unwrap();
+            assert_eq!(
+                block.hash().0,
+                snapshot
+                    .heights_to_hashes
+                    .get(
+                        &chain_index::types::Height::try_from(block.coinbase_height().unwrap())
+                            .unwrap()
+                    )
+                    .unwrap()
+                    .0
+            );
+        }
+    }
+    #[tokio::test]
+    async fn find_fork_point() {
+        let (test_manager, _json_service, chain_index) = create_test_manager_and_chain_index(
+            &ValidatorKind::Zebrad,
+            None,
+            true,
+            false,
+            false,
+            true,
+        )
+        .await;
+
+        // this delay had to increase. Maybe we tweak sync loop rerun time?
+        test_manager.generate_blocks_with_delay(5).await;
+        let snapshot = chain_index.snapshot_nonfinalized_state();
+        assert_eq!(snapshot.as_ref().blocks.len(), 6);
+        for block_hash in snapshot.heights_to_hashes.values() {
+            // As all blocks are currently on the main chain,
+            // this should be the block provided
+            assert_eq!(
+                block_hash,
+                &chain_index
+                    .find_fork_point(&snapshot, block_hash)
+                    .unwrap()
+                    .unwrap()
+                    .0
+            )
         }
     }
 }

@@ -135,7 +135,7 @@ pub trait ChainIndex {
     /// chain, or the block itself if it is on the main chain.
     fn find_fork_point(
         &self,
-        snapshot: impl AsRef<Self::Snapshot>,
+        snapshot: &Self::Snapshot,
         block_hash: &types::Hash,
     ) -> Result<Option<(types::Hash, types::Height)>, Self::Error>;
     /// given a transaction id, returns the transaction
@@ -233,7 +233,7 @@ impl ChainIndex for NodeBackedChainIndex {
     /// chain, or the block itself if it is on the main chain.
     fn find_fork_point(
         &self,
-        snapshot: impl AsRef<Self::Snapshot>,
+        snapshot: &Self::Snapshot,
         block_hash: &types::Hash,
     ) -> Result<Option<(types::Hash, types::Height)>, Self::Error> {
         let Some(block) = snapshot.as_ref().get_chainblock_by_hash(block_hash) else {

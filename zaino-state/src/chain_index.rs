@@ -14,6 +14,7 @@
 pub mod encoding;
 /// All state at least 100 blocks old
 pub mod finalised_state;
+/// The public interface to the chain index
 pub mod interface;
 /// State in the mempool, not yet on-chain
 pub mod mempool;
