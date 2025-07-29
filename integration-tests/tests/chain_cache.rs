@@ -1,9 +1,8 @@
-use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
 use zaino_state::{
     bench::chain_index::non_finalised_state::{BlockchainSource, NonFinalizedState},
-    BackendType,
+    BackendType, StateService, StateServiceConfig, ZcashService as _,
 };
-use zaino_testutils::{TestManager, ValidatorKind};
+use zaino_testutils::{TestManager, Validator as _, ValidatorKind};
 
 async fn create_test_manager_and_nfs(
     validator: &ValidatorKind,
@@ -14,14 +13,14 @@ async fn create_test_manager_and_nfs(
     enable_clients: bool,
 ) -> (
     TestManager,
-    JsonRpSeeConnector,
+    StateService,
     zaino_state::bench::chain_index::non_finalised_state::NonFinalizedState,
 ) {
     let test_manager = TestManager::launch(
         validator,
         &BackendType::Fetch,
         None,
-        chain_cache,
+        chain_cache.clone(),
         enable_zaino,
         false,
         false,
@@ -32,21 +31,10 @@ async fn create_test_manager_and_nfs(
     .await
     .unwrap();
 
-    let json_service = JsonRpSeeConnector::new_with_basic_auth(
-        test_node_and_return_url(
-            test_manager.zebrad_rpc_listen_address,
-            false,
-            None,
-            Some("xxxxxx".to_string()),
-            Some("xxxxxx".to_string()),
-        )
-        .await
-        .unwrap(),
-        "xxxxxx".to_string(),
-        "xxxxxx".to_string(),
-    )
-    .unwrap();
-
+    let state_chain_cache_dir = match chain_cache {
+        Some(dir) => dir,
+        None => test_manager.data_dir.clone(),
+    };
     let network = match test_manager.network.to_string().as_str() {
         "Regtest" => zebra_chain::parameters::Network::new_regtest(
             zebra_chain::parameters::testnet::ConfiguredActivationHeights {
@@ -67,13 +55,45 @@ async fn create_test_manager_and_nfs(
         "Mainnet" => zebra_chain::parameters::Network::Mainnet,
         _ => panic!("Incorrect newtork type found."),
     };
+    let state_service = StateService::spawn(StateServiceConfig::new(
+        zebra_state::Config {
+            cache_dir: state_chain_cache_dir,
+            ephemeral: false,
+            delete_old_database: true,
+            debug_stop_at_height: None,
+            debug_validity_check_interval: None,
+        },
+        test_manager.zebrad_rpc_listen_address,
+        false,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        test_manager
+            .local_net
+            .data_dir()
+            .path()
+            .to_path_buf()
+            .join("zaino"),
+        None,
+        network.clone(),
+        true,
+        true,
+    ))
+    .await
+    .unwrap();
 
-    let non_finalized_state =
-        NonFinalizedState::initialize(BlockchainSource::Fetch(json_service.clone()), network)
-            .await
-            .unwrap();
+    let non_finalized_state = NonFinalizedState::initialize(
+        BlockchainSource::State(state_service.read_state_service().clone()),
+        network,
+    )
+    .await
+    .unwrap();
 
-    (test_manager, json_service, non_finalized_state)
+    (test_manager, state_service, non_finalized_state)
 }
 
 #[tokio::test]

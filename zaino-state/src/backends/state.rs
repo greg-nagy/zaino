@@ -135,6 +135,12 @@ impl StateService {
         })
         .await
     }
+
+    #[cfg(feature = "bench")]
+    /// Helper for tests
+    pub fn read_state_service(&self) -> &ReadStateService {
+        &self.read_state_service
+    }
 }
 
 #[async_trait]
