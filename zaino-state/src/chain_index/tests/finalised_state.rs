@@ -20,6 +20,7 @@ use crate::{
 };
 
 /// Reads test data from file.
+#[allow(clippy::type_complexity)]
 fn read_vectors_from_file<P: AsRef<Path>>(
     base_dir: P,
 ) -> io::Result<(
@@ -74,6 +75,7 @@ fn read_vectors_from_file<P: AsRef<Path>>(
     Ok((full_blocks, faucet, recipient))
 }
 
+#[allow(clippy::type_complexity)]
 fn load_test_vectors() -> io::Result<(
     Vec<(u32, ChainBlock, CompactBlock)>,
     (Vec<String>, Vec<GetAddressUtxos>, u64),

@@ -60,17 +60,6 @@ impl DbReader {
         self.inner.get_block_hash(height).await
     }
 
-    // /// Fetch the height range for the given block hashes.
-    // pub(crate) async fn get_block_range_by_hash(
-    //     &self,
-    //     start_hash: Hash,
-    //     end_hash: Hash,
-    // ) -> Result<(Height, Height), FinalisedStateError> {
-    //     self.inner
-    //         .get_block_range_by_hash(start_hash, end_hash)
-    //         .await
-    // }
-
     // ***** Block Core Ext *****
 
     fn block_core_ext(&self) -> Result<&dyn BlockCoreExt, FinalisedStateError> {
@@ -88,7 +77,7 @@ impl DbReader {
     }
 
     /// Fetch block header data by height.
-    pub async fn get_block_header(
+    pub(crate) async fn get_block_header(
         &self,
         height: Height,
     ) -> Result<BlockHeaderData, FinalisedStateError> {
@@ -96,7 +85,7 @@ impl DbReader {
     }
 
     /// Fetches block headers for the given height range.
-    pub async fn get_block_range_headers(
+    pub(crate) async fn get_block_range_headers(
         &self,
         start: Height,
         end: Height,
@@ -107,17 +96,17 @@ impl DbReader {
     }
 
     /// Fetch the txid bytes for a given TxIndex.
-    pub async fn get_txid(&self, idx: TxIndex) -> Result<Hash, FinalisedStateError> {
+    pub(crate) async fn get_txid(&self, idx: TxIndex) -> Result<Hash, FinalisedStateError> {
         self.block_core_ext()?.get_txid(idx).await
     }
 
     /// Fetch block txids by height.
-    pub async fn get_block_txids(&self, h: Height) -> Result<TxidList, FinalisedStateError> {
+    pub(crate) async fn get_block_txids(&self, h: Height) -> Result<TxidList, FinalisedStateError> {
         self.block_core_ext()?.get_block_txids(h).await
     }
 
     /// Fetches block txids for the given height range.
-    pub async fn get_block_range_txids(
+    pub(crate) async fn get_block_range_txids(
         &self,
         s: Height,
         e: Height,

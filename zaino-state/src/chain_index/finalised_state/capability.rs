@@ -23,7 +23,7 @@ bitflags! {
     ///
     /// Each flag corresponds 1-for-1 with an extension trait.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-    pub struct Capability: u32 {
+    pub(crate) struct Capability: u32 {
         /* ------ core database functionality ------ */
         /// Implements `DbRead`.
         const READ_CORE             = 0b0000_0001;
@@ -48,7 +48,7 @@ bitflags! {
 
 impl Capability {
     /// All features supported by a **fresh v1** database.
-    pub const LATEST: Capability = Capability::READ_CORE
+    pub(crate) const LATEST: Capability = Capability::READ_CORE
         .union(Capability::WRITE_CORE)
         .union(Capability::BLOCK_CORE_EXT)
         .union(Capability::BLOCK_TRANSPARENT_EXT)
@@ -57,8 +57,9 @@ impl Capability {
         .union(Capability::CHAIN_BLOCK_EXT)
         .union(Capability::TRANSPARENT_HIST_EXT);
 
+    /// Checks for the given capability.
     #[inline]
-    pub const fn has(self, other: Capability) -> bool {
+    pub(crate) const fn has(self, other: Capability) -> bool {
         self.contains(other)
     }
 }
@@ -68,7 +69,7 @@ impl Capability {
 /// Stored under the fixed key `"metadata"` in the LMDB metadata database.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub struct DbMetadata {
+pub(crate) struct DbMetadata {
     /// Encodes the version and schema hash.
     pub(crate) version: DbVersion,
     /// BLAKE2b-256 hash of the schema definition (includes struct layout, types, etc.)
@@ -85,7 +86,7 @@ impl DbMetadata {
     }
 
     /// Returns the version data.
-    pub(crate) fn verison(&self) -> DbVersion {
+    pub(crate) fn version(&self) -> DbVersion {
         self.version
     }
 
@@ -284,6 +285,7 @@ pub trait DbCore: DbRead + DbWrite + Send + Sync {
     /// Stops background tasks, syncs, etc.
     async fn shutdown(&self) -> Result<(), FinalisedStateError>;
 
+    /// Return `std::any::Any`
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
@@ -349,8 +351,6 @@ pub trait BlockTransparentExt: Send + Sync {
 #[async_trait]
 pub trait BlockShieldedExt: Send + Sync {
     /// Fetch the serialized SaplingCompactTx for the given TxIndex, if present.
-    ///
-    /// This uses an optimized lookup without decoding the full TxidList.
     async fn get_sapling(
         &self,
         tx_index: TxIndex,
@@ -361,8 +361,6 @@ pub trait BlockShieldedExt: Send + Sync {
         -> Result<SaplingTxList, FinalisedStateError>;
 
     /// Fetches block sapling tx data for the given height range.
-    ///
-    /// Uses cursor based fetch.
     async fn get_block_range_sapling(
         &self,
         start: Height,
@@ -370,8 +368,6 @@ pub trait BlockShieldedExt: Send + Sync {
     ) -> Result<Vec<SaplingTxList>, FinalisedStateError>;
 
     /// Fetch the serialized OrchardCompactTx for the given TxIndex, if present.
-    ///
-    /// This uses an optimized lookup without decoding the full TxidList.
     async fn get_orchard(
         &self,
         tx_index: TxIndex,
@@ -382,8 +378,6 @@ pub trait BlockShieldedExt: Send + Sync {
         -> Result<OrchardTxList, FinalisedStateError>;
 
     /// Fetches block orchard tx data for the given height range.
-    ///
-    /// Uses cursor based fetch.
     async fn get_block_range_orchard(
         &self,
         start: Height,
@@ -397,8 +391,6 @@ pub trait BlockShieldedExt: Send + Sync {
     ) -> Result<CommitmentTreeData, FinalisedStateError>;
 
     /// Fetches block commitment tree data for the given height range.
-    ///
-    /// Uses cursor based fetch.
     async fn get_block_range_commitment_tree_data(
         &self,
         start: Height,

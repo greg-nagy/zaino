@@ -13,6 +13,7 @@ use capability::*;
 use db::v1::*;
 use entry::*;
 use reader::*;
+use tokio::time::{interval, MissedTickBehavior};
 
 use crate::{
     config::BlockCacheConfig, error::FinalisedStateError, ChainBlock, Hash, Height, StatusType,
@@ -23,7 +24,7 @@ use lmdb::{Environment, EnvironmentFlags, Transaction};
 use std::{path::Path, sync::Arc, time::Duration};
 
 /// ZainoDB: Versioned database holding the finalised portion of the blockchain.
-pub struct ZainoDB {
+pub(crate) struct ZainoDB {
     db: Arc<dyn DbCore + Send + Sync>,
     caps: Capability,
     cfg: BlockCacheConfig,
@@ -32,6 +33,7 @@ pub struct ZainoDB {
 impl ZainoDB {
     // ***** Db Control *****
 
+    /// Spawns a ZainoDB, opens a database if a path is given in the config else  creates a new db.
     pub(crate) async fn spawn(cfg: BlockCacheConfig) -> Result<Self, FinalisedStateError> {
         let meta_opt = Self::peek_metadata(&cfg.db_path).await?;
 
@@ -62,23 +64,32 @@ impl ZainoDB {
         })
     }
 
+    /// Gracefully shuts down the running ZainoDB, closing all child processes.
     pub(crate) async fn shutdown(&self) -> Result<(), FinalisedStateError> {
         self.db.shutdown().await
     }
 
+    /// Returns the status of the running ZainoDB.
     pub(crate) async fn status(&self) -> StatusType {
         self.db.status().await
     }
 
+    /// Waits until the ZainoDB returns a Ready status.
     pub(crate) async fn wait_until_ready(&self) {
+        let mut ticker = interval(Duration::from_millis(100));
+        ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
         loop {
+            ticker.tick().await;
             if self.db.status().await == StatusType::Ready {
                 break;
             }
-            tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
 
+    /// Creates a read-only viewer onto the running ZainoDB.
+    ///
+    /// NOTE: **ALL** chain fetch should use DbReader instead of directly using ZainoDB.
     pub(crate) fn to_reader(self: &Arc<Self>) -> DbReader {
         DbReader {
             inner: Arc::clone(self),
@@ -122,10 +133,21 @@ impl ZainoDB {
     }
 
     // ***** Db Core Write *****
+
+    /// Writes a block to the database.
+    ///
+    /// This **MUST** be the *next* block in the chain (db_tip_height + 1).
     pub(crate) async fn write_block(&self, block: ChainBlock) -> Result<(), FinalisedStateError> {
         self.db.write_block(block).await
     }
 
+    /// Deletes a block from the database by height.
+    ///
+    /// This **MUST** be the *top* block in the db.
+    ///
+    /// Uses `delete_block` internally, fails if the block to be deleted cannot be correctly built.
+    /// If this happens, the block to be deleted must be fetched from the validator and given to `delete_block`
+    /// to ensure the block has been completely wiped from the database.
     pub(crate) async fn delete_block_at_height(
         &self,
         height: Height,
@@ -133,24 +155,33 @@ impl ZainoDB {
         self.db.delete_block_at_height(height).await
     }
 
+    /// Deletes a given block from the database.
+    ///
+    /// This **MUST** be the *top* block in the db.
     pub(crate) async fn delete_block(&self, block: &ChainBlock) -> Result<(), FinalisedStateError> {
         self.db.delete_block(block).await
     }
 
     // ***** DB Core Read *****
 
+    /// Returns the highest block height held in the database.
     pub(crate) async fn db_height(&self) -> Result<Option<Height>, FinalisedStateError> {
         self.db.db_height().await
     }
 
+    /// Returns the block height for the given block hash *if* present in the finalised state.
+    ///
+    /// TODO: Should theis return `Result<Option<Height>, FinalisedStateError>`?
     pub(crate) async fn get_block_height(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
         self.db.get_block_height(hash).await
     }
 
+    /// Returns the block block hash for the given block height *if* present in the finlaised state.
     pub(crate) async fn get_block_hash(&self, height: Height) -> Result<Hash, FinalisedStateError> {
         self.db.get_block_hash(height).await
     }
 
+    /// Returns metadata for the running ZainoDB.
     pub(crate) async fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
         self.db.get_metadata().await
     }
@@ -162,6 +193,7 @@ impl ZainoDB {
         self.db.as_any().downcast_ref::<T>()
     }
 
+    /// Returns the block core extension if present.
     pub(crate) fn block_core(&self) -> Option<&dyn BlockCoreExt> {
         if self.caps.has(Capability::BLOCK_CORE_EXT) {
             let backend = self.downcast::<DbV1>().unwrap();
@@ -171,6 +203,7 @@ impl ZainoDB {
         }
     }
 
+    /// Returns the block transparent extension if present.
     pub(crate) fn block_transparent(&self) -> Option<&dyn BlockTransparentExt> {
         if self.caps.has(Capability::BLOCK_TRANSPARENT_EXT) {
             let backend = self.downcast::<DbV1>().unwrap();
@@ -180,6 +213,7 @@ impl ZainoDB {
         }
     }
 
+    /// Returns the block shielded extension if present.
     pub(crate) fn block_shielded(&self) -> Option<&dyn BlockShieldedExt> {
         if self.caps.has(Capability::BLOCK_SHIELDED_EXT) {
             let backend = self.downcast::<DbV1>().unwrap();
@@ -189,6 +223,7 @@ impl ZainoDB {
         }
     }
 
+    /// Returns the compact block extension if present.
     pub(crate) fn compact_block(&self) -> Option<&dyn CompactBlockExt> {
         if self.caps.has(Capability::COMPACT_BLOCK_EXT) {
             let backend = self.downcast::<DbV1>().unwrap();
@@ -198,6 +233,7 @@ impl ZainoDB {
         }
     }
 
+    /// Returns the chain block extension if present.
     pub(crate) fn chain_block(&self) -> Option<&dyn ChainBlockExt> {
         if self.caps.has(Capability::CHAIN_BLOCK_EXT) {
             let backend = self.downcast::<DbV1>().unwrap();
@@ -207,6 +243,7 @@ impl ZainoDB {
         }
     }
 
+    /// Returns the transparent transaction history extension if present.
     pub(crate) fn transparent_hist(&self) -> Option<&dyn TransparentHistExt> {
         if self.caps.has(Capability::TRANSPARENT_HIST_EXT) {
             let backend = self.downcast::<DbV1>().unwrap();

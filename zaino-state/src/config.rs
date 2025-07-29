@@ -178,7 +178,7 @@ impl FetchServiceConfig {
     }
 }
 
-/// Holds config data for [`ChainIndex`].
+/// Holds config data for `[ChainIndex]`.
 /// TODO: Rename when ChainIndex update is complete.
 #[derive(Debug, Clone)]
 pub struct BlockCacheConfig {

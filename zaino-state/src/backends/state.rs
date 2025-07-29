@@ -1,30 +1,30 @@
 //! Zcash chain fetch and tx submission service backed by Zebras [`ReadStateService`].
 
 use crate::{
+    chain_index::mempool::{Mempool, MempoolSubscriber},
     config::StateServiceConfig,
     error::{BlockCacheError, StateServiceError},
     indexer::{
         handle_raw_transaction, IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService,
     },
-    local_cache::{
-        compact_block_to_nullifiers,
-        mempool::{Mempool, MempoolSubscriber},
-        BlockCache, BlockCacheSubscriber,
-    },
+    local_cache::{compact_block_to_nullifiers, BlockCache, BlockCacheSubscriber},
     status::{AtomicStatus, StatusType},
     stream::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
         UtxoReplyStream,
     },
     utils::{blockid_to_hashorheight, get_build_info, ServiceMetadata},
-    MempoolKey,
+    MempoolKey, MempoolValue,
 };
 
 use nonempty::NonEmpty;
 use tokio_stream::StreamExt as _;
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
+    jsonrpsee::{
+        connector::{JsonRpSeeConnector, RpcError},
+        response::GetMempoolInfoResponse,
+    },
 };
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
@@ -966,6 +966,42 @@ impl ZcashIndexer for StateServiceSubscriber {
             // be implemented (it's sprout-only in zcashd)
             0,
         ))
+    }
+
+    /// Returns details on the active state of the TX memory pool.
+    /// In Zaino, this RPC call information is gathered from the local Zaino state instead of directly reflecting the full node's mempool. This state is populated from a gRPC stream, sourced from the full node.
+    /// There are no request parameters.
+    /// The Zcash source code is considered canonical:
+    /// [from the rpc definition](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1555>), [this function is called to produce the return value](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1541>>).
+    /// There are no required or optional parameters.
+    /// the `size` field is called by [this line of code](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1544>), and returns an int64.
+    /// `size` represents the number of transactions currently in the mempool.
+    /// the `bytes` field is called by [this line of code](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1545>), and returns an int64 from [this variable](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/txmempool.h#L349>).
+    /// `bytes` is the sum memory size in bytes of all transactions in the mempool: the sum of all transaction byte sizes.
+    /// the `usage` field is called by [this line of code](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1546>), and returns an int64 derived from the return of this function(<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/txmempool.h#L1199>), which includes a number of elements.
+    /// `usage` is the total memory usage for the mempool, in bytes.
+    /// the [optional `fullyNotified` field](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1549>), is only utilized for zcashd regtests, is deprecated, and is not included.
+    async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error> {
+        let mempool_state = self.mempool.get_mempool().await;
+
+        let approx_mem_usage = std::mem::size_of::<Vec<(MempoolKey, MempoolValue)>>()
+            + mempool_state.capacity() * std::mem::size_of::<(MempoolKey, MempoolValue)>();
+
+        Ok(GetMempoolInfoResponse {
+            size: mempool_state.len() as u64,
+            bytes: mempool_state
+                .iter()
+                .map(|mempool_entry| {
+                    // mempool_entry.1 is a MempoolValue, .0 is the first (and only) field, a GetRawTransaction.
+                    match &mempool_entry.1 .0 {
+                        // .as_ref() is a slice of bytes, a view into a contiguous block of memory
+                        GetRawTransaction::Object(tx) => tx.hex.as_ref().len() as u64,
+                        GetRawTransaction::Raw(tx) => tx.as_ref().len() as u64,
+                    }
+                })
+                .sum(),
+            usage: approx_mem_usage as u64,
+        })
     }
 
     async fn z_get_address_balance(

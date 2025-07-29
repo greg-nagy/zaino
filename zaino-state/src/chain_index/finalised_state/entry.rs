@@ -20,16 +20,16 @@ use core2::io::{self, Read, Write};
 /// │ StoredEntry version  │  Record version  │             Body              │ B2B256 hash     │
 /// └──────────────────────┴──────────────────┴───────────────────────────────┴─────────────────┘
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StoredEntryFixed<T: ZainoVersionedSerialise + FixedEncodedLen> {
+pub(crate) struct StoredEntryFixed<T: ZainoVersionedSerialise + FixedEncodedLen> {
     /// Inner record
-    pub item: T,
+    pub(crate) item: T,
     /// Entry checksum
-    pub checksum: [u8; 32],
+    pub(crate) checksum: [u8; 32],
 }
 
 impl<T: ZainoVersionedSerialise + FixedEncodedLen> StoredEntryFixed<T> {
     /// Create a new entry, hashing `key || encoded_item`.
-    pub fn new<K: AsRef<[u8]>>(key: K, item: T) -> Self {
+    pub(crate) fn new<K: AsRef<[u8]>>(key: K, item: T) -> Self {
         let body = {
             let mut v = Vec::with_capacity(T::VERSIONED_LEN);
             item.serialize(&mut v).unwrap();
@@ -41,7 +41,7 @@ impl<T: ZainoVersionedSerialise + FixedEncodedLen> StoredEntryFixed<T> {
 
     /// Verify checksum given the DB key.
     /// Returns `true` if `self.checksum == blake2b256(key || item.serialize())`.
-    pub fn verify<K: AsRef<[u8]>>(&self, key: K) -> bool {
+    pub(crate) fn verify<K: AsRef<[u8]>>(&self, key: K) -> bool {
         let body = {
             let mut v = Vec::with_capacity(T::VERSIONED_LEN);
             self.item.serialize(&mut v).unwrap();
@@ -52,12 +52,12 @@ impl<T: ZainoVersionedSerialise + FixedEncodedLen> StoredEntryFixed<T> {
     }
 
     /// Returns a reference to the inner item.
-    pub fn inner(&self) -> &T {
+    pub(crate) fn inner(&self) -> &T {
         &self.item
     }
 
     /// Computes a BLAKE2b-256 checksum.
-    pub fn blake2b256(data: &[u8]) -> [u8; 32] {
+    pub(crate) fn blake2b256(data: &[u8]) -> [u8; 32] {
         let mut hasher = Blake2bVar::new(32).expect("Failed to create hasher");
         hasher.update(data);
         let mut output = [0u8; 32];
@@ -101,16 +101,16 @@ impl<T: ZainoVersionedSerialise + FixedEncodedLen> FixedEncodedLen for StoredEnt
 /// │ StoredEntry version │ (length of item.serialize()) │ Record version │        Body        │    Hash    │
 /// └─────────────────────┴──────────────────────────────┴────────────────┴────────────────────┴────────────┘
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StoredEntryVar<T: ZainoVersionedSerialise> {
+pub(crate) struct StoredEntryVar<T: ZainoVersionedSerialise> {
     /// Inner record
-    pub item: T,
+    pub(crate) item: T,
     /// Entry checksum
-    pub checksum: [u8; 32],
+    pub(crate) checksum: [u8; 32],
 }
 
 impl<T: ZainoVersionedSerialise> StoredEntryVar<T> {
     /// Create a new entry, hashing `encoded_key || encoded_item`.
-    pub fn new<K: AsRef<[u8]>>(key: K, item: T) -> Self {
+    pub(crate) fn new<K: AsRef<[u8]>>(key: K, item: T) -> Self {
         let body = {
             let mut v = Vec::new();
             item.serialize(&mut v).unwrap();
@@ -122,7 +122,7 @@ impl<T: ZainoVersionedSerialise> StoredEntryVar<T> {
 
     /// Verify checksum given the DB key.
     /// Returns `true` if `self.checksum == blake2b256(key || item.serialize())`.
-    pub fn verify<K: AsRef<[u8]>>(&self, key: K) -> bool {
+    pub(crate) fn verify<K: AsRef<[u8]>>(&self, key: K) -> bool {
         let mut body = Vec::new();
         self.item.serialize(&mut body).unwrap();
         let candidate = Self::blake2b256(&[key.as_ref(), &body].concat());
@@ -130,12 +130,12 @@ impl<T: ZainoVersionedSerialise> StoredEntryVar<T> {
     }
 
     /// Returns a reference to the inner item.
-    pub fn inner(&self) -> &T {
+    pub(crate) fn inner(&self) -> &T {
         &self.item
     }
 
     /// Computes a BLAKE2b-256 checksum.
-    pub fn blake2b256(data: &[u8]) -> [u8; 32] {
+    pub(crate) fn blake2b256(data: &[u8]) -> [u8; 32] {
         let mut hasher = Blake2bVar::new(32).expect("Failed to create hasher");
         hasher.update(data);
         let mut output = [0u8; 32];

@@ -584,6 +584,7 @@ pub fn write_vectors_to_file<P: AsRef<Path>>(
     Ok(())
 }
 
+#[allow(clippy::type_complexity)]
 pub fn read_vectors_from_file<P: AsRef<Path>>(
     base_dir: P,
 ) -> io::Result<(
