@@ -693,8 +693,7 @@ impl From<GetBlockCountResponse> for Height {
 }
 
 /// TODO: `validateaddress` response object
-#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-#[derive(Default)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize, Default)]
 pub struct ValidateAddressResponse {
     /// If the address is valid or not. If not, this is the only property returned.
     #[serde(rename = "isvalid")]
@@ -729,7 +728,6 @@ pub struct ValidateAddressResponse {
     /// DEPRECATED. The account associated with the address, "" is the default account.
     pub account: Option<String>,
 }
-
 
 impl ResponseToError for validate_address::Response {
     type RpcError = Infallible;
