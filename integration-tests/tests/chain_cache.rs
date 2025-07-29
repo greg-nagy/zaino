@@ -316,4 +316,34 @@ mod chain_query_interface {
             );
         }
     }
+    #[tokio::test]
+    async fn get_transaction_status() {
+        let (test_manager, _json_service, chain_index) = create_test_manager_and_chain_index(
+            &ValidatorKind::Zebrad,
+            None,
+            true,
+            false,
+            false,
+            true,
+        )
+        .await;
+
+        // this delay had to increase. Maybe we tweak sync loop rerun time?
+        test_manager.generate_blocks_with_delay(5).await;
+        let snapshot = chain_index.snapshot_nonfinalized_state();
+        assert_eq!(snapshot.as_ref().blocks.len(), 6);
+        for (txid, height, block_hash) in snapshot.blocks.values().flat_map(|block| {
+            block
+                .transactions()
+                .iter()
+                .map(|txdata| (txdata.txid(), block.height(), block.hash()))
+        }) {
+            let transaction_status = chain_index
+                .get_transaction_status(&snapshot, *txid)
+                .unwrap();
+            assert_eq!(1, transaction_status.len());
+            assert_eq!(transaction_status.keys().next().unwrap(), block_hash);
+            assert_eq!(transaction_status.values().next().unwrap(), &height)
+        }
+    }
 }
