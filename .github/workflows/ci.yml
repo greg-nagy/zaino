@@ -218,16 +218,46 @@ jobs:
             ~/.cargo
             target
 
-      - name: Run clippy with console output
-        run: cargo clippy --all-targets
-        continue-on-error: true
+      # This is key to decide on the clippy job to run.
+      # The one from actions-rs prints nice annotations accross the pr, when browsing the changed files, right where the actual warning/error was found.
+      # It requires access to the GITHUB_TOKEN tho, a secret github automatically injects into every workflow run, but only for internally owned branches, not for forks.
+      # If that's the case, then we just run clippy with console output and that's it. One get's no annotations and has to check the actual job logs to see what went wrong.
+
+      - name: Run clippy with console output (external contributors)
+        if: github.secret_source != 'Actions'
+        run: cargo clippy --all-targets -- --deny warnings
 
       - name: Output clippy to Github
+        if: github.secret_source == 'Actions'
         uses: actions-rs/clippy-check@v1
-        continue-on-error: true
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-targets
+          args: --all-targets -- --deny warnings
+
+  doc:
+    name: Cargo Doc
+    runs-on: arc-sh-runners
+    needs: compute-tag
+    container:
+      image: zingodevops/zaino-ci:${{ needs.compute-tag.outputs.image-tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: MinIO Cache (cargo + target)
+        uses: tespkg/actions-cache@v1
+        with:
+          endpoint: ${{ env.CACHE_ENDPOINT }}
+          port: ${{ env.CACHE_PORT }}
+          bucket: ${{ env.CACHE_BUCKET }}
+          insecure: ${{ env.INSECURE_CACHE }}
+          key: cargo-deps-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-deps-
+          path: |
+            ~/.cargo
+            target
+
+      - name: Check documentation
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items
 
   whitespace:
     name: Whitespace check

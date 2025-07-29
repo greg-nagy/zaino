@@ -1,12 +1,15 @@
 //! Zcash RPC implementations.
 
+use zaino_fetch::jsonrpsee::response::GetMempoolInfoResponse;
 use zaino_state::{LightWalletIndexer, ZcashIndexer};
+
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
+
 use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
     types::validate_address,
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
-    GetBlockChainInfo, GetInfo, GetRawTransaction, SentTransactionHash,
+    GetBlockChainInfo, GetBlockHash, GetInfo, GetRawTransaction, SentTransactionHash,
 };
 
 use jsonrpsee::types::ErrorObjectOwned;
@@ -48,6 +51,31 @@ pub trait ZcashIndexerRpc {
     /// [required for lightwalletd support.](https://github.com/zcash/lightwalletd/blob/v0.4.9/common/common.go#L72-L89)
     #[method(name = "getblockchaininfo")]
     async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, ErrorObjectOwned>;
+
+    /// Returns details on the active state of the TX memory pool.
+    ///
+    /// online zcash rpc reference: [`getmempoolinfo`](https://zcash.github.io/rpc/getmempoolinfo.html)
+    /// method: post
+    /// tags: mempool
+    ///
+    /// Canonical source code implementation: [`getmempoolinfo`](https://github.com/zcash/zcash/blob/18238d90cd0b810f5b07d5aaa1338126aa128c06/src/rpc/blockchain.cpp#L1555)
+    #[method(name = "getmempoolinfo")]
+    async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, ErrorObjectOwned>;
+
+    /// Returns the hash of the best block (tip) of the longest chain.
+    /// zcashd reference: [`getbestblockhash`](https://zcash.github.io/rpc/getbestblockhash.html)
+    /// method: post
+    /// tags: blockchain
+    ///
+    /// # Notes
+    ///
+    /// The zcashd doc reference above says there are no parameters and the result is a "hex" (string) of the block hash hex encoded.
+    /// The Zcash source code is considered canonical:
+    /// [In the rpc definition](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/common.h#L48) there are no required params, or optional params.
+    /// [The function in rpc/blockchain.cpp](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L325)
+    /// where `return chainActive.Tip()->GetBlockHash().GetHex();` is the [return expression](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L339)returning a `std::string`
+    #[method(name = "getbestblockhash")]
+    async fn get_best_blockhash(&self) -> Result<GetBlockHash, ErrorObjectOwned>;
 
     /// Returns the proof-of-work difficulty as a multiple of the minimum difficulty.
     ///
@@ -302,10 +330,38 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
             })
     }
 
+    async fn get_best_blockhash(&self) -> Result<GetBlockHash, ErrorObjectOwned> {
+        self.service_subscriber
+            .inner_ref()
+            .get_best_blockhash()
+            .await
+            .map_err(|e| {
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
+            })
+    }
+
     async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, ErrorObjectOwned> {
         self.service_subscriber
             .inner_ref()
             .get_blockchain_info()
+            .await
+            .map_err(|e| {
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
+            })
+    }
+
+    async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, ErrorObjectOwned> {
+        self.service_subscriber
+            .inner_ref()
+            .get_mempool_info()
             .await
             .map_err(|e| {
                 ErrorObjectOwned::owned(

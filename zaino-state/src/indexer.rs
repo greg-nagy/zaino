@@ -2,9 +2,9 @@
 //! and generic wrapper structs for the various backend options available.
 
 use async_trait::async_trait;
-
 use tokio::{sync::mpsc, time::timeout};
 use tracing::warn;
+use zaino_fetch::jsonrpsee::response::GetMempoolInfoResponse;
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
     service::{
@@ -19,7 +19,7 @@ use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
     types::validate_address,
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
-    GetBlockChainInfo, GetInfo, GetRawTransaction, SentTransactionHash,
+    GetBlockChainInfo, GetBlockHash, GetInfo, GetRawTransaction, SentTransactionHash,
 };
 
 use crate::{
@@ -75,11 +75,11 @@ pub trait ZcashService: Sized {
     /// Service Config.
     type Config: Clone;
 
-    /// Spawns a [`Service`].
+    /// Spawns a [`ZcashIndexer`].
     async fn spawn(config: Self::Config)
         -> Result<Self, <Self::Subscriber as ZcashIndexer>::Error>;
 
-    /// Returns a [`ServiceSubscriber`].
+    /// Returns a [`IndexerSubscriber`].
     fn get_subscriber(&self) -> IndexerSubscriber<Self::Subscriber>;
 
     /// Fetches the current status
@@ -170,6 +170,15 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// method: post
     /// tags: blockchain
     async fn get_difficulty(&self) -> Result<f64, Self::Error>;
+
+    /// Returns details on the active state of the TX memory pool.
+    ///
+    /// zcashd reference: [`getmempoolinfo`](https://zcash.github.io/rpc/getmempoolinfo.html)
+    /// method: post
+    /// tags: mempool
+    ///
+    /// Original implementation: [`getmempoolinfo`](https://github.com/zcash/zcash/blob/18238d90cd0b810f5b07d5aaa1338126aa128c06/src/rpc/blockchain.cpp#L1555)
+    async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error>;
 
     /// Returns the total balance of a provided `addresses` in an [`AddressBalance`] instance.
     ///
@@ -267,6 +276,17 @@ pub trait ZcashIndexer: Send + Sync + 'static {
         &self,
         address: String,
     ) -> Result<validate_address::Response, Self::Error>;
+
+    /// Returns the hash of the best block (tip) of the longest chain.
+    /// online zcashd reference: [`getbestblockhash`](https://zcash.github.io/rpc/getbestblockhash.html)
+    /// The zcashd doc reference above says there are no parameters and the result is a "hex" (string) of the block hash hex encoded.
+    /// method: post
+    /// tags: blockchain
+    /// The Zcash source code is considered canonical:
+    /// [In the rpc definition](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/common.h#L48) there are no required params, or optional params.
+    /// [The function in rpc/blockchain.cpp](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L325)
+    /// where `return chainActive.Tip()->GetBlockHash().GetHex();` is the [return expression](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L339) returning a `std::string`
+    async fn get_best_blockhash(&self) -> Result<GetBlockHash, Self::Error>;
 
     /// Returns all transaction ids in the memory pool, as a JSON array.
     ///

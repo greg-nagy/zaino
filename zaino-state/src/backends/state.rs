@@ -1,30 +1,30 @@
 //! Zcash chain fetch and tx submission service backed by Zebras [`ReadStateService`].
 
 use crate::{
+    chain_index::mempool::{Mempool, MempoolSubscriber},
     config::StateServiceConfig,
     error::{BlockCacheError, StateServiceError},
     indexer::{
         handle_raw_transaction, IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService,
     },
-    local_cache::{
-        compact_block_to_nullifiers,
-        mempool::{Mempool, MempoolSubscriber},
-        BlockCache, BlockCacheSubscriber,
-    },
+    local_cache::{compact_block_to_nullifiers, BlockCache, BlockCacheSubscriber},
     status::{AtomicStatus, StatusType},
     stream::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
         UtxoReplyStream,
     },
     utils::{blockid_to_hashorheight, get_build_info, ServiceMetadata},
-    MempoolKey,
+    MempoolKey, MempoolValue,
 };
 
 use nonempty::NonEmpty;
 use tokio_stream::StreamExt as _;
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
+    jsonrpsee::{
+        connector::{JsonRpSeeConnector, RpcError},
+        response::GetMempoolInfoResponse,
+    },
 };
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
@@ -92,7 +92,7 @@ macro_rules! expected_read_response {
 ///       ServiceSubscribers are used to create separate chain fetch processes
 /// while allowing central state processes to be managed in a single place.
 ///       If we want the ability to clone Service all JoinHandle's should be
-/// converted to Arc<JoinHandle>.
+/// converted to Arc\<JoinHandle\>.
 #[derive(Debug)]
 pub struct StateService {
     /// `ReadeStateService` from Zebra-State.
@@ -252,7 +252,6 @@ impl ZcashService for StateService {
         Ok(state_service)
     }
 
-    /// returns a [`fetchservicesubscriber`].
     fn get_subscriber(&self) -> IndexerSubscriber<StateServiceSubscriber> {
         IndexerSubscriber::new(StateServiceSubscriber {
             read_state_service: self.read_state_service.clone(),
@@ -821,7 +820,7 @@ impl ZcashIndexer for StateServiceSubscriber {
             .get_info()
             .await
             .map(GetInfo::from)
-            .map_err(Self::Error::from)
+            .map_err(|e| StateServiceError::Custom(e.to_string()))
     }
 
     async fn get_difficulty(&self) -> Result<f64, Self::Error> {
@@ -970,6 +969,42 @@ impl ZcashIndexer for StateServiceSubscriber {
         ))
     }
 
+    /// Returns details on the active state of the TX memory pool.
+    /// In Zaino, this RPC call information is gathered from the local Zaino state instead of directly reflecting the full node's mempool. This state is populated from a gRPC stream, sourced from the full node.
+    /// There are no request parameters.
+    /// The Zcash source code is considered canonical:
+    /// [from the rpc definition](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1555>), [this function is called to produce the return value](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1541>>).
+    /// There are no required or optional parameters.
+    /// the `size` field is called by [this line of code](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1544>), and returns an int64.
+    /// `size` represents the number of transactions currently in the mempool.
+    /// the `bytes` field is called by [this line of code](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1545>), and returns an int64 from [this variable](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/txmempool.h#L349>).
+    /// `bytes` is the sum memory size in bytes of all transactions in the mempool: the sum of all transaction byte sizes.
+    /// the `usage` field is called by [this line of code](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1546>), and returns an int64 derived from the return of this function(<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/txmempool.h#L1199>), which includes a number of elements.
+    /// `usage` is the total memory usage for the mempool, in bytes.
+    /// the [optional `fullyNotified` field](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1549>), is only utilized for zcashd regtests, is deprecated, and is not included.
+    async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error> {
+        let mempool_state = self.mempool.get_mempool().await;
+
+        let approx_mem_usage = std::mem::size_of::<Vec<(MempoolKey, MempoolValue)>>()
+            + mempool_state.capacity() * std::mem::size_of::<(MempoolKey, MempoolValue)>();
+
+        Ok(GetMempoolInfoResponse {
+            size: mempool_state.len() as u64,
+            bytes: mempool_state
+                .iter()
+                .map(|mempool_entry| {
+                    // mempool_entry.1 is a MempoolValue, .0 is the first (and only) field, a GetRawTransaction.
+                    match &mempool_entry.1 .0 {
+                        // .as_ref() is a slice of bytes, a view into a contiguous block of memory
+                        GetRawTransaction::Object(tx) => tx.hex.as_ref().len() as u64,
+                        GetRawTransaction::Raw(tx) => tx.as_ref().len() as u64,
+                    }
+                })
+                .sum(),
+            usage: approx_mem_usage as u64,
+        })
+    }
+
     async fn z_get_address_balance(
         &self,
         address_strings: AddressStrings,
@@ -1005,7 +1040,7 @@ impl ZcashIndexer for StateServiceSubscriber {
             .send_raw_transaction(raw_transaction_hex)
             .await
             .map(SentTransactionHash::from)
-            .map_err(StateServiceError::JsonRpcConnectorError)
+            .map_err(Into::into)
     }
 
     async fn z_get_block(
@@ -1088,6 +1123,28 @@ impl ZcashIndexer for StateServiceSubscriber {
             sapling,
             orchard,
         ))
+    }
+
+    // No request parameters.
+    /// Return the hex encoded hash of the best (tip) block, in the longest block chain.
+    /// The Zcash source code is considered canonical:
+    /// [In the rpc definition](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/common.h#L48) there are no required params, or optional params.
+    /// [The function in rpc/blockchain.cpp](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L325)
+    /// where `return chainActive.Tip()->GetBlockHash().GetHex();` is the [return expression](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L339)returning a `std::string`
+    async fn get_best_blockhash(&self) -> Result<GetBlockHash, Self::Error> {
+        // return should be valid hex encoded.
+        // Hash from zebra says:
+        // Return the hash bytes in big-endian byte-order suitable for printing out byte by byte.
+        //
+        // Zebra displays transaction and block hashes in big-endian byte-order,
+        // following the u256 convention set by Bitcoin and zcashd.
+        match self.read_state_service.best_tip() {
+            Some(x) => return Ok(GetBlockHash(x.1)),
+            None => {
+                // try RPC if state read fails:
+                Ok(self.rpc_client.get_best_blockhash().await?.into())
+            }
+        }
     }
 
     /// Returns the current block count in the best valid block chain.
@@ -1441,7 +1498,10 @@ impl LightWalletIndexer for StateServiceSubscriber {
             .await
         {
             Ok(block) => Ok(block),
-            Err(e) => self.error_get_block(e, height as u32).await,
+            Err(e) => {
+                self.error_get_block(BlockCacheError::Custom(e.to_string()), height as u32)
+                    .await
+            }
         }
     }
 
@@ -1464,7 +1524,10 @@ impl LightWalletIndexer for StateServiceSubscriber {
             .await
         {
             Ok(block) => Ok(block),
-            Err(e) => self.error_get_block(e, height).await,
+            Err(e) => {
+                self.error_get_block(BlockCacheError::Custom(e.to_string()), height)
+                    .await
+            }
         }
     }
 

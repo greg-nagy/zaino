@@ -45,17 +45,26 @@ http = { workspace = true }
 lazy-regex = { workspace = true }
 dashmap = { workspace = true }
 lmdb = { workspace = true }
+lmdb-sys = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order"] }
 jsonrpsee-core = { workspace = true }
 prost = { workspace = true }
 primitive-types = { workspace = true }
+blake2 = { workspace = true }
+sha2 = { workspace = true }
 byteorder = { workspace = true }
-zcash_address = { workspace = true }
+core2 = { workspace = true }
+bs58 = { workspace = true }
 nonempty = "0.11.0"
+arc-swap = "1.7.1"
+reqwest.workspace = true
+bitflags = { workspace = true }
+zcash_address = { workspace = true }
 
 [dev-dependencies]
 zingo-infra-services = { workspace = true }
+tempfile = { workspace = true }
 
 # ZingoLib
 zingolib = { workspace = true }

@@ -13,12 +13,15 @@ use zebra_rpc::methods::{
     trees::{GetSubtrees, GetTreestate},
     types::validate_address,
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
-    GetBlockChainInfo, GetInfo, GetRawTransaction, SentTransactionHash,
+    GetBlockChainInfo, GetBlockHash, GetInfo, GetRawTransaction, SentTransactionHash,
 };
 
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
+    jsonrpsee::{
+        connector::{JsonRpSeeConnector, RpcError},
+        response::GetMempoolInfoResponse,
+    },
 };
 
 use zaino_proto::proto::{
@@ -31,15 +34,13 @@ use zaino_proto::proto::{
 };
 
 use crate::{
+    chain_index::mempool::{Mempool, MempoolSubscriber},
     config::FetchServiceConfig,
-    error::FetchServiceError,
+    error::{BlockCacheError, FetchServiceError},
     indexer::{
         handle_raw_transaction, IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService,
     },
-    local_cache::{
-        mempool::{Mempool, MempoolSubscriber},
-        BlockCache, BlockCacheSubscriber,
-    },
+    local_cache::{BlockCache, BlockCacheSubscriber},
     status::StatusType,
     stream::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
@@ -55,7 +56,7 @@ use crate::{
 ///
 /// NOTE: We currently do not implement clone for chain fetch services as this service is responsible for maintaining and closing its child processes.
 ///       ServiceSubscribers are used to create separate chain fetch processes while allowing central state processes to be managed in a single place.
-///       If we want the ability to clone Service all JoinHandle's should be converted to Arc<JoinHandle>.
+///       If we want the ability to clone Service all JoinHandle's should be converted to Arc\<JoinHandle\>.
 #[derive(Debug)]
 pub struct FetchService {
     /// JsonRPC Client.
@@ -96,9 +97,15 @@ impl ZcashService for FetchService {
         );
         info!("Using Zcash build: {}", data);
 
-        let block_cache = BlockCache::spawn(&fetcher, None, config.clone().into()).await?;
+        let block_cache = BlockCache::spawn(&fetcher, None, config.clone().into())
+            .await
+            .map_err(|e| {
+                FetchServiceError::BlockCacheError(BlockCacheError::Custom(e.to_string()))
+            })?;
 
-        let mempool = Mempool::spawn(&fetcher, None).await?;
+        let mempool = Mempool::spawn(&fetcher, None).await.map_err(|e| {
+            FetchServiceError::BlockCacheError(BlockCacheError::Custom(e.to_string()))
+        })?;
 
         let fetch_service = Self {
             fetcher,
@@ -218,6 +225,19 @@ impl ZcashIndexer for FetchServiceSubscriber {
             })?)
     }
 
+    /// Returns details on the active state of the TX memory pool.
+    ///
+    /// online zcash rpc reference: [`getmempoolinfo`](https://zcash.github.io/rpc/getmempoolinfo.html)
+    /// method: post
+    /// tags: mempool
+    ///
+    /// Canonical source code implementation: [`getmempoolinfo`](https://github.com/zcash/zcash/blob/18238d90cd0b810f5b07d5aaa1338126aa128c06/src/rpc/blockchain.cpp#L1555)
+    ///
+    /// Zebra does not support this RPC call directly.
+    async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error> {
+        Ok(self.fetcher.get_mempool_info().await?)
+    }
+
     /// Returns the proof-of-work difficulty as a multiple of the minimum difficulty.
     ///
     /// zcashd reference: [`getdifficulty`](https://zcash.github.io/rpc/getdifficulty.html)
@@ -326,6 +346,29 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_block(hash_or_height, verbosity)
             .await?
             .try_into()?)
+    }
+
+    /// Returns the hash of the best block (tip) of the longest chain.
+    /// online zcashd reference: [`getbestblockhash`](https://zcash.github.io/rpc/getbestblockhash.html)
+    /// The zcashd doc reference above says there are no parameters and the result is a "hex" (string) of the block hash hex encoded.
+    /// method: post
+    /// tags: blockchain
+    /// Return the hex encoded hash of the best (tip) block, in the longest block chain.
+    ///
+    /// # Parameters
+    ///
+    /// No request parameters.
+    ///
+    /// # Notes
+    ///
+    /// Return should be valid hex encoded.
+    ///
+    /// The Zcash source code is considered canonical:
+    /// [In the rpc definition](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/common.h#L48) there are no required params, or optional params.
+    /// [The function in rpc/blockchain.cpp](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L325)
+    /// where `return chainActive.Tip()->GetBlockHash().GetHex();` is the [return expression](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L339)returning a `std::string`
+    async fn get_best_blockhash(&self) -> Result<GetBlockHash, Self::Error> {
+        Ok(self.fetcher.get_best_blockhash().await?.into())
     }
 
     /// Returns the current block count in the best valid block chain.
