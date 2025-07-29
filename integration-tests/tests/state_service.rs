@@ -1,4 +1,4 @@
-use zaino_state::BackendType;
+use zaino_state::{BackendType, FetchServiceError};
 use zaino_state::{
     FetchService, FetchServiceConfig, FetchServiceSubscriber, LightWalletIndexer, StateService,
     StateServiceConfig, StateServiceSubscriber, ZcashIndexer, ZcashService as _,
@@ -1266,6 +1266,77 @@ mod zebrad {
         #[tokio::test]
         async fn raw_mempool_regtest() {
             state_service_get_raw_mempool(&ValidatorKind::Zebrad).await;
+        }
+
+        /// Direct fetch of `getmempoolinfo` RPC not supported by Zebra
+        #[tokio::test]
+        async fn get_mempool_info() {
+            let (
+                mut test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(&ValidatorKind::Zebrad, None, true, true, None)
+                .await;
+
+            let mut clients = test_manager
+                .clients
+                .take()
+                .expect("Clients are not initialized");
+            let recipient_taddr = clients.get_recipient_address("transparent").await;
+
+            clients.faucet.sync_and_await().await.unwrap();
+
+            test_manager.local_net.generate_blocks(100).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            clients.faucet.sync_and_await().await.unwrap();
+            clients.faucet.quick_shield().await.unwrap();
+            test_manager.local_net.generate_blocks(1).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            clients.faucet.sync_and_await().await.unwrap();
+
+            from_inputs::quick_send(
+                &mut clients.faucet,
+                vec![(recipient_taddr.as_str(), 250_000, None)],
+            )
+            .await
+            .unwrap();
+
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+            let fetch_service_result = fetch_service_subscriber.get_mempool_info().await;
+            let state_service_result = state_service_subscriber.get_mempool_info().await;
+
+            // Zebra does not support this RPC.
+            // When they implement it, this will start failing and will need to be updated.
+            assert!(fetch_service_result.is_err());
+            let fetch_service_error = fetch_service_result.unwrap_err();
+            assert!(matches!(
+                fetch_service_error,
+                FetchServiceError::Critical(_)
+            ));
+
+            // The state service does not fail.
+            assert!(state_service_result.is_ok());
+            let state_service_result = state_service_result.unwrap();
+            assert_eq!(state_service_result.size, 1);
+            assert!(state_service_result.bytes > 0);
+            assert_eq!(state_service_result.bytes, 9199);
+            assert!(state_service_result.usage > 0);
+            assert_eq!(state_service_result.usage, 216);
+
+            // accessing the transaction JSON Object
+            let getrawtx = &state_service_subscriber.mempool.get_mempool().await[0].1 .0;
+            // ...and its boxed inner field
+            match getrawtx {
+                zebra_rpc::methods::GetRawTransaction::Object(inner) => {
+                    assert_eq!(inner.size.expect("Some size instead of None"), 9199);
+                }
+                _ => panic!("expected getrawtx: {getrawtx:?} to be an Object"),
+            }
+
+            test_manager.close().await;
         }
 
         #[ignore = "requires fully synced testnet."]

@@ -43,7 +43,7 @@ pub use chain_index::encoding::*;
 
 pub(crate) mod local_cache;
 
-pub use local_cache::mempool::{MempoolKey, MempoolValue};
+pub use chain_index::mempool::{MempoolKey, MempoolValue};
 
 #[cfg(feature = "bench")]
 /// allow public access to additional APIs, for testing
