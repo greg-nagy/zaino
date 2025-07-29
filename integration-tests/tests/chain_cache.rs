@@ -126,7 +126,7 @@ mod chain_query_interface {
         },
         StateService, StateServiceConfig, ZcashService as _,
     };
-    use zebra_chain::serialization::ZcashDeserializeInto;
+    use zebra_chain::serialization::{ZcashDeserialize, ZcashDeserializeInto};
 
     use super::*;
 
@@ -279,6 +279,41 @@ mod chain_query_interface {
                     .unwrap()
                     .0
             )
+        }
+    }
+    #[tokio::test]
+    async fn get_raw_transaction() {
+        let (test_manager, _json_service, chain_index) = create_test_manager_and_chain_index(
+            &ValidatorKind::Zebrad,
+            None,
+            true,
+            false,
+            false,
+            true,
+        )
+        .await;
+
+        // this delay had to increase. Maybe we tweak sync loop rerun time?
+        test_manager.generate_blocks_with_delay(5).await;
+        let snapshot = chain_index.snapshot_nonfinalized_state();
+        assert_eq!(snapshot.as_ref().blocks.len(), 6);
+        for txid in snapshot
+            .blocks
+            .values()
+            .flat_map(|block| block.transactions().iter().map(|txdata| txdata.txid()))
+        {
+            let raw_transaction = chain_index
+                .get_raw_transaction(&snapshot, *txid)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                *txid,
+                zebra_chain::transaction::Transaction::zcash_deserialize(&raw_transaction[..])
+                    .unwrap()
+                    .hash()
+                    .0
+            );
         }
     }
 }
