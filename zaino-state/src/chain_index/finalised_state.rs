@@ -8,6 +8,7 @@ pub(crate) mod db;
 pub(crate) mod entry;
 pub(crate) mod migrations;
 pub(crate) mod reader;
+pub(crate) mod router;
 
 use capability::*;
 use db::v1::*;
