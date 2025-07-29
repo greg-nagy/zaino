@@ -20,7 +20,10 @@ use zebra_rpc::{
 
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
-    jsonrpsee::connector::{JsonRpSeeConnector, RpcError},
+    jsonrpsee::{
+        connector::{JsonRpSeeConnector, RpcError},
+        response::GetMempoolInfoResponse,
+    },
 };
 
 use zaino_proto::proto::{
@@ -33,15 +36,13 @@ use zaino_proto::proto::{
 };
 
 use crate::{
+    chain_index::mempool::{Mempool, MempoolSubscriber},
     config::FetchServiceConfig,
     error::{BlockCacheError, FetchServiceError},
     indexer::{
         handle_raw_transaction, IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService,
     },
-    local_cache::{
-        mempool::{Mempool, MempoolSubscriber},
-        BlockCache, BlockCacheSubscriber,
-    },
+    local_cache::{BlockCache, BlockCacheSubscriber},
     status::StatusType,
     stream::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
@@ -224,6 +225,19 @@ impl ZcashIndexer for FetchServiceSubscriber {
                     ),
                 )
             })?)
+    }
+
+    /// Returns details on the active state of the TX memory pool.
+    ///
+    /// online zcash rpc reference: [`getmempoolinfo`](https://zcash.github.io/rpc/getmempoolinfo.html)
+    /// method: post
+    /// tags: mempool
+    ///
+    /// Canonical source code implementation: [`getmempoolinfo`](https://github.com/zcash/zcash/blob/18238d90cd0b810f5b07d5aaa1338126aa128c06/src/rpc/blockchain.cpp#L1555)
+    ///
+    /// Zebra does not support this RPC call directly.
+    async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error> {
+        Ok(self.fetcher.get_mempool_info().await?)
     }
 
     /// Returns the proof-of-work difficulty as a multiple of the minimum difficulty.

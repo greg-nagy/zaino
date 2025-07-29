@@ -29,18 +29,25 @@ pub use backends::{
 // NOTE: This will replace local_cache. Currently WIP.
 pub(crate) mod chain_index;
 
+pub use chain_index::encoding::*;
+pub use chain_index::mempool::Mempool;
+pub use chain_index::non_finalised_state::{
+    BlockchainSource, InitError, NodeConnectionError, NonFinalizedState,
+    NonfinalizedBlockCacheSnapshot, SyncError, UpdateError,
+};
 // NOTE: Should these be pub at all?
 pub use chain_index::types::{
-    AddrHistRecord, AddrScript, BlockData, BlockIndex, ChainBlock, ChainWork, CommitmentTreeData,
-    CommitmentTreeRoots, CommitmentTreeSizes, CompactOrchardAction, CompactSaplingOutput,
-    CompactSaplingSpend, CompactTxData, Hash, Height, Index, OrchardCompactTx, Outpoint,
-    SaplingCompactTx, ScriptType, ShardRoot, TransparentCompactTx, TxInCompact, TxIndex,
-    TxOutCompact,
+    AddrHistRecord, AddrScript, BlockData, BlockHeaderData, BlockIndex, ChainBlock, ChainWork,
+    CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes, CompactOrchardAction,
+    CompactSaplingOutput, CompactSaplingSpend, CompactTxData, Hash, Height, Index,
+    OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, ScriptType,
+    ShardRoot, TransparentCompactTx, TransparentTxList, TxInCompact, TxIndex, TxOutCompact,
+    TxidList,
 };
 
 pub(crate) mod local_cache;
 
-pub use local_cache::mempool::{MempoolKey, MempoolValue};
+pub use chain_index::mempool::{MempoolKey, MempoolValue};
 
 #[cfg(feature = "bench")]
 /// allow public access to additional APIs, for testing
