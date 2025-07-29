@@ -48,7 +48,7 @@ use tracing::{error, info, warn};
 /// Full V1 schema text file. WARNING: THIS IS WRONG!
 // 1. Bring the *exact* ASCII description of the on-disk layout into the binary
 //    at compile-time.  The path is relative to this source file.
-pub const DB_SCHEMA_V1_TEXT: &str = include_str!("db_schema_v1.txt");
+pub(crate) const DB_SCHEMA_V1_TEXT: &str = include_str!("db_schema_v1.txt");
 
 /*
 2. Compute the checksum once, outside the code:
@@ -73,20 +73,20 @@ pub const DB_SCHEMA_V1_TEXT: &str = include_str!("db_schema_v1.txt");
 */
 
 /// Database V1 schema hash, used for version validation. WARNING: THIS IS WRONG!
-pub const DB_SCHEMA_V1_HASH: [u8; 32] = [
+pub(crate) const DB_SCHEMA_V1_HASH: [u8; 32] = [
     0xbf, 0x9a, 0xc7, 0x29, 0xa4, 0xb8, 0xa4, 0x1d, 0x63, 0x69, 0x85, 0x47, 0xe6, 0x40, 0x72, 0x74,
     0x2a, 0x69, 0x67, 0x51, 0x8c, 0xce, 0xaa, 0x59, 0xc5, 0xbc, 0x82, 0x7c, 0xe1, 0x46, 0xfe, 0x93,
 ];
 
 /// Database V1 version data.
-pub const DB_VERSION_V1: DbVersion = DbVersion {
+pub(crate) const DB_VERSION_V1: DbVersion = DbVersion {
     major: 1,
     minor: 0,
     patch: 0,
 };
 
 /// Database V1 Metadata.
-pub const DB_METADATA_V1: DbMetadata = DbMetadata {
+pub(crate) const DB_METADATA_V1: DbMetadata = DbMetadata {
     version: DB_VERSION_V1,
     schema_hash: DB_SCHEMA_V1_HASH,
 };
@@ -362,7 +362,7 @@ impl TransparentHistExt for DbV1 {
 
 /// Zaino’s Finalised state database V1.
 /// Implements a persistent LMDB-backed chain index for fast read access and verified data.
-pub struct DbV1 {
+pub(crate) struct DbV1 {
     /// Shared LMDB environment.
     env: Arc<Environment>,
 

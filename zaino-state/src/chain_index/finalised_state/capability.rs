@@ -23,7 +23,7 @@ bitflags! {
     ///
     /// Each flag corresponds 1-for-1 with an extension trait.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-    pub struct Capability: u32 {
+    pub(crate) struct Capability: u32 {
         /* ------ core database functionality ------ */
         /// Implements `DbRead`.
         const READ_CORE             = 0b0000_0001;
@@ -48,7 +48,7 @@ bitflags! {
 
 impl Capability {
     /// All features supported by a **fresh v1** database.
-    pub const LATEST: Capability = Capability::READ_CORE
+    pub(crate) const LATEST: Capability = Capability::READ_CORE
         .union(Capability::WRITE_CORE)
         .union(Capability::BLOCK_CORE_EXT)
         .union(Capability::BLOCK_TRANSPARENT_EXT)
@@ -59,7 +59,7 @@ impl Capability {
 
     /// Checks for the given capability.
     #[inline]
-    pub const fn has(self, other: Capability) -> bool {
+    pub(crate) const fn has(self, other: Capability) -> bool {
         self.contains(other)
     }
 }
@@ -69,7 +69,7 @@ impl Capability {
 /// Stored under the fixed key `"metadata"` in the LMDB metadata database.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub struct DbMetadata {
+pub(crate) struct DbMetadata {
     /// Encodes the version and schema hash.
     pub(crate) version: DbVersion,
     /// BLAKE2b-256 hash of the schema definition (includes struct layout, types, etc.)

@@ -24,7 +24,7 @@ use lmdb::{Environment, EnvironmentFlags, Transaction};
 use std::{path::Path, sync::Arc, time::Duration};
 
 /// ZainoDB: Versioned database holding the finalised portion of the blockchain.
-pub struct ZainoDB {
+pub(crate) struct ZainoDB {
     db: Arc<dyn DbCore + Send + Sync>,
     caps: Capability,
     cfg: BlockCacheConfig,
