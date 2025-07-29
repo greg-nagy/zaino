@@ -428,7 +428,7 @@ pub struct DbV1 {
 }
 
 impl DbV1 {
-    /// Spawns a new [`ZainoDB`] and syncs the FinalisedState to the servers finalised state.
+    /// Spawns a new [`DbV1`] and syncs the FinalisedState to the servers finalised state.
     ///
     /// Uses ReadStateService to fetch chain data if given else uses JsonRPC client.
     ///
