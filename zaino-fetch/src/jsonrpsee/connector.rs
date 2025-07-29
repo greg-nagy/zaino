@@ -24,10 +24,10 @@ use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
     response::{
         GetBalanceError, GetBalanceResponse, GetBlockCountResponse, GetBlockError, GetBlockHash,
-        GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse, GetSubtreesError,
-        GetSubtreesResponse, GetTransactionResponse, GetTreestateError, GetTreestateResponse,
-        GetUtxosError, GetUtxosResponse, SendTransactionError, SendTransactionResponse, TxidsError,
-        TxidsResponse,
+        GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse, GetMempoolInfoResponse,
+        GetSubtreesError, GetSubtreesResponse, GetTransactionResponse, GetTreestateError,
+        GetTreestateResponse, GetUtxosError, GetUtxosResponse, SendTransactionError,
+        SendTransactionResponse, TxidsError, TxidsResponse,
     },
 };
 
@@ -294,7 +294,7 @@ impl JsonRpSeeConnector {
 
             let request_builder = self
                 .build_request(method, &params, id)
-                .map_err(|e| RpcRequestError::JsonRpc(e))?;
+                .map_err(RpcRequestError::JsonRpc)?;
 
             let response = request_builder
                 .send()
@@ -414,6 +414,22 @@ impl JsonRpSeeConnector {
         &self,
     ) -> Result<GetBlockchainInfoResponse, RpcRequestError<Infallible>> {
         self.send_request::<(), GetBlockchainInfoResponse>("getblockchaininfo", ())
+            .await
+    }
+
+    /// Returns details on the active state of the TX memory pool.
+    ///
+    /// online zcash rpc reference: [`getmempoolinfo`](https://zcash.github.io/rpc/getmempoolinfo.html)
+    /// method: post
+    /// tags: mempool
+    ///
+    /// Canonical source code implementation: [`getmempoolinfo`](https://github.com/zcash/zcash/blob/18238d90cd0b810f5b07d5aaa1338126aa128c06/src/rpc/blockchain.cpp#L1555)
+    ///
+    /// Zebra does not support this RPC directly.
+    pub async fn get_mempool_info(
+        &self,
+    ) -> Result<GetMempoolInfoResponse, RpcRequestError<Infallible>> {
+        self.send_request::<(), GetMempoolInfoResponse>("getmempoolinfo", ())
             .await
     }
 

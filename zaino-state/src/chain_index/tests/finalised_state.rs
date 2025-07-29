@@ -406,7 +406,7 @@ async fn get_chain_blocks() {
     {
         let reader_chain_block = db.reader.get_chain_block(Height(*height)).await.unwrap();
         assert_eq!(chain_block, &reader_chain_block);
-        println!("ChainBlock at height {} OK", height);
+        println!("ChainBlock at height {height} OK");
     }
 }
 
@@ -765,21 +765,18 @@ async fn check_faucet_spent_map() {
                 });
                 assert!(
                     matches,
-                    "Spender transaction does not actually spend the outpoint: {:?}",
-                    outpoint
+                    "Spender transaction does not actually spend the outpoint: {outpoint:?}"
                 );
 
                 assert!(
                     !faucet_utxo_indexes.contains(&outpoint_tuple),
-                    "Spent outpoint should NOT be in UTXO set, but found: {:?}",
-                    outpoint_tuple
+                    "Spent outpoint should NOT be in UTXO set, but found: {outpoint_tuple:?}"
                 );
             }
             None => {
                 assert!(
                     faucet_utxo_indexes.contains(&outpoint_tuple),
-                    "Unspent outpoint should be in UTXO set, but NOT found: {:?}",
-                    outpoint_tuple
+                    "Unspent outpoint should be in UTXO set, but NOT found: {outpoint_tuple:?}"
                 );
             }
         }
@@ -866,21 +863,18 @@ async fn check_recipient_spent_map() {
                 });
                 assert!(
                     matches,
-                    "Spender transaction does not actually spend the outpoint: {:?}",
-                    outpoint
+                    "Spender transaction does not actually spend the outpoint: {outpoint:?}"
                 );
 
                 assert!(
                     !recipient_utxo_indexes.contains(&outpoint_tuple),
-                    "Spent outpoint should NOT be in UTXO set, but found: {:?}",
-                    outpoint_tuple
+                    "Spent outpoint should NOT be in UTXO set, but found: {outpoint_tuple:?}"
                 );
             }
             None => {
                 assert!(
                     recipient_utxo_indexes.contains(&outpoint_tuple),
-                    "Unspent outpoint should be in UTXO set, but NOT found: {:?}",
-                    outpoint_tuple
+                    "Unspent outpoint should be in UTXO set, but NOT found: {outpoint_tuple:?}"
                 );
             }
         }

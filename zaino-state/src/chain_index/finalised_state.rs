@@ -31,7 +31,7 @@ use lmdb::{
 };
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     fs,
     sync::{
         atomic::{AtomicU32, Ordering},
@@ -39,7 +39,7 @@ use std::{
     },
     time::Duration,
 };
-use tokio::time::interval;
+use tokio::time::{interval, MissedTickBehavior};
 use tracing::{error, info, warn};
 use zebra_chain::parameters::NetworkKind;
 
@@ -90,43 +90,43 @@ pub struct ZainoDB {
     /// Shared LMDB environment.
     env: Arc<Environment>,
 
-    /// Block headers: Height -> StoredEntry<BlockHeaderData>
+    /// Block headers: `Height` -> `StoredEntry<BlockHeaderData>`
     ///
     /// Stored per-block, in order.
     headers: Database,
-    /// Txids: Height -> StoredEntry<TxidList>
+    /// Txids: `Height` -> `StoredEntry<TxidList>`
     ///
     /// Stored per-block, in order.
     txids: Database,
-    /// Transparent: Height -> StoredEntry<Vec<TransparentTxList>>
+    /// Transparent: `Height` -> `StoredEntry<Vec<TransparentTxList>>`
     ///
     /// Stored per-block, in order.
     transparent: Database,
-    /// Sapling: Height -> StoredEntry<Vec<TxData>>
+    /// Sapling: `Height` -> `StoredEntry<Vec<TxData>>`
     ///
     /// Stored per-block, in order.
     sapling: Database,
-    /// Orchard: Height -> StoredEntry<Vec<TxData>>
+    /// Orchard: `Height` -> `StoredEntry<Vec<TxData>>`
     ///
     /// Stored per-block, in order.
     orchard: Database,
-    /// Block commitment tree data: Height -> StoredEntry<Vec<CommitmentTreeData>>
+    /// Block commitment tree data: `Height` -> `StoredEntry<Vec<CommitmentTreeData>>`
     ///
     /// Stored per-block, in order.
     commitment_tree_data: Database,
-    /// Heights: Hash -> SotredEntry<Height>
+    /// Heights: `Hash` -> `StoredEntry<Height>`
     ///
     /// Used for hash based fetch of the best chain (and random access).
     heights: Database,
-    /// Spent outpoints: Outpoint -> StoredEntry<Vec<TxIndex>>
+    /// Spent outpoints: `Outpoint` -> `StoredEntry<Vec<TxIndex>>`
     ///
     /// Used to check spent status of given outpoints, retuning spending tx.
     spent: Database,
-    /// Transparent address history: AddrScript -> StoredEntry<AddrEventBytes>
+    /// Transparent address history: `AddrScript` -> `StoredEntry<AddrEventBytes>`
     ///
     /// Used to search all transparent address indexes (txids, utxos, balances, deltas)
-    addrhist: Database,
-    /// Metadata: singleton entry "metadata" -> StoredEntry<DbMetadata>
+    address_history: Database,
+    /// Metadata: singleton entry "metadata" -> `StoredEntry<DbMetadata>`
     metadata: Database,
 
     /// Contiguous **water-mark**: every height ≤ `validated_tip` is known-good.
@@ -174,11 +174,15 @@ impl ZainoDB {
             fs::create_dir_all(&db_path)?;
         }
 
-        // Check system rescources to set max db reeaders, clamped between 256 and 1024.
+        // Check system rescources to set max db reeaders, clamped between 256 and 4096.
         let cpu_cnt = std::thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(4);
-        let max_readers = u32::try_from((cpu_cnt * 4).clamp(256, 1024))
+
+        // Sets LMDB max_readers based on CPU count (cpu * 32), clamped between 512 and 4096.
+        // Allows high async read concurrency while keeping memory use low (~192B per slot).
+        // The 512 min ensures reasonable capacity even on low-core systems.
+        let max_readers = u32::try_from((cpu_cnt * 32).clamp(512, 4096))
             .expect("max_readers was clamped to fit in u32");
 
         // Open LMDB environment and set environmental details.
@@ -200,9 +204,9 @@ impl ZainoDB {
             Self::open_or_create_db(&env, "commitment_tree_data", DatabaseFlags::empty()).await?;
         let hashes = Self::open_or_create_db(&env, "hashes", DatabaseFlags::empty()).await?;
         let spent = Self::open_or_create_db(&env, "spent", DatabaseFlags::empty()).await?;
-        let addrhist = Self::open_or_create_db(
+        let address_history = Self::open_or_create_db(
             &env,
-            "addrhist",
+            "address_history",
             DatabaseFlags::DUP_SORT | DatabaseFlags::DUP_FIXED,
         )
         .await?;
@@ -219,7 +223,7 @@ impl ZainoDB {
             commitment_tree_data,
             heights: hashes,
             spent,
-            addrhist,
+            address_history,
             metadata,
             validated_tip: Arc::new(AtomicU32::new(0)),
             validated_set: DashSet::new(),
@@ -269,16 +273,21 @@ impl ZainoDB {
 
     /// Returns the status of ZainoDB.
     pub(crate) async fn status(&self) -> StatusType {
-        self.status.load().into()
+        (&self.status).into()
     }
 
-    /// Awaits untile the DB returns a Ready status.
+    /// Awaits until the DB returns a Ready status.
+    ///
+    /// TODO: check db for free readers and wait if busy.
     pub(crate) async fn wait_until_ready(&self) {
+        let mut ticker = interval(Duration::from_millis(100));
+        ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
         loop {
+            ticker.tick().await;
             if self.status.load() == StatusType::Ready as usize {
                 break;
             }
-            tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
 
@@ -303,7 +312,7 @@ impl ZainoDB {
             commitment_tree_data: self.commitment_tree_data,
             heights: self.heights,
             spent: self.spent,
-            addrhist: self.addrhist,
+            address_history: self.address_history,
             metadata: self.metadata,
             validated_tip: Arc::clone(&self.validated_tip),
             validated_set: self.validated_set.clone(),
@@ -313,14 +322,13 @@ impl ZainoDB {
         };
 
         let handle = tokio::spawn({
-            let zaino_db = zaino_db;
             async move {
                 // *** initial validation ***
                 zaino_db.status.store(StatusType::Syncing.into());
                 let (r1, r2, r3) = tokio::join!(
-                    async { zaino_db.initial_spent_scan().await },
-                    async { zaino_db.initial_addrhist_scan().await },
-                    async { zaino_db.initial_block_scan().await },
+                    zaino_db.initial_spent_scan(),
+                    zaino_db.initial_address_history_scan(),
+                    zaino_db.initial_block_scan(),
                 );
 
                 for (desc, result) in [
@@ -435,13 +443,13 @@ impl ZainoDB {
     }
 
     /// Validate every stored `AddrEventBytes`.
-    async fn initial_addrhist_scan(&self) -> Result<(), FinalisedStateError> {
+    async fn initial_address_history_scan(&self) -> Result<(), FinalisedStateError> {
         let env = self.env.clone();
-        let addrhist = self.addrhist;
+        let address_history = self.address_history;
 
         tokio::task::spawn_blocking(move || {
             let ro = env.begin_ro_txn()?;
-            let mut cursor = ro.open_ro_cursor(addrhist)?;
+            let mut cursor = ro.open_ro_cursor(address_history)?;
 
             for (addr_bytes, record_bytes) in cursor.iter() {
                 let entry =
@@ -474,7 +482,7 @@ impl ZainoDB {
             commitment_tree_data: self.commitment_tree_data,
             heights: self.heights,
             spent: self.spent,
-            addrhist: self.addrhist,
+            address_history: self.address_history,
             metadata: self.metadata,
             validated_tip: Arc::clone(&self.validated_tip),
             validated_set: self.validated_set.clone(),
@@ -553,9 +561,8 @@ impl ZainoDB {
                     // Height must be exactly +1 over the current tip
                     if block_height.0 != last_height.0 + 1 {
                         return Err(FinalisedStateError::Custom(format!(
-                            "cannot write block at height {:?}; \
-                     current tip is {:?}",
-                            block_height, last_height
+                            "cannot write block at height {block_height:?}; \
+                     current tip is {last_height:?}"
                         )));
                     }
                 }
@@ -563,8 +570,7 @@ impl ZainoDB {
                 Err(lmdb::Error::NotFound) => {
                     if block_height.0 != 1 {
                         return Err(FinalisedStateError::Custom(format!(
-                            "first block must be height 1, got {:?}",
-                            block_height
+                            "first block must be height 1, got {block_height:?}"
                         )));
                     }
                 }
@@ -728,7 +734,7 @@ impl ZainoDB {
             commitment_tree_data: self.commitment_tree_data,
             heights: self.heights,
             spent: self.spent,
-            addrhist: self.addrhist,
+            address_history: self.address_history,
             metadata: self.metadata,
             validated_tip: Arc::clone(&self.validated_tip),
             validated_set: self.validated_set.clone(),
@@ -831,7 +837,7 @@ impl ZainoDB {
 
                 for (_record, record_entry_bytes) in stored_entries {
                     txn.put(
-                        zaino_db.addrhist,
+                        zaino_db.address_history,
                         &addr_bytes,
                         &record_entry_bytes,
                         WriteFlags::empty(),
@@ -864,7 +870,7 @@ impl ZainoDB {
                 {
                     let mut txn = zaino_db.env.begin_rw_txn()?;
                     txn.put(
-                        zaino_db.addrhist,
+                        zaino_db.address_history,
                         &addr_bytes,
                         &record_entry_bytes,
                         WriteFlags::empty(),
@@ -1125,7 +1131,7 @@ impl ZainoDB {
             commitment_tree_data: self.commitment_tree_data,
             heights: self.heights,
             spent: self.spent,
-            addrhist: self.addrhist,
+            address_history: self.address_history,
             metadata: self.metadata,
             validated_tip: Arc::clone(&self.validated_tip),
             validated_set: self.validated_set.clone(),
@@ -2020,7 +2026,7 @@ impl ZainoDB {
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
 
-            let mut cursor = match txn.open_ro_cursor(self.addrhist) {
+            let mut cursor = match txn.open_ro_cursor(self.address_history) {
                 Ok(cursor) => cursor,
                 Err(lmdb::Error::NotFound) => return Ok(None),
                 Err(e) => return Err(FinalisedStateError::LmdbError(e)),
@@ -2111,7 +2117,7 @@ impl ZainoDB {
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
 
-            let mut cursor = txn.open_ro_cursor(self.addrhist)?;
+            let mut cursor = txn.open_ro_cursor(self.address_history)?;
             let mut set: HashSet<TxIndex> = HashSet::new();
 
             for (key, val) in cursor.iter_dup_of(&addr_bytes)? {
@@ -2124,12 +2130,12 @@ impl ZainoDB {
                 // Parse the tx_index out of val:
                 // - [0] StoredEntry tag
                 // - [1] record tag
-                // - [2..5] height
-                // - [6..7] tx_index
-                // - [8..9] vout
+                // - [2..=5] height
+                // - [6..=7] tx_index
+                // - [8..=9] vout
                 // - [10] flags
-                // - [11..18] value
-                // - [19..50] checksum
+                // - [11..=18] value
+                // - [19..=50] checksum
 
                 let h = u32::from_be_bytes([val[2], val[3], val[4], val[5]]);
                 if h < start_height.0 || h > end_height.0 {
@@ -2170,7 +2176,7 @@ impl ZainoDB {
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
 
-            let mut cursor = txn.open_ro_cursor(self.addrhist)?;
+            let mut cursor = txn.open_ro_cursor(self.address_history)?;
             let mut utxos = Vec::new();
 
             for (key, val) in cursor.iter_dup_of(&addr_bytes)? {
@@ -2183,12 +2189,12 @@ impl ZainoDB {
                 // Parse the tx_index out of val:
                 // - [0] StoredEntry tag
                 // - [1] record tag
-                // - [2..5] height
-                // - [6..7] tx_index
-                // - [8..9] vout
+                // - [2..=5] height
+                // - [6..=7] tx_index
+                // - [8..=9] vout
                 // - [10] flags
-                // - [11..18] value
-                // - [19..50] checksum
+                // - [11..=18] value
+                // - [19..=50] checksum
 
                 let height = u32::from_be_bytes([val[2], val[3], val[4], val[5]]);
                 if height < start_height.0 || height > end_height.0 {
@@ -2238,7 +2244,7 @@ impl ZainoDB {
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
 
-            let mut cursor = txn.open_ro_cursor(self.addrhist)?;
+            let mut cursor = txn.open_ro_cursor(self.address_history)?;
             let mut balance: i64 = 0;
 
             for (key, val) in cursor.iter_dup_of(&addr_bytes)? {
@@ -2251,12 +2257,12 @@ impl ZainoDB {
                 // Parse the tx_index out of val:
                 // - [0] StoredEntry tag
                 // - [1] record tag
-                // - [2..5] height
-                // - [6..7] tx_index
-                // - [8..9] vout
+                // - [2..=5] height
+                // - [6..=7] tx_index
+                // - [8..=9] vout
                 // - [10] flags
-                // - [11..18] value
-                // - [19..50] checksum
+                // - [11..=18] value
+                // - [19..=50] checksum
 
                 let height = u32::from_be_bytes([val[2], val[3], val[4], val[5]]);
                 if height < start_height.0 || height > end_height.0 {
@@ -2576,7 +2582,7 @@ impl ZainoDB {
     ///
     /// *Confirms the checksum* in each of the three per-block tables.
     ///
-    /// WARNINNG: This is a blocking function and **MUST** be called within a blocking thread / task.
+    /// WARNING: This is a blocking function and **MUST** be called within a blocking thread / task.
     fn validate_block_blocking(
         &self,
         height: Height,
@@ -2745,12 +2751,12 @@ impl ZainoDB {
                     // avoid deserialization: check IS_MINED + correct vout
                     // - [0] StoredEntry tag
                     // - [1] record tag
-                    // - [2..5] height
-                    // - [6..7] tx_index
-                    // - [8..9] vout
+                    // - [2..=5] height
+                    // - [6..=7] tx_index
+                    // - [8..=9] vout
                     // - [10] flags
-                    // - [11..18] value
-                    // - [19..50] checksum
+                    // - [11..=18] value
+                    // - [19..=50] checksum
 
                     let flags = val[10];
                     let vout_rec = u16::from_be_bytes([val[8], val[9]]);
@@ -2772,9 +2778,9 @@ impl ZainoDB {
                 // Check spent record
                 let outpoint = Outpoint::new(*input.prevout_txid(), input.prevout_index());
                 let outpoint_bytes = outpoint.to_bytes()?;
-                let val = ro.get(self.spent, &outpoint_bytes).map_err(|_| {
-                    fail(&format!("missing spent index for outpoint {:?}", outpoint))
-                })?;
+                let val = ro
+                    .get(self.spent, &outpoint_bytes)
+                    .map_err(|_| fail(&format!("missing spent index for outpoint {outpoint:?}")))?;
                 let entry = StoredEntryFixed::<TxIndex>::from_bytes(val)
                     .map_err(|e| fail(&format!("corrupt spent entry: {e}")))?;
                 if !entry.verify(&outpoint_bytes) {
@@ -2796,12 +2802,12 @@ impl ZainoDB {
                     // avoid deserialization: check IS_INPUT + correct vout
                     // - [0] StoredEntry tag
                     // - [1] record tag
-                    // - [2..5] height
-                    // - [6..7] tx_index
-                    // - [8..9] vout
+                    // - [2..=5] height
+                    // - [6..=7] tx_index
+                    // - [8..=9] vout
                     // - [10] flags
-                    // - [11..18] value
-                    // - [19..50] checksum
+                    // - [11..=18] value
+                    // - [19..=50] checksum
 
                     let flags = val[10];
                     let vout = u16::from_be_bytes([val[8], val[9]]);
@@ -3090,7 +3096,7 @@ impl ZainoDB {
     /// Skips one `Option<TransparentCompactTx>` entry from the current cursor position.
     ///
     /// The input should be a cursor over just the inner item "list" bytes of a:
-    /// - StoredEntryVar<TransparentTxList>
+    /// - `StoredEntryVar<TransparentTxList>`
     ///
     /// Advances the cursor past either:
     /// - 1 byte (`0x00`) if `None`, or
@@ -3138,7 +3144,7 @@ impl ZainoDB {
     /// Skips one `Option<SaplingCompactTx>` from the current cursor position.
     ///
     /// The input should be a cursor over just the inner item "list" bytes of a:
-    /// - StoredEntryVar<SaplingTxList>
+    /// - `StoredEntryVar<SaplingTxList>`
     ///
     /// Advances past:
     /// - 1 byte `0x00` if None, or
@@ -3192,7 +3198,7 @@ impl ZainoDB {
     /// Skips one `Option<OrchardCompactTx>` from the current cursor position.
     ///
     /// The input should be a cursor over just the inner item "list" bytes of a:
-    /// - StoredEntryVar<OrchardTxList>
+    /// - `StoredEntryVar<OrchardTxList>`
     ///
     /// Advances past:
     /// - 1 byte `0x00` if None, or
@@ -3246,7 +3252,7 @@ impl ZainoDB {
     ///
     /// Efficiently filters by matching block + tx index bytes in-place.
     ///
-    /// WARNINNG: This is a blocking function and **MUST** be called within a blocking thread / task.
+    /// WARNING: This is a blocking function and **MUST** be called within a blocking thread / task.
     fn addr_hist_records_by_addr_and_index_blocking(
         &self,
         addr_script_bytes: &Vec<u8>,
@@ -3254,7 +3260,7 @@ impl ZainoDB {
     ) -> Result<Vec<Vec<u8>>, FinalisedStateError> {
         let txn = self.env.begin_ro_txn()?;
 
-        let mut cursor = txn.open_ro_cursor(self.addrhist)?;
+        let mut cursor = txn.open_ro_cursor(self.address_history)?;
         let mut results = Vec::new();
 
         for (key, val) in cursor.iter_dup_of(&addr_script_bytes)? {
@@ -3270,12 +3276,12 @@ impl ZainoDB {
             // Check tx_index match without deserializing
             // - [0] StoredEntry tag
             // - [1] record tag
-            // - [2..5] height
-            // - [6..7] tx_index
-            // - [8..9] vout
+            // - [2..=5] height
+            // - [6..=7] tx_index
+            // - [8..=9] vout
             // - [10] flags
-            // - [11..18] value
-            // - [19..50] checksum
+            // - [11..=18] value
+            // - [19..=50] checksum
 
             let block_index = u32::from_be_bytes([val[2], val[3], val[4], val[5]]);
             let tx_idx = u16::from_be_bytes([val[6], val[7]]);
@@ -3303,12 +3309,9 @@ impl ZainoDB {
                 output.value(),
                 AddrHistRecord::FLAG_MINED,
             );
-            match map.entry(addr_script) {
-                Entry::Occupied(mut e) => e.get_mut().push(output_record),
-                Entry::Vacant(e) => {
-                    e.insert(vec![output_record]);
-                }
-            }
+            map.entry(addr_script)
+                .and_modify(|v| v.push(output_record))
+                .or_insert_with(|| vec![output_record]);
         }
     }
 
@@ -3340,12 +3343,9 @@ impl ZainoDB {
                 AddrHistRecord::FLAG_MINED,
             ),
         );
-        match map.entry(addr_script) {
-            Entry::Occupied(mut e) => e.get_mut().push((input_record, prev_output_record)),
-            Entry::Vacant(e) => {
-                e.insert(vec![(input_record, prev_output_record)]);
-            }
-        }
+        map.entry(addr_script)
+            .and_modify(|v| v.push((input_record, prev_output_record)))
+            .or_insert_with(|| vec![(input_record, prev_output_record)]);
     }
 
     /// Delete all `addrhist` duplicates for `addr_bytes` that
@@ -3357,7 +3357,7 @@ impl ZainoDB {
     ///
     /// `expected` is the number of records to delete;
     ///
-    /// WARNINNG: This is a blocking function and **MUST** be called within a blocking thread / task.
+    /// WARNING: This is a blocking function and **MUST** be called within a blocking thread / task.
     fn delete_addrhist_dups_blocking(
         &self,
         addr_bytes: &[u8],
@@ -3381,7 +3381,7 @@ impl ZainoDB {
         let height_be = block_height.0.to_be_bytes();
 
         let mut txn = self.env.begin_rw_txn()?;
-        let mut cur = txn.open_rw_cursor(self.addrhist)?;
+        let mut cur = txn.open_rw_cursor(self.address_history)?;
 
         match cur
             .get(Some(addr_bytes), None, lmdb_sys::MDB_SET_KEY)
@@ -3391,12 +3391,12 @@ impl ZainoDB {
                 // Parse AddrEventBytes:
                 // - [0] StoredEntry tag
                 // - [1] record tag
-                // - [2..5] height
-                // - [6..7] tx_index
-                // - [8..9] vout
+                // - [2..=5] height
+                // - [6..=7] tx_index
+                // - [8..=9] vout
                 // - [10] flags
-                // - [11..18] value
-                // - [19..50] checksum
+                // - [11..=18] value
+                // - [19..=50] checksum
                 if val.len() == StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN
                     && val[2..6] == height_be
                 {
@@ -3448,7 +3448,7 @@ impl ZainoDB {
     ///
     /// Returns Ok(true) if a record was updated, Ok(false) if not found, or Err on DB error.
     ///
-    /// WARNINNG: This is a blocking function and **MUST** be called within a blocking thread / task.
+    /// WARNING: This is a blocking function and **MUST** be called within a blocking thread / task.
     fn mark_addr_hist_record_spent_blocking(
         &self,
         addr_script: &AddrScript,
@@ -3458,7 +3458,7 @@ impl ZainoDB {
         let addr_bytes = addr_script.to_bytes()?;
         let mut txn = self.env.begin_rw_txn()?;
         {
-            let mut cur = txn.open_rw_cursor(self.addrhist)?;
+            let mut cur = txn.open_rw_cursor(self.address_history)?;
 
             for (key, val) in cur.iter_dup_of(&addr_bytes)? {
                 if key.len() != AddrScript::VERSIONED_LEN {
@@ -3475,12 +3475,12 @@ impl ZainoDB {
                 // Parse the tx_index out of arr:
                 // - [0] StoredEntry tag
                 // - [1] record tag
-                // - [2..5] height
-                // - [6..7] tx_index
-                // - [8..9] vout
+                // - [2..=5] height
+                // - [6..=7] tx_index
+                // - [8..=9] vout
                 // - [10] flags
-                // - [11..18] value
-                // - [19..50] checksum
+                // - [11..=18] value
+                // - [19..=50] checksum
 
                 let block_index = u32::from_be_bytes([
                     hist_record[2],
@@ -3531,7 +3531,7 @@ impl ZainoDB {
     ///
     /// Returns Ok(true) if a record was updated, Ok(false) if not found, or Err on DB error.
     ///
-    /// WARNINNG: This is a blocking function and **MUST** be called within a blocking thread / task.
+    /// WARNING: This is a blocking function and **MUST** be called within a blocking thread / task.
     fn mark_addr_hist_record_unspent_blocking(
         &self,
         addr_script: &AddrScript,
@@ -3541,7 +3541,7 @@ impl ZainoDB {
         let addr_bytes = addr_script.to_bytes()?;
         let mut txn = self.env.begin_rw_txn()?;
         {
-            let mut cur = txn.open_rw_cursor(self.addrhist)?;
+            let mut cur = txn.open_rw_cursor(self.address_history)?;
 
             for (key, val) in cur.iter_dup_of(&addr_bytes)? {
                 if key.len() != AddrScript::VERSIONED_LEN {
@@ -3558,12 +3558,12 @@ impl ZainoDB {
                 // Parse the tx_index out of arr:
                 // - [0] StoredEntry tag
                 // - [1] record tag
-                // - [2..5] height
-                // - [6..7] tx_index
-                // - [8..9] vout
+                // - [2..=5] height
+                // - [6..=7] tx_index
+                // - [8..=9] vout
                 // - [10] flags
-                // - [11..18] value
-                // - [19..50] checksum
+                // - [11..=18] value
+                // - [19..=50] checksum
 
                 let block_index = u32::from_be_bytes([
                     hist_record[2],
@@ -3614,7 +3614,7 @@ impl ZainoDB {
     ///
     /// Used to build addrhist records.
     ///
-    /// WARNINNG: This is a blocking function and **MUST** be called within a blocking thread / task.
+    /// WARNING: This is a blocking function and **MUST** be called within a blocking thread / task.
     fn get_previous_output_blocking(
         &self,
         outpoint: Outpoint,
@@ -3634,7 +3634,7 @@ impl ZainoDB {
         let height_key = Height(block_height).to_bytes()?;
         let stored_bytes = ro.get(self.transparent, &height_key)?;
 
-        Self::find_txout_in_stored_transparenttxlist(stored_bytes, tx_pos, out_pos).ok_or_else(
+        Self::find_txout_in_stored_transparent_tx_list(stored_bytes, tx_pos, out_pos).ok_or_else(
             || FinalisedStateError::Custom("Previous output not found at given index".into()),
         )
     }
@@ -3642,7 +3642,7 @@ impl ZainoDB {
     /// Finds a TxIndex [block_height, tx_index] from a given txid.
     /// Used for Txid based lookup in transaction DBs.
     ///
-    /// WARNINNG: This is a blocking function and **MUST** be called within a blocking thread / task.
+    /// WARNING: This is a blocking function and **MUST** be called within a blocking thread / task.
     fn find_txid_index_blocking(
         &self,
         txid: &Hash,
@@ -3653,7 +3653,8 @@ impl ZainoDB {
         let target: [u8; 32] = (*txid).into();
 
         for (height_bytes, stored_bytes) in cursor.iter() {
-            if let Some(tx_idx) = Self::find_txid_position_in_stored_txidlist(&target, stored_bytes)
+            if let Some(tx_idx) =
+                Self::find_txid_position_in_stored_txid_list(&target, stored_bytes)
             {
                 let height = Height::from_bytes(height_bytes)?;
                 return Ok(Some(TxIndex::new(height.0, tx_idx as u16)));
@@ -3681,7 +3682,7 @@ impl ZainoDB {
     /// - `Some(index)` if a matching txid is found
     /// - `None` if the format is invalid or no match
     #[inline]
-    fn find_txid_position_in_stored_txidlist(
+    fn find_txid_position_in_stored_txid_list(
         target_txid: &[u8; 32],
         stored: &[u8],
     ) -> Option<usize> {
@@ -3726,7 +3727,7 @@ impl ZainoDB {
     /// # Returns
     /// - `Some(TxOutCompact)` if found and present, otherwise `None`
     #[inline]
-    fn find_txout_in_stored_transparenttxlist(
+    fn find_txout_in_stored_transparent_tx_list(
         stored: &[u8],
         target_tx_idx: usize,
         target_output_idx: usize,
