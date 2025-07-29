@@ -716,8 +716,6 @@ async fn fetch_service_validate_address(validator: &ValidatorKind) {
     let (mut test_manager, _fetch_service, fetch_service_subscriber) =
         create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
-    dbg!(fetch_service_subscriber.get_info().await.unwrap());
-
     let expected_validation = validate_address::Response {
         is_valid: true,
         address: Some("tm9iMLAuYMzJ6jtFLcA7rzUmfreGuKvr7Ma".to_owned()),
@@ -734,8 +732,6 @@ async fn fetch_service_validate_address(validator: &ValidatorKind) {
         .validate_address("tm9iMLAuYMzJ6jtFLcA7rzUmfreGuKvr7Ma".to_string())
         .await
         .unwrap());
-
-    dbg!(&fetch_service_validate_address);
 
     // Zebra has a bug when doing validation, they don't match against both regtest and testnet.
     if matches!(validator, ValidatorKind::Zebrad) {
