@@ -51,13 +51,13 @@ impl NodeBackedChainIndex {
         Result<std::convert::Infallible, super::non_finalised_state::SyncError>,
     > {
         let nfs = self.non_finalized_state.clone();
-        tokio::task::spawn((|| async move {
+        tokio::task::spawn(async move {
             loop {
                 nfs.sync().await?;
                 //TODO: configure
                 tokio::time::sleep(Duration::from_millis(500)).await
             }
-        })())
+        })
     }
     async fn get_fullblock_bytes_from_node(
         &self,
@@ -125,6 +125,7 @@ pub trait ChainIndex {
     /// Given inclusive start and end indexes, stream all blocks
     /// between the given indexes. Can be specified
     /// by hash or height.
+    #[allow(clippy::type_complexity)]
     fn get_block_range(
         &self,
         nonfinalized_snapshot: &Self::Snapshot,
@@ -244,7 +245,7 @@ impl ChainIndex for NodeBackedChainIndex {
         if let Some(height) = block.height() {
             Ok(Some((*block.hash(), height)))
         } else {
-            self.find_fork_point(&snapshot, block.index().parent_hash())
+            self.find_fork_point(snapshot, block.index().parent_hash())
         }
     }
 
