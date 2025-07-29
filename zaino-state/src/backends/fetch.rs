@@ -392,7 +392,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
         &self,
         address: String,
     ) -> Result<validate_address::Response, Self::Error> {
-        Ok(self.fetcher.validate_address(address).await?.into())
+        Ok(self.fetcher.validate_address(address).await?)
     }
 
     /// Returns all transaction ids in the memory pool, as a JSON array.

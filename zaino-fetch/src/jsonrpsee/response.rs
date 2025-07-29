@@ -694,6 +694,7 @@ impl From<GetBlockCountResponse> for Height {
 
 /// TODO: `validateaddress` response object
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[derive(Default)]
 pub struct ValidateAddressResponse {
     /// If the address is valid or not. If not, this is the only property returned.
     #[serde(rename = "isvalid")]
@@ -729,21 +730,6 @@ pub struct ValidateAddressResponse {
     pub account: Option<String>,
 }
 
-impl Default for ValidateAddressResponse {
-    fn default() -> Self {
-        Self {
-            is_valid: false,
-            address: None,
-            scriptpubkey: None,
-            is_mine: None,
-            is_script: None,
-            is_watchonly: None,
-            pubkey: None,
-            is_compressed: None,
-            account: None,
-        }
-    }
-}
 
 impl ResponseToError for validate_address::Response {
     type RpcError = Infallible;
