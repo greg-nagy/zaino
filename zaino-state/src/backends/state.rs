@@ -38,7 +38,7 @@ use zaino_proto::proto::{
 use zebra_chain::{
     block::{Header, Height, SerializedBlock},
     chain_tip::NetworkChainTipHeightEstimator,
-    parameters::{ConsensusBranchId, Network, NetworkUpgrade},
+    parameters::{ConsensusBranchId, Network, NetworkKind, NetworkUpgrade},
     primitives,
     serialization::ZcashSerialize,
     subtree::NoteCommitmentSubtreeIndex,
@@ -1131,57 +1131,31 @@ impl ZcashIndexer for StateServiceSubscriber {
             return Ok(validate_address::Response::invalid());
         }
 
-        if address.network() == network.kind() {
-            Ok(validate_address::Response {
-                address: Some(raw_address),
-                is_valid: true,
-                is_script: Some(address.is_script_hash()),
-            })
-        } else {
-            Ok(validate_address::Response::invalid())
+        match address.network() {
+            NetworkKind::Mainnet => {
+                if network.kind() != NetworkKind::Mainnet {
+                    Ok(validate_address::Response::invalid())
+                } else {
+                    Ok(validate_address::Response {
+                        address: Some(raw_address),
+                        is_valid: true,
+                        is_script: Some(address.is_script_hash()),
+                    })
+                }
+            }
+            // Both testnet and regtest have the same address format
+            NetworkKind::Testnet | NetworkKind::Regtest => {
+                if network.kind() == NetworkKind::Mainnet {
+                    Ok(validate_address::Response::invalid())
+                } else {
+                    Ok(validate_address::Response {
+                        address: Some(raw_address),
+                        is_valid: true,
+                        is_script: Some(address.is_script_hash()),
+                    })
+                }
+            }
         }
-
-        // let addr = ZcashAddress::try_from_encoded(&address)
-        //     .map_err(|_| ValidateAddressResponse {
-        //         is_valid: false,
-        //         ..Default::default()
-        //     })
-        //     .unwrap();
-
-        // let (taddr, script_pubkey, isscript) = match self.config.network.clone() {
-        //     Network::Mainnet => {
-        //         match addr.convert_if_network::<TransparentAddress>(NetworkType::Main) {
-        //             Ok(trans_addr) => {
-        //                 let script = trans_addr.script();
-        //                 let is_script = matches!(trans_addr, TransparentAddress::ScriptHash(_));
-        //                 (Some(trans_addr), Some(script), Some(is_script))
-        //             }
-        //             Err(e) => (None, None, None),
-        //         }
-        //     }
-        //     Network::Testnet(_) => {
-        //         match addr.convert_if_network::<TransparentAddress>(NetworkType::Test) {
-        //             Ok(trans_addr) => {
-        //                 let script = trans_addr.script();
-        //                 let is_script = matches!(trans_addr, TransparentAddress::ScriptHash(_));
-        //                 (Some(trans_addr), Some(script), Some(is_script))
-        //             }
-        //             Err(_) => (None, None, None),
-        //         }
-        //     }
-        // };
-
-        // Ok(ValidateAddressResponse {
-        //     is_valid: true,
-        //     address: Some(address.clone()),
-        //     is_script: isscript,
-        //     scriptpubkey: script_pubkey.map(|script| script.0.encode_hex()),
-        //     is_watchonly: Some(false),
-        //     pubkey: None,
-        //     is_compressed: None,
-        //     account: None,
-        //     is_mine: None,
-        // })
     }
 
     async fn z_get_subtrees_by_index(
