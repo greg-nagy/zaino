@@ -145,7 +145,8 @@ pub trait ChainIndex {
         snapshot: &Self::Snapshot,
         txid: [u8; 32],
     ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>>;
-    /// Given a transaction ID, returns all known
+    /// Given a transaction ID, returns all known hashes and heights of blocks
+    /// containing that transaction. Height is None for blocks not on the best chain.
     fn get_transaction_status(
         &self,
         snapshot: &Self::Snapshot,
