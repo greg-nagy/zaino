@@ -151,10 +151,10 @@ fn parse_transparent(data: &[u8]) -> Result<(&[u8], Vec<TxIn>, Vec<TxOut>), Pars
 /// The fields that this function parses are:
 ///
 /// - nJoinSplit: compactSize
-/// - vJoinSplit: JSDescriptionBCTV14[nJoinSplit] (if version 1 < tx_version < 4)
-/// - vJoinSplit: JSDescriptionGroth16[nJoinSplit] (if tx_version >= 4)
-/// - joinSplitPubKey: byte[32]
-/// - joinSplitSig: byte[64]
+/// - vJoinSplit: JSDescriptionBCTV14\[nJoinSplit\] (if version 1 < tx_version < 4)
+/// - vJoinSplit: JSDescriptionGroth16\[nJoinSplit\] (if tx_version >= 4)
+/// - joinSplitPubKey: byte\[32\]
+/// - joinSplitSig: byte\[64\]
 ///
 /// TODO: Enable skipped fields (all of them currently).
 fn parse_joinsplits(data: &[u8], version: u32) -> Result<(&[u8], Vec<JoinSplit>), ParseError> {
@@ -553,9 +553,9 @@ impl TransactionData {
     /// - tx_out: tx_out
     /// - lock_time: u32
     /// - nJoinSplit: compactSize <- New
-    /// - vJoinSplit: JSDescriptionBCTV14[nJoinSplit] <- New
-    /// - joinSplitPubKey: byte[32] <- New
-    /// - joinSplitSig: byte[64] <- New
+    /// - vJoinSplit: JSDescriptionBCTV14\[nJoinSplit\] <- New
+    /// - joinSplitPubKey: byte\[32\] <- New
+    /// - joinSplitSig: byte\[64\] <- New
     pub(crate) fn parse_v2(data: &[u8], version: u32) -> Result<(&[u8], Self), ParseError> {
         let mut cursor = Cursor::new(data);
 
@@ -601,9 +601,9 @@ impl TransactionData {
     /// - lock_time: u32
     /// - nExpiryHeight: u32 <- New
     /// - nJoinSplit: compactSize
-    /// - vJoinSplit: JSDescriptionBCTV14[nJoinSplit]
-    /// - joinSplitPubKey: byte[32]
-    /// - joinSplitSig: byte[64]
+    /// - vJoinSplit: JSDescriptionBCTV14\[nJoinSplit\]
+    /// - joinSplitPubKey: byte\[32\]
+    /// - joinSplitSig: byte\[64\]
     pub(crate) fn parse_v3(
         data: &[u8],
         version: u32,
