@@ -182,3 +182,11 @@ fi
 
 info "✅ All versions match between Cargo.toml and .env.testing-artifacts"
 '''
+
+# -------------------------------------------------------------------
+
+[tasks.doc]
+description = "Run `cargo doc`"
+script = '''
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items
+'''
