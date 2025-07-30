@@ -77,16 +77,16 @@ impl<T: ZainoVersionedSerialise + FixedEncodedLen> ZainoVersionedSerialise for S
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut body = vec![0u8; T::VERSIONED_LEN];
         r.read_exact(&mut body)?;
         let item = T::deserialize(&body[..])?;
 
         let checksum = read_fixed_le::<32, _>(r)?;
         Ok(Self { item, checksum })
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -159,6 +159,10 @@ impl<T: ZainoVersionedSerialise> ZainoVersionedSerialise for StoredEntryVar<T> {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let len = CompactSize::read(&mut *r)? as usize;
 
         let mut body = vec![0u8; len];
@@ -167,9 +171,5 @@ impl<T: ZainoVersionedSerialise> ZainoVersionedSerialise for StoredEntryVar<T> {
 
         let checksum = read_fixed_le::<32, _>(r)?;
         Ok(Self { item, checksum })
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }

@@ -38,8 +38,8 @@ pub mod version {
 /// 2. `impl ZainoVersionedSerialise for TxV1`
 ///    * `const VERSION = 1`
 ///    * `encode_body` – **v1** layout
-///    * `decode_latest` – parses **v1** bytes
-///    * (optional) `decode_v1 = Self::decode_latest`
+///    * `decode_v1` – parses **v1** bytes
+///    * `decode_latest` - wrapper for `Self::decode_v1`
 ///
 /// ### Bump to v2
 /// 1. `pub struct TxV2 { … }`   // new “current” layout
@@ -47,6 +47,8 @@ pub mod version {
 /// 3. `impl ZainoVersionedSerialise for TxV2`
 ///    * `const VERSION = 2`
 ///    * `encode_body` – **v2** layout
+///    * `decode_v1` – parses **v1** bytes
+///    * `decode_latest` - wrapper for `Self::decode_v1`
 ///    * `decode_latest` – parses **v2** bytes
 ///    * `decode_v1` – `TxV1::decode_latest(r).map(Self::from)`
 ///    * (optional) `decode_v2 = Self::decode_latest`
