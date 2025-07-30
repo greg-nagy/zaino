@@ -1,6 +1,6 @@
 //! Implements the ZainoDB Router, used to selectively route database capabilities during major migrations.
 //!
-//! The Router allows incremental database migrations by splitting read and write capabilities between primary and shadow databases.
+//! The Router allows incremental database migrations by splitting read and write capability groups between primary and shadow databases.
 //! This design enables partial migrations without duplicating the entire chain database,
 //! greatly reducing disk usage and ensuring minimal downtime.
 
@@ -18,7 +18,7 @@ use std::sync::{
 struct Router {
     /// Primary active database.
     primary: ArcSwap<Arc<dyn DbCore + Send + Sync>>,
-    /// Shadow database, new version to be built duing major migration.
+    /// Shadow database, new version to be built during major migration.
     shadow: ArcSwap<Option<Arc<dyn DbCore + Send + Sync>>>,
     /// Capability mask dictating what database capalility (if any) should be served by the shadow.
     mask: AtomicU32,
@@ -38,7 +38,7 @@ impl Router {
         }
     }
 
-    //
+    // Database capability router
 
     /// Return the database for a given capability.
     #[inline]
@@ -49,6 +49,10 @@ impl Router {
             self.primary.load_full().as_ref().clone()
         }
     }
+
+    // Shadow database control.
+    //
+    // These methods should only ever be used by the migration manager.
 
     /// Sets the shadow to the given database.
     fn set_shadow(&self, shadow: Arc<dyn DbCore + Send + Sync + 'static>, caps: Capability) {
