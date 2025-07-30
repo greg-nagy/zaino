@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::HashMap,
     fmt::{Debug, Display},
     future::Future,
@@ -6,11 +7,16 @@ use std::{
     time::Duration,
 };
 
-use super::non_finalised_state::{
-    BlockchainSource, InitError, NonFinalizedState, NonfinalizedBlockCacheSnapshot,
-};
+use crate::error::FinalisedStateError;
+
 use super::types::{self, ChainBlock};
-use futures::Stream;
+use super::{
+    finalised_state::ZainoDB,
+    non_finalised_state::{
+        BlockchainSource, InitError, NonFinalizedState, NonfinalizedBlockCacheSnapshot,
+    },
+};
+use futures::{Stream, TryFutureExt};
 use tokio_stream::StreamExt;
 pub use zebra_chain::parameters::Network as ZebraNetwork;
 use zebra_chain::serialization::ZcashSerialize;
@@ -27,19 +33,26 @@ pub struct NodeBackedChainIndex {
     // TODO: finalized state
     // TODO: mempool
     non_finalized_state: Arc<NonFinalizedState>,
+    finalized_state: ZainoDB,
 }
 
 impl NodeBackedChainIndex {
     /// Creates a new chainindex from a connection to a validator
     /// Currently this is a ReadStateService or JsonRpSeeConnector
-    pub async fn new<T>(source: T, network: ZebraNetwork) -> Result<Self, InitError>
+    pub async fn new<T>(
+        source: T,
+        config: crate::config::BlockCacheConfig,
+    ) -> Result<Self, InitError>
     where
         T: Into<BlockchainSource> + Send + Sync + 'static,
     {
+        let (non_finalized_state, finalized_state) = futures::try_join!(
+            NonFinalizedState::initialize(source.into(), config.network.clone()),
+            ZainoDB::spawn(config).map_err(InitError::FinalisedStateInitialzationError)
+        )?;
         let chain_index = Self {
-            non_finalized_state: Arc::new(
-                NonFinalizedState::initialize(source.into(), network).await?,
-            ),
+            non_finalized_state: Arc::new(non_finalized_state),
+            finalized_state,
         };
         chain_index.start_sync_loop();
         Ok(chain_index)
@@ -74,17 +87,41 @@ impl NodeBackedChainIndex {
             })
             .transpose()
     }
-    fn get_chainblock_by_hashorheight<'snapshot, 'self_lt, 'output>(
+    async fn get_chainblock_by_hashorheight<'snapshot, 'self_lt, 'output>(
         &'self_lt self,
         non_finalized_snapshot: &'snapshot NonfinalizedBlockCacheSnapshot,
-        height: &HashOrHeight,
-    ) -> Option<&'output ChainBlock>
+        hashorheight: &HashOrHeight,
+    ) -> Result<Option<Cow<'output, ChainBlock>>, FinalisedStateError>
     where
         'snapshot: 'output,
         'self_lt: 'output,
     {
         //TODO: finalized state
-        non_finalized_snapshot.get_chainblock_by_hashorheight(height)
+        if let Some(block) = non_finalized_snapshot.get_chainblock_by_hashorheight(hashorheight) {
+            Ok(Some(Cow::Borrowed(block)))
+        } else {
+            let height = match hashorheight {
+                HashOrHeight::Hash(hash) => match self
+                    .finalized_state
+                    .get_block_height(types::Hash::from(hash.0))
+                    .await
+                {
+                    Ok(height) => height,
+                    Err(FinalisedStateError::MissingData(_)) => return Ok(None),
+                    Err(other) => return Err(other),
+                },
+                HashOrHeight::Height(height) => types::Height(height.0),
+            };
+            if let Some(chainblocks) = self.finalized_state.chain_block() {
+                match chainblocks.get_chain_block(height).await {
+                    Ok(block) => Ok(Some(Cow::Owned(block))),
+                    Err(FinalisedStateError::MissingData(_)) => Ok(None),
+                    Err(other) => Err(other),
+                }
+            } else {
+                Ok(None)
+            }
+        }
     }
 
     fn blocks_containing_transaction<'snapshot, 'self_lt, 'iter>(
@@ -126,7 +163,7 @@ pub trait ChainIndex {
     /// between the given indexes. Can be specified
     /// by hash or height.
     #[allow(clippy::type_complexity)]
-    fn get_block_range(
+    async fn get_block_range(
         &self,
         nonfinalized_snapshot: &Self::Snapshot,
         start: Option<HashOrHeight>,
@@ -169,17 +206,20 @@ impl ChainIndex for NodeBackedChainIndex {
     /// between the given indexes. Can be specified
     /// by hash or height. Returns None if the start or end
     /// block cannot be found
-    fn get_block_range(
+    async fn get_block_range(
         &self,
         nonfinalized_snapshot: &Self::Snapshot,
         start: Option<HashOrHeight>,
         end: Option<HashOrHeight>,
     ) -> Result<Option<impl Stream<Item = Result<Vec<u8>, Self::Error>>>, Self::Error> {
         // with no start supplied, start from genesis
-        let Some(start_block) = self.get_chainblock_by_hashorheight(
-            nonfinalized_snapshot,
-            &start.unwrap_or(HashOrHeight::Height(zebra_chain::block::Height(1))),
-        ) else {
+        let Some(start_block) = self
+            .get_chainblock_by_hashorheight(
+                nonfinalized_snapshot,
+                &start.unwrap_or(HashOrHeight::Height(zebra_chain::block::Height(1))),
+            )
+            .await?
+        else {
             return if start.is_some() {
                 Ok(None)
             } else {
@@ -190,10 +230,13 @@ impl ChainIndex for NodeBackedChainIndex {
                 })
             };
         };
-        let Some(end_block) = self.get_chainblock_by_hashorheight(
-            nonfinalized_snapshot,
-            &end.unwrap_or(HashOrHeight::Hash(nonfinalized_snapshot.best_tip.1.into())),
-        ) else {
+        let Some(end_block) = self
+            .get_chainblock_by_hashorheight(
+                nonfinalized_snapshot,
+                &end.unwrap_or(HashOrHeight::Hash(nonfinalized_snapshot.best_tip.1.into())),
+            )
+            .await?
+        else {
             return if start.is_some() {
                 Ok(None)
             } else {
@@ -378,6 +421,27 @@ impl ChainIndexError {
                 "InternalServerError: hole in validator database, missing block {missing_block}"
             ),
             source: None,
+        }
+    }
+}
+
+impl From<FinalisedStateError> for ChainIndexError {
+    fn from(value: FinalisedStateError) -> Self {
+        match value {
+            FinalisedStateError::Custom(_) => todo!(),
+            FinalisedStateError::MissingData(_) => todo!(),
+            FinalisedStateError::InvalidBlock {
+                height,
+                hash,
+                reason,
+            } => todo!(),
+            FinalisedStateError::FeatureUnavailable(_) => todo!(),
+            FinalisedStateError::Critical(_) => todo!(),
+            FinalisedStateError::LmdbError(error) => todo!(),
+            FinalisedStateError::SerdeJsonError(error) => todo!(),
+            FinalisedStateError::StatusError(status_error) => todo!(),
+            FinalisedStateError::JsonRpcConnectorError(transport_error) => todo!(),
+            FinalisedStateError::IoError(error) => todo!(),
         }
     }
 }

@@ -2,6 +2,7 @@ use std::{collections::HashMap, mem, sync::Arc};
 
 use crate::{
     chain_index::types::{Hash, Height},
+    error::FinalisedStateError,
     BlockData, BlockIndex, ChainWork, CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes,
     CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactTxData,
     OrchardCompactTx, SaplingCompactTx, TransparentCompactTx, TxInCompact, TxOutCompact,
@@ -106,6 +107,8 @@ pub enum InitError {
     #[error("zebra returned invalid data: {0}")]
     /// the connected node returned garbage data
     InvalidNodeData(Box<dyn std::error::Error + Send + Sync + 'static>),
+    #[error(transparent)]
+    FinalisedStateInitialzationError(#[from] FinalisedStateError),
 }
 
 /// This is the core of the concurrent block cache.
