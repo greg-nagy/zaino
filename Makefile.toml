@@ -31,7 +31,7 @@ echo "  container-test             Run integration tests using the local image"
 echo "  build-image                Build the Docker image with current artifact versions"
 echo "  push-image                 Push the image (used in CI, can be used manually)"
 echo "  compute-image-tag          Compute the tag for the Docker image based on versions"
-echo "  update-docker-hash         Update DOCKER_DIR_HASH if test_environment has changed"
+echo "  get-docker-hash            Get DOCKER_DIR_HASH value (hash for the image defining files)"
 echo "  ensure-image-exists        Check if the required image exists locally, build if not"
 echo "  check-matching-zebras      Verify Zebra versions match between Cargo.toml and .env"
 echo "  validate-makefile-tasks    Run minimal validation of all maker tasks"
@@ -132,50 +132,21 @@ export CARGO_MAKE_IMAGE_TAG=$TAG
 '''
 # -------------------------------------------------------------------
 
-[tasks.update-docker-hash]
-description = "Update DOCKER_DIR_HASH in .env.testing-artifacts if test_environment has changed"
+[tasks.get-docker-hash]
+description = "Get the current DOCKER_DIR_HASH"
 script_runner = "bash"
 script = '''
-set -euo pipefail
-
-# Get the current hash from HEAD
-CURRENT_HASH=$(git ls-tree HEAD test_environment | git hash-object --stdin | cut -c1-14)
-
-# Get the hash from .env.testing-artifacts
-if [ -f .env.testing-artifacts ]; then
-    ENV_HASH=$(grep "^DOCKER_DIR_HASH=" .env.testing-artifacts | cut -d'=' -f2)
-else
-    echo "ERROR: .env.testing-artifacts not found!"
-    exit 1
-fi
-
-# Compare and update if different
-if [ "$CURRENT_HASH" != "$ENV_HASH" ]; then
-    echo "test_environment has changed. Updating DOCKER_DIR_HASH from $ENV_HASH to $CURRENT_HASH"
-
-    # Update the file
-    sed -i.bak "s/^DOCKER_DIR_HASH=.*/DOCKER_DIR_HASH=$CURRENT_HASH/" .env.testing-artifacts
-    rm -f .env.testing-artifacts.bak
-
-    echo "Updated .env.testing-artifacts with new DOCKER_DIR_HASH: $CURRENT_HASH"
-    echo "Note: You should commit this change to .env.testing-artifacts"
-else
-    echo "DOCKER_DIR_HASH is up to date: $CURRENT_HASH"
-fi
+HASH=$(./utils/get-docker-hash.sh)
+echo "DOCKER_DIR_HASH=$HASH"
 '''
 
 [tasks.ensure-image-exists]
 description = "Ensure the image exists locally or on Docker Hub before building"
 # This task checks if the required Docker image exists locally or on Docker Hub.
 # If not found, it triggers the build-image task to build from test_environment.
-dependencies = ["init-docker-volumes", "update-docker-hash"]
+dependencies = ["init-docker-volumes"]
 extend = "base-script"
 script.main = '''
-# Re-source the environment file and recompute TAG in case update-docker-hash changed it
-source "${CARGO_MAKE_WORKING_DIRECTORY}/.env.testing-artifacts"
-export RUST_VERSION ZCASH_VERSION ZEBRA_VERSION DOCKER_DIR_HASH
-TAG=$("${CARGO_MAKE_WORKING_DIRECTORY}/utils/get-ci-image-tag.sh")
-
 if ! docker image inspect ${IMAGE_NAME}:${TAG} > /dev/null 2>&1; then
   warn "Image not found locally. Attempting to pull from Docker Hub..."
   if docker pull ${IMAGE_NAME}:${TAG}; then
@@ -196,14 +167,9 @@ description = "Build the Docker image for testing artifacts"
 # Note: This task builds the Docker image from the test_environment directory,
 # which contains the Dockerfile and entrypoint.sh for the CI/test environment.
 # The build context is set to test_environment to keep paths simple.
-dependencies = ["update-docker-hash"]
 script_runner = "bash"
 extend = "base-script"
 script.main = '''
-# Re-source the environment file to get the updated hash
-source "${CARGO_MAKE_WORKING_DIRECTORY}/.env.testing-artifacts"
-export RUST_VERSION ZCASH_VERSION ZEBRA_VERSION DOCKER_DIR_HASH
-TAG=$("${CARGO_MAKE_WORKING_DIRECTORY}/utils/get-ci-image-tag.sh")
 set -euo pipefail
 
 # Create target directory with correct ownership before Docker creates it as root
@@ -242,10 +208,6 @@ dependencies = ["update-docker-hash"]
 script_runner = "bash"
 extend = "base-script"
 script.main = '''
-# Re-source the environment file to get the updated hash
-source "${CARGO_MAKE_WORKING_DIRECTORY}/.env.testing-artifacts"
-export RUST_VERSION ZCASH_VERSION ZEBRA_VERSION DOCKER_DIR_HASH
-TAG=$("${CARGO_MAKE_WORKING_DIRECTORY}/utils/get-ci-image-tag.sh")
 set -euo pipefail
 
 info "Pushing image: ${IMAGE_NAME}:$TAG"
