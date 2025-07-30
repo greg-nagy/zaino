@@ -172,7 +172,6 @@ jobs:
         uses: test-summary/action@v2
         with:
           paths: "target/nextest/ci/junit.xml"
-        if: false
 
   fmt:
     name: Rustfmt
