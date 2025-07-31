@@ -29,6 +29,12 @@ pub use backends::{
 // NOTE: This will replace local_cache. Currently WIP.
 pub(crate) mod chain_index;
 
+pub use chain_index::encoding::*;
+pub use chain_index::mempool::Mempool;
+pub use chain_index::non_finalised_state::{
+    BlockchainSource, InitError, NodeConnectionError, NonFinalizedState,
+    NonfinalizedBlockCacheSnapshot, SyncError, UpdateError,
+};
 // NOTE: Should these be pub at all?
 pub use chain_index::types::{
     AddrHistRecord, AddrScript, BlockData, BlockHeaderData, BlockIndex, ChainBlock, ChainWork,
@@ -38,8 +44,6 @@ pub use chain_index::types::{
     ShardRoot, TransparentCompactTx, TransparentTxList, TxInCompact, TxIndex, TxOutCompact,
     TxidList,
 };
-
-pub use chain_index::encoding::*;
 
 pub(crate) mod local_cache;
 
