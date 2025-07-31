@@ -42,6 +42,7 @@ impl ZainoDB {
         let meta_opt = Self::peek_metadata(&cfg.db_path).await?;
         let backend = match meta_opt {
             Some(meta) => match meta.version.major() {
+                0 => DbBackend::spawn_v0(&cfg).await?,
                 1 => DbBackend::spawn_v1(&cfg).await?,
                 _ => {
                     return Err(FinalisedStateError::Custom(format!(
@@ -109,18 +110,41 @@ impl ZainoDB {
         };
 
         tokio::task::block_in_place(|| {
-            let meta_dbi = env.open_db(Some("metadata"))?;
             let txn = env.begin_ro_txn()?;
-            match txn.get(meta_dbi, b"metadata") {
-                Ok(raw) => {
-                    let entry = StoredEntryFixed::<DbMetadata>::from_bytes(raw).map_err(|e| {
-                        FinalisedStateError::Custom(format!("metadata decode error: {e}"))
-                    })?;
-                    Ok(Some(entry.item))
-                }
-                Err(lmdb::Error::NotFound) => Ok(None),
-                Err(e) => Err(FinalisedStateError::LmdbError(e)),
+
+            // Try metadata DB
+            match env.open_db(Some("metadata")) {
+                Ok(meta_dbi) => match txn.get(meta_dbi, b"metadata") {
+                    Ok(raw) => {
+                        let entry =
+                            StoredEntryFixed::<DbMetadata>::from_bytes(raw).map_err(|e| {
+                                FinalisedStateError::Custom(format!("metadata decode error: {e}"))
+                            })?;
+                        return Ok(Some(entry.item));
+                    }
+                    Err(lmdb::Error::NotFound) => {} // fall through and check legacy
+                    Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+                },
+                Err(lmdb::Error::NotFound) => {} // metadata db missing, check legacy
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
             }
+
+            // Fallback: detect legacy v0 by checking if known v0 DBs exist
+            let has_v0 = env.open_db(Some("heights_to_hashes")).is_ok()
+                && env.open_db(Some("hashes_to_blocks")).is_ok();
+
+            if has_v0 {
+                return Ok(Some(DbMetadata {
+                    version: DbVersion {
+                        major: 0,
+                        minor: 0,
+                        patch: 0,
+                    },
+                    schema_hash: [0u8; 32],
+                }));
+            }
+
+            Ok(None)
         })
     }
 

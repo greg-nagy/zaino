@@ -95,9 +95,17 @@ impl DbCore for Router {
         self.backend(Capability::READ_CORE).status().await
     }
 
-    // TODO: SHUT DOWN BOTH DBs IF OPEN!
     async fn shutdown(&self) -> Result<(), FinalisedStateError> {
-        self.backend(Capability::READ_CORE).shutdown().await
+        let primary_shutdown_result = self.primary.load_full().shutdown().await;
+
+        let shadow_option = self.shadow.load();
+        let shadow_shutdown_result = match shadow_option.as_ref() {
+            Some(shadow_database) => shadow_database.shutdown().await,
+            None => Ok(()),
+        };
+
+        primary_shutdown_result?;
+        shadow_shutdown_result
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

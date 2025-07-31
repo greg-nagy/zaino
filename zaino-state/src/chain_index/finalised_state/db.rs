@@ -3,12 +3,13 @@
 pub(crate) mod v0;
 pub(crate) mod v1;
 
-use std::time::Duration;
+use v0::DbV0;
+use v1::DbV1;
 
 use crate::{
     chain_index::finalised_state::capability::{
-        BlockCoreExt, BlockShieldedExt, BlockTransparentExt, Capability, ChainBlockExt,
-        CompactBlockExt, DbCore, DbMetadata, DbRead, DbWrite, TransparentHistExt,
+        BlockCoreExt, BlockShieldedExt, BlockTransparentExt, ChainBlockExt, CompactBlockExt,
+        DbCore, DbMetadata, DbRead, DbWrite, TransparentHistExt,
     },
     config::BlockCacheConfig,
     error::FinalisedStateError,
@@ -18,18 +19,23 @@ use crate::{
 };
 
 use async_trait::async_trait;
-
+use std::time::Duration;
 use tokio::time::{interval, MissedTickBehavior};
-use v1::DbV1;
 
 /// All concrete database implementations.
 pub(crate) enum DbBackend {
+    V0(DbV0),
     V1(DbV1),
 }
 
 // ***** Core database functionality *****
 
 impl DbBackend {
+    /// Spawn a v0 database.
+    pub(crate) async fn spawn_v0(cfg: &BlockCacheConfig) -> Result<Self, FinalisedStateError> {
+        Ok(Self::V0(DbV0::spawn(cfg).await?))
+    }
+
     /// Spawn a v1 database.
     pub(crate) async fn spawn_v1(cfg: &BlockCacheConfig) -> Result<Self, FinalisedStateError> {
         Ok(Self::V1(DbV1::spawn(cfg).await?))
@@ -53,18 +59,21 @@ impl DbBackend {
 impl DbCore for DbBackend {
     async fn status(&self) -> StatusType {
         match self {
+            Self::V0(db) => db.status().await,
             Self::V1(db) => db.status().await,
         }
     }
 
     async fn shutdown(&self) -> Result<(), FinalisedStateError> {
         match self {
+            Self::V0(db) => db.shutdown().await,
             Self::V1(db) => db.shutdown().await,
         }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
         match self {
+            Self::V0(db) => db,
             Self::V1(db) => db,
         }
     }
@@ -74,24 +83,28 @@ impl DbCore for DbBackend {
 impl DbRead for DbBackend {
     async fn db_height(&self) -> Result<Option<Height>, FinalisedStateError> {
         match self {
+            Self::V0(db) => db.db_height().await,
             Self::V1(db) => db.db_height().await,
         }
     }
 
     async fn get_block_height(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
         match self {
+            Self::V0(db) => db.get_block_height(hash).await,
             Self::V1(db) => db.get_block_height(hash).await,
         }
     }
 
     async fn get_block_hash(&self, height: Height) -> Result<Hash, FinalisedStateError> {
         match self {
+            Self::V0(db) => db.get_block_hash(height).await,
             Self::V1(db) => db.get_block_hash(height).await,
         }
     }
 
     async fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
         match self {
+            Self::V0(db) => db.get_metadata().await,
             Self::V1(db) => db.get_metadata().await,
         }
     }
@@ -101,18 +114,21 @@ impl DbRead for DbBackend {
 impl DbWrite for DbBackend {
     async fn write_block(&self, block: ChainBlock) -> Result<(), FinalisedStateError> {
         match self {
+            Self::V0(db) => db.write_block(block).await,
             Self::V1(db) => db.write_block(block).await,
         }
     }
 
     async fn delete_block_at_height(&self, height: Height) -> Result<(), FinalisedStateError> {
         match self {
+            Self::V0(db) => db.delete_block_at_height(height).await,
             Self::V1(db) => db.delete_block_at_height(height).await,
         }
     }
 
     async fn delete_block(&self, block: &ChainBlock) -> Result<(), FinalisedStateError> {
         match self {
+            Self::V0(db) => db.delete_block(block).await,
             Self::V1(db) => db.delete_block(block).await,
         }
     }
@@ -296,7 +312,9 @@ impl CompactBlockExt for DbBackend {
         &self,
         h: Height,
     ) -> Result<zaino_proto::proto::compact_formats::CompactBlock, FinalisedStateError> {
+        #[allow(unreachable_patterns)]
         match self {
+            Self::V0(db) => db.get_compact_block(h).await,
             Self::V1(db) => db.get_compact_block(h).await,
             _ => Err(FinalisedStateError::FeatureUnavailable("compact_block")),
         }

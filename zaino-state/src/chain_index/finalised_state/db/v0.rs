@@ -6,11 +6,13 @@
 //! for this reason ZainoDB-V0 does not use the standard serialisation schema used elswhere in Zaino.
 
 use crate::{
-    chain_index::finalised_state::capability::{DbCore, DbMetadata, DbRead, DbVersion, DbWrite},
+    chain_index::finalised_state::capability::{
+        CompactBlockExt, DbCore, DbMetadata, DbRead, DbVersion, DbWrite,
+    },
     config::BlockCacheConfig,
     error::FinalisedStateError,
     status::{AtomicStatus, StatusType},
-    ChainBlock,
+    ChainBlock, Height,
 };
 
 use zaino_proto::proto::compact_formats::CompactBlock;
@@ -97,6 +99,16 @@ impl DbCore for DbV0 {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[async_trait]
+impl CompactBlockExt for DbV0 {
+    async fn get_compact_block(
+        &self,
+        height: Height,
+    ) -> Result<zaino_proto::proto::compact_formats::CompactBlock, FinalisedStateError> {
+        self.get_compact_block(height).await
     }
 }
 
@@ -630,6 +642,23 @@ impl DbV0 {
                 patch: 0,
             },
             schema_hash: [0u8; 32],
+        })
+    }
+
+    async fn get_compact_block(
+        &self,
+        height: crate::Height,
+    ) -> Result<zaino_proto::proto::compact_formats::CompactBlock, FinalisedStateError> {
+        let zebra_hash =
+            zebra_chain::block::Hash::from(self.get_block_hash_by_height(height).await?);
+        let hash_key = serde_json::to_vec(&DbHash(zebra_hash))?;
+
+        tokio::task::block_in_place(|| {
+            let txn = self.env.begin_ro_txn()?;
+
+            let block_bytes: &[u8] = txn.get(self.hashes_to_blocks, &hash_key)?;
+            let block: DbCompactBlock = serde_json::from_slice(block_bytes)?;
+            Ok(block.0)
         })
     }
 }
