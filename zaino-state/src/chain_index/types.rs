@@ -122,12 +122,12 @@ impl ZainoVersionedSerialise for Hash {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let bytes = read_fixed_le::<32, _>(r)?;
-        Ok(Hash(bytes))
+        Self::decode_v1(r)
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
+        let bytes = read_fixed_le::<32, _>(r)?;
+        Ok(Hash(bytes))
     }
 }
 
@@ -232,12 +232,12 @@ impl ZainoVersionedSerialise for Height {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let raw = read_u32_be(r)?;
-        Height::try_from(raw).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        Self::decode_v1(r)
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
+        let raw = read_u32_be(r)?;
+        Height::try_from(raw).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 }
 
@@ -264,12 +264,12 @@ impl ZainoVersionedSerialise for Index {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let raw = read_u32_be(r)?;
-        Ok(Index(raw))
+        Self::decode_v1(r)
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
+        let raw = read_u32_be(r)?;
+        Ok(Index(raw))
     }
 }
 
@@ -384,6 +384,10 @@ impl ZainoVersionedSerialise for AddrScript {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let hash = read_fixed_le::<20, _>(&mut *r)?;
         let mut buf = [0u8; 1];
         r.read_exact(&mut buf)?;
@@ -391,10 +395,6 @@ impl ZainoVersionedSerialise for AddrScript {
             hash,
             script_type: buf[0],
         })
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -450,14 +450,14 @@ impl ZainoVersionedSerialise for Outpoint {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
         let txid = read_fixed_le::<32, _>(&mut r)?;
         let index = read_u32_le(&mut r)?;
         Ok(Outpoint::new(txid, index))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -539,20 +539,17 @@ impl ZainoVersionedSerialise for BlockIndex {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let mut r = r;
+        Self::decode_v1(r)
+    }
 
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
         let hash = Hash::deserialize(&mut r)?;
         let parent_hash = Hash::deserialize(&mut r)?;
         let chainwork = ChainWork::deserialize(&mut r)?;
-
         let height = read_option(&mut r, |r| Height::deserialize(r))?;
 
         Ok(BlockIndex::new(hash, parent_hash, chainwork, height))
-    }
-
-    /*──────── historic v1 helper ────────*/
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -616,12 +613,12 @@ impl ZainoVersionedSerialise for ChainWork {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let bytes = read_fixed_le::<32, _>(r)?;
-        Ok(ChainWork(bytes))
+        Self::decode_v1(r)
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
+        let bytes = read_fixed_le::<32, _>(r)?;
+        Ok(ChainWork(bytes))
     }
 }
 
@@ -778,6 +775,10 @@ impl ZainoVersionedSerialise for BlockData {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
 
         let version = read_u32_le(&mut r)?;
@@ -800,10 +801,6 @@ impl ZainoVersionedSerialise for BlockData {
             nonse,
             solution,
         ))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -887,6 +884,10 @@ impl ZainoVersionedSerialise for EquihashSolution {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
 
         let mut tag = [0u8; 1];
@@ -905,10 +906,6 @@ impl ZainoVersionedSerialise for EquihashSolution {
                 format!("unknown Equihash variant tag {other}"),
             )),
         }
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -948,14 +945,14 @@ impl ZainoVersionedSerialise for CommitmentTreeData {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
         let roots = CommitmentTreeRoots::deserialize(&mut r)?;
         let sizes = CommitmentTreeSizes::deserialize(&mut r)?;
         Ok(CommitmentTreeData::new(roots, sizes))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -1004,14 +1001,14 @@ impl ZainoVersionedSerialise for CommitmentTreeRoots {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
         let sapling = read_fixed_le::<32, _>(&mut r)?;
         let orchard = read_fixed_le::<32, _>(&mut r)?;
         Ok(CommitmentTreeRoots::new(sapling, orchard))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -1058,14 +1055,14 @@ impl ZainoVersionedSerialise for CommitmentTreeSizes {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
         let sapling = read_u32_le(&mut r)?;
         let orchard = read_u32_le(&mut r)?;
         Ok(CommitmentTreeSizes::new(sapling, orchard))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -1334,17 +1331,18 @@ impl ZainoVersionedSerialise for ChainBlock {
         self.commitment_tree_data.serialize(&mut w)
     }
 
-    fn decode_latest<R: Read>(mut r: &mut R) -> io::Result<Self> {
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
         let index = BlockIndex::deserialize(&mut r)?;
         let data = BlockData::deserialize(&mut r)?;
         let tx = read_vec(&mut r, |r| CompactTxData::deserialize(r))?;
         let ctd = CommitmentTreeData::deserialize(&mut r)?;
 
         Ok(ChainBlock::new(index, data, tx, ctd))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -1595,7 +1593,12 @@ impl ZainoVersionedSerialise for CompactTxData {
         self.orchard.serialize(&mut w)
     }
 
-    fn decode_latest<R: Read>(mut r: &mut R) -> io::Result<Self> {
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
         let index = read_u64_le(&mut r)?;
         let txid = read_fixed_le::<32, _>(&mut r)?;
 
@@ -1610,10 +1613,6 @@ impl ZainoVersionedSerialise for CompactTxData {
             sapling,
             orchard,
         ))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -1638,16 +1637,16 @@ impl ZainoVersionedSerialise for TransparentCompactTx {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
 
         let vin = read_vec(&mut r, |r| TxInCompact::deserialize(r))?;
         let vout = read_vec(&mut r, |r| TxOutCompact::deserialize(r))?;
 
         Ok(TransparentCompactTx::new(vin, vout))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -1714,14 +1713,14 @@ impl ZainoVersionedSerialise for TxInCompact {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
         let txid = read_fixed_le::<32, _>(&mut r)?;
         let idx = read_u32_le(&mut r)?;
         Ok(TxInCompact::new(txid, idx))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -1775,14 +1774,14 @@ impl ZainoVersionedSerialise for ScriptType {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut b = [0u8; 1];
         r.read_exact(&mut b)?;
         ScriptType::try_from(b[0])
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "unknown ScriptType"))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -1925,6 +1924,10 @@ impl ZainoVersionedSerialise for TxOutCompact {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
         let value = read_u64_le(&mut r)?;
         let script_hash = read_fixed_le::<20, _>(&mut r)?;
@@ -1933,10 +1936,6 @@ impl ZainoVersionedSerialise for TxOutCompact {
         r.read_exact(&mut b)?;
         TxOutCompact::new(value, script_hash, b[0])
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid script_type"))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -2000,6 +1999,10 @@ impl ZainoVersionedSerialise for SaplingCompactTx {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
 
         let value = read_option(&mut r, |r| read_i64_le(r))?;
@@ -2007,10 +2010,6 @@ impl ZainoVersionedSerialise for SaplingCompactTx {
         let outputs = read_vec(&mut r, |r| CompactSaplingOutput::deserialize(r))?;
 
         Ok(SaplingCompactTx::new(value, spends, outputs))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -2049,11 +2048,11 @@ impl ZainoVersionedSerialise for CompactSaplingSpend {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        Ok(CompactSaplingSpend::new(read_fixed_le::<32, _>(r)?))
+        Self::decode_v1(r)
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
+        Ok(CompactSaplingSpend::new(read_fixed_le::<32, _>(r)?))
     }
 }
 
@@ -2122,15 +2121,15 @@ impl ZainoVersionedSerialise for CompactSaplingOutput {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
         let cmu = read_fixed_le::<32, _>(&mut r)?;
         let epk = read_fixed_le::<32, _>(&mut r)?;
         let ciphertext = read_fixed_le::<52, _>(&mut r)?;
         Ok(CompactSaplingOutput::new(cmu, epk, ciphertext))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -2178,16 +2177,16 @@ impl ZainoVersionedSerialise for OrchardCompactTx {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
 
         let value = read_option(&mut r, |r| read_i64_le(r))?;
         let actions = read_vec(&mut r, |r| CompactOrchardAction::deserialize(r))?;
 
         Ok(OrchardCompactTx::new(value, actions))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -2265,16 +2264,16 @@ impl ZainoVersionedSerialise for CompactOrchardAction {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
         let nf = read_fixed_le::<32, _>(&mut r)?;
         let cmx = read_fixed_le::<32, _>(&mut r)?;
         let epk = read_fixed_le::<32, _>(&mut r)?;
         let ctxt = read_fixed_le::<52, _>(&mut r)?;
         Ok(CompactOrchardAction::new(nf, cmx, epk, ctxt))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -2323,13 +2322,13 @@ impl ZainoVersionedSerialise for TxLocation {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let block_height = read_u32_be(&mut *r)?;
-        let tx_index = read_u16_be(&mut *r)?;
-        Ok(TxLocation::new(block_height, tx_index))
+        Self::decode_v1(r)
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
+        let block_height = read_u32_be(&mut *r)?;
+        let tx_index = read_u16_be(&mut *r)?;
+        Ok(TxLocation::new(block_height, tx_index))
     }
 }
 
@@ -2419,6 +2418,10 @@ impl ZainoVersionedSerialise for AddrHistRecord {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let tx_location = TxLocation::deserialize(&mut *r)?;
         let out_index = read_u16_be(&mut *r)?;
         let value = read_u64_le(&mut *r)?;
@@ -2426,10 +2429,6 @@ impl ZainoVersionedSerialise for AddrHistRecord {
         r.read_exact(&mut flag)?;
 
         Ok(AddrHistRecord::new(tx_location, out_index, value, flag[0]))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -2518,11 +2517,11 @@ impl ZainoVersionedSerialise for AddrEventBytes {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        Ok(AddrEventBytes(read_fixed_le::<17, _>(r)?))
+        Self::decode_v1(r)
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
+        Ok(AddrEventBytes(read_fixed_le::<17, _>(r)?))
     }
 }
 
@@ -2590,15 +2589,15 @@ impl ZainoVersionedSerialise for ShardRoot {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
         let hash = read_fixed_le::<32, _>(&mut r)?;
         let final_block_hash = read_fixed_le::<32, _>(&mut r)?;
         let final_block_height = read_u32_le(&mut r)?;
         Ok(ShardRoot::new(hash, final_block_hash, final_block_height))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -2647,13 +2646,13 @@ impl ZainoVersionedSerialise for BlockHeaderData {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let index = BlockIndex::deserialize(&mut *r)?;
-        let data = BlockData::deserialize(r)?;
-        Ok(BlockHeaderData::new(index, data))
+        Self::decode_v1(r)
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
+        let index = BlockIndex::deserialize(&mut *r)?;
+        let data = BlockData::deserialize(r)?;
+        Ok(BlockHeaderData::new(index, data))
     }
 }
 
@@ -2685,12 +2684,12 @@ impl ZainoVersionedSerialise for TxidList {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let tx = read_vec(r, |r| Hash::deserialize(r))?;
-        Ok(TxidList::new(tx))
+        Self::decode_v1(r)
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
+        let tx = read_vec(r, |r| Hash::deserialize(r))?;
+        Ok(TxidList::new(tx))
     }
 }
 
@@ -2758,14 +2757,14 @@ impl ZainoVersionedSerialise for TransparentTxList {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let tx = read_vec(r, |r| {
             read_option(r, |r| TransparentCompactTx::deserialize(r))
         })?;
         Ok(TransparentTxList::new(tx))
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -2837,12 +2836,12 @@ impl ZainoVersionedSerialise for SaplingTxList {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let tx = read_vec(r, |r| read_option(r, |r| SaplingCompactTx::deserialize(r)))?;
-        Ok(SaplingTxList::new(tx))
+        Self::decode_v1(r)
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
+        let tx = read_vec(r, |r| read_option(r, |r| SaplingCompactTx::deserialize(r)))?;
+        Ok(SaplingTxList::new(tx))
     }
 }
 
@@ -2908,12 +2907,12 @@ impl ZainoVersionedSerialise for OrchardTxList {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let tx = read_vec(r, |r| read_option(r, |r| OrchardCompactTx::deserialize(r)))?;
-        Ok(OrchardTxList::new(tx))
+        Self::decode_v1(r)
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
+        let tx = read_vec(r, |r| read_option(r, |r| OrchardCompactTx::deserialize(r)))?;
+        Ok(OrchardTxList::new(tx))
     }
 }
 

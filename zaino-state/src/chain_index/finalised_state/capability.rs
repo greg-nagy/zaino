@@ -105,16 +105,16 @@ impl ZainoVersionedSerialise for DbMetadata {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let version = DbVersion::deserialize(&mut *r)?;
         let schema_hash = read_fixed_le::<32, _>(&mut *r)?;
         Ok(DbMetadata {
             version,
             schema_hash,
         })
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
@@ -215,6 +215,10 @@ impl ZainoVersionedSerialise for DbVersion {
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let major = read_u32_le(&mut *r)?;
         let minor = read_u32_le(&mut *r)?;
         let patch = read_u32_le(&mut *r)?;
@@ -223,10 +227,6 @@ impl ZainoVersionedSerialise for DbVersion {
             minor,
             patch,
         })
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_latest(r)
     }
 }
 
