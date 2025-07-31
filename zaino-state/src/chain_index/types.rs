@@ -2284,49 +2284,48 @@ impl FixedEncodedLen for CompactOrchardAction {
     const ENCODED_LEN: usize = 32 + 32 + 32 + 52;
 }
 
-/// Identifies a transaction by its (block_position, tx_position) pair,
-/// used to locate transactions within Zaino's internal DB.
+/// Identifies a transaction's location by block height and transaction index.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub struct TxIndex {
-    /// Block Height in chain.
-    block_index: u32,
+pub struct TxLocation {
+    /// Block height in chain.
+    block_height: u32,
     /// Transaction index in block.
     tx_index: u16,
 }
 
-impl TxIndex {
-    /// Creates a new TxIndex instance.
-    pub fn new(block_index: u32, tx_index: u16) -> Self {
+impl TxLocation {
+    /// Creates a new TxLocation instance.
+    pub fn new(block_height: u32, tx_index: u16) -> Self {
         Self {
-            block_index,
+            block_height,
             tx_index,
         }
     }
 
-    /// Returns the block height held in the TxIndex.
-    pub fn block_index(&self) -> u32 {
-        self.block_index
+    /// Returns the block height held in the TxLocation.
+    pub fn block_height(&self) -> u32 {
+        self.block_height
     }
 
-    /// Returns the transaction index held in the TxIndex.
+    /// Returns the transaction index held in the TxLocation.
     pub fn tx_index(&self) -> u16 {
         self.tx_index
     }
 }
 
-impl ZainoVersionedSerialise for TxIndex {
+impl ZainoVersionedSerialise for TxLocation {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        write_u32_be(&mut *w, self.block_index)?;
+        write_u32_be(&mut *w, self.block_height)?;
         write_u16_be(&mut *w, self.tx_index)
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let blk = read_u32_be(&mut *r)?;
-        let tx = read_u16_be(&mut *r)?;
-        Ok(TxIndex::new(blk, tx))
+        let block_height = read_u32_be(&mut *r)?;
+        let tx_index = read_u16_be(&mut *r)?;
+        Ok(TxLocation::new(block_height, tx_index))
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
@@ -2335,7 +2334,7 @@ impl ZainoVersionedSerialise for TxIndex {
 }
 
 /// 6 bytes, BE encoded.
-impl FixedEncodedLen for TxIndex {
+impl FixedEncodedLen for TxLocation {
     /// 4-byte big-endian block_index + 2-byte big-endian tx_index
     const ENCODED_LEN: usize = 4 + 2;
 }
@@ -2346,7 +2345,7 @@ impl FixedEncodedLen for TxIndex {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct AddrHistRecord {
-    tx_index: TxIndex,
+    tx_location: TxLocation,
     out_index: u16,
     value: u64,
     flags: u8,
@@ -2364,18 +2363,18 @@ impl AddrHistRecord {
     pub const FLAG_IS_INPUT: u8 = 0b00000100;
 
     /// Creatues a new AddrHistRecord instance.
-    pub fn new(tx_index: TxIndex, out_index: u16, value: u64, flags: u8) -> Self {
+    pub fn new(tx_location: TxLocation, out_index: u16, value: u64, flags: u8) -> Self {
         Self {
-            tx_index,
+            tx_location,
             out_index,
             value,
             flags,
         }
     }
 
-    /// Returns the TxIndex in this record.
-    pub fn tx_index(&self) -> TxIndex {
-        self.tx_index
+    /// Returns the TxLocation in this record.
+    pub fn tx_location(&self) -> TxLocation {
+        self.tx_location
     }
 
     /// Returns the out index of this record.
@@ -2413,20 +2412,20 @@ impl ZainoVersionedSerialise for AddrHistRecord {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        self.tx_index.serialize(&mut *w)?;
+        self.tx_location.serialize(&mut *w)?;
         write_u16_be(&mut *w, self.out_index)?;
         write_u64_le(&mut *w, self.value)?;
         w.write_all(&[self.flags])
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        let tx_index = TxIndex::deserialize(&mut *r)?;
+        let tx_location = TxLocation::deserialize(&mut *r)?;
         let out_index = read_u16_be(&mut *r)?;
         let value = read_u64_le(&mut *r)?;
         let mut flag = [0u8; 1];
         r.read_exact(&mut flag)?;
 
-        Ok(AddrHistRecord::new(tx_index, out_index, value, flag[0]))
+        Ok(AddrHistRecord::new(tx_location, out_index, value, flag[0]))
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
@@ -2436,13 +2435,13 @@ impl ZainoVersionedSerialise for AddrHistRecord {
 
 /// 18 byte total
 impl FixedEncodedLen for AddrHistRecord {
-    ///  1 byte:  TxIndex tag
-    /// +6 bytes: TxIndex body (4 BE block_index + 2 BE tx_index)
+    ///  1 byte:  TxLocation tag
+    /// +6 bytes: TxLocation body (4 BE block_index + 2 BE tx_index)
     /// +2 bytes: out_index (BE)
     /// +8 bytes: value     (LE)
     /// +1 byte : flags
     /// =18 bytes
-    const ENCODED_LEN: usize = (TxIndex::ENCODED_LEN + 1) + 2 + 8 + 1;
+    const ENCODED_LEN: usize = (TxLocation::ENCODED_LEN + 1) + 2 + 8 + 1;
 }
 
 /// AddrHistRecord database byte array.
@@ -2480,8 +2479,8 @@ impl AddrEventBytes {
         let mut buf = [0u8; Self::LEN];
         let mut c = Cursor::new(&mut buf[..]);
 
-        write_u32_be(&mut c, rec.tx_index.block_index)?;
-        write_u16_be(&mut c, rec.tx_index.tx_index)?;
+        write_u32_be(&mut c, rec.tx_location.block_height)?;
+        write_u16_be(&mut c, rec.tx_location.tx_index)?;
         write_u16_be(&mut c, rec.out_index)?;
         c.write_all(&[rec.flags])?;
         write_u64_le(&mut c, rec.value)?;
@@ -2495,7 +2494,7 @@ impl AddrEventBytes {
     pub(crate) fn as_record(&self) -> io::Result<AddrHistRecord> {
         let mut c = Cursor::new(&self.0[..]);
 
-        let block_index = read_u32_be(&mut c)?;
+        let block_height = read_u32_be(&mut c)?;
         let tx_index = read_u16_be(&mut c)?;
         let out_index = read_u16_be(&mut c)?;
         let mut flag = [0u8; 1];
@@ -2503,7 +2502,7 @@ impl AddrEventBytes {
         let value = read_u64_le(&mut c)?;
 
         Ok(AddrHistRecord::new(
-            TxIndex::new(block_index, tx_index),
+            TxLocation::new(block_height, tx_index),
             out_index,
             value,
             flag[0],
