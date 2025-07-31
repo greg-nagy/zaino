@@ -1,3 +1,4 @@
+extend = "makefiles/lints.toml"
 env_files = [".env.testing-artifacts"]
 
 [config]
@@ -36,6 +37,13 @@ echo "  ensure-image-exists        Check if the required image exists locally, b
 echo "  check-matching-zebras      Verify Zebra versions match between Cargo.toml and .env"
 echo "  validate-makefile-tasks    Run minimal validation of all maker tasks"
 echo "  hello-rust                 Test rust-script functionality"
+echo ""
+echo "Lint commands:"
+echo "  lint                       Run all lints (fmt, clippy, doc). Use as a pre-commit hook."
+echo "  fmt                        Check formatting (cargo fmt --all -- --check)"
+echo "  clippy                     Run Clippy with -D warnings (--all-targets --all-features)"
+echo "  doc                        Build docs (no deps, all features, document private items) with RUSTDOCFLAGS='-D warnings'"
+echo "  toogle-hooks               Toggle the git config for core.hooksPath to use .githooks/"
 echo ""
 echo "Environment:"
 echo "  Defined by: .env.testing-artifacts"
@@ -297,12 +305,6 @@ info "✅ All versions match between Cargo.toml and .env.testing-artifacts"
 '''
 
 # -------------------------------------------------------------------
-
-[tasks.doc]
-description = "Run `cargo doc`"
-script = '''
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items
-'''
 
 [tasks.validate-makefile-tasks]
 description = "Validate all tasks work correctly with minimal execution"
