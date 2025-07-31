@@ -68,6 +68,7 @@ ARG CARGO_TARGET_DIR
 ENV CARGO_HOME=${CARGO_HOME}
 ENV CARGO_TARGET_DIR=${CARGO_TARGET_DIR}
 ENV CARGO_TERM_COLOR=always
+ENV PROTOC=/usr/bin/protoc
 
 
 LABEL maintainer="nachog00"
@@ -84,6 +85,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libbz2-dev \
     liblz4-dev \
     libzstd-dev \
+    protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
 
 # Create container_user
