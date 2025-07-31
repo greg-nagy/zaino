@@ -97,6 +97,7 @@ async fn spawn_default_zaino_db() -> Result<(TempDir, ZainoDB), FinalisedStateEr
     let config = BlockCacheConfig {
         map_capacity: None,
         map_shard_amount: None,
+        db_version: 1,
         db_path,
         db_size: None,
         network: zebra_chain::parameters::Network::new_regtest(
@@ -253,6 +254,7 @@ async fn load_db_from_file() {
     let config = BlockCacheConfig {
         map_capacity: None,
         map_shard_amount: None,
+        db_version: 1,
         db_path,
         db_size: None,
         network: zebra_chain::parameters::Network::new_regtest(

@@ -38,17 +38,28 @@ impl ZainoDB {
     ///
     /// Peeks at the db metadata store to load correct database version.
     pub(crate) async fn spawn(cfg: BlockCacheConfig) -> Result<Self, FinalisedStateError> {
-        /* as before … pick backend based on on-disk metadata */
         let meta_opt = Self::peek_metadata(&cfg.db_path).await?;
 
-        // TODO: add db_version to cfg.
-        // let current_version = match meta_opt {
-        //     Some(meta) => meta.version(),
-        //     None => cfg.target_version,
-        // };
+        let target_version = match cfg.db_version {
+            0 => DbVersion {
+                major: 0,
+                minor: 0,
+                patch: 0,
+            },
+            _ => DbVersion {
+                major: 1,
+                minor: 0,
+                patch: 0,
+            },
+        };
+
+        let current_version = match meta_opt {
+            Some(meta) => meta.version(),
+            None => target_version,
+        };
 
         let backend = match meta_opt {
-            Some(meta) => match meta.version.major() {
+            Some(meta) => match meta.version().major() {
                 0 => DbBackend::spawn_v0(&cfg).await?,
                 1 => DbBackend::spawn_v1(&cfg).await?,
                 _ => {
@@ -62,15 +73,15 @@ impl ZainoDB {
 
         let router = Arc::new(Router::new(Arc::new(backend)));
 
-        // if meta_opt.is_some() && current_version < cfg.target_version {
-        //     MigrationManager::migrate_to(
-        //         Arc::clone(&router),
-        //         &cfg,
-        //         current_version,
-        //         cfg.target_version,
-        //     )
-        //     .await?;
-        // }
+        if meta_opt.is_some() && current_version < target_version {
+            MigrationManager::migrate_to(
+                Arc::clone(&router),
+                &cfg,
+                current_version,
+                target_version,
+            )
+            .await?;
+        }
 
         Ok(Self { db: router, cfg })
     }
