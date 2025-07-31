@@ -7,6 +7,7 @@ on:
       - '**'
     paths:
       - '.env.testing-artifacts'
+      - 'test_environment/*'
 
 jobs:
   build-and-push:
