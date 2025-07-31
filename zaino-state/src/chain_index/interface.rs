@@ -163,12 +163,14 @@ pub trait ChainIndex {
     /// between the given indexes. Can be specified
     /// by hash or height.
     #[allow(clippy::type_complexity)]
-    async fn get_block_range(
+    fn get_block_range(
         &self,
         nonfinalized_snapshot: &Self::Snapshot,
         start: Option<HashOrHeight>,
         end: Option<HashOrHeight>,
-    ) -> Result<Option<impl Stream<Item = Result<Vec<u8>, Self::Error>>>, Self::Error>;
+    ) -> impl std::future::Future<
+        Output = Result<Option<impl Stream<Item = Result<Vec<u8>, Self::Error>>>, Self::Error>,
+    > + Send;
     /// Finds the newest ancestor of the given block on the main
     /// chain, or the block itself if it is on the main chain.
     fn find_fork_point(
@@ -206,72 +208,78 @@ impl ChainIndex for NodeBackedChainIndex {
     /// between the given indexes. Can be specified
     /// by hash or height. Returns None if the start or end
     /// block cannot be found
-    async fn get_block_range(
+    fn get_block_range(
         &self,
         nonfinalized_snapshot: &Self::Snapshot,
         start: Option<HashOrHeight>,
         end: Option<HashOrHeight>,
-    ) -> Result<Option<impl Stream<Item = Result<Vec<u8>, Self::Error>>>, Self::Error> {
-        // with no start supplied, start from genesis
-        let Some(start_block) = self
-            .get_chainblock_by_hashorheight(
-                nonfinalized_snapshot,
-                &start.unwrap_or(HashOrHeight::Height(zebra_chain::block::Height(1))),
-            )
-            .await?
-        else {
-            return if start.is_some() {
-                Ok(None)
-            } else {
-                Err(ChainIndexError {
-                    kind: ChainIndexErrorKind::InternalServerError,
-                    message: "genesis block missing from database".to_string(),
-                    source: None,
-                })
+    ) -> impl Future<
+        Output = Result<Option<impl Stream<Item = Result<Vec<u8>, Self::Error>>>, Self::Error>,
+    > {
+        async move {
+            // with no start supplied, start from genesis
+            let Some(start_block) = self
+                .get_chainblock_by_hashorheight(
+                    nonfinalized_snapshot,
+                    &start.unwrap_or(HashOrHeight::Height(zebra_chain::block::Height(1))),
+                )
+                .await?
+            else {
+                return if start.is_some() {
+                    Ok(None)
+                } else {
+                    Err(ChainIndexError {
+                        kind: ChainIndexErrorKind::InternalServerError,
+                        message: "genesis block missing from database".to_string(),
+                        source: None,
+                    })
+                };
             };
-        };
-        let Some(end_block) = self
-            .get_chainblock_by_hashorheight(
-                nonfinalized_snapshot,
-                &end.unwrap_or(HashOrHeight::Hash(nonfinalized_snapshot.best_tip.1.into())),
-            )
-            .await?
-        else {
-            return if start.is_some() {
-                Ok(None)
-            } else {
-                Err(ChainIndexError {
-                    kind: ChainIndexErrorKind::InternalServerError,
-                    message: "chaintip missing from database".to_string(),
-                    source: None,
-                })
+            let Some(end_block) = self
+                .get_chainblock_by_hashorheight(
+                    nonfinalized_snapshot,
+                    &end.unwrap_or(HashOrHeight::Hash(nonfinalized_snapshot.best_tip.1.into())),
+                )
+                .await?
+            else {
+                return if start.is_some() {
+                    Ok(None)
+                } else {
+                    Err(ChainIndexError {
+                        kind: ChainIndexErrorKind::InternalServerError,
+                        message: "chaintip missing from database".to_string(),
+                        source: None,
+                    })
+                };
             };
-        };
 
-        let mut nonfinalized_block = nonfinalized_snapshot.get_chainblock_by_hash(end_block.hash());
-        let first_nonfinalized_hash = nonfinalized_snapshot
-            .get_chainblock_by_hash(start_block.hash())
-            .map(|block| block.index().hash());
+            let mut nonfinalized_block =
+                nonfinalized_snapshot.get_chainblock_by_hash(end_block.hash());
+            let first_nonfinalized_hash = nonfinalized_snapshot
+                .get_chainblock_by_hash(start_block.hash())
+                .map(|block| block.index().hash());
 
-        // TODO: combine with finalized state when available
-        let mut nonfinalized_range = vec![];
-        while let Some(block) = nonfinalized_block {
-            nonfinalized_range.push(*block.hash());
-            nonfinalized_block = if Some(block.index().parent_hash()) != first_nonfinalized_hash {
-                nonfinalized_snapshot.get_chainblock_by_hash(block.index().parent_hash())
-            } else {
-                None
+            // TODO: combine with finalized state when available
+            let mut nonfinalized_range = vec![];
+            while let Some(block) = nonfinalized_block {
+                nonfinalized_range.push(*block.hash());
+                nonfinalized_block = if Some(block.index().parent_hash()) != first_nonfinalized_hash
+                {
+                    nonfinalized_snapshot.get_chainblock_by_hash(block.index().parent_hash())
+                } else {
+                    None
+                }
             }
-        }
 
-        Ok(Some(tokio_stream::iter(nonfinalized_range).then(
-            async |hash| {
-                self.get_fullblock_bytes_from_node(HashOrHeight::Hash(hash.into()))
-                    .await
-                    .map_err(ChainIndexError::backing_validator)?
-                    .ok_or(ChainIndexError::database_hole(hash))
-            },
-        )))
+            Ok(Some(tokio_stream::iter(nonfinalized_range).then(
+                async |hash| {
+                    self.get_fullblock_bytes_from_node(HashOrHeight::Hash(hash.into()))
+                        .await
+                        .map_err(ChainIndexError::backing_validator)?
+                        .ok_or(ChainIndexError::database_hole(hash))
+                },
+            )))
+        }
     }
 
     /// Finds the newest ancestor of the given block on the main

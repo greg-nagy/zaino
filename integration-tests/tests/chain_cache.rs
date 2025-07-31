@@ -202,14 +202,15 @@ mod chain_query_interface {
         ))
         .await
         .unwrap();
-        let chain_index = NodeBackedChainIndex::new(
-            BlockchainSource::State(state_service.read_state_service().clone()),
-            network,
-        )
-        .await
-        .unwrap();
+        // let chain_index = NodeBackedChainIndex::new(
+        //     BlockchainSource::State(state_service.read_state_service().clone()),
+        //     network,
+        // )
+        // .await
+        // .unwrap();
 
-        (test_manager, state_service, chain_index)
+        // (test_manager, state_service, chain_index)
+        todo!()
     }
 
     #[tokio::test]
@@ -230,6 +231,7 @@ mod chain_query_interface {
         assert_eq!(snapshot.as_ref().blocks.len(), 6);
         let range = chain_index
             .get_block_range(&snapshot, None, None)
+            .await
             .unwrap()
             .unwrap()
             .try_collect::<Vec<_>>()
