@@ -846,7 +846,7 @@ impl ZcashIndexer for StateServiceSubscriber {
         let tx_fetches = stream::iter(txids.into_iter())
             .then(|txid| async move { self.get_raw_transaction(txid.to_string(), Some(1)).await });
 
-        let txs_result: Result<Vec<_>, Self::Error> = tx_fetches
+        let txs_result: Result<Vec<Box<TransactionObject>>, Self::Error> = tx_fetches
             .map(|res| {
                 res.and_then(|raw_tx| match raw_tx {
                     GetRawTransaction::Raw(_) => Ok(None), // Unexpected raw, treat as None
