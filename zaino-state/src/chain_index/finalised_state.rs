@@ -13,6 +13,7 @@ pub(crate) mod router;
 use capability::*;
 use db::DbBackend;
 use entry::*;
+use migrations::MigrationManager;
 use reader::*;
 use router::Router;
 
@@ -25,7 +26,6 @@ use lmdb::{Environment, EnvironmentFlags, Transaction};
 use std::{path::Path, sync::Arc, time::Duration};
 use tokio::time::{interval, MissedTickBehavior};
 
-/// ZainoDB façade: version-switching wrapper around concrete back-ends.
 pub(crate) struct ZainoDB {
     db: Arc<Router>,
     cfg: BlockCacheConfig,
@@ -40,6 +40,13 @@ impl ZainoDB {
     pub(crate) async fn spawn(cfg: BlockCacheConfig) -> Result<Self, FinalisedStateError> {
         /* as before … pick backend based on on-disk metadata */
         let meta_opt = Self::peek_metadata(&cfg.db_path).await?;
+
+        // TODO: add db_version to cfg.
+        // let current_version = match meta_opt {
+        //     Some(meta) => meta.version(),
+        //     None => cfg.target_version,
+        // };
+
         let backend = match meta_opt {
             Some(meta) => match meta.version.major() {
                 0 => DbBackend::spawn_v0(&cfg).await?,
@@ -54,6 +61,16 @@ impl ZainoDB {
         };
 
         let router = Arc::new(Router::new(Arc::new(backend)));
+
+        // if meta_opt.is_some() && current_version < cfg.target_version {
+        //     MigrationManager::migrate_to(
+        //         Arc::clone(&router),
+        //         &cfg,
+        //         current_version,
+        //         cfg.target_version,
+        //     )
+        //     .await?;
+        // }
 
         Ok(Self { db: router, cfg })
     }

@@ -22,7 +22,7 @@ bitflags! {
     /// (`writer()`, `block_core()`, …) it may expose.
     ///
     /// Each flag corresponds 1-for-1 with an extension trait.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+    #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash, Default)]
     pub(crate) struct Capability: u32 {
         /* ------ core database functionality ------ */
         /// Implements `DbRead`.
@@ -67,7 +67,7 @@ impl Capability {
 /// Top-level database metadata entry, storing the current schema version.
 ///
 /// Stored under the fixed key `"metadata"` in the LMDB metadata database.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash, Default)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct DbMetadata {
     /// Encodes the version and schema hash.
@@ -144,7 +144,7 @@ impl core::fmt::Display for DbMetadata {
 /// Database schema version information.
 ///
 /// This is used for schema migration safety and compatibility checks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash, Default)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct DbVersion {
     /// Major version tag.
