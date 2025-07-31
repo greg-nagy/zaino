@@ -14,3 +14,19 @@ args = ["doc", "--no-deps", "--all-features", "--document-private-items"]
 [tasks.lint]
 description = "Run all lints. Use as a pre-commit hook."
 dependencies = ["fmt", "clippy", "doc"]
+
+[tasks.toggle-hooks]
+description = "Toggles the git config for core.hooksPath"
+script = [
+    '''
+    current_path=$(git config --local --get core.hooksPath)
+    new_path=".githooks/"
+    if [ "$current_path" = "$new_path" ]; then
+        echo "Disabling custom hooks path"
+        git config --local --unset core.hooksPath
+    else
+        echo "Enabling custom hooks path"
+        git config --local core.hooksPath $new_path
+    fi
+    '''
+]
