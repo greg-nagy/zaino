@@ -414,14 +414,14 @@ async fn get_faucet_txids() {
             .collect();
         dbg!(&filtered_block_txids);
 
-        let reader_faucet_tx_indexes = db_reader
-            .addr_tx_indexes_by_range(faucet_addr_script, block_height, block_height)
+        let reader_faucet_tx_locations = db_reader
+            .addr_tx_locations_by_range(faucet_addr_script, block_height, block_height)
             .await
             .unwrap()
             .unwrap();
         let mut reader_block_txids = Vec::new();
-        for index in reader_faucet_tx_indexes {
-            let txid = db_reader.get_txid(index).await.unwrap();
+        for tx_location in reader_faucet_tx_locations {
+            let txid = db_reader.get_txid(tx_location).await.unwrap();
             reader_block_txids.push(txid.to_string());
         }
         dbg!(&reader_block_txids);
@@ -431,13 +431,13 @@ async fn get_faucet_txids() {
     }
 
     println!("Checking full faucet data");
-    let reader_faucet_tx_indexes = db_reader
-        .addr_tx_indexes_by_range(faucet_addr_script, start, end)
+    let reader_faucet_tx_locations = db_reader
+        .addr_tx_locations_by_range(faucet_addr_script, start, end)
         .await
         .unwrap()
         .unwrap();
     let mut reader_faucet_txids = Vec::new();
-    for index in reader_faucet_tx_indexes {
+    for index in reader_faucet_tx_locations {
         let txid = db_reader.get_txid(index).await.unwrap();
         reader_faucet_txids.push(txid.to_string());
     }
@@ -476,8 +476,8 @@ async fn get_recipient_txids() {
             .collect();
         dbg!(&filtered_block_txids);
 
-        let reader_recipient_tx_indexes = match db_reader
-            .addr_tx_indexes_by_range(recipient_addr_script, block_height, block_height)
+        let reader_recipient_tx_locations = match db_reader
+            .addr_tx_locations_by_range(recipient_addr_script, block_height, block_height)
             .await
             .unwrap()
         {
@@ -485,8 +485,8 @@ async fn get_recipient_txids() {
             None => continue,
         };
         let mut reader_block_txids = Vec::new();
-        for index in reader_recipient_tx_indexes {
-            let txid = db_reader.get_txid(index).await.unwrap();
+        for tx_location in reader_recipient_tx_locations {
+            let txid = db_reader.get_txid(tx_location).await.unwrap();
             reader_block_txids.push(txid.to_string());
         }
         dbg!(&reader_block_txids);
@@ -496,14 +496,14 @@ async fn get_recipient_txids() {
     }
 
     println!("Checking full faucet data");
-    let reader_recipient_tx_indexes = db_reader
-        .addr_tx_indexes_by_range(recipient_addr_script, start, end)
+    let reader_recipient_tx_locations = db_reader
+        .addr_tx_locations_by_range(recipient_addr_script, start, end)
         .await
         .unwrap()
         .unwrap();
 
     let mut reader_recipient_txids = Vec::new();
-    for index in reader_recipient_tx_indexes {
+    for index in reader_recipient_tx_locations {
         let txid = db_reader.get_txid(index).await.unwrap();
         reader_recipient_txids.push(txid.to_string());
     }
@@ -686,7 +686,7 @@ async fn check_faucet_spent_map() {
                 let spender_tx = blocks.iter().find_map(|(_h, chain_block, _cb)| {
                     chain_block.transactions().iter().find(|tx| {
                         let (block_height, tx_idx) =
-                            (spender_index.block_index(), spender_index.tx_index());
+                            (spender_index.block_height(), spender_index.tx_index());
                         chain_block.index().height() == Some(Height(block_height))
                             && tx.index() == tx_idx as u64
                     })
@@ -780,7 +780,7 @@ async fn check_recipient_spent_map() {
                 let spender_tx = blocks.iter().find_map(|(_h, chain_block, _cb)| {
                     chain_block.transactions().iter().find(|tx| {
                         let (block_height, tx_idx) =
-                            (spender_index.block_index(), spender_index.tx_index());
+                            (spender_index.block_height(), spender_index.tx_index());
                         chain_block.index().height() == Some(Height(block_height))
                             && tx.index() == tx_idx as u64
                     })

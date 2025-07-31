@@ -41,7 +41,7 @@ pub use chain_index::types::{
     CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes, CompactOrchardAction,
     CompactSaplingOutput, CompactSaplingSpend, CompactTxData, Hash, Height, Index,
     OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, ScriptType,
-    ShardRoot, TransparentCompactTx, TransparentTxList, TxInCompact, TxIndex, TxOutCompact,
+    ShardRoot, TransparentCompactTx, TransparentTxList, TxInCompact, TxLocation, TxOutCompact,
     TxidList,
 };
 
