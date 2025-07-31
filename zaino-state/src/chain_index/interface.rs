@@ -1,10 +1,6 @@
-use std::{
-    collections::HashMap,
-    fmt::{Debug, Display},
-    future::Future,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, future::Future, sync::Arc, time::Duration};
+
+use crate::error::{ChainIndexError, ChainIndexErrorKind};
 
 use super::non_finalised_state::{
     BlockchainSource, InitError, NonFinalizedState, NonfinalizedBlockCacheSnapshot,
@@ -331,53 +327,5 @@ impl NonFinalizedSnapshot for NonfinalizedBlockCacheSnapshot {
                 None
             }
         })
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error("{kind}: {message}")]
-/// The set of errors that can occur during the public API calls
-/// of a NodeBackedChainIndex
-pub struct ChainIndexError {
-    kind: ChainIndexErrorKind,
-    message: String,
-    source: Option<Box<dyn std::error::Error + Send + Sync + 'static>>,
-}
-
-#[derive(Debug)]
-/// The high-level kinds of thing that can fail
-pub enum ChainIndexErrorKind {
-    /// Zaino is in some way nonfunctional
-    InternalServerError,
-    /// The given snapshot contains invalid data.
-    InvalidSnapshot,
-}
-
-impl Display for ChainIndexErrorKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            ChainIndexErrorKind::InternalServerError => "internal server error",
-            ChainIndexErrorKind::InvalidSnapshot => "invalid snapshot",
-        })
-    }
-}
-
-impl ChainIndexError {
-    fn backing_validator(value: impl std::error::Error + Send + Sync + 'static) -> Self {
-        Self {
-            kind: ChainIndexErrorKind::InternalServerError,
-            message: "InternalServerError: error receiving data from backing node".to_string(),
-            source: Some(Box::new(value)),
-        }
-    }
-
-    fn database_hole(missing_block: impl Display) -> Self {
-        Self {
-            kind: ChainIndexErrorKind::InternalServerError,
-            message: format!(
-                "InternalServerError: hole in validator database, missing block {missing_block}"
-            ),
-            source: None,
-        }
     }
 }
