@@ -187,7 +187,10 @@ impl BlockCoreExt for DbV1 {
         self.get_txid(tx_location).await
     }
 
-    async fn get_tx_location(&self, txid: &Hash) -> Result<Option<TxLocation>, FinalisedStateError> {
+    async fn get_tx_location(
+        &self,
+        txid: &Hash,
+    ) -> Result<Option<TxLocation>, FinalisedStateError> {
         self.get_tx_location(txid).await
     }
 }
@@ -1587,7 +1590,10 @@ impl DbV1 {
     }
 
     // Fetch the TxLocation for the given txid, transaction data is indexed by TxLocation internally.
-    async fn get_tx_location(&self, txid: &Hash) -> Result<Option<TxLocation>, FinalisedStateError> {
+    async fn get_tx_location(
+        &self,
+        txid: &Hash,
+    ) -> Result<Option<TxLocation>, FinalisedStateError> {
         if let Some(index) = tokio::task::block_in_place(|| self.find_txid_index_blocking(txid))? {
             Ok(Some(index))
         } else {
@@ -3897,9 +3903,10 @@ impl DbV1 {
         let height_key = Height(block_height).to_bytes()?;
         let stored_bytes = ro.get(self.transparent, &height_key)?;
 
-        Self::find_txout_in_stored_transparent_tx_list(stored_bytes, tx_index, out_index).ok_or_else(
-            || FinalisedStateError::Custom("Previous output not found at given index".into()),
-        )
+        Self::find_txout_in_stored_transparent_tx_list(stored_bytes, tx_index, out_index)
+            .ok_or_else(|| {
+                FinalisedStateError::Custom("Previous output not found at given index".into())
+            })
     }
 
     /// Finds a TxLocation [block_height, tx_index] from a given txid.

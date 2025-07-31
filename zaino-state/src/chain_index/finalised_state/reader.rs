@@ -5,8 +5,8 @@
 use crate::{
     chain_index::types::AddrEventBytes, error::FinalisedStateError, AddrScript, BlockHeaderData,
     ChainBlock, CommitmentTreeData, Hash, Height, OrchardCompactTx, OrchardTxList, Outpoint,
-    SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList, TxLocation,
-    TxidList,
+    SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
+    TxLocation, TxidList,
 };
 
 use super::{
@@ -96,12 +96,18 @@ impl DbReader {
     }
 
     /// Fetch the txid bytes for a given TxLocation.
-    pub(crate) async fn get_txid(&self, tx_location: TxLocation) -> Result<Hash, FinalisedStateError> {
+    pub(crate) async fn get_txid(
+        &self,
+        tx_location: TxLocation,
+    ) -> Result<Hash, FinalisedStateError> {
         self.block_core_ext()?.get_txid(tx_location).await
     }
 
     /// Fetch block txids by height.
-    pub(crate) async fn get_block_txids(&self, height: Height) -> Result<TxidList, FinalisedStateError> {
+    pub(crate) async fn get_block_txids(
+        &self,
+        height: Height,
+    ) -> Result<TxidList, FinalisedStateError> {
         self.block_core_ext()?.get_block_txids(height).await
     }
 
@@ -111,7 +117,9 @@ impl DbReader {
         start: Height,
         end: Height,
     ) -> Result<Vec<TxidList>, FinalisedStateError> {
-        self.block_core_ext()?.get_block_range_txids(start, end).await
+        self.block_core_ext()?
+            .get_block_range_txids(start, end)
+            .await
     }
 
     // ***** Block Transparent Ext *****

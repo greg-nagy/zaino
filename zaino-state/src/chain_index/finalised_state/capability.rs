@@ -4,8 +4,8 @@ use crate::{
     chain_index::types::AddrEventBytes, error::FinalisedStateError, read_fixed_le, read_u32_le,
     version, write_fixed_le, write_u32_le, AddrScript, BlockHeaderData, ChainBlock,
     CommitmentTreeData, FixedEncodedLen, Hash, Height, OrchardCompactTx, OrchardTxList, Outpoint,
-    SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList, TxLocation,
-    TxidList, ZainoVersionedSerialise,
+    SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
+    TxLocation, TxidList, ZainoVersionedSerialise,
 };
 
 use async_trait::async_trait;
@@ -321,7 +321,8 @@ pub trait BlockCoreExt: Send + Sync {
     async fn get_txid(&self, tx_location: TxLocation) -> Result<Hash, FinalisedStateError>;
 
     /// Fetch the TxLocation for the given txid, transaction data is indexed by TxLocation internally.
-    async fn get_tx_location(&self, txid: &Hash) -> Result<Option<TxLocation>, FinalisedStateError>;
+    async fn get_tx_location(&self, txid: &Hash)
+        -> Result<Option<TxLocation>, FinalisedStateError>;
 }
 
 /// Transparent block data extension.
