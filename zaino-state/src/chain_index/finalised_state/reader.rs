@@ -11,9 +11,10 @@ use crate::{
 
 use super::{
     capability::{
-        BlockCoreExt, BlockShieldedExt, BlockTransparentExt, ChainBlockExt, CompactBlockExt,
-        DbMetadata, TransparentHistExt,
+        BlockCoreExt, BlockShieldedExt, BlockTransparentExt, Capability, ChainBlockExt,
+        CompactBlockExt, DbMetadata, TransparentHistExt,
     },
+    db::DbBackend,
     ZainoDB,
 };
 
@@ -23,11 +24,17 @@ use std::sync::Arc;
 ///
 /// Carries a plain reference with the same lifetime as the parent DB
 pub(crate) struct DbReader {
+    /// Immutable read-only view onto the running ZainoDB
     pub(crate) inner: Arc<ZainoDB>,
 }
 
 impl DbReader {
-    // ***** DB Core *****
+    /// Returns the internal db backend for the given db capability.
+    #[inline(always)]
+    fn db(&self, cap: Capability) -> Arc<DbBackend> {
+        self.inner.backend_for_cap(cap)
+    }
+    // ***** DB Core Read *****
 
     /// Returns the status of the serving ZainoDB.
     pub(crate) async fn status(&self) -> StatusType {
@@ -62,18 +69,14 @@ impl DbReader {
 
     // ***** Block Core Ext *****
 
-    fn block_core_ext(&self) -> Result<&dyn BlockCoreExt, FinalisedStateError> {
-        self.inner
-            .block_core()
-            .ok_or_else(|| FinalisedStateError::FeatureUnavailable("block_core"))
-    }
-
     /// Fetch the TxLocation for the given txid, transaction data is indexed by TxLocation internally.
     pub(crate) async fn get_tx_location(
         &self,
         txid: &Hash,
     ) -> Result<Option<TxLocation>, FinalisedStateError> {
-        self.block_core_ext()?.get_tx_location(txid).await
+        self.db(Capability::BLOCK_CORE_EXT)
+            .get_tx_location(txid)
+            .await
     }
 
     /// Fetch block header data by height.
@@ -81,7 +84,9 @@ impl DbReader {
         &self,
         height: Height,
     ) -> Result<BlockHeaderData, FinalisedStateError> {
-        self.block_core_ext()?.get_block_header(height).await
+        self.db(Capability::BLOCK_CORE_EXT)
+            .get_block_header(height)
+            .await
     }
 
     /// Fetches block headers for the given height range.
@@ -90,7 +95,7 @@ impl DbReader {
         start: Height,
         end: Height,
     ) -> Result<Vec<BlockHeaderData>, FinalisedStateError> {
-        self.block_core_ext()?
+        self.db(Capability::BLOCK_CORE_EXT)
             .get_block_range_headers(start, end)
             .await
     }
@@ -100,7 +105,9 @@ impl DbReader {
         &self,
         tx_location: TxLocation,
     ) -> Result<Hash, FinalisedStateError> {
-        self.block_core_ext()?.get_txid(tx_location).await
+        self.db(Capability::BLOCK_CORE_EXT)
+            .get_txid(tx_location)
+            .await
     }
 
     /// Fetch block txids by height.
@@ -108,7 +115,9 @@ impl DbReader {
         &self,
         height: Height,
     ) -> Result<TxidList, FinalisedStateError> {
-        self.block_core_ext()?.get_block_txids(height).await
+        self.db(Capability::BLOCK_CORE_EXT)
+            .get_block_txids(height)
+            .await
     }
 
     /// Fetches block txids for the given height range.
@@ -117,25 +126,19 @@ impl DbReader {
         start: Height,
         end: Height,
     ) -> Result<Vec<TxidList>, FinalisedStateError> {
-        self.block_core_ext()?
+        self.db(Capability::BLOCK_CORE_EXT)
             .get_block_range_txids(start, end)
             .await
     }
 
     // ***** Block Transparent Ext *****
 
-    fn block_transparent_ext(&self) -> Result<&dyn BlockTransparentExt, FinalisedStateError> {
-        self.inner
-            .block_transparent()
-            .ok_or_else(|| FinalisedStateError::FeatureUnavailable("block_transparent"))
-    }
-
     /// Fetch the serialized TransparentCompactTx for the given TxLocation, if present.
     pub(crate) async fn get_transparent(
         &self,
         tx_location: TxLocation,
     ) -> Result<Option<TransparentCompactTx>, FinalisedStateError> {
-        self.block_transparent_ext()?
+        self.db(Capability::BLOCK_TRANSPARENT_EXT)
             .get_transparent(tx_location)
             .await
     }
@@ -145,7 +148,7 @@ impl DbReader {
         &self,
         height: Height,
     ) -> Result<TransparentTxList, FinalisedStateError> {
-        self.block_transparent_ext()?
+        self.db(Capability::BLOCK_TRANSPARENT_EXT)
             .get_block_transparent(height)
             .await
     }
@@ -156,25 +159,21 @@ impl DbReader {
         start: Height,
         end: Height,
     ) -> Result<Vec<TransparentTxList>, FinalisedStateError> {
-        self.block_transparent_ext()?
+        self.db(Capability::BLOCK_TRANSPARENT_EXT)
             .get_block_range_transparent(start, end)
             .await
     }
 
     // ***** Block shielded Ext *****
 
-    fn block_shielded_ext(&self) -> Result<&dyn BlockShieldedExt, FinalisedStateError> {
-        self.inner
-            .block_shielded()
-            .ok_or_else(|| FinalisedStateError::FeatureUnavailable("block_shielded"))
-    }
-
     /// Fetch the serialized SaplingCompactTx for the given TxLocation, if present.
     pub(crate) async fn get_sapling(
         &self,
         tx_location: TxLocation,
     ) -> Result<Option<SaplingCompactTx>, FinalisedStateError> {
-        self.block_shielded_ext()?.get_sapling(tx_location).await
+        self.db(Capability::BLOCK_SHIELDED_EXT)
+            .get_sapling(tx_location)
+            .await
     }
 
     /// Fetch block sapling transaction data by height.
@@ -182,7 +181,9 @@ impl DbReader {
         &self,
         height: Height,
     ) -> Result<SaplingTxList, FinalisedStateError> {
-        self.block_shielded_ext()?.get_block_sapling(height).await
+        self.db(Capability::BLOCK_SHIELDED_EXT)
+            .get_block_sapling(height)
+            .await
     }
 
     /// Fetches block sapling tx data for the given height range.
@@ -191,7 +192,7 @@ impl DbReader {
         start: Height,
         end: Height,
     ) -> Result<Vec<SaplingTxList>, FinalisedStateError> {
-        self.block_shielded_ext()?
+        self.db(Capability::BLOCK_SHIELDED_EXT)
             .get_block_range_sapling(start, end)
             .await
     }
@@ -201,7 +202,9 @@ impl DbReader {
         &self,
         tx_location: TxLocation,
     ) -> Result<Option<OrchardCompactTx>, FinalisedStateError> {
-        self.block_shielded_ext()?.get_orchard(tx_location).await
+        self.db(Capability::BLOCK_SHIELDED_EXT)
+            .get_orchard(tx_location)
+            .await
     }
 
     /// Fetch block orchard transaction data by height.
@@ -209,7 +212,9 @@ impl DbReader {
         &self,
         height: Height,
     ) -> Result<OrchardTxList, FinalisedStateError> {
-        self.block_shielded_ext()?.get_block_orchard(height).await
+        self.db(Capability::BLOCK_SHIELDED_EXT)
+            .get_block_orchard(height)
+            .await
     }
 
     /// Fetches block orchard tx data for the given height range.
@@ -218,7 +223,7 @@ impl DbReader {
         start: Height,
         end: Height,
     ) -> Result<Vec<OrchardTxList>, FinalisedStateError> {
-        self.block_shielded_ext()?
+        self.db(Capability::BLOCK_SHIELDED_EXT)
             .get_block_range_orchard(start, end)
             .await
     }
@@ -228,7 +233,7 @@ impl DbReader {
         &self,
         height: Height,
     ) -> Result<CommitmentTreeData, FinalisedStateError> {
-        self.block_shielded_ext()?
+        self.db(Capability::BLOCK_SHIELDED_EXT)
             .get_block_commitment_tree_data(height)
             .await
     }
@@ -239,17 +244,12 @@ impl DbReader {
         start: Height,
         end: Height,
     ) -> Result<Vec<CommitmentTreeData>, FinalisedStateError> {
-        self.block_shielded_ext()?
+        self.db(Capability::BLOCK_SHIELDED_EXT)
             .get_block_range_commitment_tree_data(start, end)
             .await
     }
 
     // ***** Transparent Hist Ext *****
-    fn transparent_hist_ext(&self) -> Result<&dyn TransparentHistExt, FinalisedStateError> {
-        self.inner
-            .transparent_hist()
-            .ok_or_else(|| FinalisedStateError::FeatureUnavailable("transparent_hist"))
-    }
 
     /// Fetch all address history records for a given transparent address.
     ///
@@ -261,7 +261,9 @@ impl DbReader {
         &self,
         addr_script: AddrScript,
     ) -> Result<Option<Vec<AddrEventBytes>>, FinalisedStateError> {
-        self.transparent_hist_ext()?.addr_records(addr_script).await
+        self.db(Capability::TRANSPARENT_HIST_EXT)
+            .addr_records(addr_script)
+            .await
     }
 
     /// Fetch all address history records for a given address and TxLocation.
@@ -275,7 +277,7 @@ impl DbReader {
         addr_script: AddrScript,
         tx_location: TxLocation,
     ) -> Result<Option<Vec<AddrEventBytes>>, FinalisedStateError> {
-        self.transparent_hist_ext()?
+        self.db(Capability::TRANSPARENT_HIST_EXT)
             .addr_and_index_records(addr_script, tx_location)
             .await
     }
@@ -293,7 +295,7 @@ impl DbReader {
         start_height: Height,
         end_height: Height,
     ) -> Result<Option<Vec<TxLocation>>, FinalisedStateError> {
-        self.transparent_hist_ext()?
+        self.db(Capability::TRANSPARENT_HIST_EXT)
             .addr_tx_locations_by_range(addr_script, start_height, end_height)
             .await
     }
@@ -313,7 +315,7 @@ impl DbReader {
         start_height: Height,
         end_height: Height,
     ) -> Result<Option<Vec<(TxLocation, u16, u64)>>, FinalisedStateError> {
-        self.transparent_hist_ext()?
+        self.db(Capability::TRANSPARENT_HIST_EXT)
             .addr_utxos_by_range(addr_script, start_height, end_height)
             .await
     }
@@ -332,7 +334,7 @@ impl DbReader {
         start_height: Height,
         end_height: Height,
     ) -> Result<i64, FinalisedStateError> {
-        self.transparent_hist_ext()?
+        self.db(Capability::TRANSPARENT_HIST_EXT)
             .addr_balance_by_range(addr_script, start_height, end_height)
             .await
     }
@@ -347,7 +349,7 @@ impl DbReader {
         &self,
         outpoint: Outpoint,
     ) -> Result<Option<TxLocation>, FinalisedStateError> {
-        self.transparent_hist_ext()?
+        self.db(Capability::TRANSPARENT_HIST_EXT)
             .get_outpoint_spender(outpoint)
             .await
     }
@@ -362,18 +364,12 @@ impl DbReader {
         &self,
         outpoints: Vec<Outpoint>,
     ) -> Result<Vec<Option<TxLocation>>, FinalisedStateError> {
-        self.transparent_hist_ext()?
+        self.db(Capability::TRANSPARENT_HIST_EXT)
             .get_outpoint_spenders(outpoints)
             .await
     }
 
     // ***** ChainBlock Ext *****
-
-    fn chain_block_ext(&self) -> Result<&dyn ChainBlockExt, FinalisedStateError> {
-        self.inner
-            .chain_block()
-            .ok_or_else(|| FinalisedStateError::FeatureUnavailable("chain_block"))
-    }
 
     /// Returns the ChainBlock for the given Height.
     ///
@@ -382,16 +378,12 @@ impl DbReader {
         &self,
         height: Height,
     ) -> Result<ChainBlock, FinalisedStateError> {
-        self.chain_block_ext()?.get_chain_block(height).await
+        self.db(Capability::CHAIN_BLOCK_EXT)
+            .get_chain_block(height)
+            .await
     }
 
     // ***** CompactBlock Ext *****
-
-    fn compact_block_ext(&self) -> Result<&dyn CompactBlockExt, FinalisedStateError> {
-        self.inner
-            .compact_block()
-            .ok_or_else(|| FinalisedStateError::FeatureUnavailable("compact_block"))
-    }
 
     /// Returns the CompactBlock for the given Height.
     ///
@@ -400,6 +392,8 @@ impl DbReader {
         &self,
         height: Height,
     ) -> Result<zaino_proto::proto::compact_formats::CompactBlock, FinalisedStateError> {
-        self.compact_block_ext()?.get_compact_block(height).await
+        self.db(Capability::COMPACT_BLOCK_EXT)
+            .get_compact_block(height)
+            .await
     }
 }
