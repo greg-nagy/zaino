@@ -22,6 +22,8 @@ use async_trait::async_trait;
 use std::time::Duration;
 use tokio::time::{interval, MissedTickBehavior};
 
+use super::capability::Capability;
+
 /// All concrete database implementations.
 pub(crate) enum DbBackend {
     V0(DbV0),
@@ -51,6 +53,16 @@ impl DbBackend {
             if self.status().await == StatusType::Ready {
                 break;
             }
+        }
+    }
+
+    /// Returns the capabilities supported by this database instance.
+    pub(crate) fn capability(&self) -> Capability {
+        match self {
+            Self::V0(_) => {
+                Capability::READ_CORE | Capability::WRITE_CORE | Capability::COMPACT_BLOCK_EXT
+            }
+            Self::V1(_) => Capability::LATEST,
         }
     }
 }

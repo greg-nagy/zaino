@@ -180,7 +180,10 @@ impl ZainoDB {
     ///
     /// Used by DbReader to route calls to the correct database during major migrations.
     #[inline]
-    pub(crate) fn backend_for_cap(&self, cap: Capability) -> Arc<DbBackend> {
+    pub(crate) fn backend_for_cap(
+        &self,
+        cap: Capability,
+    ) -> Result<Arc<DbBackend>, FinalisedStateError> {
         self.db.backend(cap)
     }
 

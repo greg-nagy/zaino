@@ -116,8 +116,8 @@ impl MigrationStep for Migration0_0_0To1_0_0 {
     const MIGRATION_TYPE: MigrationType = MigrationType::Minor;
 
     async fn migrate(
-        router: Arc<Router>,
-        cfg: BlockCacheConfig,
+        _router: Arc<Router>,
+        _cfg: BlockCacheConfig,
     ) -> Result<(), FinalisedStateError> {
         // todo!()
         Ok(())
