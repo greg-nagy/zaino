@@ -7,6 +7,7 @@ on:
       - '**'
     paths:
       - '.env.testing-artifacts'
+      - 'test_environment/*'
 
 jobs:
   build-and-push:
@@ -29,7 +30,7 @@ jobs:
       id: taggen
       run: |
         source .env.testing-artifacts
-        export RUST_VERSION ZCASH_VERSION ZEBRA_VERSION DOCKER_DIR_HASH
+        export RUST_VERSION ZCASH_VERSION ZEBRA_VERSION
         TAG=$(./utils/get-ci-image-tag.sh)
         echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
