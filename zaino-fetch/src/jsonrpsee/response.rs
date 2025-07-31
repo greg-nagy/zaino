@@ -59,7 +59,7 @@ pub struct AddressDelta {
 
 /// Response to a `getinfo` RPC request.
 ///
-/// This is used for the output parameter of [`JsonRpcConnector::get_info`].
+/// This is used for the output parameter of [`crate::jsonrpsee::connector::JsonRpSeeConnector::get_info`].
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GetInfoResponse {
     /// The node version
@@ -173,7 +173,7 @@ impl From<GetInfoResponse> for zebra_rpc::methods::GetInfo {
 
 /// Response to a `getblockchaininfo` RPC request.
 ///
-/// This is used for the output parameter of [`JsonRpcConnector::get_blockchain_info`].
+/// This is used for the output parameter of [`crate::jsonrpsee::connector::JsonRpSeeConnector::get_blockchain_info`].
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GetBlockchainInfoResponse {
     /// Current network name as defined in BIP70 (main, test, regtest)
@@ -370,7 +370,7 @@ impl TryFrom<GetBlockchainInfoResponse> for zebra_rpc::methods::GetBlockChainInf
 
 /// The transparent balance of a set of addresses.
 ///
-/// This is used for the output parameter of [`JsonRpcConnector::get_address_balance`].
+/// This is used for the output parameter of [`crate::jsonrpsee::connector::JsonRpSeeConnector::get_address_balance`].
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GetBalanceResponse {
     /// The total transparent balance.
@@ -411,7 +411,7 @@ impl From<GetBalanceResponse> for zebra_rpc::methods::AddressBalance {
 
 /// Contains the hex-encoded hash of the sent transaction.
 ///
-/// This is used for the output parameter of [`JsonRpcConnector::send_raw_transaction`].
+/// This is used for the output parameter of [`crate::jsonrpsee::connector::JsonRpSeeConnector::send_raw_transaction`].
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct SendTransactionResponse(#[serde(with = "hex")] pub zebra_chain::transaction::Hash);
 
@@ -463,7 +463,6 @@ impl From<SendTransactionResponse> for zebra_rpc::methods::SentTransactionHash {
 ///
 /// Contains the hex-encoded hash of the requested block.
 ///
-/// Also see the notes for the [`Rpc::get_best_block_hash`] and `get_block_hash` methods.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(transparent)]
 pub struct GetBlockHash(#[serde(with = "hex")] pub zebra_chain::block::Hash);
@@ -486,7 +485,7 @@ impl From<GetBlockHash> for zebra_rpc::methods::GetBlockHash {
 
 /// A wrapper struct for a zebra serialized block.
 ///
-/// Stores bytes that are guaranteed to be deserializable into a [`Block`].
+/// Stores bytes that are guaranteed to be deserializable into a [`zebra_chain::block::Block`].
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct SerializedBlock(zebra_chain::block::SerializedBlock);
 
@@ -642,7 +641,7 @@ impl From<Solution> for zebra_chain::work::equihash::Solution {
 
 /// Contains the hex-encoded hash of the sent transaction.
 ///
-/// This is used for the output parameter of [`JsonRpcConnector::get_block`].
+/// This is used for the output parameter of [`crate::jsonrpsee::connector::JsonRpSeeConnector::get_block`].
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(untagged)]
 pub enum GetBlockResponse {
@@ -725,7 +724,7 @@ impl From<GetBlockCountResponse> for Height {
 
 /// A block object containing data and metadata about a block.
 ///
-/// This is used for the output parameter of [`JsonRpcConnector::get_block`].
+/// This is used for the output parameter of [`crate::jsonrpsee::connector::JsonRpSeeConnector::get_block`].
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct BlockObject {
     /// The hash of the requested block.
@@ -861,7 +860,7 @@ impl TryFrom<GetBlockResponse> for zebra_rpc::methods::GetBlock {
 
 /// Vec of transaction ids, as a JSON array.
 ///
-/// This is used for the output parameter of [`JsonRpcConnector::get_raw_mempool`] and [`JsonRpcConnector::get_address_txids`].
+/// This is used for the output parameter of [`crate::jsonrpsee::connector::JsonRpSeeConnector::get_raw_mempool`] and [`crate::jsonrpsee::connector::JsonRpSeeConnector::get_address_txids`].
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
 pub struct TxidsResponse {
     /// Vec of txids.
@@ -935,11 +934,11 @@ impl<'de> serde::Deserialize<'de> for TxidsResponse {
 }
 
 /// Contains the hex-encoded Sapling & Orchard note commitment trees, and their
-/// corresponding [`block::Hash`], [`Height`], and block time.
+/// corresponding `block::Hash`, `Height`, and block time.
 ///
 /// Encoded using v0 frontier encoding.
 ///
-/// This is used for the output parameter of [`JsonRpcConnector::get_treestate`].
+/// This is used for the output parameter of [`crate::jsonrpsee::connector::JsonRpSeeConnector::get_treestate`].
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
 pub struct GetTreestateResponse {
     /// The block height corresponding to the treestate, numeric.
@@ -1053,7 +1052,7 @@ impl TryFrom<GetTreestateResponse> for zebra_rpc::methods::trees::GetTreestate {
 
 /// Contains raw transaction, encoded as hex bytes.
 ///
-/// This is used for the output parameter of [`JsonRpcConnector::get_raw_transaction`].
+/// This is used for the output parameter of [`crate::jsonrpsee::connector::JsonRpSeeConnector::get_raw_transaction`].
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub enum GetTransactionResponse {
     /// The raw transaction, encoded as hex bytes.
@@ -1284,7 +1283,7 @@ impl<'de> serde::Deserialize<'de> for SubtreeRpcData {
 /// Contains the Sapling or Orchard pool label, the index of the first subtree in the list,
 /// and a list of subtree roots and end heights.
 ///
-/// This is used for the output parameter of [`JsonRpcConnector::get_subtrees_by_index`].
+/// This is used for the output parameter of [`crate::jsonrpsee::connector::JsonRpSeeConnector::get_subtrees_by_index`].
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GetSubtreesResponse {
     /// The shielded pool to which the subtrees belong.
@@ -1346,7 +1345,7 @@ impl From<GetSubtreesResponse> for zebra_rpc::methods::trees::GetSubtrees {
 ///
 /// # Correctness
 ///
-/// Consensus-critical serialization uses [`ZcashSerialize`].
+/// Consensus-critical serialization uses `ZcashSerialize`.
 /// [`serde`]-based hex serialization must only be used for RPCs and testing.
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
 pub struct Script(zebra_chain::transparent::Script);
@@ -1403,7 +1402,7 @@ impl<'de> serde::Deserialize<'de> for Script {
     }
 }
 
-/// This is used for the output parameter of [`JsonRpcConnector::get_address_utxos`].
+/// This is used for the output parameter of [`crate::jsonrpsee::connector::JsonRpSeeConnector::get_address_utxos`].
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GetUtxosResponse {
     /// The transparent address, base58check encoded
@@ -1470,4 +1469,30 @@ where
     T::RpcError: Send + Sync + 'static,
 {
     type RpcError = T::RpcError;
+}
+
+/// Response type for the `getmempoolinfo` RPC request
+/// Details on the state of the TX memory pool.
+/// In Zaino, this RPC call information is gathered from the local Zaino state instead of directly reflecting the full node's mempool. This state is populated from a gRPC stream, sourced from the full node.
+/// The Zcash source code is considered canonical:
+/// [from the rpc definition](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1555>), [this function is called to produce the return value](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1541>>).
+/// the `size` field is called by [this line of code](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1544>), and returns an int64.
+/// `size` represents the number of transactions currently in the mempool.
+/// the `bytes` field is called by [this line of code](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1545>), and returns an int64 from [this variable](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/txmempool.h#L349>).
+/// `bytes` is the sum memory size in bytes of all transactions in the mempool: the sum of all transaction byte sizes.
+/// the `usage` field is called by [this line of code](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1546>), and returns an int64 derived from the return of this function(<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/txmempool.h#L1199>), which includes a number of elements.
+/// `usage` is the total memory usage for the mempool, in bytes.
+/// the [optional `fullyNotified` field](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1549>), is only utilized for zcashd regtests, is deprecated, and is not included.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct GetMempoolInfoResponse {
+    /// Current tx count
+    pub size: u64,
+    /// Sum of all tx sizes
+    pub bytes: u64,
+    /// Total memory usage for the mempool
+    pub usage: u64,
+}
+
+impl ResponseToError for GetMempoolInfoResponse {
+    type RpcError = Infallible;
 }

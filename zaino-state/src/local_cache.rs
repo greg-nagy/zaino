@@ -5,7 +5,6 @@ use crate::{
 };
 
 pub mod finalised_state;
-pub mod mempool;
 pub mod non_finalised_state;
 
 use finalised_state::{FinalisedState, FinalisedStateSubscriber};

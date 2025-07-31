@@ -1,7 +1,7 @@
 //! JsonRPSee client implementation.
 //!
 //! TODO: - Add option for http connector.
-//!       - Refactor JsonRPSeecConnectorError into concrete error types and implement fmt::display [https://github.com/zingolabs/zaino/issues/67].
+//!       - Refactor JsonRPSeecConnectorError into concrete error types and implement fmt::display [<https://github.com/zingolabs/zaino/issues/67>].
 
 use base64::{engine::general_purpose, Engine};
 use http::Uri;
@@ -24,10 +24,10 @@ use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
     response::{
         GetBalanceError, GetBalanceResponse, GetBlockCountResponse, GetBlockError, GetBlockHash,
-        GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse, GetSubtreesError,
-        GetSubtreesResponse, GetTransactionResponse, GetTreestateError, GetTreestateResponse,
-        GetUtxosError, GetUtxosResponse, SendTransactionError, SendTransactionResponse, TxidsError,
-        TxidsResponse,
+        GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse, GetMempoolInfoResponse,
+        GetSubtreesError, GetSubtreesResponse, GetTransactionResponse, GetTreestateError,
+        GetTreestateResponse, GetUtxosError, GetUtxosResponse, SendTransactionError,
+        SendTransactionResponse, TxidsError, TxidsResponse,
     },
 };
 
@@ -294,7 +294,7 @@ impl JsonRpSeeConnector {
 
             let request_builder = self
                 .build_request(method, &params, id)
-                .map_err(|e| RpcRequestError::JsonRpc(e))?;
+                .map_err(RpcRequestError::JsonRpc)?;
 
             let response = request_builder
                 .send()
@@ -417,7 +417,7 @@ impl JsonRpSeeConnector {
         todo!()
     }
 
-    /// Returns software information from the RPC server, as a [`GetInfo`] JSON struct.
+    /// Returns software information from the RPC server, as a [`crate::jsonrpsee::connector::GetInfoResponse`] JSON struct.
     ///
     /// zcashd reference: [`getinfo`](https://zcash.github.io/rpc/getinfo.html)
     /// method: post
@@ -427,7 +427,6 @@ impl JsonRpSeeConnector {
             .await
     }
 
-    /// Returns blockchain state information, as a [`GetBlockChainInfo`] JSON struct.
     ///
     /// zcashd reference: [`getblockchaininfo`](https://zcash.github.io/rpc/getblockchaininfo.html)
     /// method: post
@@ -436,6 +435,22 @@ impl JsonRpSeeConnector {
         &self,
     ) -> Result<GetBlockchainInfoResponse, RpcRequestError<Infallible>> {
         self.send_request::<(), GetBlockchainInfoResponse>("getblockchaininfo", ())
+            .await
+    }
+
+    /// Returns details on the active state of the TX memory pool.
+    ///
+    /// online zcash rpc reference: [`getmempoolinfo`](https://zcash.github.io/rpc/getmempoolinfo.html)
+    /// method: post
+    /// tags: mempool
+    ///
+    /// Canonical source code implementation: [`getmempoolinfo`](https://github.com/zcash/zcash/blob/18238d90cd0b810f5b07d5aaa1338126aa128c06/src/rpc/blockchain.cpp#L1555)
+    ///
+    /// Zebra does not support this RPC directly.
+    pub async fn get_mempool_info(
+        &self,
+    ) -> Result<GetMempoolInfoResponse, RpcRequestError<Infallible>> {
+        self.send_request::<(), GetMempoolInfoResponse>("getmempoolinfo", ())
             .await
     }
 
@@ -451,7 +466,7 @@ impl JsonRpSeeConnector {
             .await
     }
 
-    /// Returns the total balance of a provided `addresses` in an [`AddressBalance`] instance.
+    /// Returns the total balance of a provided `addresses` in an [`crate::jsonrpsee::response::GetBalanceResponse`] instance.
     ///
     /// zcashd reference: [`getaddressbalance`](https://zcash.github.io/rpc/getaddressbalance.html)
     /// method: post
@@ -470,7 +485,6 @@ impl JsonRpSeeConnector {
     }
 
     /// Sends the raw bytes of a signed transaction to the local node's mempool, if the transaction is valid.
-    /// Returns the [`SentTransactionHash`] for the transaction, as a JSON string.
     ///
     /// zcashd reference: [`sendrawtransaction`](https://zcash.github.io/rpc/sendrawtransaction.html)
     /// method: post
@@ -488,7 +502,7 @@ impl JsonRpSeeConnector {
         self.send_request("sendrawtransaction", params).await
     }
 
-    /// Returns the requested block by hash or height, as a [`GetBlock`] JSON string.
+    /// Returns the requested block by hash or height, as a [`GetBlockResponse`].
     /// If the block is not in Zebra's state, returns
     /// [error code `-8`.](https://github.com/zcash/zcash/issues/5758)
     ///
@@ -532,7 +546,7 @@ impl JsonRpSeeConnector {
     /// The zcashd doc reference above says there are no parameters and the result is a "hex" (string) of the block hash hex encoded.
     /// The Zcash source code is considered canonical.
     /// [In the rpc definition](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/common.h#L48) there are no required params, or optional params.
-    /// [The function in rpc/blockchain.cpp]https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L325
+    /// [The function in rpc/blockchain.cpp](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L325)
     /// where `return chainActive.Tip()->GetBlockHash().GetHex();` is the [return expression](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L339)returning a `std::string`
     pub async fn get_best_blockhash(&self) -> Result<GetBlockHash, RpcRequestError<Infallible>> {
         self.send_request::<(), GetBlockHash>("getbestblockhash", ())
@@ -610,7 +624,7 @@ impl JsonRpSeeConnector {
         self.send_request("z_getsubtreesbyindex", params).await
     }
 
-    /// Returns the raw transaction data, as a [`GetRawTransaction`] JSON string or structure.
+    /// Returns the raw transaction data, as a [`GetTransactionResponse`].
     ///
     /// zcashd reference: [`getrawtransaction`](https://zcash.github.io/rpc/getrawtransaction.html)
     /// method: post
