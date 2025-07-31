@@ -4,8 +4,8 @@ use crate::{
     chain_index::types::AddrEventBytes, error::FinalisedStateError, read_fixed_le, read_u32_le,
     version, write_fixed_le, write_u32_le, AddrScript, BlockHeaderData, ChainBlock,
     CommitmentTreeData, FixedEncodedLen, Hash, Height, OrchardCompactTx, OrchardTxList, Outpoint,
-    SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList, TxIndex,
-    TxidList, ZainoVersionedSerialise,
+    SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
+    TxLocation, TxidList, ZainoVersionedSerialise,
 };
 
 use async_trait::async_trait;
@@ -317,20 +317,21 @@ pub trait BlockCoreExt: Send + Sync {
         end: Height,
     ) -> Result<Vec<TxidList>, FinalisedStateError>;
 
-    /// Fetch the txid bytes for a given TxIndex.
-    async fn get_txid(&self, tx_index: TxIndex) -> Result<Hash, FinalisedStateError>;
+    /// Fetch the txid bytes for a given TxLocation.
+    async fn get_txid(&self, tx_location: TxLocation) -> Result<Hash, FinalisedStateError>;
 
-    /// Fetch the TxIndex for the given txid, transaction data is indexed by Txidex internally.
-    async fn get_tx_index(&self, txid: &Hash) -> Result<Option<TxIndex>, FinalisedStateError>;
+    /// Fetch the TxLocation for the given txid, transaction data is indexed by TxLocation internally.
+    async fn get_tx_location(&self, txid: &Hash)
+        -> Result<Option<TxLocation>, FinalisedStateError>;
 }
 
 /// Transparent block data extension.
 #[async_trait]
 pub trait BlockTransparentExt: Send + Sync {
-    /// Fetch the serialized TransparentCompactTx for the given TxIndex, if present.
+    /// Fetch the serialized TransparentCompactTx for the given TxLocation, if present.
     async fn get_transparent(
         &self,
-        tx_index: TxIndex,
+        tx_location: TxLocation,
     ) -> Result<Option<TransparentCompactTx>, FinalisedStateError>;
 
     /// Fetch block transparent transaction data by height.
@@ -350,10 +351,10 @@ pub trait BlockTransparentExt: Send + Sync {
 /// Transparent block data extension.
 #[async_trait]
 pub trait BlockShieldedExt: Send + Sync {
-    /// Fetch the serialized SaplingCompactTx for the given TxIndex, if present.
+    /// Fetch the serialized SaplingCompactTx for the given TxLocation, if present.
     async fn get_sapling(
         &self,
-        tx_index: TxIndex,
+        tx_location: TxLocation,
     ) -> Result<Option<SaplingCompactTx>, FinalisedStateError>;
 
     /// Fetch block sapling transaction data by height.
@@ -367,10 +368,10 @@ pub trait BlockShieldedExt: Send + Sync {
         end: Height,
     ) -> Result<Vec<SaplingTxList>, FinalisedStateError>;
 
-    /// Fetch the serialized OrchardCompactTx for the given TxIndex, if present.
+    /// Fetch the serialized OrchardCompactTx for the given TxLocation, if present.
     async fn get_orchard(
         &self,
-        tx_index: TxIndex,
+        tx_location: TxLocation,
     ) -> Result<Option<OrchardCompactTx>, FinalisedStateError>;
 
     /// Fetch block orchard transaction data by height.
@@ -433,7 +434,7 @@ pub trait TransparentHistExt: Send + Sync {
         addr_script: AddrScript,
     ) -> Result<Option<Vec<AddrEventBytes>>, FinalisedStateError>;
 
-    /// Fetch all address history records for a given address and TxIndex.
+    /// Fetch all address history records for a given address and TxLocation.
     ///
     /// Returns:
     /// - `Ok(Some(records))` if one or more matching records are found at that index,
@@ -442,27 +443,27 @@ pub trait TransparentHistExt: Send + Sync {
     async fn addr_and_index_records(
         &self,
         addr_script: AddrScript,
-        tx_index: TxIndex,
+        tx_location: TxLocation,
     ) -> Result<Option<Vec<AddrEventBytes>>, FinalisedStateError>;
 
-    /// Fetch all distinct `TxIndex` values for `addr_script` within the
+    /// Fetch all distinct `TxLocation` values for `addr_script` within the
     /// height range `[start_height, end_height]` (inclusive).
     ///
     /// Returns:
     /// - `Ok(Some(vec))` if one or more matching records are found,
     /// - `Ok(None)` if no matches found (not an error),
     /// - `Err(...)` on decode or DB failure.
-    async fn addr_tx_indexes_by_range(
+    async fn addr_tx_locations_by_range(
         &self,
         addr_script: AddrScript,
         start_height: Height,
         end_height: Height,
-    ) -> Result<Option<Vec<TxIndex>>, FinalisedStateError>;
+    ) -> Result<Option<Vec<TxLocation>>, FinalisedStateError>;
 
     /// Fetch all UTXOs (unspent mined outputs) for `addr_script` within the
     /// height range `[start_height, end_height]` (inclusive).
     ///
-    /// Each entry is `(TxIndex, vout, value)`.
+    /// Each entry is `(TxLocation, vout, value)`.
     ///
     /// Returns:
     /// - `Ok(Some(vec))` if one or more UTXOs are found,
@@ -473,7 +474,7 @@ pub trait TransparentHistExt: Send + Sync {
         addr_script: AddrScript,
         start_height: Height,
         end_height: Height,
-    ) -> Result<Option<Vec<(TxIndex, u16, u64)>>, FinalisedStateError>;
+    ) -> Result<Option<Vec<(TxLocation, u16, u64)>>, FinalisedStateError>;
 
     /// Computes the transparent balance change for `addr_script` over the
     /// height range `[start_height, end_height]` (inclusive).
@@ -492,25 +493,25 @@ pub trait TransparentHistExt: Send + Sync {
 
     // TODO: Add addr_deltas_by_range method!
 
-    /// Fetch the `TxIndex` that spent a given outpoint, if any.
+    /// Fetch the `TxLocation` that spent a given outpoint, if any.
     ///
     /// Returns:
-    /// - `Ok(Some(TxIndex))` if the outpoint is spent.
+    /// - `Ok(Some(TxLocation))` if the outpoint is spent.
     /// - `Ok(None)` if no entry exists (not spent or not known).
     /// - `Err(...)` on deserialization or DB error.
     async fn get_outpoint_spender(
         &self,
         outpoint: Outpoint,
-    ) -> Result<Option<TxIndex>, FinalisedStateError>;
+    ) -> Result<Option<TxLocation>, FinalisedStateError>;
 
-    /// Fetch the `TxIndex` entries for a batch of outpoints.
+    /// Fetch the `TxLocation` entries for a batch of outpoints.
     ///
     /// For each input:
-    /// - Returns `Some(TxIndex)` if spent,
+    /// - Returns `Some(TxLocation)` if spent,
     /// - `None` if not found,
     /// - or returns `Err` immediately if any DB or decode error occurs.
     async fn get_outpoint_spenders(
         &self,
         outpoints: Vec<Outpoint>,
-    ) -> Result<Vec<Option<TxIndex>>, FinalisedStateError>;
+    ) -> Result<Vec<Option<TxLocation>>, FinalisedStateError>;
 }
