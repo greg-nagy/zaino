@@ -847,13 +847,17 @@ impl ZcashIndexer for StateServiceSubscriber {
             .then(|txid| async move { self.get_raw_transaction(txid.to_string(), Some(1)).await });
 
         let txs_result: Result<Vec<Box<TransactionObject>>, Self::Error> = tx_fetches
-            .map(|res| {
+            // Transform and filter in one step: convert GetRawTransaction to Option<Box<TransactionObject>>
+            // Raw transactions are filtered out (None), Object transactions are kept (Some(tx))
+            // Errors are propagated through the Result wrapper
+            .try_filter_map(|res| async {
                 res.and_then(|raw_tx| match raw_tx {
-                    GetRawTransaction::Raw(_) => Ok(None), // Unexpected raw, treat as None
-                    GetRawTransaction::Object(tx) => Ok(Some(tx)), // Proper object
+                    GetRawTransaction::Raw(_) => Ok(None), // Filter out raw transactions
+                    GetRawTransaction::Object(tx) => Ok(Some(tx)), // Keep transaction objects
                 })
             })
-            .try_filter_map(|tx_opt| async { Ok(tx_opt) })
+            // Collect all remaining transaction objects into a Vec<Box<TransactionObject>>
+            // If any step produced an error, the entire collection fails with that error
             .try_collect()
             .await;
 
