@@ -62,7 +62,7 @@ pub mod version {
 /// ## Mandatory items per implementation
 /// * `const VERSION`
 /// * `encode_body`
-/// * `decode_vN` — **must** parse bytes for version N, where N = `Self::VERSION`.
+/// * `decode_vN` — **must** parse bytes for version N, where N = [`Self::VERSION`].
 /// * `decode_latest` — **must** parse `Self::VERSION` bytes.
 ///
 /// Historical helpers (`decode_v1`, `decode_v2`, …) must be implemented
