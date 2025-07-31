@@ -266,7 +266,8 @@ impl Default for ChainWork {
     }
 }
 
-/// Wrapper struct for a Zebra [`Balance`], enabling custom deserialisation logic to handle both zebrad and zcashd.
+/// Wrapper struct for a Zebra [`GetBlockchainInfoBalance`], enabling custom
+/// deserialisation logic to handle both zebrad and zcashd.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct ChainBalance(GetBlockchainInfoBalance);
 
@@ -453,8 +454,6 @@ impl From<SendTransactionResponse> for zebra_rpc::methods::SentTransactionHash {
 /// Response to a `getbestblockhash` and `getblockhash` RPC request.
 ///
 /// Contains the hex-encoded hash of the requested block.
-///
-/// Also see the notes for the [`Rpc::get_best_block_hash`] and `get_block_hash` methods.
 #[derive(
     Copy, Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize, derive_more::From,
 )]
