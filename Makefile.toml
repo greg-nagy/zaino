@@ -1,3 +1,4 @@
+extend = "makefiles/lints.toml"
 env_files = [".env.testing-artifacts"]
 
 [config]
@@ -297,12 +298,6 @@ info "✅ All versions match between Cargo.toml and .env.testing-artifacts"
 '''
 
 # -------------------------------------------------------------------
-
-[tasks.doc]
-description = "Run `cargo doc`"
-script = '''
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items
-'''
 
 [tasks.validate-makefile-tasks]
 description = "Validate all tasks work correctly with minimal execution"
