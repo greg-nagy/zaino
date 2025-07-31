@@ -10,7 +10,7 @@ use zebra_chain::{
     block::Height,
     work::difficulty::CompactDifficulty,
 };
-use zebra_rpc::methods::{opthex, types::get_blockchain_info::Balance};
+use zebra_rpc::methods::{opthex, types::{get_blockchain_info::Balance, transaction::{Input, Output}}};
 
 use crate::jsonrpsee::connector::ResponseToError;
 
@@ -55,6 +55,63 @@ pub struct AddressDelta {
     height: u32,
     /// The base58check encoded address
     address: String,
+}
+
+impl AddressDelta {
+    /// Create a delta from a transaction input (spend - negative value)
+    pub fn from_input(
+        input: &Input,
+        input_index: u32,
+        txid: &str,
+        height: u32,
+        target_addresses: &[String],
+    ) -> Option<Self> {
+        match input {
+            Input::NonCoinbase {
+                address: Some(addr),
+                value_zat: Some(value),
+                ..
+            } => {
+                // Check if this address is in our target addresses
+                if target_addresses.iter().any(|req_addr| req_addr == addr) {
+                    Some(AddressDelta {
+                        satoshis: -value, // Negative for inputs (spends)
+                        txid: txid.to_string(),
+                        index: input_index,
+                        height,
+                        address: addr.clone(),
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None, // Skip coinbase inputs or inputs without address/value
+        }
+    }
+
+    /// Create a delta from a transaction output (receive - positive value)
+    pub fn from_output(
+        output: &Output,
+        txid: &str,
+        height: u32,
+        target_addresses: &[String],
+    ) -> Vec<Self> {
+        if let Some(output_addresses) = &output.script_pub_key.addresses {
+            output_addresses
+                .iter()
+                .filter(|addr| target_addresses.iter().any(|req_addr| req_addr == *addr))
+                .map(|addr| AddressDelta {
+                    satoshis: output.value_zat, // Positive for outputs (receives)
+                    txid: txid.to_string(),
+                    index: output.n,
+                    height,
+                    address: addr.clone(),
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
 }
 
 /// Response to a `getinfo` RPC request.

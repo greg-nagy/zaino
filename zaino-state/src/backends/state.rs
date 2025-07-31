@@ -841,6 +841,8 @@ impl ZcashIndexer for StateServiceSubscriber {
         &self,
         request: GetAddressTxIdsRequest,
     ) -> Result<GetAddressDeltasResponse, Self::Error> {
+        // Extract addresses from the request for later matching
+        let (addresses, _start, _end) = request.clone().into_parts();
         let txids = self.get_address_tx_ids(request).await?;
 
         let tx_fetches = stream::iter(txids.into_iter())
@@ -861,12 +863,37 @@ impl ZcashIndexer for StateServiceSubscriber {
             .try_collect()
             .await;
 
-        let deltas: Vec<AddressDelta> = todo!();
+        let deltas: Vec<AddressDelta> = match &txs_result {
+            Ok(txs) => txs
+                .iter()
+                .flat_map(|tx| {
+                    let txid = hex::encode(tx.hex.as_ref());
+                    let height = tx.height.unwrap_or(0);
 
-        match txs_result {
-            Ok(txs) => Ok(GetAddressDeltasResponse { deltas }),
-            Err(e) => Err(e),
-        }
+                    // Process inputs (spends - negative deltas)
+                    let input_deltas = tx.inputs.iter().flatten().enumerate().filter_map(
+                        |(input_index, input)| {
+                            AddressDelta::from_input(
+                                input,
+                                input_index as u32,
+                                &txid,
+                                height,
+                                &addresses,
+                            )
+                        },
+                    );
+
+                    // Process outputs (receives - positive deltas)
+                    let output_deltas = tx.outputs.iter().flatten().flat_map(|output| {
+                        AddressDelta::from_output(output, &txid, height, &addresses)
+                    });
+
+                    // Chain input and output deltas together
+                    input_deltas.chain(output_deltas)
+                })
+                .collect(),
+            Err(_) => Vec::new(), // Error case will be handled below
+        };
     }
 
     async fn get_difficulty(&self) -> Result<f64, Self::Error> {
