@@ -1,5 +1,6 @@
 //! Holds Database implementations by *major* version.
 
+pub(crate) mod v0;
 pub(crate) mod v1;
 
 use std::time::Duration;

@@ -94,9 +94,12 @@ impl DbCore for Router {
     async fn status(&self) -> StatusType {
         self.backend(Capability::READ_CORE).status().await
     }
+
+    // TODO: SHUT DOWN BOTH DBs IF OPEN!
     async fn shutdown(&self) -> Result<(), FinalisedStateError> {
         self.backend(Capability::READ_CORE).shutdown().await
     }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self as &dyn std::any::Any
     }
