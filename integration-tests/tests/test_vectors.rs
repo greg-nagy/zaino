@@ -360,7 +360,7 @@ async fn create_200_block_regtest_chain_vectors() {
                         }
                         zebra_rpc::methods::GetBlock::Object(block_obj)  => Ok((
                             block_obj.hash() ,
-                            block_obj.tx().into_iter()
+                            block_obj.tx().iter()
                                 .map(|item| {
                                     match item {
                                         GetBlockTransaction::Hash(h) => Ok(h.0.to_vec()),
