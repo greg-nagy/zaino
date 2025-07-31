@@ -425,6 +425,11 @@ pub enum FinalisedStateError {
         reason: String,
     },
 
+    /// Returned when a caller asks for a feature that the
+    /// currently-opened database version does not advertise.
+    #[error("feature unavailable: {0}")]
+    FeatureUnavailable(&'static str),
+
     // TODO: Add `InvalidRequestError` and return for invalid requests.
     /// Critical Errors, Restart Zaino.
     #[error("Critical error: {0}")]

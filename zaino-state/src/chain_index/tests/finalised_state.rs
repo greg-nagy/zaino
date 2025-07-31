@@ -12,7 +12,8 @@ use zaino_proto::proto::compact_formats::CompactBlock;
 use zebra_rpc::methods::GetAddressUtxos;
 
 use crate::bench::BlockCacheConfig;
-use crate::chain_index::finalised_state::{DbReader, ZainoDB};
+use crate::chain_index::finalised_state::reader::DbReader;
+use crate::chain_index::finalised_state::ZainoDB;
 use crate::error::FinalisedStateError;
 use crate::{
     read_u32_le, AddrScript, ChainBlock, CompactSize, Height, Outpoint,
@@ -139,7 +140,7 @@ async fn spawn_default_zaino_db() -> Result<DefaultZainoDbProcess, FinalisedStat
         no_db: false,
     };
 
-    let zaino_db = ZainoDB::spawn(&config).await.unwrap();
+    let zaino_db = ZainoDB::spawn(config).await.unwrap();
 
     Ok(DefaultZainoDbProcess {
         dir: temp_dir,
@@ -178,10 +179,10 @@ async fn load_vectors_db_and_reader() -> (Vectors, SyncedZainoDbProcess) {
 
     handle.wait_until_ready().await;
     dbg!(handle.status().await);
-    dbg!(handle.tip_height().await.unwrap()).unwrap();
+    dbg!(handle.db_height().await.unwrap()).unwrap();
 
     let db_reader = handle.to_reader();
-    dbg!(db_reader.tip_height().await.unwrap()).unwrap();
+    dbg!(db_reader.db_height().await.unwrap()).unwrap();
 
     (
         vectors,
@@ -255,7 +256,7 @@ async fn add_blocks_to_db_and_verify() {
     let (_, db) = load_vectors_and_spawn_and_sync_zaino_db().await;
     db.handle.wait_until_ready().await;
     dbg!(db.handle.status().await);
-    dbg!(db.handle.tip_height().await.unwrap());
+    dbg!(db.handle.db_height().await.unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -272,7 +273,7 @@ async fn delete_blocks_from_db() {
 
     db.handle.wait_until_ready().await;
     dbg!(db.handle.status().await);
-    dbg!(db.handle.tip_height().await.unwrap());
+    dbg!(db.handle.db_height().await.unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -306,28 +307,28 @@ async fn load_db_from_file() {
     };
 
     {
-        let zaino_db = ZainoDB::spawn(&config).await.unwrap();
+        let zaino_db = ZainoDB::spawn(config.clone()).await.unwrap();
         for block in blocks.clone() {
             zaino_db.write_block(block.chain_block).await.unwrap();
         }
 
         zaino_db.wait_until_ready().await;
         dbg!(zaino_db.status().await);
-        dbg!(zaino_db.tip_height().await.unwrap());
+        dbg!(zaino_db.db_height().await.unwrap());
 
-        dbg!(zaino_db.close().await.unwrap());
+        dbg!(zaino_db.shutdown().await.unwrap());
     }
 
     {
-        let zaino_db_2 = ZainoDB::spawn(&config).await.unwrap();
+        let zaino_db_2 = ZainoDB::spawn(config).await.unwrap();
 
         zaino_db_2.wait_until_ready().await;
         dbg!(zaino_db_2.status().await);
-        let db_height = dbg!(zaino_db_2.tip_height().await.unwrap()).unwrap();
+        let db_height = dbg!(zaino_db_2.db_height().await.unwrap()).unwrap();
 
         assert_eq!(db_height.0, 200);
 
-        dbg!(zaino_db_2.close().await.unwrap());
+        dbg!(zaino_db_2.shutdown().await.unwrap());
     }
 }
 
@@ -337,7 +338,7 @@ async fn try_write_invalid_block() {
 
     db.handle.wait_until_ready().await;
     dbg!(db.handle.status().await);
-    dbg!(db.handle.tip_height().await.unwrap());
+    dbg!(db.handle.db_height().await.unwrap());
 
     let Block {
         height,
@@ -353,7 +354,7 @@ async fn try_write_invalid_block() {
     // TODO: Update with concrete err type.
     assert!(db_err.is_err());
 
-    dbg!(db.handle.tip_height().await.unwrap());
+    dbg!(db.handle.db_height().await.unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -362,7 +363,7 @@ async fn try_delete_block_with_invalid_height() {
 
     db.handle.wait_until_ready().await;
     dbg!(db.handle.status().await);
-    dbg!(db.handle.tip_height().await.unwrap());
+    dbg!(db.handle.db_height().await.unwrap());
 
     let Block { height, .. } = blocks.last().unwrap().clone();
 
@@ -377,7 +378,7 @@ async fn try_delete_block_with_invalid_height() {
     // TODO: Update with concrete err type.
     assert!(db_err.is_err());
 
-    dbg!(db.handle.tip_height().await.unwrap());
+    dbg!(db.handle.db_height().await.unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -385,8 +386,8 @@ async fn create_db_reader() {
     let (vectors, db) = load_vectors_db_and_reader().await;
 
     let data_height = vectors.blocks.last().unwrap().height;
-    let db_height = dbg!(db.handle.tip_height().await.unwrap()).unwrap();
-    let db_reader_height = dbg!(db.reader.tip_height().await.unwrap()).unwrap();
+    let db_height = dbg!(db.handle.db_height().await.unwrap()).unwrap();
+    let db_reader_height = dbg!(db.reader.db_height().await.unwrap()).unwrap();
 
     assert_eq!(data_height, db_height.0);
     assert_eq!(db_height, db_reader_height);
@@ -456,15 +457,15 @@ async fn get_faucet_txids() {
             .collect();
         dbg!(&filtered_block_txids);
 
-        let reader_faucet_tx_indexes = db
+        let reader_faucet_tx_locations = db
             .reader
-            .addr_tx_indexes_by_range(faucet_addr_script, block_height, block_height)
+            .addr_tx_locations_by_range(faucet_addr_script, block_height, block_height)
             .await
             .unwrap()
             .unwrap();
         let mut reader_block_txids = Vec::new();
-        for index in reader_faucet_tx_indexes {
-            let txid = db.reader.get_txid(index).await.unwrap();
+        for tx_location in reader_faucet_tx_locations {
+            let txid = db.reader.get_txid(tx_location).await.unwrap();
             reader_block_txids.push(txid.to_string());
         }
         dbg!(&reader_block_txids);
@@ -474,14 +475,14 @@ async fn get_faucet_txids() {
     }
 
     println!("Checking full faucet data");
-    let reader_faucet_tx_indexes = db
+    let reader_faucet_tx_locations = db
         .reader
-        .addr_tx_indexes_by_range(faucet_addr_script, start, end)
+        .addr_tx_locations_by_range(faucet_addr_script, start, end)
         .await
         .unwrap()
         .unwrap();
     let mut reader_faucet_txids = Vec::new();
-    for index in reader_faucet_tx_indexes {
+    for index in reader_faucet_tx_locations {
         let txid = db.reader.get_txid(index).await.unwrap();
         reader_faucet_txids.push(txid.to_string());
     }
@@ -528,9 +529,9 @@ async fn get_recipient_txids() {
             .collect();
         dbg!(&filtered_block_txids);
 
-        let reader_recipient_tx_indexes = match db
+        let reader_recipient_tx_locations = match db
             .reader
-            .addr_tx_indexes_by_range(recipient_addr_script, block_height, block_height)
+            .addr_tx_locations_by_range(recipient_addr_script, block_height, block_height)
             .await
             .unwrap()
         {
@@ -538,8 +539,8 @@ async fn get_recipient_txids() {
             None => continue,
         };
         let mut reader_block_txids = Vec::new();
-        for index in reader_recipient_tx_indexes {
-            let txid = db.reader.get_txid(index).await.unwrap();
+        for tx_location in reader_recipient_tx_locations {
+            let txid = db.reader.get_txid(tx_location).await.unwrap();
             reader_block_txids.push(txid.to_string());
         }
         dbg!(&reader_block_txids);
@@ -549,15 +550,15 @@ async fn get_recipient_txids() {
     }
 
     println!("Checking full faucet data");
-    let reader_recipient_tx_indexes = db
+    let reader_recipient_tx_locations = db
         .reader
-        .addr_tx_indexes_by_range(recipient_addr_script, start, end)
+        .addr_tx_locations_by_range(recipient_addr_script, start, end)
         .await
         .unwrap()
         .unwrap();
 
     let mut reader_recipient_txids = Vec::new();
-    for index in reader_recipient_tx_indexes {
+    for index in reader_recipient_tx_locations {
         let txid = db.reader.get_txid(index).await.unwrap();
         reader_recipient_txids.push(txid.to_string());
     }
@@ -748,7 +749,7 @@ async fn check_faucet_spent_map() {
                 let spender_tx = blocks.iter().find_map(|Block { chain_block, .. }| {
                     chain_block.transactions().iter().find(|tx| {
                         let (block_height, tx_idx) =
-                            (spender_index.block_index(), spender_index.tx_index());
+                            (spender_index.block_height(), spender_index.tx_index());
                         chain_block.index().height() == Some(Height(block_height))
                             && tx.index() == tx_idx as u64
                     })
@@ -846,7 +847,7 @@ async fn check_recipient_spent_map() {
                 let spender_tx = blocks.iter().find_map(|Block { chain_block, .. }| {
                     chain_block.transactions().iter().find(|tx| {
                         let (block_height, tx_idx) =
-                            (spender_index.block_index(), spender_index.tx_index());
+                            (spender_index.block_height(), spender_index.tx_index());
                         chain_block.index().height() == Some(Height(block_height))
                             && tx.index() == tx_idx as u64
                     })
