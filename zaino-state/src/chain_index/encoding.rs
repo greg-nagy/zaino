@@ -38,8 +38,8 @@ pub mod version {
 /// 2. `impl ZainoVersionedSerialise for TxV1`
 ///    * `const VERSION = 1`
 ///    * `encode_body` – **v1** layout
-///    * `decode_latest` – parses **v1** bytes
-///    * (optional) `decode_v1 = Self::decode_latest`
+///    * `decode_v1` – parses **v1** bytes
+///    * `decode_latest` - wrapper for `Self::decode_v1`
 ///
 /// ### Bump to v2
 /// 1. `pub struct TxV2 { … }`   // new “current” layout
@@ -47,19 +47,22 @@ pub mod version {
 /// 3. `impl ZainoVersionedSerialise for TxV2`
 ///    * `const VERSION = 2`
 ///    * `encode_body` – **v2** layout
-///    * `decode_latest` – parses **v2** bytes
 ///    * `decode_v1` – `TxV1::decode_latest(r).map(Self::from)`
-///    * (optional) `decode_v2 = Self::decode_latest`
+///    * `decode_v2` – parses **v2** bytes
+///    * `decode_latest` - wrapper for `Self::decode_v2`
 ///
-/// ### Next bumps (v3, v4, …)
+/// ### Next bumps (v3, v4, …, vN)
+/// * Create struct for new version.
 /// * Set `const VERSION = N`.
-/// * Implement `decode_latest` for N’s layout.
-/// * Add `decode_v(N-1)` (and older).
-/// * Extend the `match` table inside **this trait** when a brand-new tag first appears.
+/// * Add the `decode_vN` trait method and extend the `match` table inside **this trait** when a brand-new tag first appears.
+/// * Implement `decode_vN` for N’s layout.
+/// * Update `decode_latest` to wrap `decode_vN`.
+/// * Implement `decode_v(N-1)`, `decode_v(N-2)`, ..., `decode_v(N-K)` for all previous versions.
 ///
 /// ## Mandatory items per implementation
 /// * `const VERSION`
 /// * `encode_body`
+/// * `decode_vN` — **must** parse bytes for version N, where N = [`Self::VERSION`].
 /// * `decode_latest` — **must** parse `Self::VERSION` bytes.
 ///
 /// Historical helpers (`decode_v1`, `decode_v2`, …) must be implemented
@@ -76,9 +79,11 @@ pub trait ZainoVersionedSerialise: Sized {
     /*──────────── mandatory decoder for *this* version ────────────*/
 
     /// Parses a body whose tag equals `Self::VERSION`.
+    ///
+    /// The trait implementation must wrap `decode_vN` where N = [`Self::VERSION`]
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self>;
 
-    /*──────────── optional historical decoders ────────────*/
+    /*──────────── version decoders ────────────*/
     // Add more versions here when required.
 
     #[inline(always)]
