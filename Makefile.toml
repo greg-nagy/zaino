@@ -204,7 +204,7 @@ docker build -f Dockerfile \
 [tasks.push-image]
 description = "Push image if running in CI"
 # condition = { env_set = ["CI"] }
-dependencies = ["update-docker-hash"]
+dependencies = ["ensure-image-exists"]
 script_runner = "bash"
 extend = "base-script"
 script.main = '''
