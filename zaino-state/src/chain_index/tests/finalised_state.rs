@@ -108,7 +108,6 @@ fn load_test_vectors() -> io::Result<Vectors> {
 }
 
 struct DefaultZainoDbProcess {
-    dir: TempDir,
     handle: ZainoDB,
 }
 
@@ -142,10 +141,7 @@ async fn spawn_default_zaino_db() -> Result<DefaultZainoDbProcess, FinalisedStat
 
     let zaino_db = ZainoDB::spawn(config).await.unwrap();
 
-    Ok(DefaultZainoDbProcess {
-        dir: temp_dir,
-        handle: zaino_db,
-    })
+    Ok(DefaultZainoDbProcess { handle: zaino_db })
 }
 
 async fn load_vectors_and_spawn_and_sync_zaino_db() -> (Vectors, DefaultZainoDbProcess) {
@@ -166,13 +162,12 @@ async fn load_vectors_and_spawn_and_sync_zaino_db() -> (Vectors, DefaultZainoDbP
 }
 
 struct SyncedZainoDbProcess {
-    dir: TempDir,
     handle: std::sync::Arc<ZainoDB>,
     reader: DbReader,
 }
 
 async fn load_vectors_db_and_reader() -> (Vectors, SyncedZainoDbProcess) {
-    let (vectors, DefaultZainoDbProcess { dir, handle }) =
+    let (vectors, DefaultZainoDbProcess { handle }) =
         load_vectors_and_spawn_and_sync_zaino_db().await;
 
     let handle = std::sync::Arc::new(handle);
@@ -187,7 +182,6 @@ async fn load_vectors_db_and_reader() -> (Vectors, SyncedZainoDbProcess) {
     (
         vectors,
         SyncedZainoDbProcess {
-            dir,
             handle,
             reader: db_reader,
         },
