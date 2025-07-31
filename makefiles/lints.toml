@@ -19,7 +19,9 @@ dependencies = ["fmt", "clippy", "doc"]
 description = "Toggles the git config for core.hooksPath"
 script = [
     '''
-    current_path=$(git config --local --get core.hooksPath)
+    set -euo pipefail
+
+    current_path=$(git config --local --get core.hooksPath || echo "unset")
     new_path=".githooks/"
     if [ "$current_path" = "$new_path" ]; then
         echo "Disabling custom hooks path"
