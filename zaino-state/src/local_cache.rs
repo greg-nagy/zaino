@@ -1,5 +1,7 @@
 //! Holds Zaino's local compact block cache implementation.
 
+use std::any::type_name;
+
 use crate::{
     config::BlockCacheConfig, error::BlockCacheError, status::StatusType, StateServiceSubscriber,
 };
@@ -240,9 +242,9 @@ async fn try_state_path(
                 GetBlock::Raw(_) => Err(BlockCacheError::Custom(
                     "Found transaction of `Raw` type, expected only `Hash` types.".to_string(),
                 )),
-                GetBlock::Object {
-                    hash, tx, trees, ..
-                } => Ok((hash, tx, trees)),
+                GetBlock::Object(block_obj) => {
+                    Ok((block_obj.hash(), block_obj.tx().clone(), block_obj.trees()))
+                }
             })?;
 
     StateServiceSubscriber::get_block_inner(state, network, hash_or_height, Some(0))
@@ -267,7 +269,7 @@ async fn try_state_path(
                     .collect::<Vec<String>>();
 
                 Ok((
-                    hash.0,
+                    hash,
                     FullBlock::parse_from_hex(
                         block_hex.as_ref(),
                         Some(display_txids_to_server(txid_strings)?),
@@ -292,6 +294,7 @@ async fn try_fetcher_path(
             GetBlockResponse::Raw(_) => {
                 Err(RpcRequestError::Transport(TransportError::BadNodeData(
                     Box::new(std::io::Error::other("unexpected raw block response")),
+                    type_name::<GetBlockError>(),
                 )))
             }
             GetBlockResponse::Object(block) => Ok((block.hash, block.tx, block.trees)),
@@ -304,6 +307,7 @@ async fn try_fetcher_path(
             GetBlockResponse::Object { .. } => {
                 Err(RpcRequestError::Transport(TransportError::BadNodeData(
                     Box::new(std::io::Error::other("unexpected object block response")),
+                    type_name::<GetBlockError>(),
                 )))
             }
             GetBlockResponse::Raw(block_hex) => Ok((
@@ -311,20 +315,37 @@ async fn try_fetcher_path(
                 FullBlock::parse_from_hex(
                     block_hex.as_ref(),
                     Some(display_txids_to_server(tx).map_err(|e| {
-                        RpcRequestError::Transport(TransportError::BadNodeData(Box::new(e)))
+                        RpcRequestError::Transport(TransportError::BadNodeData(
+                            Box::new(e),
+                            type_name::<GetBlockError>(),
+                        ))
                     })?),
                 )
-                .map_err(|e| RpcRequestError::Transport(TransportError::BadNodeData(Box::new(e))))?
+                .map_err(|e| {
+                    RpcRequestError::Transport(TransportError::BadNodeData(
+                        Box::new(e),
+                        type_name::<GetBlockError>(),
+                    ))
+                })?
                 .into_compact(
                     u32::try_from(trees.sapling()).map_err(|e| {
-                        RpcRequestError::Transport(TransportError::BadNodeData(Box::new(e)))
+                        RpcRequestError::Transport(TransportError::BadNodeData(
+                            Box::new(e),
+                            type_name::<GetBlockError>(),
+                        ))
                     })?,
                     u32::try_from(trees.orchard()).map_err(|e| {
-                        RpcRequestError::Transport(TransportError::BadNodeData(Box::new(e)))
+                        RpcRequestError::Transport(TransportError::BadNodeData(
+                            Box::new(e),
+                            type_name::<GetBlockError>(),
+                        ))
                     })?,
                 )
                 .map_err(|e| {
-                    RpcRequestError::Transport(TransportError::BadNodeData(Box::new(e)))
+                    RpcRequestError::Transport(TransportError::BadNodeData(
+                        Box::new(e),
+                        type_name::<GetBlockError>(),
+                    ))
                 })?,
             )),
         })
