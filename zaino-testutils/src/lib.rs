@@ -107,6 +107,15 @@ impl zingo_infra_services::validator::Validator for LocalNet {
 
     type Config = ValidatorConfig;
 
+    fn activation_heights(&self) -> zingo_infra_services::network::ActivationHeights {
+        // Return the activation heights for the network
+        // This depends on which validator is running (zcashd or zebrad)
+        match self {
+            LocalNet::Zcashd(net) => net.validator().activation_heights(),
+            LocalNet::Zebrad(net) => net.validator().activation_heights(),
+        }
+    }
+
     #[allow(clippy::manual_async_fn)]
     fn launch(
         config: Self::Config,
