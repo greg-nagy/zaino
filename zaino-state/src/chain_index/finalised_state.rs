@@ -169,6 +169,7 @@ impl ZainoDB {
                         patch: 0,
                     },
                     schema_hash: [0u8; 32],
+                    migration_status: MigrationStatus::Complete,
                 }));
             }
 

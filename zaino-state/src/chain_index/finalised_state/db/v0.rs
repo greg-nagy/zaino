@@ -642,6 +642,8 @@ impl DbV0 {
                 patch: 0,
             },
             schema_hash: [0u8; 32],
+            migration_status:
+                crate::chain_index::finalised_state::capability::MigrationStatus::Complete,
         })
     }
 

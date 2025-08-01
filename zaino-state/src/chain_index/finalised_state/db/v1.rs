@@ -5,7 +5,7 @@ use crate::{
         finalised_state::{
             capability::{
                 BlockCoreExt, BlockShieldedExt, BlockTransparentExt, ChainBlockExt,
-                CompactBlockExt, DbCore, DbMetadata, DbRead, DbVersion, DbWrite,
+                CompactBlockExt, DbCore, DbMetadata, DbRead, DbVersion, DbWrite, MigrationStatus,
                 TransparentHistExt,
             },
             entry::{StoredEntryFixed, StoredEntryVar},
@@ -72,23 +72,17 @@ pub(crate) const DB_SCHEMA_V1_TEXT: &str = include_str!("db_schema_v1.txt");
 
 */
 
-/// Database V1 schema hash, used for version validation. WARNING: THIS IS WRONG!
+/// *Current* database V1 schema hash, used for version validation. WARNING: THIS IS WRONG!
 pub(crate) const DB_SCHEMA_V1_HASH: [u8; 32] = [
     0xbf, 0x9a, 0xc7, 0x29, 0xa4, 0xb8, 0xa4, 0x1d, 0x63, 0x69, 0x85, 0x47, 0xe6, 0x40, 0x72, 0x74,
     0x2a, 0x69, 0x67, 0x51, 0x8c, 0xce, 0xaa, 0x59, 0xc5, 0xbc, 0x82, 0x7c, 0xe1, 0x46, 0xfe, 0x93,
 ];
 
-/// Database V1 version data.
+/// *Current* database V1 version.
 pub(crate) const DB_VERSION_V1: DbVersion = DbVersion {
     major: 1,
     minor: 0,
     patch: 0,
-};
-
-/// Database V1 Metadata.
-pub(crate) const DB_METADATA_V1: DbMetadata = DbMetadata {
-    version: DB_VERSION_V1,
-    schema_hash: DB_SCHEMA_V1_HASH,
 };
 
 // ───────────────────────── ZainoDb v1 Capabilities ─────────────────────────
@@ -3312,7 +3306,7 @@ impl DbV1 {
             let mut txn = self.env.begin_rw_txn()?;
 
             match txn.get(self.metadata, b"metadata") {
-                // *** Existing DB ***
+                // ***** Existing DB *****
                 Ok(raw_bytes) => {
                     let stored: StoredEntryFixed<DbMetadata> =
                         StoredEntryFixed::from_bytes(raw_bytes).map_err(|e| {
@@ -3326,23 +3320,38 @@ impl DbV1 {
 
                     let meta = stored.item;
 
-                    if meta.version != DB_METADATA_V1.version {
+                    // Error if major version differs
+                    if meta.version.major != DB_VERSION_V1.major {
                         return Err(FinalisedStateError::Custom(format!(
-                            "unsupported schema version {} (expected v{})",
-                            meta.version, DB_METADATA_V1.version
+                            "unsupported schema major version {} (expected {})",
+                            meta.version.major, DB_VERSION_V1.major
                         )));
                     }
-                    if meta.schema_hash != DB_METADATA_V1.schema_hash {
-                        return Err(FinalisedStateError::Custom(
-                        "schema hash mismatch – db_schema_v1.txt edited without bumping version"
-                            .into(),
-                    ));
+
+                    // Warn if schema hash mismatches
+                    // NOTE: There could be a schema mismatch at launch during minor migrations,
+                    //       so we do not return an error here. Maybe we can improve this?
+                    if meta.schema_hash != DB_SCHEMA_V1_HASH {
+                        warn!(
+                            "schema hash mismatch: db_schema_v1.txt has likely changed \
+                         without bumping version; expected 0x{:02x?}, found 0x{:02x?}",
+                            &DB_SCHEMA_V1_HASH[..4],
+                            &meta.schema_hash[..4],
+                        );
                     }
                 }
 
-                // *** Fresh DB (key not found) ***
+                // ***** Fresh DB (key not found) *****
                 Err(lmdb::Error::NotFound) => {
-                    let entry = StoredEntryFixed::new(b"metadata", DB_METADATA_V1);
+                    let entry = StoredEntryFixed::new(
+                        b"metadata",
+                        DbMetadata {
+                            version: DB_VERSION_V1,
+                            schema_hash: DB_SCHEMA_V1_HASH,
+                            // Fresh database, no migration required.
+                            migration_status: MigrationStatus::Complete,
+                        },
+                    );
                     txn.put(
                         self.metadata,
                         b"metadata",
@@ -3351,7 +3360,7 @@ impl DbV1 {
                     )?;
                 }
 
-                // ── Any other LMDB error ──────────────────────────────────────
+                // ***** Any other LMDB error *****
                 Err(e) => return Err(FinalisedStateError::LmdbError(e)),
             }
 

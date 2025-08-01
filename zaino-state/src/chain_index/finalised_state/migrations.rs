@@ -119,7 +119,23 @@ impl MigrationStep for Migration0_0_0To1_0_0 {
         _router: Arc<Router>,
         _cfg: BlockCacheConfig,
     ) -> Result<(), FinalisedStateError> {
-        // todo!()
+        // partially build new database with old data
+
+        // move capability to shadow
+        // (how are new blocks added at this point?)
+        // do we move to primary here?
+
+        // build new database from block data from validator
+
+        // switch database
+
         Ok(())
+
+        // NOTE: this needs a blocksource.
+        // NOTE: use DbV1 directly here?
+
+        // NOTE / WARNING: add from_db method for DbBackend
+        // NOTE / WARNING: create DbV1 in this fn, clone into router and use internal for migration
+        // NOTE / WARNING: create, set, extend, and promote shadow thi this fn.
     }
 }

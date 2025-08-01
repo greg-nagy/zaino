@@ -38,9 +38,19 @@ impl DbBackend {
         Ok(Self::V0(DbV0::spawn(cfg).await?))
     }
 
+    /// Creates a DbBackend from the given DbV0
+    pub(crate) fn from_v0(db: DbV0) -> Self {
+        Self::V0(db)
+    }
+
     /// Spawn a v1 database.
     pub(crate) async fn spawn_v1(cfg: &BlockCacheConfig) -> Result<Self, FinalisedStateError> {
         Ok(Self::V1(DbV1::spawn(cfg).await?))
+    }
+
+    /// Creates a DbBackend from the given DbV0
+    pub(crate) fn from_v1(db: DbV1) -> Self {
+        Self::V1(db)
     }
 
     /// Waits until the ZainoDB returns a Ready status.

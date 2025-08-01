@@ -1,10 +1,12 @@
 //! Holds ZainoDB capability traits and bitmaps.
 
+use core::fmt;
+
 use crate::{
     chain_index::types::AddrEventBytes, error::FinalisedStateError, read_fixed_le, read_u32_le,
-    version, write_fixed_le, write_u32_le, AddrScript, BlockHeaderData, ChainBlock,
-    CommitmentTreeData, FixedEncodedLen, Hash, Height, OrchardCompactTx, OrchardTxList, Outpoint,
-    SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
+    read_u8_le, version, write_fixed_le, write_u32_le, write_u8_le, AddrScript, BlockHeaderData,
+    ChainBlock, CommitmentTreeData, FixedEncodedLen, Hash, Height, OrchardCompactTx, OrchardTxList,
+    Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
     TxLocation, TxidList, ZainoVersionedSerialise,
 };
 
@@ -74,14 +76,21 @@ pub(crate) struct DbMetadata {
     pub(crate) version: DbVersion,
     /// BLAKE2b-256 hash of the schema definition (includes struct layout, types, etc.)
     pub(crate) schema_hash: [u8; 32],
+    /// Migration status of the database, None outside of migrations.
+    pub(crate) migration_status: MigrationStatus,
 }
 
 impl DbMetadata {
     /// Creates a new DbMetadata.
-    pub(crate) fn new(version: DbVersion, schema_hash: [u8; 32]) -> Self {
+    pub(crate) fn new(
+        version: DbVersion,
+        schema_hash: [u8; 32],
+        migration_status: MigrationStatus,
+    ) -> Self {
         Self {
             version,
             schema_hash,
+            migration_status,
         }
     }
 
@@ -94,6 +103,11 @@ impl DbMetadata {
     pub(crate) fn schema(&self) -> [u8; 32] {
         self.schema_hash
     }
+
+    /// Returns the migration status of the database.
+    pub(crate) fn migration_status(&self) -> MigrationStatus {
+        self.migration_status
+    }
 }
 
 impl ZainoVersionedSerialise for DbMetadata {
@@ -101,7 +115,8 @@ impl ZainoVersionedSerialise for DbMetadata {
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
         self.version.serialize(&mut *w)?;
-        write_fixed_le::<32, _>(&mut *w, &self.schema_hash)
+        write_fixed_le::<32, _>(&mut *w, &self.schema_hash)?;
+        self.migration_status.serialize(&mut *w)
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
@@ -111,16 +126,19 @@ impl ZainoVersionedSerialise for DbMetadata {
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let version = DbVersion::deserialize(&mut *r)?;
         let schema_hash = read_fixed_le::<32, _>(&mut *r)?;
+        let migration_status = MigrationStatus::deserialize(&mut *r)?;
         Ok(DbMetadata {
             version,
             schema_hash,
+            migration_status,
         })
     }
 }
 
-/* DbMetadata: its body is one *versioned* DbVersion (12 + 1 tag) + 32-byte schema hash = 45 bytes */
+// DbMetadata: its body is one *versioned* DbVersion (12 + 1 tag) + 32-byte schema hash
+// + one *versioned* MigrationStatus (1 + 1 tag) = 47 bytes
 impl FixedEncodedLen for DbMetadata {
-    const ENCODED_LEN: usize = DbVersion::VERSIONED_LEN + 32;
+    const ENCODED_LEN: usize = DbVersion::VERSIONED_LEN + 32 + MigrationStatus::VERSIONED_LEN;
 }
 
 impl core::fmt::Display for DbMetadata {
@@ -239,6 +257,79 @@ impl core::fmt::Display for DbVersion {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
     }
+}
+
+/// Holds migration data.
+///
+/// This is used when the database is shutdown mid-migration to ensure migration correctness.
+///
+/// NOTE: Some migrations run a partial database rebuild before the final build process.
+///       This is done to minimise disk requirements ruring migrations,
+///       enabling the deletion of the old database before the the database is rebuilt in full.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
+#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
+pub(crate) enum MigrationStatus {
+    Empty,
+    PartialBuidInProgress,
+    PartialBuildComplete,
+    FinalBuildInProgress,
+    Complete,
+}
+
+impl fmt::Display for MigrationStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let status_str = match self {
+            MigrationStatus::Empty => "Empty",
+            MigrationStatus::PartialBuidInProgress => "Partial build in progress",
+            MigrationStatus::PartialBuildComplete => "Partial build complete",
+            MigrationStatus::FinalBuildInProgress => "Final build in progress",
+            MigrationStatus::Complete => "Complete",
+        };
+        write!(f, "{}", status_str)
+    }
+}
+
+impl Default for MigrationStatus {
+    fn default() -> Self {
+        MigrationStatus::Empty
+    }
+}
+
+impl ZainoVersionedSerialise for MigrationStatus {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        let tag = match self {
+            MigrationStatus::Empty => 0,
+            MigrationStatus::PartialBuidInProgress => 1,
+            MigrationStatus::PartialBuildComplete => 2,
+            MigrationStatus::FinalBuildInProgress => 3,
+            MigrationStatus::Complete => 4,
+        };
+        write_u8_le(w, tag)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        match read_u8_le(r)? {
+            0 => Ok(MigrationStatus::Empty),
+            1 => Ok(MigrationStatus::PartialBuidInProgress),
+            2 => Ok(MigrationStatus::PartialBuildComplete),
+            3 => Ok(MigrationStatus::FinalBuildInProgress),
+            4 => Ok(MigrationStatus::Complete),
+            other => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("invalid MigrationStatus tag: {other}"),
+            )),
+        }
+    }
+}
+
+impl FixedEncodedLen for MigrationStatus {
+    const ENCODED_LEN: usize = 1;
 }
 
 // ***** Core Database functionality *****
