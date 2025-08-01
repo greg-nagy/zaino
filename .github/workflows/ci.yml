@@ -131,15 +131,9 @@ jobs:
           - "integration-tests::state_service"
           - "integration-tests::test_vectors"
           - "integration-tests::wallet_to_validator"
-          - "zaino-fetch"
-          - "zaino-proto"
-          - "zaino-serve"
+          - "zainod::config"
           - "zaino-state"
           - "zaino-testutils"
-          - "zainod"
-          - "zainod::config"
-          - "zainod::bin/zainod"
-
     steps:
       - uses: actions/checkout@v4
 
