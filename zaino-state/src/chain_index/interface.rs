@@ -115,28 +115,27 @@ impl NodeBackedChainIndex {
         'snapshot: 'output,
         'self_lt: 'output,
     {
-        //TODO: finalized state
         if let Some(block) = non_finalized_snapshot.get_chainblock_by_hashorheight(hashorheight) {
             Ok(Some(Cow::Borrowed(block)))
         } else {
             let height = match hashorheight {
-                HashOrHeight::Hash(hash) => match self
-                    .finalized_state
-                    .get_block_height(types::Hash::from(hash.0))
-                    .await
-                {
-                    Ok(height) => height,
-                    Err(FinalisedStateError::MissingData(_)) => return Ok(None),
-                    Err(other) => return Err(other),
-                },
+                HashOrHeight::Hash(hash) => {
+                    match self
+                        .finalized_state
+                        .get_block_height(types::Hash::from(hash.0))
+                        .await?
+                    {
+                        Some(h) => h,
+                        None => return Ok(None),
+                    }
+                }
                 HashOrHeight::Height(height) => types::Height(height.0),
             };
             if let Some(chainblocks) = self.finalized_state.chain_block() {
-                match chainblocks.get_chain_block(height).await {
-                    Ok(block) => Ok(Some(Cow::Owned(block))),
-                    Err(FinalisedStateError::MissingData(_)) => Ok(None),
-                    Err(other) => Err(other),
-                }
+                chainblocks
+                    .get_chain_block(height)
+                    .await
+                    .map(|b| b.map(Cow::Owned))
             } else {
                 Ok(None)
             }

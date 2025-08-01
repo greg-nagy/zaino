@@ -369,7 +369,7 @@ async fn get_chain_blocks() {
 
     for (height, chain_block, _) in blocks.iter() {
         let reader_chain_block = db_reader.get_chain_block(Height(*height)).await.unwrap();
-        assert_eq!(chain_block, &reader_chain_block);
+        assert_eq!(chain_block, &reader_chain_block.unwrap());
         println!("ChainBlock at height {height} OK");
     }
 }

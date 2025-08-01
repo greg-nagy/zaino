@@ -170,14 +170,18 @@ impl ZainoDB {
     }
 
     /// Returns the block height for the given block hash *if* present in the finalised state.
-    ///
-    /// TODO: Should theis return `Result<Option<Height>, FinalisedStateError>`?
-    pub(crate) async fn get_block_height(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
+    pub(crate) async fn get_block_height(
+        &self,
+        hash: Hash,
+    ) -> Result<Option<Height>, FinalisedStateError> {
         self.db.get_block_height(hash).await
     }
 
     /// Returns the block block hash for the given block height *if* present in the finlaised state.
-    pub(crate) async fn get_block_hash(&self, height: Height) -> Result<Hash, FinalisedStateError> {
+    pub(crate) async fn get_block_hash(
+        &self,
+        height: Height,
+    ) -> Result<Option<Hash>, FinalisedStateError> {
         self.db.get_block_hash(height).await
     }
 

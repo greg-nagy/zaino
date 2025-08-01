@@ -416,7 +416,10 @@ pub trait ChainBlockExt: Send + Sync {
     /// Returns the ChainBlock for the given Height.
     ///
     /// TODO: Add separate range fetch method!
-    async fn get_chain_block(&self, height: Height) -> Result<ChainBlock, FinalisedStateError>;
+    async fn get_chain_block(
+        &self,
+        height: Height,
+    ) -> Result<Option<ChainBlock>, FinalisedStateError>;
 }
 
 /// ChainBlock v1 extension.
