@@ -250,10 +250,10 @@ pub trait DbRead: Send + Sync {
     async fn db_height(&self) -> Result<Option<Height>, FinalisedStateError>;
 
     /// Lookup height of a block by its hash.
-    async fn get_block_height(&self, hash: Hash) -> Result<Height, FinalisedStateError>;
+    async fn get_block_height(&self, hash: Hash) -> Result<Option<Height>, FinalisedStateError>;
 
     /// Lookup hash of a block by its height.
-    async fn get_block_hash(&self, height: Height) -> Result<Hash, FinalisedStateError>;
+    async fn get_block_hash(&self, height: Height) -> Result<Option<Hash>, FinalisedStateError>;
 
     /// Return the persisted `DbMetadata` singleton.
     async fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError>;

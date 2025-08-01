@@ -87,6 +87,25 @@ impl NodeBackedChainIndex {
             })
             .transpose()
     }
+    async fn hash_to_height(
+        &self,
+        non_finalized_snapshot: NonfinalizedBlockCacheSnapshot,
+        hash: types::Hash,
+    ) -> Result<Option<types::Height>, FinalisedStateError> {
+        match non_finalized_snapshot
+            .blocks
+            .iter()
+            .find_map(|(block_hash, block)| {
+                if *block_hash == hash {
+                    Some(block.height())
+                } else {
+                    None
+                }
+            }) {
+            Some(height) => Ok(height),
+            None => self.finalized_state.get_block_height(hash).await,
+        }
+    }
     async fn get_chainblock_by_hashorheight<'snapshot, 'self_lt, 'output>(
         &'self_lt self,
         non_finalized_snapshot: &'snapshot NonfinalizedBlockCacheSnapshot,
