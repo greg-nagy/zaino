@@ -276,30 +276,45 @@ async fn load_db_from_file() {
         no_db: false,
     };
 
-    {
-        let zaino_db = ZainoDB::spawn(config.clone()).await.unwrap();
-        for (_h, chain_block, _compact_block) in blocks.clone() {
-            zaino_db.write_block(chain_block).await.unwrap();
-        }
+    let blocks_clone = blocks.clone();
+    let config_clone = config.clone();
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async move {
+            let zaino_db = ZainoDB::spawn(config_clone).await.unwrap();
+            for (_h, chain_block, _compact_block) in blocks_clone {
+                zaino_db.write_block(chain_block).await.unwrap();
+            }
 
-        zaino_db.wait_until_ready().await;
-        dbg!(zaino_db.status().await);
-        dbg!(zaino_db.db_height().await.unwrap());
+            zaino_db.wait_until_ready().await;
+            dbg!(zaino_db.status().await);
+            dbg!(zaino_db.db_height().await.unwrap());
 
-        dbg!(zaino_db.shutdown().await.unwrap());
-    }
+            dbg!(zaino_db.shutdown().await.unwrap());
+        });
+    })
+    .join()
+    .unwrap();
 
-    {
-        let zaino_db_2 = ZainoDB::spawn(config).await.unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(1000));
 
-        zaino_db_2.wait_until_ready().await;
-        dbg!(zaino_db_2.status().await);
-        let db_height = dbg!(zaino_db_2.db_height().await.unwrap()).unwrap();
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async move {
+            dbg!(config.db_path.read_dir().unwrap().collect::<Vec<_>>());
+            let zaino_db_2 = ZainoDB::spawn(config).await.unwrap();
 
-        assert_eq!(db_height.0, 200);
+            zaino_db_2.wait_until_ready().await;
+            dbg!(zaino_db_2.status().await);
+            let db_height = dbg!(zaino_db_2.db_height().await.unwrap()).unwrap();
 
-        dbg!(zaino_db_2.shutdown().await.unwrap());
-    }
+            assert_eq!(db_height.0, 200);
+
+            dbg!(zaino_db_2.shutdown().await.unwrap());
+        });
+    })
+    .join()
+    .unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -12,18 +12,16 @@ pub(crate) mod router;
 
 use capability::*;
 use db::DbBackend;
-use entry::*;
 use migrations::MigrationManager;
 use reader::*;
 use router::Router;
+use zebra_chain::parameters::NetworkKind;
 
 use crate::{
     config::BlockCacheConfig, error::FinalisedStateError, ChainBlock, Hash, Height, StatusType,
-    ZainoVersionedSerialise as _,
 };
 
-use lmdb::{Environment, EnvironmentFlags, Transaction};
-use std::{path::Path, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::time::{interval, MissedTickBehavior};
 
 pub(crate) struct ZainoDB {
@@ -38,9 +36,9 @@ impl ZainoDB {
     ///
     /// Peeks at the db metadata store to load correct database version.
     pub(crate) async fn spawn(cfg: BlockCacheConfig) -> Result<Self, FinalisedStateError> {
-        let meta_opt = Self::peek_metadata(&cfg.db_path).await?;
+        let version_opt = Self::try_find_current_db_version(&cfg).await;
 
-        let target_version = match cfg.db_version {
+        let target_db_version = match cfg.db_version {
             0 => DbVersion {
                 major: 0,
                 minor: 0,
@@ -53,32 +51,28 @@ impl ZainoDB {
             },
         };
 
-        let current_version = match meta_opt {
-            Some(meta) => meta.version(),
-            None => target_version,
-        };
-
-        let backend = match meta_opt {
-            Some(meta) => match meta.version().major() {
+        let backend = match version_opt {
+            Some(version) => match version {
                 0 => DbBackend::spawn_v0(&cfg).await?,
                 1 => DbBackend::spawn_v1(&cfg).await?,
                 _ => {
                     return Err(FinalisedStateError::Custom(format!(
-                        "unsupported version {meta:?}"
+                        "unsupported database version: DbV{version}"
                     )))
                 }
             },
             None => DbBackend::spawn_v1(&cfg).await?,
         };
+        let current_db_version = backend.get_metadata().await?.version();
 
         let router = Arc::new(Router::new(Arc::new(backend)));
 
-        if meta_opt.is_some() && current_version < target_version {
+        if version_opt.is_some() && current_db_version < target_db_version {
             MigrationManager::migrate_to(
                 Arc::clone(&router),
                 &cfg,
-                current_version,
-                target_version,
+                current_db_version,
+                target_db_version,
             )
             .await?;
         }
@@ -117,64 +111,43 @@ impl ZainoDB {
         }
     }
 
-    /// Try to read the metadata entry.
+    /// Look for kown dirs to find current db version.
     ///
-    /// * `Ok(Some(meta))` – DB exists, metadata decoded.
-    /// * `Ok(None)`      – directory or key is missing ⇒ fresh DB.
-    /// * `Err(e)`        – any other LMDB / decode failure.
-    async fn peek_metadata(path: &Path) -> Result<Option<DbMetadata>, FinalisedStateError> {
-        if !path.exists() {
-            return Ok(None);
+    /// The oldest version is returned as the database may have been closed mid migration.
+    ///
+    /// * `Some(version)` – DB exists, version returned.
+    /// * `None`      – directory or key is missing -> fresh DB.
+    pub async fn try_find_current_db_version(cfg: &BlockCacheConfig) -> Option<u32> {
+        let legacy_dir = match cfg.network.kind() {
+            NetworkKind::Mainnet => "live",
+            NetworkKind::Testnet => "test",
+            NetworkKind::Regtest => "local",
+        };
+        let legacy_path = cfg.db_path.join(legacy_dir);
+        if legacy_path.join("data.mdb").exists() && legacy_path.join("lock.mdb").exists() {
+            return Some(0);
         }
 
-        let env = match Environment::new()
-            .set_max_dbs(4)
-            .set_flags(EnvironmentFlags::READ_ONLY)
-            .open(path)
-        {
-            Ok(env) => env,
-            Err(lmdb::Error::Other(2)) => return Ok(None),
-            Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+        let net_dir = match cfg.network.kind() {
+            NetworkKind::Mainnet => "mainnet",
+            NetworkKind::Testnet => "testnet",
+            NetworkKind::Regtest => "regtest",
         };
-
-        tokio::task::block_in_place(|| {
-            let txn = env.begin_ro_txn()?;
-
-            // Try metadata DB
-            match env.open_db(Some("metadata")) {
-                Ok(meta_dbi) => match txn.get(meta_dbi, b"metadata") {
-                    Ok(raw) => {
-                        let entry =
-                            StoredEntryFixed::<DbMetadata>::from_bytes(raw).map_err(|e| {
-                                FinalisedStateError::Custom(format!("metadata decode error: {e}"))
-                            })?;
-                        return Ok(Some(entry.item));
-                    }
-                    Err(lmdb::Error::NotFound) => {} // fall through and check legacy
-                    Err(e) => return Err(FinalisedStateError::LmdbError(e)),
-                },
-                Err(lmdb::Error::NotFound) => {} // metadata db missing, check legacy
-                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+        let net_path = cfg.db_path.join(net_dir);
+        if net_path.exists() && net_path.is_dir() {
+            let version_dirs = ["v1"];
+            for (i, version_dir) in version_dirs.iter().enumerate() {
+                let db_path = net_path.join(version_dir);
+                let data_file = db_path.join("data.mdb");
+                let lock_file = db_path.join("lock.mdb");
+                if data_file.exists() && lock_file.exists() {
+                    let version = (i + 1) as u32;
+                    return Some(version);
+                }
             }
+        }
 
-            // Fallback: detect legacy v0 by checking if known v0 DBs exist
-            let has_v0 = env.open_db(Some("heights_to_hashes")).is_ok()
-                && env.open_db(Some("hashes_to_blocks")).is_ok();
-
-            if has_v0 {
-                return Ok(Some(DbMetadata {
-                    version: DbVersion {
-                        major: 0,
-                        minor: 0,
-                        patch: 0,
-                    },
-                    schema_hash: [0u8; 32],
-                    migration_status: MigrationStatus::Complete,
-                }));
-            }
-
-            Ok(None)
-        })
+        None
     }
 
     /// Returns the internal db backend for the given db capability.

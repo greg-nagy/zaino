@@ -442,7 +442,7 @@ impl DbV1 {
             NetworkKind::Testnet => "testnet",
             NetworkKind::Regtest => "regtest",
         };
-        let db_path = config.db_path.join(db_path_dir);
+        let db_path = config.db_path.join(db_path_dir).join("v1");
         if !db_path.exists() {
             fs::create_dir_all(&db_path)?;
         }
@@ -467,19 +467,23 @@ impl DbV1 {
             .open(&db_path)?;
 
         // Open individual LMDB DBs.
-        let headers = Self::open_or_create_db(&env, "headers", DatabaseFlags::empty()).await?;
-        let txids = Self::open_or_create_db(&env, "txids", DatabaseFlags::empty()).await?;
+        let headers =
+            Self::open_or_create_db(&env, "headers_1_0_0", DatabaseFlags::empty()).await?;
+        let txids = Self::open_or_create_db(&env, "txids_1_0_0", DatabaseFlags::empty()).await?;
         let transparent =
-            Self::open_or_create_db(&env, "transparent", DatabaseFlags::empty()).await?;
-        let sapling = Self::open_or_create_db(&env, "sapling", DatabaseFlags::empty()).await?;
-        let orchard = Self::open_or_create_db(&env, "orchard", DatabaseFlags::empty()).await?;
+            Self::open_or_create_db(&env, "transparent_1_0_0", DatabaseFlags::empty()).await?;
+        let sapling =
+            Self::open_or_create_db(&env, "sapling_1_0_0", DatabaseFlags::empty()).await?;
+        let orchard =
+            Self::open_or_create_db(&env, "orchard_1_0_0", DatabaseFlags::empty()).await?;
         let commitment_tree_data =
-            Self::open_or_create_db(&env, "commitment_tree_data", DatabaseFlags::empty()).await?;
-        let hashes = Self::open_or_create_db(&env, "hashes", DatabaseFlags::empty()).await?;
-        let spent = Self::open_or_create_db(&env, "spent", DatabaseFlags::empty()).await?;
+            Self::open_or_create_db(&env, "commitment_tree_data_1_0_0", DatabaseFlags::empty())
+                .await?;
+        let hashes = Self::open_or_create_db(&env, "hashes_1_0_0", DatabaseFlags::empty()).await?;
+        let spent = Self::open_or_create_db(&env, "spent_1_0_0", DatabaseFlags::empty()).await?;
         let address_history = Self::open_or_create_db(
             &env,
-            "address_history",
+            "address_history_1_0_0",
             DatabaseFlags::DUP_SORT | DatabaseFlags::DUP_FIXED,
         )
         .await?;

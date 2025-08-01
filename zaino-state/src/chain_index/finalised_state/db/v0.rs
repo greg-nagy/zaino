@@ -147,9 +147,9 @@ impl DbV0 {
         let db_size = config.db_size.unwrap_or(128);
         let db_size_bytes = db_size * 1024 * 1024 * 1024;
         let db_path_dir = match config.network.kind() {
-            NetworkKind::Mainnet => "mainnet",
-            NetworkKind::Testnet => "testnet",
-            NetworkKind::Regtest => "regtest",
+            NetworkKind::Mainnet => "live",
+            NetworkKind::Testnet => "test",
+            NetworkKind::Regtest => "local",
         };
         let db_path = config.db_path.join(db_path_dir);
         if !db_path.exists() {

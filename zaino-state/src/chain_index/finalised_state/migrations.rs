@@ -71,17 +71,7 @@ impl MigrationManager {
                 ))
             })?;
 
-            match step.migration_type {
-                MigrationType::Patch | MigrationType::Minor => {
-                    (step.migrate_fn)(Arc::clone(&router), cfg).await?;
-                }
-                MigrationType::Major => {
-                    let shadow_db = Arc::new(DbBackend::spawn_v1(cfg).await?);
-                    router.set_shadow(Arc::clone(&shadow_db), Capability::empty());
-                    (step.migrate_fn)(Arc::clone(&router), cfg).await?;
-                    router.promote_shadow();
-                }
-            }
+            (step.migrate_fn)(Arc::clone(&router), cfg).await?;
 
             current_version = step.to;
         }
@@ -115,11 +105,17 @@ impl MigrationStep for Migration0_0_0To1_0_0 {
     };
     const MIGRATION_TYPE: MigrationType = MigrationType::Minor;
 
+    /// The V0 database that we are migrating from was a lightwallet specific database
+    /// that only built compact block data from sapling activation onwards.
+    /// DbV1 is required to be built from genasis to correctly build the transparent address indexes.
+    /// For this reason we do not do any partial builds in the V0 to V1 migration.
+    /// We just run V0 as primary until V1 if fully built in shadow, then switch primary, deleting V0.
     async fn migrate(
-        _router: Arc<Router>,
-        _cfg: BlockCacheConfig,
+        router: Arc<Router>,
+        cfg: BlockCacheConfig,
     ) -> Result<(), FinalisedStateError> {
-        // partially build new database with old data
+        let shadow = Arc::new(DbBackend::spawn_v1(&cfg).await?);
+        router.set_shadow(Arc::clone(&shadow), Capability::empty());
 
         // move capability to shadow
         // (how are new blocks added at this point?)
@@ -128,6 +124,9 @@ impl MigrationStep for Migration0_0_0To1_0_0 {
         // build new database from block data from validator
 
         // switch database
+        router.promote_shadow();
+
+        // Delete V0
 
         Ok(())
 
