@@ -2113,6 +2113,7 @@ version = "0.1.2"
 dependencies = [
  "core2 0.4.0",
  "futures",
+ "hex",
  "prost",
  "serde_json",
  "tokio",
@@ -2122,6 +2123,7 @@ dependencies = [
  "zaino-proto",
  "zaino-state",
  "zaino-testutils",
+ "zcash_primitives",
  "zebra-chain 1.0.0-beta.46 (git+https://github.com/ZcashFoundation/zebra.git?rev=3b5cbf845146ffe43be2d40b3ed5e2e6ffb7f12c)",
  "zebra-rpc 1.0.0-beta.46 (git+https://github.com/ZcashFoundation/zebra.git?rev=3b5cbf845146ffe43be2d40b3ed5e2e6ffb7f12c)",
  "zebra-state 1.0.0-beta.46 (git+https://github.com/ZcashFoundation/zebra.git?rev=3b5cbf845146ffe43be2d40b3ed5e2e6ffb7f12c)",

@@ -116,12 +116,9 @@ impl MigrationStep for Migration0_0_0To1_0_0 {
     ) -> Result<(), FinalisedStateError> {
         let shadow = Arc::new(DbBackend::spawn_v1(&cfg).await?);
         router.set_shadow(Arc::clone(&shadow), Capability::empty());
+        // Add chain source
 
-        // move capability to shadow
-        // (how are new blocks added at this point?)
-        // do we move to primary here?
-
-        // build new database from block data from validator
+        // build new db to db height
 
         // switch database
         router.promote_shadow();
@@ -129,12 +126,5 @@ impl MigrationStep for Migration0_0_0To1_0_0 {
         // Delete V0
 
         Ok(())
-
-        // NOTE: this needs a blocksource.
-        // NOTE: use DbV1 directly here?
-
-        // NOTE / WARNING: add from_db method for DbBackend
-        // NOTE / WARNING: create DbV1 in this fn, clone into router and use internal for migration
-        // NOTE / WARNING: create, set, extend, and promote shadow thi this fn.
     }
 }
