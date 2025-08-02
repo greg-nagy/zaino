@@ -95,6 +95,7 @@ async fn create_test_manager_and_services(
             debug_validity_check_interval: None,
         },
         test_manager.zebrad_rpc_listen_address,
+        test_manager.zebrad_grpc_listen_address,
         false,
         None,
         None,
@@ -359,28 +360,9 @@ async fn create_200_block_regtest_chain_vectors() {
                                     .to_string(),
                             ))
                         }
-                        zebra_rpc::methods::GetBlock::Object {
-                            hash,
-                            confirmations: _,
-                            size: _,
-                            height: _,
-                            version: _,
-                            merkle_root: _,
-                            block_commitments: _,
-                            final_sapling_root: _,
-                            final_orchard_root: _,
-                            tx,
-                            time: _,
-                            nonce: _,
-                            solution: _,
-                            bits: _,
-                            difficulty: _,
-                            trees,
-                            previous_block_hash: _,
-                            next_block_hash: _,
-                        } => Ok((
-                            hash.0 .0,
-                            tx.into_iter()
+                        zebra_rpc::methods::GetBlock::Object(block_obj)  => Ok((
+                            block_obj.hash() ,
+                            block_obj.tx().iter()
                                 .map(|item| {
                                     match item {
                                         GetBlockTransaction::Hash(h) => Ok(h.0.to_vec()),
@@ -394,7 +376,7 @@ async fn create_200_block_regtest_chain_vectors() {
                                 })
                                 .collect::<Result<Vec<_>, _>>()
                                 .unwrap(),
-                            (trees.sapling(), trees.orchard()),
+                            (block_obj.trees().sapling(), block_obj.trees().orchard()),
                         )),
                     })
                     .unwrap();
@@ -452,24 +434,24 @@ async fn create_200_block_regtest_chain_vectors() {
     // Fetch and build wallet addr transparent data
     let faucet_data = {
         let faucet_txids = state_service_subscriber
-            .get_address_tx_ids(GetAddressTxIdsRequest::from_parts(
+            .get_address_tx_ids(GetAddressTxIdsRequest::new(
                 vec![faucet_taddr.clone()],
-                1,
-                chain_height.0,
+                Some(1),
+                Some(chain_height.0),
             ))
             .await
             .unwrap();
 
         let faucet_utxos = state_service_subscriber
-            .z_get_address_utxos(AddressStrings::new_valid(vec![faucet_taddr.clone()]).unwrap())
+            .z_get_address_utxos(AddressStrings::new(vec![faucet_taddr.clone()]))
             .await
             .unwrap();
 
         let faucet_balance = state_service_subscriber
-            .z_get_address_balance(AddressStrings::new_valid(vec![faucet_taddr.clone()]).unwrap())
+            .z_get_address_balance(AddressStrings::new(vec![faucet_taddr.clone()]))
             .await
             .unwrap()
-            .balance;
+            .balance();
 
         (faucet_txids, faucet_utxos, faucet_balance)
     };
@@ -477,26 +459,24 @@ async fn create_200_block_regtest_chain_vectors() {
     // fetch recipient addr transparent data
     let recipient_data = {
         let recipient_txids = state_service_subscriber
-            .get_address_tx_ids(GetAddressTxIdsRequest::from_parts(
+            .get_address_tx_ids(GetAddressTxIdsRequest::new(
                 vec![recipient_taddr.clone()],
-                1,
-                chain_height.0,
+                Some(1),
+                Some(chain_height.0),
             ))
             .await
             .unwrap();
 
         let recipient_utxos = state_service_subscriber
-            .z_get_address_utxos(AddressStrings::new_valid(vec![recipient_taddr.clone()]).unwrap())
+            .z_get_address_utxos(AddressStrings::new(vec![recipient_taddr.clone()]))
             .await
             .unwrap();
 
         let recipient_balance = state_service_subscriber
-            .z_get_address_balance(
-                AddressStrings::new_valid(vec![recipient_taddr.clone()]).unwrap(),
-            )
+            .z_get_address_balance(AddressStrings::new(vec![recipient_taddr.clone()]))
             .await
             .unwrap()
-            .balance;
+            .balance();
 
         (recipient_txids, recipient_utxos, recipient_balance)
     };

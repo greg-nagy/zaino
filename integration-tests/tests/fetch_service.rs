@@ -128,7 +128,7 @@ async fn fetch_service_get_address_balance(validator: &ValidatorKind) {
     let recipient_balance = clients.recipient.do_balance().await;
 
     let fetch_service_balance = fetch_service_subscriber
-        .z_get_address_balance(AddressStrings::new_valid(vec![recipient_address]).unwrap())
+        .z_get_address_balance(AddressStrings::new(vec![recipient_address]))
         .await
         .unwrap();
 
@@ -141,7 +141,7 @@ async fn fetch_service_get_address_balance(validator: &ValidatorKind) {
     );
     assert_eq!(
         recipient_balance.confirmed_transparent_balance.unwrap(),
-        fetch_service_balance.balance,
+        fetch_service_balance.balance(),
     );
 
     test_manager.close().await;
@@ -489,10 +489,10 @@ async fn fetch_service_get_address_tx_ids(validator: &ValidatorKind) {
     dbg!(&chain_height);
 
     let fetch_service_txids = fetch_service_subscriber
-        .get_address_tx_ids(GetAddressTxIdsRequest::from_parts(
+        .get_address_tx_ids(GetAddressTxIdsRequest::new(
             vec![recipient_taddr],
-            chain_height - 2,
-            chain_height,
+            Some(chain_height - 2),
+            None,
         ))
         .await
         .unwrap();
@@ -537,7 +537,7 @@ async fn fetch_service_get_address_utxos(validator: &ValidatorKind) {
     clients.faucet.sync_and_await().await.unwrap();
 
     let fetch_service_utxos = fetch_service_subscriber
-        .z_get_address_utxos(AddressStrings::new_valid(vec![recipient_taddr]).unwrap())
+        .z_get_address_utxos(AddressStrings::new(vec![recipient_taddr]))
         .await
         .unwrap();
     let (_, fetch_service_txid, ..) = fetch_service_utxos[0].into_parts();
@@ -656,27 +656,8 @@ async fn fetch_service_get_best_blockhash(validator: &ValidatorKind) {
         .await
         .unwrap();
 
-    let ret: Option<GetBlockHash> = match inspected_block {
-        GetBlock::Object {
-            hash,
-            confirmations: _,
-            size: _,
-            height: _,
-            version: _,
-            merkle_root: _,
-            block_commitments: _,
-            final_sapling_root: _,
-            final_orchard_root: _,
-            tx: _,
-            time: _,
-            nonce: _,
-            solution: _,
-            bits: _,
-            difficulty: _,
-            trees: _,
-            previous_block_hash: _,
-            next_block_hash: _,
-        } => Some(hash),
+    let ret = match inspected_block {
+        GetBlock::Object(obj) => Some(obj.hash()),
         _ => None,
     };
 
@@ -684,7 +665,7 @@ async fn fetch_service_get_best_blockhash(validator: &ValidatorKind) {
         dbg!(fetch_service_subscriber.get_best_blockhash().await.unwrap());
 
     assert_eq!(
-        fetch_service_get_best_blockhash,
+        fetch_service_get_best_blockhash.hash(),
         ret.expect("ret to be Some(GetBlockHash) not None")
     );
 
