@@ -109,7 +109,7 @@ impl MigrationStep for Migration0_0_0To1_0_0 {
     /// that only built compact block data from sapling activation onwards.
     /// DbV1 is required to be built from genasis to correctly build the transparent address indexes.
     /// For this reason we do not do any partial builds in the V0 to V1 migration.
-    /// We just run V0 as primary until V1 if fully built in shadow, then switch primary, deleting V0.
+    /// We just run V0 as primary until V1 is fully built in shadow, then switch primary, deleting V0.
     async fn migrate(
         router: Arc<Router>,
         cfg: BlockCacheConfig,

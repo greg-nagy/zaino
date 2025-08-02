@@ -18,6 +18,8 @@ pub mod finalised_state;
 pub mod mempool;
 /// State less than 100 blocks old, stored separately as it may be reorged
 pub mod non_finalised_state;
+/// BlockchainSource
+pub mod source;
 /// Common types used by the rest of this module
 pub mod types;
 
