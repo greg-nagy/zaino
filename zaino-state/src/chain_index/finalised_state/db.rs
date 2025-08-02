@@ -154,6 +154,13 @@ impl DbWrite for DbBackend {
             Self::V1(db) => db.delete_block(block).await,
         }
     }
+
+    async fn update_metadata(&self, metadata: DbMetadata) -> Result<(), FinalisedStateError> {
+        match self {
+            Self::V0(db) => db.update_metadata(metadata).await,
+            Self::V1(db) => db.update_metadata(metadata).await,
+        }
+    }
 }
 
 // ***** Database capability extension traits *****

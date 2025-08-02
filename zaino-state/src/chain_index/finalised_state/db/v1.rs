@@ -119,6 +119,10 @@ impl DbWrite for DbV1 {
     async fn delete_block(&self, block: &ChainBlock) -> Result<(), FinalisedStateError> {
         self.delete_block(block).await
     }
+
+    async fn update_metadata(&self, metadata: DbMetadata) -> Result<(), FinalisedStateError> {
+        self.update_metadata(metadata).await
+    }
 }
 
 #[async_trait]
@@ -1534,6 +1538,27 @@ impl DbV1 {
         .await
         .map_err(|e| FinalisedStateError::Custom(format!("Tokio task error: {e}")))??;
         Ok(())
+    }
+
+    /// Updates the metadata hed by the database.
+    pub(crate) async fn update_metadata(
+        &self,
+        metadata: DbMetadata,
+    ) -> Result<(), FinalisedStateError> {
+        tokio::task::block_in_place(|| {
+            let mut txn = self.env.begin_rw_txn()?;
+
+            let entry = StoredEntryFixed::new(b"metadata", metadata);
+            txn.put(
+                self.metadata,
+                b"metadata",
+                &entry.to_bytes()?,
+                WriteFlags::empty(),
+            )?;
+
+            txn.commit()?;
+            Ok(())
+        })
     }
 
     // *** Public fetcher methods - Used by DbReader ***

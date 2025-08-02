@@ -180,6 +180,12 @@ impl DbWrite for Router {
             .delete_block(blk)
             .await
     }
+
+    async fn update_metadata(&self, metadata: DbMetadata) -> Result<(), FinalisedStateError> {
+        self.backend(Capability::WRITE_CORE)?
+            .update_metadata(metadata)
+            .await
+    }
 }
 
 #[async_trait]

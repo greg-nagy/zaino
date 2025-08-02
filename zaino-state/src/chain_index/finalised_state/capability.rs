@@ -365,6 +365,9 @@ pub trait DbWrite: Send + Sync {
     ///
     /// Used as a backup when delete_block_at_height fails.
     async fn delete_block(&self, block: &ChainBlock) -> Result<(), FinalisedStateError>;
+
+    /// Update the metadata store with the given DbMetadata
+    async fn update_metadata(&self, metadata: DbMetadata) -> Result<(), FinalisedStateError>;
 }
 
 /// Core database functionality that *every* ZainoDB version must support.

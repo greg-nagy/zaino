@@ -3,7 +3,9 @@
 //! This will be added in a subsequest pr.
 
 use super::{
-    capability::{BlockCoreExt, Capability, DbCore as _, DbRead, DbVersion, DbWrite},
+    capability::{
+        BlockCoreExt, Capability, DbCore as _, DbRead, DbVersion, DbWrite, MigrationStatus,
+    },
     db::DbBackend,
     router::Router,
 };
@@ -133,73 +135,93 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
         let shadow = Arc::new(DbBackend::spawn_v1(&cfg).await?);
         router.set_shadow(Arc::clone(&shadow), Capability::empty());
 
-        // build shadow to primary_db_height,
-        // start from shadow_db_height in case database what shutdown mid-migration.
-        let mut parent_chain_work = ChainWork::from_u256(0.into());
-        loop {
-            let shadow_db_height = shadow
-                .db_height()
-                .await?
-                .expect("height always some in the finalised state");
-            let primary_db_height = router
-                .db_height()
-                .await?
-                .expect("height always some in the finalised state");
+        let migration_status = shadow.get_metadata().await?.migration_status();
 
-            if shadow_db_height >= primary_db_height {
-                break;
-            }
+        match migration_status {
+            MigrationStatus::Empty
+            | MigrationStatus::PartialBuidInProgress
+            | MigrationStatus::PartialBuildComplete
+            | MigrationStatus::FinalBuildInProgress => {
+                // build shadow to primary_db_height,
+                // start from shadow_db_height in case database what shutdown mid-migration.
+                let mut parent_chain_work = ChainWork::from_u256(0.into());
+                loop {
+                    let shadow_db_height = shadow
+                        .db_height()
+                        .await?
+                        .expect("height always some in the finalised state");
+                    let primary_db_height = router
+                        .db_height()
+                        .await?
+                        .expect("height always some in the finalised state");
 
-            if shadow_db_height.0 > 1 {
-                parent_chain_work = *shadow
-                    .get_block_header(shadow_db_height)
-                    .await?
-                    .index()
-                    .chainwork();
-            }
+                    if shadow_db_height >= primary_db_height {
+                        break;
+                    }
 
-            for height in (shadow_db_height.0 + 1)..=primary_db_height.0 {
-                let block = source
-                    .get_block(zebra_state::HashOrHeight::Height(
-                        zebra_chain::block::Height(height),
-                    ))
-                    .await?
-                    .ok_or_else(|| {
-                        FinalisedStateError::MissingData(format!(
-                            "block not found at height {}",
-                            height
-                        ))
-                    })?;
-                let hash = Hash::from(block.hash().0);
+                    if shadow_db_height.0 > 1 {
+                        parent_chain_work = *shadow
+                            .get_block_header(shadow_db_height)
+                            .await?
+                            .index()
+                            .chainwork();
+                    }
 
-                let (sapling_root_data, orchard_root_data) =
-                    source.get_commitment_tree_roots(hash).await?;
-                let (sapling_root, sapling_root_size) = sapling_root_data.ok_or_else(|| {
-                    FinalisedStateError::MissingData(format!(
+                    for height in (shadow_db_height.0 + 1)..=primary_db_height.0 {
+                        let block = source
+                            .get_block(zebra_state::HashOrHeight::Height(
+                                zebra_chain::block::Height(height),
+                            ))
+                            .await?
+                            .ok_or_else(|| {
+                                FinalisedStateError::MissingData(format!(
+                                    "block not found at height {}",
+                                    height
+                                ))
+                            })?;
+                        let hash = Hash::from(block.hash().0);
+
+                        let (sapling_root_data, orchard_root_data) =
+                            source.get_commitment_tree_roots(hash).await?;
+                        let (sapling_root, sapling_root_size) =
+                            sapling_root_data.ok_or_else(|| {
+                                FinalisedStateError::MissingData(format!(
                         "sapling commitment tree data missing for block {hash:?} at height {height}"
                     ))
-                })?;
-                let (orchard_root, orchard_root_size) = orchard_root_data.ok_or_else(|| {
-                    FinalisedStateError::MissingData(format!(
+                            })?;
+                        let (orchard_root, orchard_root_size) =
+                            orchard_root_data.ok_or_else(|| {
+                                FinalisedStateError::MissingData(format!(
                         "orchard commitment tree data missing for block {hash:?} at height {height}"
                     ))
-                })?;
+                            })?;
 
-                let chain_block = ChainBlock::try_from((
-                    (*block).clone(),
-                    sapling_root,
-                    sapling_root_size as u32,
-                    orchard_root,
-                    orchard_root_size as u32,
-                    parent_chain_work,
-                    cfg.network.clone(),
-                ))
-                .map_err(|e| FinalisedStateError::Custom(e))?;
+                        let chain_block = ChainBlock::try_from((
+                            (*block).clone(),
+                            sapling_root,
+                            sapling_root_size as u32,
+                            orchard_root,
+                            orchard_root_size as u32,
+                            parent_chain_work,
+                            cfg.network.clone(),
+                        ))
+                        .map_err(|e| FinalisedStateError::Custom(e))?;
 
-                shadow.write_block(chain_block).await?;
+                        shadow.write_block(chain_block).await?;
+                    }
+
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+
+                // update db metadata migration status
+                let mut metadata = shadow.get_metadata().await?;
+                metadata.migration_status = MigrationStatus::Complete;
+                shadow.update_metadata(metadata).await?;
             }
 
-            std::thread::sleep(std::time::Duration::from_millis(100));
+            MigrationStatus::Complete => {
+                // Migration complete, continue with DbV0 deletion.
+            }
         }
 
         // Promote V1 to primary
@@ -218,7 +240,7 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
                 tracing::warn!("Old primary shutdown failed: {e}");
             }
 
-            // Now it is safe to delete
+            // Now safe to delete old database files
             let db_path_dir = match cfg.network.kind() {
                 NetworkKind::Mainnet => "live",
                 NetworkKind::Testnet => "test",

@@ -73,6 +73,11 @@ impl DbWrite for DbV0 {
     async fn delete_block(&self, block: &ChainBlock) -> Result<(), FinalisedStateError> {
         self.delete_block(block).await
     }
+
+    /// NOTE: V0 does not hold metadata!
+    async fn update_metadata(&self, _metadata: DbMetadata) -> Result<(), FinalisedStateError> {
+        Ok(())
+    }
 }
 
 #[async_trait]
