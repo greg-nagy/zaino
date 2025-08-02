@@ -24,6 +24,8 @@ use crate::{
 use std::{sync::Arc, time::Duration};
 use tokio::time::{interval, MissedTickBehavior};
 
+use super::source::BlockchainSourceInterface;
+
 pub(crate) struct ZainoDB {
     db: Arc<Router>,
     cfg: BlockCacheConfig,
@@ -35,7 +37,13 @@ impl ZainoDB {
     /// Spawns a ZainoDB, opens an existing database if a path is given in the config else creates a new db.
     ///
     /// Peeks at the db metadata store to load correct database version.
-    pub(crate) async fn spawn(cfg: BlockCacheConfig) -> Result<Self, FinalisedStateError> {
+    pub(crate) async fn spawn<T>(
+        cfg: BlockCacheConfig,
+        source: T,
+    ) -> Result<Self, FinalisedStateError>
+    where
+        T: BlockchainSourceInterface,
+    {
         let version_opt = Self::try_find_current_db_version(&cfg).await;
 
         let target_db_version = match cfg.db_version {
@@ -73,6 +81,7 @@ impl ZainoDB {
                 &cfg,
                 current_db_version,
                 target_db_version,
+                source,
             )
             .await?;
         }

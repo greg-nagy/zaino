@@ -8,7 +8,10 @@ use super::{
     router::Router,
 };
 
-use crate::{config::BlockCacheConfig, error::FinalisedStateError};
+use crate::{
+    chain_index::source::BlockchainSourceInterface, config::BlockCacheConfig,
+    error::FinalisedStateError,
+};
 
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -21,48 +24,58 @@ pub enum MigrationType {
 }
 
 #[async_trait]
-pub trait MigrationStep {
+pub trait MigrationStep<T: BlockchainSourceInterface> {
     const FROM_VERSION: DbVersion;
     const TO_VERSION: DbVersion;
     const MIGRATION_TYPE: MigrationType;
 
-    async fn migrate(router: Arc<Router>, cfg: BlockCacheConfig)
-        -> Result<(), FinalisedStateError>;
+    async fn migrate(
+        router: Arc<Router>,
+        cfg: BlockCacheConfig,
+        source: T,
+    ) -> Result<(), FinalisedStateError>;
 }
 
-struct Migration {
+struct Migration<T: BlockchainSourceInterface> {
     from: DbVersion,
     to: DbVersion,
     migration_type: MigrationType,
     migrate_fn: fn(
         Arc<Router>,
         &BlockCacheConfig,
+        T,
     ) -> futures::future::BoxFuture<'static, Result<(), FinalisedStateError>>,
 }
 
-// Returns the *next* migration step to be executed.
-fn get_migration_step(version: DbVersion) -> Option<Migration> {
-    match version {
-        v if v == Migration0_0_0To1_0_0::FROM_VERSION => Some(Migration {
-            from: Migration0_0_0To1_0_0::FROM_VERSION,
-            to: Migration0_0_0To1_0_0::TO_VERSION,
-            migration_type: Migration0_0_0To1_0_0::MIGRATION_TYPE,
-            migrate_fn: |router, cfg| Box::pin(Migration0_0_0To1_0_0::migrate(router, cfg.clone())),
-        }),
-
-        _ => None,
+fn get_migration_step<T: BlockchainSourceInterface>(version: DbVersion) -> Option<Migration<T>> {
+    let from = <Migration0_0_0To1_0_0 as MigrationStep<T>>::FROM_VERSION;
+    if version == from {
+        Some(Migration {
+            from,
+            to: <Migration0_0_0To1_0_0 as MigrationStep<T>>::TO_VERSION,
+            migration_type: <Migration0_0_0To1_0_0 as MigrationStep<T>>::MIGRATION_TYPE,
+            migrate_fn: |router, cfg, source| {
+                Box::pin(Migration0_0_0To1_0_0::migrate(router, cfg.clone(), source))
+            },
+        })
+    } else {
+        None
     }
 }
 
 pub struct MigrationManager;
 
 impl MigrationManager {
-    pub async fn migrate_to(
+    pub async fn migrate_to<T>(
         router: Arc<Router>,
         cfg: &BlockCacheConfig,
         mut current_version: DbVersion,
         target_version: DbVersion,
-    ) -> Result<(), FinalisedStateError> {
+        source: T,
+    ) -> Result<(), FinalisedStateError>
+    where
+        T: BlockchainSourceInterface,
+    {
         while current_version < target_version {
             let step = get_migration_step(current_version).ok_or_else(|| {
                 FinalisedStateError::Custom(format!(
@@ -71,7 +84,7 @@ impl MigrationManager {
                 ))
             })?;
 
-            (step.migrate_fn)(Arc::clone(&router), cfg).await?;
+            (step.migrate_fn)(Arc::clone(&router), cfg, source.clone()).await?;
 
             current_version = step.to;
         }
@@ -92,7 +105,7 @@ impl MigrationManager {
 struct Migration0_0_0To1_0_0;
 
 #[async_trait]
-impl MigrationStep for Migration0_0_0To1_0_0 {
+impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
     const FROM_VERSION: DbVersion = DbVersion {
         major: 0,
         minor: 0,
@@ -113,9 +126,11 @@ impl MigrationStep for Migration0_0_0To1_0_0 {
     async fn migrate(
         router: Arc<Router>,
         cfg: BlockCacheConfig,
+        source: T,
     ) -> Result<(), FinalisedStateError> {
         let shadow = Arc::new(DbBackend::spawn_v1(&cfg).await?);
         router.set_shadow(Arc::clone(&shadow), Capability::empty());
+
         // Add chain source
 
         // build new db to db height

@@ -4,8 +4,10 @@ use core2::io::{self, Read};
 use prost::Message;
 use std::io::BufReader;
 use std::path::Path;
+use std::sync::Arc;
 use std::{fs::File, path::PathBuf};
 use tempfile::TempDir;
+use zebra_chain::serialization::ZcashDeserialize as _;
 
 use zaino_proto::proto::compact_formats::CompactBlock;
 use zebra_rpc::methods::GetAddressUtxos;
@@ -13,23 +15,36 @@ use zebra_rpc::methods::GetAddressUtxos;
 use crate::bench::BlockCacheConfig;
 use crate::chain_index::finalised_state::reader::DbReader;
 use crate::chain_index::finalised_state::ZainoDB;
+use crate::chain_index::source::test::MockchainSource;
 use crate::error::FinalisedStateError;
 use crate::{
-    read_u32_le, AddrScript, ChainBlock, CompactSize, Height, Outpoint,
+    read_u32_le, read_u64_le, AddrScript, ChainBlock, CompactSize, Height, Outpoint,
     ZainoVersionedSerialise as _,
 };
 
 /// Reads test data from file.
 #[allow(clippy::type_complexity)]
-fn read_vectors_from_file<P: AsRef<Path>>(
+pub fn read_vectors_from_file<P: AsRef<Path>>(
     base_dir: P,
 ) -> io::Result<(
-    Vec<(u32, ChainBlock, CompactBlock)>,
+    Vec<(
+        u32,
+        ChainBlock,
+        CompactBlock,
+        zebra_chain::block::Block,
+        (
+            zebra_chain::sapling::tree::Root,
+            u64,
+            zebra_chain::orchard::tree::Root,
+            u64,
+        ),
+    )>,
     (Vec<String>, Vec<GetAddressUtxos>, u64),
     (Vec<String>, Vec<GetAddressUtxos>, u64),
 )> {
     let base = base_dir.as_ref();
 
+    // chain_blocks.dat
     let mut chain_blocks = Vec::<(u32, ChainBlock)>::new();
     {
         let mut r = BufReader::new(File::open(base.join("chain_blocks.dat"))?);
@@ -47,7 +62,9 @@ fn read_vectors_from_file<P: AsRef<Path>>(
         }
     }
 
-    let mut full_blocks = Vec::<(u32, ChainBlock, CompactBlock)>::with_capacity(chain_blocks.len());
+    // compact_blocks.dat
+    let mut compact_blocks =
+        Vec::<(u32, ChainBlock, CompactBlock)>::with_capacity(chain_blocks.len());
     {
         let mut r = BufReader::new(File::open(base.join("compact_blocks.dat"))?);
         for (h1, chain) in chain_blocks {
@@ -55,7 +72,7 @@ fn read_vectors_from_file<P: AsRef<Path>>(
             if h1 != h2 {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
-                    "height mismatch between ChainBlock and CompactBlock streams",
+                    "height mismatch between ChainBlock and CompactBlock",
                 ));
             }
             let len: usize = CompactSize::read_t(&mut r)?;
@@ -63,21 +80,98 @@ fn read_vectors_from_file<P: AsRef<Path>>(
             r.read_exact(&mut buf)?;
             let compact = CompactBlock::decode(&*buf)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-            full_blocks.push((h1, chain, compact));
+            compact_blocks.push((h1, chain, compact));
         }
     }
 
+    // zebra_blocks.dat
+    let mut full_blocks =
+        Vec::<(u32, ChainBlock, CompactBlock, zebra_chain::block::Block)>::with_capacity(
+            compact_blocks.len(),
+        );
+    {
+        let mut r = BufReader::new(File::open(base.join("zcash_blocks.dat"))?);
+        for (h1, chain, compact) in compact_blocks {
+            let h2 = read_u32_le(&mut r)?;
+            if h1 != h2 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "height mismatch in zcash_blocks.dat",
+                ));
+            }
+
+            let len: usize = CompactSize::read_t(&mut r)?;
+            let mut buf = vec![0u8; len];
+            r.read_exact(&mut buf)?;
+
+            let zcash_block = zebra_chain::block::Block::zcash_deserialize(&*buf)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+            full_blocks.push((h1, chain, compact, zcash_block));
+        }
+    }
+
+    // tree_roots.dat
+    let mut full_data = Vec::with_capacity(full_blocks.len());
+    {
+        let mut r = BufReader::new(File::open(base.join("tree_roots.dat"))?);
+        for (h1, chain, compact, zcash_block) in full_blocks {
+            let h2 = read_u32_le(&mut r)?;
+            if h1 != h2 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "height mismatch in tree_roots.dat",
+                ));
+            }
+            let mut sapling_bytes = [0u8; 32];
+            r.read_exact(&mut sapling_bytes)?;
+            let sapling_root = zebra_chain::sapling::tree::Root::try_from(sapling_bytes)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+            let sapling_size = read_u64_le(&mut r)?;
+
+            let mut orchard_bytes = [0u8; 32];
+            r.read_exact(&mut orchard_bytes)?;
+            let orchard_root = zebra_chain::orchard::tree::Root::try_from(orchard_bytes)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+            let orchard_size = read_u64_le(&mut r)?;
+
+            full_data.push((
+                h1,
+                chain,
+                compact,
+                zcash_block,
+                (sapling_root, sapling_size, orchard_root, orchard_size),
+            ));
+        }
+    }
+
+    // faucet_data.json
     let faucet = serde_json::from_reader(File::open(base.join("faucet_data.json"))?)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    // recipient_data.json
     let recipient = serde_json::from_reader(File::open(base.join("recipient_data.json"))?)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-    Ok((full_blocks, faucet, recipient))
+    Ok((full_data, faucet, recipient))
 }
 
 #[allow(clippy::type_complexity)]
 fn load_test_vectors() -> io::Result<(
-    Vec<(u32, ChainBlock, CompactBlock)>,
+    Vec<(
+        u32,
+        ChainBlock,
+        CompactBlock,
+        zebra_chain::block::Block,
+        (
+            zebra_chain::sapling::tree::Root,
+            u64,
+            zebra_chain::orchard::tree::Root,
+            u64,
+        ),
+    )>,
     (Vec<String>, Vec<GetAddressUtxos>, u64),
     (Vec<String>, Vec<GetAddressUtxos>, u64),
 )> {
@@ -90,7 +184,9 @@ fn load_test_vectors() -> io::Result<(
     read_vectors_from_file(&base_dir)
 }
 
-async fn spawn_default_zaino_db() -> Result<(TempDir, ZainoDB), FinalisedStateError> {
+async fn spawn_default_zaino_db(
+    source: MockchainSource,
+) -> Result<(TempDir, ZainoDB), FinalisedStateError> {
     let temp_dir: TempDir = tempfile::tempdir().unwrap();
     let db_path: PathBuf = temp_dir.path().to_path_buf();
 
@@ -119,21 +215,93 @@ async fn spawn_default_zaino_db() -> Result<(TempDir, ZainoDB), FinalisedStateEr
         no_db: false,
     };
 
-    let zaino_db = ZainoDB::spawn(config).await.unwrap();
+    let zaino_db = ZainoDB::spawn(config, source).await.unwrap();
 
     Ok((temp_dir, zaino_db))
 }
 
+fn build_mockchain_source(
+    // the input data for this function could be reduced for wider use
+    // but is more simple to pass all test block data here.
+    blockchain_data: Vec<(
+        u32,
+        ChainBlock,
+        CompactBlock,
+        zebra_chain::block::Block,
+        (
+            zebra_chain::sapling::tree::Root,
+            u64,
+            zebra_chain::orchard::tree::Root,
+            u64,
+        ),
+    )>,
+) -> MockchainSource {
+    let (
+        mut heights,
+        mut chain_blocks,
+        mut compact_blocks,
+        mut zebra_blocks,
+        mut block_roots,
+        mut block_hashes,
+    ) = (
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+
+    for (
+        height,
+        chain_block,
+        compact_block,
+        zebra_block,
+        (sapling_root, sapling_tree_size, orchard_root, orchard_tree_size),
+    ) in blockchain_data.clone()
+    {
+        heights.push(height);
+        chain_blocks.push(chain_block.clone());
+        compact_blocks.push(compact_block);
+        zebra_blocks.push(Arc::new(zebra_block));
+
+        block_roots.push((
+            Some((sapling_root, sapling_tree_size)),
+            Some((orchard_root, orchard_tree_size)),
+        ));
+
+        block_hashes.push(*chain_block.index().hash());
+    }
+
+    let source = MockchainSource::new(zebra_blocks, block_roots, block_hashes);
+
+    source
+}
+
 async fn load_vectors_and_spawn_and_sync_zaino_db() -> (
-    Vec<(u32, ChainBlock, CompactBlock)>,
+    Vec<(
+        u32,
+        ChainBlock,
+        CompactBlock,
+        zebra_chain::block::Block,
+        (
+            zebra_chain::sapling::tree::Root,
+            u64,
+            zebra_chain::orchard::tree::Root,
+            u64,
+        ),
+    )>,
     (Vec<String>, Vec<GetAddressUtxos>, u64),
     (Vec<String>, Vec<GetAddressUtxos>, u64),
     TempDir,
     ZainoDB,
 ) {
     let (blocks, faucet, recipient) = load_test_vectors().unwrap();
-    let (db_dir, zaino_db) = spawn_default_zaino_db().await.unwrap();
-    for (_h, chain_block, _compact_block) in blocks.clone() {
+
+    let source = build_mockchain_source(blocks.clone());
+
+    let (db_dir, zaino_db) = spawn_default_zaino_db(source).await.unwrap();
+    for (_h, chain_block, _compact_block, _zebra_block, _block_roots) in blocks.clone() {
         // dbg!("Writing block at height {}", _h);
         // if _h == 1 {
         //     dbg!(&chain_block);
@@ -144,7 +312,18 @@ async fn load_vectors_and_spawn_and_sync_zaino_db() -> (
 }
 
 async fn load_vectors_db_and_reader() -> (
-    Vec<(u32, ChainBlock, CompactBlock)>,
+    Vec<(
+        u32,
+        ChainBlock,
+        CompactBlock,
+        zebra_chain::block::Block,
+        (
+            zebra_chain::sapling::tree::Root,
+            u64,
+            zebra_chain::orchard::tree::Root,
+            u64,
+        ),
+    )>,
     (Vec<String>, Vec<GetAddressUtxos>, u64),
     (Vec<String>, Vec<GetAddressUtxos>, u64),
     TempDir,
@@ -178,7 +357,7 @@ async fn vectors_can_be_loaded_and_deserialised() {
         "expected at least one block in test-vectors"
     );
     let mut prev_h: u32 = 0;
-    for (h, chain_block, compact_block) in &blocks {
+    for (h, chain_block, compact_block, _zebra_block, _block_roots) in &blocks {
         // println!("Checking block at height {h}");
 
         assert_eq!(
@@ -276,13 +455,16 @@ async fn load_db_from_file() {
         no_db: false,
     };
 
+    let source = build_mockchain_source(blocks.clone());
+    let source_clone = source.clone();
+
     let blocks_clone = blocks.clone();
     let config_clone = config.clone();
     std::thread::spawn(move || {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async move {
-            let zaino_db = ZainoDB::spawn(config_clone).await.unwrap();
-            for (_h, chain_block, _compact_block) in blocks_clone {
+            let zaino_db = ZainoDB::spawn(config_clone, source).await.unwrap();
+            for (_h, chain_block, _compact_block, _zebra_block, _block_roots) in blocks_clone {
                 zaino_db.write_block(chain_block).await.unwrap();
             }
 
@@ -302,7 +484,7 @@ async fn load_db_from_file() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async move {
             dbg!(config.db_path.read_dir().unwrap().collect::<Vec<_>>());
-            let zaino_db_2 = ZainoDB::spawn(config).await.unwrap();
+            let zaino_db_2 = ZainoDB::spawn(config, source_clone).await.unwrap();
 
             zaino_db_2.wait_until_ready().await;
             dbg!(zaino_db_2.status().await);
@@ -326,7 +508,8 @@ async fn try_write_invalid_block() {
     dbg!(zaino_db.status().await);
     dbg!(zaino_db.db_height().await.unwrap());
 
-    let (height, mut chain_block, _compact_block) = blocks.last().unwrap().clone();
+    let (height, mut chain_block, _compact_block, _zebra_block, _block_roots) =
+        blocks.last().unwrap().clone();
 
     chain_block.index.height = Some(crate::Height(height + 1));
     dbg!(chain_block.index.height);
@@ -348,7 +531,8 @@ async fn try_delete_block_with_invalid_height() {
     dbg!(zaino_db.status().await);
     dbg!(zaino_db.db_height().await.unwrap());
 
-    let (height, _chain_block, _compact_block) = blocks.last().unwrap().clone();
+    let (height, _chain_block, _compact_block, _zebra_block, _block_roots) =
+        blocks.last().unwrap().clone();
 
     let delete_height = height - 1;
 
@@ -369,7 +553,7 @@ async fn create_db_reader() {
     let (blocks, _faucet, _recipient, _db_dir, zaino_db, db_reader) =
         load_vectors_db_and_reader().await;
 
-    let (data_height, _, _) = blocks.last().unwrap();
+    let (data_height, _, _, _, _) = blocks.last().unwrap();
     let db_height = dbg!(zaino_db.db_height().await.unwrap()).unwrap();
     let db_reader_height = dbg!(db_reader.db_height().await.unwrap()).unwrap();
 
@@ -384,7 +568,7 @@ async fn get_chain_blocks() {
     let (blocks, _faucet, _recipient, _db_dir, _zaino_db, db_reader) =
         load_vectors_db_and_reader().await;
 
-    for (height, chain_block, _) in blocks.iter() {
+    for (height, chain_block, _, _, _) in blocks.iter() {
         let reader_chain_block = db_reader.get_chain_block(Height(*height)).await.unwrap();
         assert_eq!(chain_block, &reader_chain_block);
         println!("ChainBlock at height {height} OK");
@@ -396,7 +580,7 @@ async fn get_compact_blocks() {
     let (blocks, _faucet, _recipient, _db_dir, _zaino_db, db_reader) =
         load_vectors_db_and_reader().await;
 
-    for (height, _, compact_block) in blocks.iter() {
+    for (height, _, compact_block, _, _) in blocks.iter() {
         let reader_compact_block = db_reader.get_compact_block(Height(*height)).await.unwrap();
         assert_eq!(compact_block, &reader_compact_block);
         println!("CompactBlock at height {height} OK");
@@ -417,7 +601,7 @@ async fn get_faucet_txids() {
     let faucet_addr_script = AddrScript::from_script(faucet_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
-    for (height, chain_block, _compact_block) in blocks {
+    for (height, chain_block, _compact_block, _zebra_block, _block_roots) in blocks {
         println!("Checking faucet txids at height {height}");
         let block_height = Height(height);
         let block_txids: Vec<String> = chain_block
@@ -477,7 +661,7 @@ async fn get_recipient_txids() {
     let recipient_addr_script = AddrScript::from_script(recipient_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
-    for (height, chain_block, _compact_block) in blocks {
+    for (height, chain_block, _compact_block, _zebra_block, _block_roots) in blocks {
         println!("Checking recipient txids at height {height}");
         let block_height = Height(height);
         let block_txids: Vec<String> = chain_block
@@ -658,7 +842,7 @@ async fn check_faucet_spent_map() {
     // collect faucet outpoints
     let mut faucet_outpoints = Vec::new();
     let mut faucet_ouptpoints_spent_status = Vec::new();
-    for (_height, chain_block, _compact_block) in blocks.clone() {
+    for (_height, chain_block, _compact_block, _zebra_block, _block_roots) in blocks.clone() {
         for tx in chain_block.transactions() {
             let txid = tx.txid();
             let outputs = tx.transparent().outputs();
@@ -700,14 +884,17 @@ async fn check_faucet_spent_map() {
         );
         match spender_option {
             Some(spender_index) => {
-                let spender_tx = blocks.iter().find_map(|(_h, chain_block, _cb)| {
-                    chain_block.transactions().iter().find(|tx| {
-                        let (block_height, tx_idx) =
-                            (spender_index.block_height(), spender_index.tx_index());
-                        chain_block.index().height() == Some(Height(block_height))
-                            && tx.index() == tx_idx as u64
-                    })
-                });
+                let spender_tx =
+                    blocks
+                        .iter()
+                        .find_map(|(_h, chain_block, _cb, _zebra_block, _block_roots)| {
+                            chain_block.transactions().iter().find(|tx| {
+                                let (block_height, tx_idx) =
+                                    (spender_index.block_height(), spender_index.tx_index());
+                                chain_block.index().height() == Some(Height(block_height))
+                                    && tx.index() == tx_idx as u64
+                            })
+                        });
                 assert!(
                     spender_tx.is_some(),
                     "Spender transaction not found in blocks!"
@@ -752,7 +939,7 @@ async fn check_recipient_spent_map() {
     // collect faucet outpoints
     let mut recipient_outpoints = Vec::new();
     let mut recipient_ouptpoints_spent_status = Vec::new();
-    for (_height, chain_block, _compact_block) in blocks.clone() {
+    for (_height, chain_block, _compact_block, _zebra_block, _block_roots) in blocks.clone() {
         for tx in chain_block.transactions() {
             let txid = tx.txid();
             let outputs = tx.transparent().outputs();
@@ -794,14 +981,17 @@ async fn check_recipient_spent_map() {
         );
         match spender_option {
             Some(spender_index) => {
-                let spender_tx = blocks.iter().find_map(|(_h, chain_block, _cb)| {
-                    chain_block.transactions().iter().find(|tx| {
-                        let (block_height, tx_idx) =
-                            (spender_index.block_height(), spender_index.tx_index());
-                        chain_block.index().height() == Some(Height(block_height))
-                            && tx.index() == tx_idx as u64
-                    })
-                });
+                let spender_tx =
+                    blocks
+                        .iter()
+                        .find_map(|(_h, chain_block, _cb, _zebra_block, _block_roots)| {
+                            chain_block.transactions().iter().find(|tx| {
+                                let (block_height, tx_idx) =
+                                    (spender_index.block_height(), spender_index.tx_index());
+                                chain_block.index().height() == Some(Height(block_height))
+                                    && tx.index() == tx_idx as u64
+                            })
+                        });
                 assert!(
                     spender_tx.is_some(),
                     "Spender transaction not found in blocks!"

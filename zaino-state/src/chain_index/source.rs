@@ -16,7 +16,7 @@ use zebra_state::{HashOrHeight, ReadResponse, ReadStateService};
 
 /// A trait for accessing blockchain data from different backends.
 #[async_trait]
-pub trait BlockchainSourceInterface {
+pub trait BlockchainSourceInterface: Clone + Send + Sync + 'static {
     /// Returns the block by hash or height
     async fn get_block(
         &self,
@@ -237,7 +237,7 @@ impl BlockchainSourceInterface for BlockchainSource {
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use super::*;
     use async_trait::async_trait;
     use std::sync::Arc;
@@ -245,7 +245,8 @@ mod test {
     use zebra_state::HashOrHeight;
 
     /// A test-only mock implementation of BlockchainReader using ordered lists by height.
-    pub struct MockchainSource {
+    #[derive(Clone)]
+    pub(crate) struct MockchainSource {
         blocks: Vec<Arc<Block>>,
         roots: Vec<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>,
         hashes: Vec<Hash>,
@@ -254,7 +255,7 @@ mod test {
     impl MockchainSource {
         /// Creates a new MockchainSource.
         /// All inputs must be the same length, and ordered by ascending height starting from `height_offset`.
-        pub fn new(
+        pub(crate) fn new(
             blocks: Vec<Arc<Block>>,
             roots: Vec<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>,
             hashes: Vec<Hash>,
