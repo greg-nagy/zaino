@@ -3353,7 +3353,7 @@ impl DbV1 {
                             version: DB_VERSION_V1,
                             schema_hash: DB_SCHEMA_V1_HASH,
                             // Fresh database, no migration required.
-                            migration_status: MigrationStatus::Complete,
+                            migration_status: MigrationStatus::Empty,
                         },
                     );
                     txn.put(

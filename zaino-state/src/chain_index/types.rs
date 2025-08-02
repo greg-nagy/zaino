@@ -1321,6 +1321,181 @@ impl
     }
 }
 
+impl
+    TryFrom<(
+        zebra_chain::block::Block,
+        zebra_chain::sapling::tree::Root,
+        u32,
+        zebra_chain::orchard::tree::Root,
+        u32,
+        ChainWork,
+        zebra_chain::parameters::Network,
+    )> for ChainBlock
+{
+    // TODO: update error type.
+    type Error = String;
+
+    fn try_from(
+        (
+            block,
+            sapling_root,
+            sapling_root_size,
+            orchard_root,
+            orchard_root_size,
+            parent_chain_work,
+            network,
+        ): (
+            zebra_chain::block::Block,
+            zebra_chain::sapling::tree::Root,
+            u32,
+            zebra_chain::orchard::tree::Root,
+            u32,
+            ChainWork,
+            zebra_chain::parameters::Network,
+        ),
+    ) -> Result<Self, Self::Error> {
+        let data = BlockData {
+            version: block.header.version,
+            time: block.header.time.timestamp(),
+            merkle_root: block.header.merkle_root.0,
+            bits: u32::from_be_bytes(block.header.difficulty_threshold.bytes_in_display_order()),
+            block_commitments: match block
+                .commitment(&network)
+                .or_else(|_| Err("Block commitment could not be computed".to_string()))?
+            {
+                zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
+                zebra_chain::block::Commitment::FinalSaplingRoot(root) => root.into(),
+                zebra_chain::block::Commitment::ChainHistoryActivationReserved => [0; 32],
+                zebra_chain::block::Commitment::ChainHistoryRoot(chain_history_mmr_root_hash) => {
+                    chain_history_mmr_root_hash.bytes_in_serialized_order()
+                }
+                zebra_chain::block::Commitment::ChainHistoryBlockTxAuthCommitment(
+                    chain_history_block_tx_auth_commitment_hash,
+                ) => chain_history_block_tx_auth_commitment_hash.bytes_in_serialized_order(),
+            },
+
+            nonse: *block.header.nonce,
+            solution: block.header.solution.into(),
+        };
+
+        let mut transactions = Vec::new();
+        for (i, trnsctn) in block.transactions.iter().enumerate() {
+            let transparent = TransparentCompactTx::new(
+                trnsctn
+                    .inputs()
+                    .iter()
+                    .filter_map(|input| {
+                        input
+                            .outpoint()
+                            .map(|outpoint| TxInCompact::new(outpoint.hash.0, outpoint.index))
+                    })
+                    .collect(),
+                trnsctn
+                    .outputs()
+                    .iter()
+                    .map(|output| {
+                        TxOutCompact::try_from((
+                            u64::from(output.value),
+                            output.lock_script.as_raw_bytes(),
+                        ))
+                        .map_err(|_| "TxOutCompact conversion failed".to_string())
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            );
+
+            let sapling = SaplingCompactTx::new(
+                Some(i64::from(trnsctn.sapling_value_balance().sapling_amount())),
+                trnsctn
+                    .sapling_nullifiers()
+                    .map(|nf| CompactSaplingSpend::new(*nf.0))
+                    .collect(),
+                trnsctn
+                    .sapling_outputs()
+                    .map(|output| {
+                        CompactSaplingOutput::new(
+                            output.cm_u.to_bytes(),
+                            <[u8; 32]>::from(output.ephemeral_key),
+                            // This unwrap is unnecessary, but to remove it one would need to write
+                            // a new array of [input[0], input[1]..] and enumerate all 52 elements
+                            //
+                            // This would be uglier than the unwrap
+                            <[u8; 580]>::from(output.enc_ciphertext)[..52]
+                                .try_into()
+                                .unwrap(),
+                        )
+                    })
+                    .collect(),
+            );
+
+            let orchard = OrchardCompactTx::new(
+                Some(i64::from(trnsctn.orchard_value_balance().orchard_amount())),
+                trnsctn
+                    .orchard_actions()
+                    .map(|action| {
+                        CompactOrchardAction::new(
+                            <[u8; 32]>::from(action.nullifier),
+                            <[u8; 32]>::from(action.cm_x),
+                            <[u8; 32]>::from(action.ephemeral_key),
+                            // This unwrap is unnecessary, but to remove it one would need to write
+                            // a new array of [input[0], input[1]..] and enumerate all 52 elements
+                            //
+                            // This would be uglier than the unwrap
+                            <[u8; 580]>::from(action.enc_ciphertext)[..52]
+                                .try_into()
+                                .unwrap(),
+                        )
+                    })
+                    .collect(),
+            );
+
+            let txdata =
+                CompactTxData::new(i as u64, trnsctn.hash().0, transparent, sapling, orchard);
+            transactions.push(txdata);
+        }
+
+        let hash = Hash::from(block.hash());
+        let parent_hash = Hash::from(block.header.previous_block_hash);
+
+        let coinbase_tx_height = block
+            .coinbase_height()
+            .ok_or_else(|| "Missing coinbase height".to_string())?;
+        let height = Height::try_from(coinbase_tx_height.0)
+            .map_err(|e| format!("Invalid block height: {e}"))?;
+
+        let block_work = block.header.difficulty_threshold.to_work().ok_or_else(|| {
+            "Failed to calculate block work from difficulty threshold".to_string()
+        })?;
+        let chainwork = parent_chain_work.add(&ChainWork::from(U256::from(block_work.as_u128())));
+
+        let index = BlockIndex {
+            hash,
+            parent_hash,
+            chainwork,
+            height: Some(height),
+        };
+
+        //TODO: Is a default (zero) root correct?
+        let commitment_tree_roots = CommitmentTreeRoots::new(
+            <[u8; 32]>::from(sapling_root),
+            <[u8; 32]>::from(orchard_root),
+        );
+
+        let commitment_tree_size = CommitmentTreeSizes::new(sapling_root_size, orchard_root_size);
+
+        let commitment_tree_data =
+            CommitmentTreeData::new(commitment_tree_roots, commitment_tree_size);
+
+        let chainblock = ChainBlock {
+            index,
+            data,
+            transactions,
+            commitment_tree_data,
+        };
+
+        Ok(chainblock)
+    }
+}
+
 impl ZainoVersionedSerialise for ChainBlock {
     const VERSION: u8 = version::V1;
 

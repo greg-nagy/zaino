@@ -3,18 +3,19 @@
 //! This will be added in a subsequest pr.
 
 use super::{
-    capability::{Capability, DbVersion},
+    capability::{BlockCoreExt, Capability, DbCore as _, DbRead, DbVersion, DbWrite},
     db::DbBackend,
     router::Router,
 };
 
 use crate::{
     chain_index::source::BlockchainSourceInterface, config::BlockCacheConfig,
-    error::FinalisedStateError,
+    error::FinalisedStateError, ChainBlock, ChainWork, Hash,
 };
 
 use async_trait::async_trait;
 use std::sync::Arc;
+use zebra_chain::parameters::NetworkKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MigrationType {
@@ -128,17 +129,112 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
         cfg: BlockCacheConfig,
         source: T,
     ) -> Result<(), FinalisedStateError> {
+        // Open V1 as shadow
         let shadow = Arc::new(DbBackend::spawn_v1(&cfg).await?);
         router.set_shadow(Arc::clone(&shadow), Capability::empty());
 
-        // Add chain source
+        // build shadow to primary_db_height,
+        // start from shadow_db_height in case database what shutdown mid-migration.
+        let mut parent_chain_work = ChainWork::from_u256(0.into());
+        loop {
+            let shadow_db_height = shadow
+                .db_height()
+                .await?
+                .expect("height always some in the finalised state");
+            let primary_db_height = router
+                .db_height()
+                .await?
+                .expect("height always some in the finalised state");
 
-        // build new db to db height
+            if shadow_db_height >= primary_db_height {
+                break;
+            }
 
-        // switch database
-        router.promote_shadow();
+            if shadow_db_height.0 > 1 {
+                parent_chain_work = *shadow
+                    .get_block_header(shadow_db_height)
+                    .await?
+                    .index()
+                    .chainwork();
+            }
+
+            for height in (shadow_db_height.0 + 1)..=primary_db_height.0 {
+                let block = source
+                    .get_block(zebra_state::HashOrHeight::Height(
+                        zebra_chain::block::Height(height),
+                    ))
+                    .await?
+                    .ok_or_else(|| {
+                        FinalisedStateError::MissingData(format!(
+                            "block not found at height {}",
+                            height
+                        ))
+                    })?;
+                let hash = Hash::from(block.hash().0);
+
+                let (sapling_root_data, orchard_root_data) =
+                    source.get_commitment_tree_roots(hash).await?;
+                let (sapling_root, sapling_root_size) = sapling_root_data.ok_or_else(|| {
+                    FinalisedStateError::MissingData(format!(
+                        "sapling commitment tree data missing for block {hash:?} at height {height}"
+                    ))
+                })?;
+                let (orchard_root, orchard_root_size) = orchard_root_data.ok_or_else(|| {
+                    FinalisedStateError::MissingData(format!(
+                        "orchard commitment tree data missing for block {hash:?} at height {height}"
+                    ))
+                })?;
+
+                let chain_block = ChainBlock::try_from((
+                    (*block).clone(),
+                    sapling_root,
+                    sapling_root_size as u32,
+                    orchard_root,
+                    orchard_root_size as u32,
+                    parent_chain_work,
+                    cfg.network.clone(),
+                ))
+                .map_err(|e| FinalisedStateError::Custom(e))?;
+
+                shadow.write_block(chain_block).await?;
+            }
+
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+
+        // Promote V1 to primary
+        let db_v0 = router.promote_shadow();
+        let old_weak = Arc::downgrade(&db_v0);
 
         // Delete V0
+        tokio::spawn(async move {
+            // Wait until all Arc<DbBackend> clones are dropped
+            while old_weak.strong_count() > 1 {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            }
+
+            // shutdown database
+            if let Err(e) = db_v0.shutdown().await {
+                tracing::warn!("Old primary shutdown failed: {e}");
+            }
+
+            // Now it is safe to delete
+            let db_path_dir = match cfg.network.kind() {
+                NetworkKind::Mainnet => "live",
+                NetworkKind::Testnet => "test",
+                NetworkKind::Regtest => "local",
+            };
+            let db_path = cfg.db_path.join(db_path_dir);
+
+            match tokio::fs::remove_dir_all(&db_path).await {
+                Ok(_) => tracing::info!("Deleted old database at {}", db_path.display()),
+                Err(e) => tracing::error!(
+                    "Failed to delete old database at {}: {}",
+                    db_path.display(),
+                    e
+                ),
+            }
+        });
 
         Ok(())
     }

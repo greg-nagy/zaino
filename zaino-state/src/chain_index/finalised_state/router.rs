@@ -99,7 +99,7 @@ impl Router {
     /// and updates the primary capability mask from the new backend.
     ///
     /// Used at the und of major migrations to move the active database to the new version.
-    pub(crate) fn promote_shadow(&self) {
+    pub(crate) fn promote_shadow(&self) -> Arc<DbBackend> {
         let new_primary = self
             .shadow
             .swap(None.into())
@@ -109,9 +109,11 @@ impl Router {
 
         let cap = new_primary.capability();
 
-        self.primary.store(new_primary.into());
+        let old_primary = self.primary.swap(Arc::clone(&new_primary).into());
         self.primary_mask.store(cap.bits(), Ordering::Release);
         self.shadow_mask.store(0, Ordering::Release);
+
+        old_primary
     }
 
     // ***** Primary database capability control *****

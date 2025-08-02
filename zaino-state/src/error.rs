@@ -409,7 +409,7 @@ pub enum FinalisedStateError {
     #[error("Custom error: {0}")]
     Custom(String),
 
-    /// Required data is missing from the non-finalised state.
+    /// Required data is missing from the finalised state.
     #[error("Missing data: {0}")]
     MissingData(String),
 
@@ -429,6 +429,10 @@ pub enum FinalisedStateError {
     /// currently-opened database version does not advertise.
     #[error("feature unavailable: {0}")]
     FeatureUnavailable(&'static str),
+
+    /// Errors originating from the BlockchainSource in use.
+    #[error("blockchain source error: {0}")]
+    BlockchainSourceError(#[from] crate::chain_index::source::BlockchainSourceError),
 
     // TODO: Add `InvalidRequestError` and return for invalid requests.
     /// Critical Errors, Restart Zaino.
