@@ -720,26 +720,8 @@ async fn varying_block_and_transaction_deserialization() {
                         "Found transaction of `Raw` type, expected only `Hash` types.".to_string(),
                     ))
                 }
-                zebra_rpc::methods::GetBlock::Object {
-                    hash: _,
-                    confirmations: _,
-                    size: _,
-                    height: _,
-                    version: _,
-                    merkle_root: _,
-                    block_commitments: _,
-                    final_sapling_root: _,
-                    final_orchard_root: _,
-                    tx,
-                    time: _,
-                    nonce: _,
-                    solution: _,
-                    bits: _,
-                    difficulty: _,
-                    trees: _,
-                    previous_block_hash: _,
-                    next_block_hash: _,
-                } => Ok(tx
+                zebra_rpc::methods::GetBlock::Object(block) => Ok(block
+                    .tx()
                     .into_iter()
                     .map(|item| match item {
                         GetBlockTransaction::Hash(h) => Ok(h.0.to_vec()),
