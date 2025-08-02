@@ -29,8 +29,8 @@ zingolib = { git = "https://github.com/zingolabs/zingolib.git", tag = "2.0.0-bet
     "test-elevation",
 ] }
 testvectors = { git = "https://github.com/zingolabs/zingolib.git", tag = "2.0.0-beta2" }
-zingo-infra-testutils = { git = "https://github.com/zingolabs/infrastructure.git", rev = "cca5d0705111e1e7064a691724c8501560c84782" }
-zingo-infra-services = { git = "https://github.com/zingolabs/infrastructure.git", rev = "cca5d0705111e1e7064a691724c8501560c84782" }
+zingo-infra-testutils = { git = "https://github.com/zingolabs/infrastructure.git", rev = "269feb5f76e231c5bdfc0317f35c23df390a3f4c" }
+zingo-infra-services = { git = "https://github.com/zingolabs/infrastructure.git", rev = "269feb5f76e231c5bdfc0317f35c23df390a3f4c" }
 
 # Librustzcash
 zcash_client_backend = { version = "0.18.0", features = ["lightwalletd-tonic"] }
@@ -40,9 +40,9 @@ zcash_transparent = "0.3"
 
 # Zebra
 # Can be updated to 2.4.0 once lands. Should be updated to crates.io releases once available.
-zebra-chain = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "3b5cbf845146ffe43be2d40b3ed5e2e6ffb7f12c" }
-zebra-state = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "3b5cbf845146ffe43be2d40b3ed5e2e6ffb7f12c" }
-zebra-rpc = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "3b5cbf845146ffe43be2d40b3ed5e2e6ffb7f12c" }
+zebra-chain = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "0893e1a7f499cadad1d9480216b3057dfd7900c7" }
+zebra-state = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "0893e1a7f499cadad1d9480216b3057dfd7900c7" }
+zebra-rpc = { git = "https://github.com/ZcashFoundation/zebra.git", rev = "0893e1a7f499cadad1d9480216b3057dfd7900c7" }
 
 # Runtime
 tokio = { version = "1.38", features = ["full"] }
