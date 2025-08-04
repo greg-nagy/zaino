@@ -139,7 +139,7 @@ pub struct DbV0 {
 }
 
 impl DbV0 {
-    /// Spawns a new [`DbV1`] and syncs the FinalisedState to the servers finalised state.
+    /// Spawns a new [`DbV0`] and syncs the FinalisedState to the servers finalised state.
     ///
     /// Uses ReadStateService to fetch chain data if given else uses JsonRPC client.
     ///
