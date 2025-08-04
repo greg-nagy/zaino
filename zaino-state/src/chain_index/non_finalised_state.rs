@@ -732,6 +732,49 @@ impl BlockchainSource {
         }
     }
 
+    pub(super) async fn hash_or_height_to_hash(
+        &self,
+        id: HashOrHeight,
+    ) -> BlockchainSourceResult<Option<Hash>> {
+        if let HashOrHeight::Hash(hash) = id {
+            return Ok(Some(Hash::from(hash.0)));
+        };
+        match self {
+            BlockchainSource::State(read_state_service) => {
+                let response = read_state_service
+                    .clone()
+                    .call(zebra_state::ReadRequest::BlockHeader(id))
+                    .await
+                    .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?;
+                match response {
+                    ReadResponse::BlockHeader { hash, .. } => Ok(Some(hash.into())),
+                    _otherwise => unreachable!(),
+                }
+            }
+            BlockchainSource::Fetch(json_rp_see_connector) => {
+                let block_response = json_rp_see_connector
+                    .get_block(id.to_string(), Some(1))
+                    .await
+                    .map_err(|e| match e {
+                        RpcRequestError::ServerWorkQueueFull => {
+                            BlockchainSourceError::Unrecoverable(
+                                "Not yet implemented: handle backing \
+                                    validator full queue"
+                                    .to_string(),
+                            )
+                        }
+                        _ => BlockchainSourceError::Unrecoverable(e.to_string()),
+                    })?;
+                match block_response {
+                    GetBlockResponse::Raw(_serialized_block) => unreachable!(),
+                    GetBlockResponse::Object(block_object) => {
+                        Ok(Some(Hash::from(block_object.hash.0)))
+                    }
+                }
+            }
+        }
+    }
+
     async fn get_commitment_tree_roots(
         &self,
         id: Hash,

@@ -154,6 +154,46 @@ impl NodeBackedChainIndex {
             })
         })
     }
+
+    async fn get_range_boundary_hash(
+        &self,
+        boundary: Option<HashOrHeight>,
+        fallback: impl FnOnce() -> HashOrHeight,
+        non_finalized_snapshot: &NonfinalizedBlockCacheSnapshot,
+    ) -> Result<Option<types::Hash>, ChainIndexError> {
+        let boundary_fallback = boundary.unwrap_or_else(fallback);
+        let Some(block_hash) = (match self
+            .get_chainblock_by_hashorheight(non_finalized_snapshot, &boundary_fallback)
+            .await
+            .map(|chain_block| chain_block.map(|cb| *cb.hash()))
+        {
+            Ok(hash) => hash,
+            Err(FinalisedStateError::FeatureUnavailable(_)) => self
+                .non_finalized_state
+                .source
+                .hash_or_height_to_hash(boundary_fallback)
+                .await
+                .map_err(|_e| ChainIndexError {
+                    kind: ChainIndexErrorKind::InternalServerError,
+                    message: "zaino still syncing, fallback to \
+                            fetch from backing node failed"
+                        .to_string(),
+                    source: None,
+                })?,
+            Err(e) => return Err(e.into()),
+        }) else {
+            return if boundary.is_some() {
+                Ok(None)
+            } else {
+                Err(ChainIndexError {
+                    kind: ChainIndexErrorKind::InternalServerError,
+                    message: "fallback block boundary missing from database".to_string(),
+                    source: None,
+                })
+            };
+        };
+        Ok(Some(block_hash))
+    }
 }
 
 /// The interface to the chain index
@@ -227,46 +267,26 @@ impl ChainIndex for NodeBackedChainIndex {
         Output = Result<Option<impl Stream<Item = Result<Vec<u8>, Self::Error>>>, Self::Error>,
     > {
         async move {
-            // with no start supplied, start from genesis
-            let Some(start_block) = self
-                .get_chainblock_by_hashorheight(
-                    nonfinalized_snapshot,
-                    &start.unwrap_or(HashOrHeight::Height(zebra_chain::block::Height(1))),
-                )
+            let fallback_to_genesis = || HashOrHeight::Height(zebra_chain::block::Height(1));
+            let Some(start_block_hash) = self
+                .get_range_boundary_hash(start, fallback_to_genesis, nonfinalized_snapshot)
                 .await?
             else {
-                return if start.is_some() {
-                    Ok(None)
-                } else {
-                    Err(ChainIndexError {
-                        kind: ChainIndexErrorKind::InternalServerError,
-                        message: "genesis block missing from database".to_string(),
-                        source: None,
-                    })
-                };
+                return Ok(None);
             };
-            let Some(end_block) = self
-                .get_chainblock_by_hashorheight(
-                    nonfinalized_snapshot,
-                    &end.unwrap_or(HashOrHeight::Hash(nonfinalized_snapshot.best_tip.1.into())),
-                )
+            let fallback_to_best_tip =
+                || HashOrHeight::Hash(nonfinalized_snapshot.best_tip.1.into());
+            let Some(end_block_hash) = self
+                .get_range_boundary_hash(end, fallback_to_best_tip, nonfinalized_snapshot)
                 .await?
             else {
-                return if start.is_some() {
-                    Ok(None)
-                } else {
-                    Err(ChainIndexError {
-                        kind: ChainIndexErrorKind::InternalServerError,
-                        message: "chaintip missing from database".to_string(),
-                        source: None,
-                    })
-                };
+                return Ok(None);
             };
 
             let mut nonfinalized_block =
-                nonfinalized_snapshot.get_chainblock_by_hash(end_block.hash());
+                nonfinalized_snapshot.get_chainblock_by_hash(&end_block_hash);
             let first_nonfinalized_hash = nonfinalized_snapshot
-                .get_chainblock_by_hash(start_block.hash())
+                .get_chainblock_by_hash(&start_block_hash)
                 .map(|block| block.index().hash());
 
             // TODO: combine with finalized state when available
