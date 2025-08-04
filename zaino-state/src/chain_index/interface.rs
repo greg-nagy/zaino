@@ -267,7 +267,7 @@ impl ChainIndex for NodeBackedChainIndex {
         Output = Result<Option<impl Stream<Item = Result<Vec<u8>, Self::Error>>>, Self::Error>,
     > {
         async move {
-            let fallback_to_genesis = || HashOrHeight::Height(zebra_chain::block::Height(1));
+            let fallback_to_genesis = || HashOrHeight::Height(zebra_chain::block::Height(0));
             let Some(start_block_hash) = self
                 .get_range_boundary_hash(start, fallback_to_genesis, nonfinalized_snapshot)
                 .await?
