@@ -154,6 +154,25 @@ pub(crate) async fn load_vectors_v0db_and_reader() -> (
 // *** ZainoDB Tests ***
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sync_to_height() {
+    init_tracing();
+
+    let (blocks, _faucet, _recipient) = load_test_vectors().unwrap();
+
+    let source = build_mockchain_source(blocks.clone());
+
+    let (_db_dir, zaino_db) = spawn_v0_zaino_db(source.clone()).await.unwrap();
+
+    zaino_db.sync_to_height(Height(200), source).await.unwrap();
+
+    zaino_db.wait_until_ready().await;
+    dbg!(zaino_db.status().await);
+    let built_db_height = dbg!(zaino_db.db_height().await.unwrap()).unwrap();
+
+    assert_eq!(built_db_height, Height(200));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn add_blocks_to_db_and_verify() {
     init_tracing();
 

@@ -19,7 +19,8 @@ use tracing::info;
 use zebra_chain::parameters::NetworkKind;
 
 use crate::{
-    config::BlockCacheConfig, error::FinalisedStateError, ChainBlock, Hash, Height, StatusType,
+    chain_index::source::BlockchainSourceError, config::BlockCacheConfig,
+    error::FinalisedStateError, ChainBlock, ChainWork, Hash, Height, StatusType,
 };
 
 use std::{sync::Arc, time::Duration};
@@ -145,7 +146,7 @@ impl ZainoDB {
     ///
     /// * `Some(version)` – DB exists, version returned.
     /// * `None`      – directory or key is missing -> fresh DB.
-    pub async fn try_find_current_db_version(cfg: &BlockCacheConfig) -> Option<u32> {
+    async fn try_find_current_db_version(cfg: &BlockCacheConfig) -> Option<u32> {
         let legacy_dir = match cfg.network.kind() {
             NetworkKind::Mainnet => "live",
             NetworkKind::Testnet => "test",
@@ -190,6 +191,116 @@ impl ZainoDB {
     }
 
     // ***** Db Core Write *****
+
+    /// Sync the database to the given height using the given ChainBlockSourceInterface.
+    pub(crate) async fn sync_to_height<T>(
+        &self,
+        height: Height,
+        source: T,
+    ) -> Result<(), FinalisedStateError>
+    where
+        T: BlockchainSourceInterface,
+    {
+        let network = self.cfg.network.clone();
+        let db_height = self.db_height().await?.unwrap_or(Height(0));
+
+        let mut parent_chainwork = if db_height.0 == 0 {
+            ChainWork::from_u256(0.into())
+        } else {
+            match self
+                .db
+                .backend(Capability::BLOCK_CORE_EXT)?
+                .get_block_header(height)
+                .await
+            {
+                Ok(header) => *header.index().chainwork(),
+                // V0 does not hold or use chainwork, and does not serve header data,
+                // can we handle this better?
+                //
+                // can we get this data from zebra blocks?
+                Err(_) => ChainWork::from_u256(0.into()),
+            }
+        };
+
+        for height_int in (db_height.0 + 1)..=height.0 {
+            let block = match source
+                .get_block(zebra_state::HashOrHeight::Height(
+                    zebra_chain::block::Height(height_int),
+                ))
+                .await?
+            {
+                Some(block) => block,
+                None => {
+                    return Err(FinalisedStateError::BlockchainSourceError(
+                        BlockchainSourceError::Unrecoverable(format!(
+                            "error fetching block at height {} from validator",
+                            height.0
+                        )),
+                    ));
+                }
+            };
+
+            let block_hash = match Hash::try_from(block.hash().0) {
+                Ok(hash) => hash,
+                Err(_) => {
+                    return Err(FinalisedStateError::BlockchainSourceError(
+                        BlockchainSourceError::Unrecoverable(format!(
+                            "error decoding block hash at height {} from validator",
+                            height.0
+                        )),
+                    ));
+                }
+            };
+
+            let (sapling_root, sapling_size, orchard_root, orchard_size) =
+                match source.get_commitment_tree_roots(block_hash).await? {
+                    (Some((sapling_root, sapling_size)), Some((orchard_root, orchard_size))) => {
+                        (sapling_root, sapling_size, orchard_root, orchard_size)
+                    }
+                    (None, _) => {
+                        return Err(FinalisedStateError::BlockchainSourceError(
+                            BlockchainSourceError::Unrecoverable(format!(
+                                "missing Sapling commitment tree root for block {}",
+                                block_hash
+                            )),
+                        ));
+                    }
+                    (_, None) => {
+                        return Err(FinalisedStateError::BlockchainSourceError(
+                            BlockchainSourceError::Unrecoverable(format!(
+                                "missing Orchard commitment tree root for block {}",
+                                block_hash
+                            )),
+                        ));
+                    }
+                };
+
+            let chain_block = match ChainBlock::try_from((
+                (*block).clone(),
+                sapling_root,
+                sapling_size as u32,
+                orchard_root,
+                orchard_size as u32,
+                parent_chainwork,
+                network.clone(),
+            )) {
+                Ok(block) => block,
+                Err(_) => {
+                    return Err(FinalisedStateError::BlockchainSourceError(
+                        BlockchainSourceError::Unrecoverable(format!(
+                            "error building block data at height {}",
+                            height.0
+                        )),
+                    ));
+                }
+            };
+            parent_chainwork = *chain_block.index().chainwork();
+
+            self.write_block(chain_block).await?;
+        }
+
+        Ok(())
+    }
 
     /// Writes a block to the database.
     ///
