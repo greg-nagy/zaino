@@ -1388,80 +1388,94 @@ impl
         };
 
         let mut transactions = Vec::new();
-        for (i, trnsctn) in block.transactions.iter().enumerate() {
-            let transparent = TransparentCompactTx::new(
-                trnsctn
-                    .inputs()
-                    .iter()
-                    .filter_map(|input| {
-                        input
-                            .outpoint()
-                            .map(|outpoint| TxInCompact::new(outpoint.hash.0, outpoint.index))
-                    })
+        for (i, txn) in block.transactions.iter().enumerate() {
+            let inputs: Vec<TxInCompact> = txn
+                .inputs()
+                .iter()
+                .map(|input| match input.outpoint() {
+                    Some(outpoint) => TxInCompact::new(outpoint.hash.0, outpoint.index),
+                    None => TxInCompact::null_prevout(),
+                })
+                .collect();
+
+            let outputs = txn
+                .outputs()
+                .iter()
+                .map(|output| {
+                    let value = u64::from(output.value);
+                    let script_bytes = output.lock_script.as_raw_bytes();
+
+                    let addr = AddrScript::from_script(script_bytes).unwrap_or_else(|| {
+                        let mut fallback = [0u8; 20];
+                        let usable = script_bytes.len().min(20);
+                        fallback[..usable].copy_from_slice(&script_bytes[..usable]);
+                        AddrScript::new(fallback, ScriptType::NonStandard as u8)
+                    });
+
+                    TxOutCompact::new(value, *addr.hash(), addr.script_type())
+                        .ok_or_else(|| "TxOutCompact conversion failed".to_string())
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let transparent = TransparentCompactTx::new(inputs, outputs);
+
+            let sapling_value = {
+                let val = txn.sapling_value_balance().sapling_amount();
+                if val == 0 {
+                    None
+                } else {
+                    Some(i64::from(val))
+                }
+            };
+            let sapling = SaplingCompactTx::new(
+                sapling_value,
+                txn.sapling_nullifiers()
+                    .map(|nf| CompactSaplingSpend::new(*nf.0))
                     .collect(),
-                trnsctn
-                    .outputs()
-                    .iter()
+                txn.sapling_outputs()
                     .map(|output| {
-                        TxOutCompact::try_from((
-                            u64::from(output.value),
-                            output.lock_script.as_raw_bytes(),
+                        let cipher: [u8; 52] = <[u8; 580]>::from(output.enc_ciphertext)[..52]
+                            .try_into()
+                            .map_err(|_| "Ciphertext slice conversion failed")?;
+                        Ok::<CompactSaplingOutput, String>(CompactSaplingOutput::new(
+                            output.cm_u.to_bytes(),
+                            <[u8; 32]>::from(output.ephemeral_key),
+                            cipher,
                         ))
-                        .map_err(|_| "TxOutCompact conversion failed".to_string())
                     })
                     .collect::<Result<Vec<_>, _>>()?,
             );
 
-            let sapling = SaplingCompactTx::new(
-                Some(i64::from(trnsctn.sapling_value_balance().sapling_amount())),
-                trnsctn
-                    .sapling_nullifiers()
-                    .map(|nf| CompactSaplingSpend::new(*nf.0))
-                    .collect(),
-                trnsctn
-                    .sapling_outputs()
-                    .map(|output| {
-                        CompactSaplingOutput::new(
-                            output.cm_u.to_bytes(),
-                            <[u8; 32]>::from(output.ephemeral_key),
-                            // This unwrap is unnecessary, but to remove it one would need to write
-                            // a new array of [input[0], input[1]..] and enumerate all 52 elements
-                            //
-                            // This would be uglier than the unwrap
-                            <[u8; 580]>::from(output.enc_ciphertext)[..52]
-                                .try_into()
-                                .unwrap(),
-                        )
-                    })
-                    .collect(),
-            );
-
+            let orchard_value = {
+                let val = txn.orchard_value_balance().orchard_amount();
+                if val == 0 {
+                    None
+                } else {
+                    Some(i64::from(val))
+                }
+            };
             let orchard = OrchardCompactTx::new(
-                Some(i64::from(trnsctn.orchard_value_balance().orchard_amount())),
-                trnsctn
-                    .orchard_actions()
+                orchard_value,
+                txn.orchard_actions()
                     .map(|action| {
-                        CompactOrchardAction::new(
+                        let cipher: [u8; 52] = <[u8; 580]>::from(action.enc_ciphertext)[..52]
+                            .try_into()
+                            .map_err(|_| "Ciphertext slice conversion failed")?;
+                        Ok::<CompactOrchardAction, String>(CompactOrchardAction::new(
                             <[u8; 32]>::from(action.nullifier),
                             <[u8; 32]>::from(action.cm_x),
                             <[u8; 32]>::from(action.ephemeral_key),
-                            // This unwrap is unnecessary, but to remove it one would need to write
-                            // a new array of [input[0], input[1]..] and enumerate all 52 elements
-                            //
-                            // This would be uglier than the unwrap
-                            <[u8; 580]>::from(action.enc_ciphertext)[..52]
-                                .try_into()
-                                .unwrap(),
-                        )
+                            cipher,
+                        ))
                     })
-                    .collect(),
+                    .collect::<Result<Vec<_>, _>>()?,
             );
 
             let txdata = CompactTxData::new(
                 i as u64,
                 // Convert txids to server order (reverse bytes),
                 // required for internal block validation logic (merkle root check).
-                trnsctn.hash().bytes_in_display_order(),
+                txn.hash().bytes_in_display_order(),
                 transparent,
                 sapling,
                 orchard,
@@ -1877,6 +1891,14 @@ impl TxInCompact {
         }
     }
 
+    /// Constructs a canonical "null prevout" (coinbase marker).
+    pub fn null_prevout() -> Self {
+        Self {
+            prevout_txid: [0u8; 32],
+            prevout_index: u32::MAX,
+        }
+    }
+
     /// Returns txid of the transaction that holds the output being sent.
     pub fn prevout_txid(&self) -> &[u8; 32] {
         &self.prevout_txid
@@ -2088,17 +2110,21 @@ impl TxOutCompact {
 impl<T: AsRef<[u8]>> TryFrom<(u64, T)> for TxOutCompact {
     type Error = ();
 
-    fn try_from((value, script_hash): (u64, T)) -> Result<Self, Self::Error> {
-        let script_hash_ref = script_hash.as_ref();
-        if script_hash_ref.len() == 21 {
-            let script_type = script_hash_ref[0];
+    fn try_from((value, script): (u64, T)) -> Result<Self, Self::Error> {
+        let script_bytes = script.as_ref();
+
+        if let Some(addr) = AddrScript::from_script(script_bytes) {
+            TxOutCompact::new(value, *addr.hash(), addr.script_type()).ok_or(())
+        } else if script_bytes.len() == 21 {
+            let script_type = script_bytes[0];
             let mut hash_bytes = [0u8; 20];
-            hash_bytes.copy_from_slice(&script_hash_ref[1..]);
+            hash_bytes.copy_from_slice(&script_bytes[1..]);
             TxOutCompact::new(value, hash_bytes, script_type).ok_or(())
         } else {
+            // fallback for nonstandard scripts
             let mut fallback = [0u8; 20];
-            let usable_len = script_hash_ref.len().min(20);
-            fallback[..usable_len].copy_from_slice(&script_hash_ref[..usable_len]);
+            let usable_len = script_bytes.len().min(20);
+            fallback[..usable_len].copy_from_slice(&script_bytes[..usable_len]);
             TxOutCompact::new(value, fallback, ScriptType::NonStandard as u8).ok_or(())
         }
     }

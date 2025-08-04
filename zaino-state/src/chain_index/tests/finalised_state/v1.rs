@@ -10,9 +10,10 @@ use crate::bench::BlockCacheConfig;
 use crate::chain_index::finalised_state::reader::DbReader;
 use crate::chain_index::finalised_state::ZainoDB;
 use crate::chain_index::source::test::MockchainSource;
+use crate::chain_index::tests::init_tracing;
 use crate::chain_index::tests::vectors::{build_mockchain_source, load_test_vectors};
 use crate::error::FinalisedStateError;
-use crate::{AddrScript, ChainBlock, Height, Outpoint};
+use crate::{AddrScript, ChainBlock, ChainWork, Height, Outpoint};
 
 pub(crate) async fn spawn_v1_zaino_db(
     source: MockchainSource,
@@ -73,11 +74,44 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v1_zaino_db() -> (
     let source = build_mockchain_source(blocks.clone());
 
     let (db_dir, zaino_db) = spawn_v1_zaino_db(source).await.unwrap();
-    for (_h, chain_block, _compact_block, _zebra_block, _block_roots) in blocks.clone() {
-        // dbg!("Writing block at height {}", _h);
-        // if _h == 1 {
-        //     dbg!(&chain_block);
-        // }
+
+    let mut parent_chain_work = ChainWork::from_u256(0.into());
+
+    for (
+        _h,
+        _chain_block,
+        _compact_block,
+        zebra_block,
+        (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+    ) in blocks.clone()
+    {
+        let chain_block = ChainBlock::try_from((
+            zebra_block,
+            sapling_root,
+            sapling_root_size as u32,
+            orchard_root,
+            orchard_root_size as u32,
+            parent_chain_work,
+            zebra_chain::parameters::Network::new_regtest(
+                zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                    before_overwinter: Some(1),
+                    overwinter: Some(1),
+                    sapling: Some(1),
+                    blossom: Some(1),
+                    heartwood: Some(1),
+                    canopy: Some(1),
+                    nu5: Some(1),
+                    nu6: Some(1),
+                    // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
+                    nu6_1: None,
+                    nu7: None,
+                },
+            ),
+        ))
+        .unwrap();
+
+        parent_chain_work = *chain_block.index().chainwork();
+
         zaino_db.write_block(chain_block).await.unwrap();
     }
     (blocks, faucet, recipient, db_dir, zaino_db)
@@ -121,6 +155,8 @@ pub(crate) async fn load_vectors_v1db_and_reader() -> (
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn add_blocks_to_db_and_verify() {
+    init_tracing();
+
     let (_blocks, _faucet, _recipient, _db_dir, zaino_db) =
         load_vectors_and_spawn_and_sync_v1_zaino_db().await;
     zaino_db.wait_until_ready().await;
@@ -130,6 +166,8 @@ async fn add_blocks_to_db_and_verify() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn delete_blocks_from_db() {
+    init_tracing();
+
     let (_blocks, _faucet, _recipient, _db_dir, zaino_db) =
         load_vectors_and_spawn_and_sync_v1_zaino_db().await;
 
@@ -148,6 +186,8 @@ async fn delete_blocks_from_db() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn load_db_from_file() {
+    init_tracing();
+
     let (blocks, _faucet, _recipient) = load_test_vectors().unwrap();
 
     let temp_dir: TempDir = tempfile::tempdir().unwrap();
@@ -186,7 +226,44 @@ async fn load_db_from_file() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async move {
             let zaino_db = ZainoDB::spawn(config_clone, source).await.unwrap();
-            for (_h, chain_block, _compact_block, _zebra_block, _block_roots) in blocks_clone {
+
+            let mut parent_chain_work = ChainWork::from_u256(0.into());
+
+            for (
+                _h,
+                _chain_block,
+                _compact_block,
+                zebra_block,
+                (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+            ) in blocks_clone
+            {
+                let chain_block = ChainBlock::try_from((
+                    zebra_block,
+                    sapling_root,
+                    sapling_root_size as u32,
+                    orchard_root,
+                    orchard_root_size as u32,
+                    parent_chain_work,
+                    zebra_chain::parameters::Network::new_regtest(
+                        zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                            before_overwinter: Some(1),
+                            overwinter: Some(1),
+                            sapling: Some(1),
+                            blossom: Some(1),
+                            heartwood: Some(1),
+                            canopy: Some(1),
+                            nu5: Some(1),
+                            nu6: Some(1),
+                            // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
+                            nu6_1: None,
+                            nu7: None,
+                        },
+                    ),
+                ))
+                .unwrap();
+
+                parent_chain_work = *chain_block.index().chainwork();
+
                 zaino_db.write_block(chain_block).await.unwrap();
             }
 
@@ -223,6 +300,8 @@ async fn load_db_from_file() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn try_write_invalid_block() {
+    init_tracing();
+
     let (blocks, _faucet, _recipient, _db_dir, zaino_db) =
         load_vectors_and_spawn_and_sync_v1_zaino_db().await;
 
@@ -246,6 +325,8 @@ async fn try_write_invalid_block() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn try_delete_block_with_invalid_height() {
+    init_tracing();
+
     let (blocks, _faucet, _recipient, _db_dir, zaino_db) =
         load_vectors_and_spawn_and_sync_v1_zaino_db().await;
 
@@ -287,30 +368,109 @@ async fn create_db_reader() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_chain_blocks() {
+    init_tracing();
+
     let (blocks, _faucet, _recipient, _db_dir, _zaino_db, db_reader) =
         load_vectors_v1db_and_reader().await;
 
-    for (height, chain_block, _, _, _) in blocks.iter() {
+    let mut parent_chain_work = ChainWork::from_u256(0.into());
+
+    for (
+        height,
+        _chain_block,
+        _compact_block,
+        zebra_block,
+        (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+    ) in blocks.iter()
+    {
+        let chain_block = ChainBlock::try_from((
+            zebra_block.clone(),
+            sapling_root.clone(),
+            *sapling_root_size as u32,
+            orchard_root.clone(),
+            *orchard_root_size as u32,
+            parent_chain_work,
+            zebra_chain::parameters::Network::new_regtest(
+                zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                    before_overwinter: Some(1),
+                    overwinter: Some(1),
+                    sapling: Some(1),
+                    blossom: Some(1),
+                    heartwood: Some(1),
+                    canopy: Some(1),
+                    nu5: Some(1),
+                    nu6: Some(1),
+                    // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
+                    nu6_1: None,
+                    nu7: None,
+                },
+            ),
+        ))
+        .unwrap();
+
+        parent_chain_work = *chain_block.index().chainwork();
+
         let reader_chain_block = db_reader.get_chain_block(Height(*height)).await.unwrap();
-        assert_eq!(chain_block, &reader_chain_block);
+        assert_eq!(chain_block, reader_chain_block);
         println!("ChainBlock at height {height} OK");
     }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_compact_blocks() {
+    init_tracing();
+
     let (blocks, _faucet, _recipient, _db_dir, _zaino_db, db_reader) =
         load_vectors_v1db_and_reader().await;
 
-    for (height, _, compact_block, _, _) in blocks.iter() {
+    let mut parent_chain_work = ChainWork::from_u256(0.into());
+
+    for (
+        height,
+        _chain_block,
+        _compact_block,
+        zebra_block,
+        (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+    ) in blocks.iter()
+    {
+        let chain_block = ChainBlock::try_from((
+            zebra_block.clone(),
+            sapling_root.clone(),
+            *sapling_root_size as u32,
+            orchard_root.clone(),
+            *orchard_root_size as u32,
+            parent_chain_work,
+            zebra_chain::parameters::Network::new_regtest(
+                zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                    before_overwinter: Some(1),
+                    overwinter: Some(1),
+                    sapling: Some(1),
+                    blossom: Some(1),
+                    heartwood: Some(1),
+                    canopy: Some(1),
+                    nu5: Some(1),
+                    nu6: Some(1),
+                    // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
+                    nu6_1: None,
+                    nu7: None,
+                },
+            ),
+        ))
+        .unwrap();
+        let compact_block = chain_block.to_compact_block();
+
+        parent_chain_work = *chain_block.index().chainwork();
+
         let reader_compact_block = db_reader.get_compact_block(Height(*height)).await.unwrap();
-        assert_eq!(compact_block, &reader_compact_block);
+        assert_eq!(compact_block, reader_compact_block);
         println!("CompactBlock at height {height} OK");
     }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_faucet_txids() {
+    init_tracing();
+
     let (blocks, faucet, _recipient, _db_dir, _zaino_db, db_reader) =
         load_vectors_v1db_and_reader().await;
 
@@ -323,9 +483,45 @@ async fn get_faucet_txids() {
     let faucet_addr_script = AddrScript::from_script(faucet_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
-    for (height, chain_block, _compact_block, _zebra_block, _block_roots) in blocks {
+    let mut parent_chain_work = ChainWork::from_u256(0.into());
+
+    for (
+        height,
+        _chain_block,
+        _compact_block,
+        zebra_block,
+        (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+    ) in blocks.iter()
+    {
+        let chain_block = ChainBlock::try_from((
+            zebra_block.clone(),
+            sapling_root.clone(),
+            *sapling_root_size as u32,
+            orchard_root.clone(),
+            *orchard_root_size as u32,
+            parent_chain_work,
+            zebra_chain::parameters::Network::new_regtest(
+                zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                    before_overwinter: Some(1),
+                    overwinter: Some(1),
+                    sapling: Some(1),
+                    blossom: Some(1),
+                    heartwood: Some(1),
+                    canopy: Some(1),
+                    nu5: Some(1),
+                    nu6: Some(1),
+                    // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
+                    nu6_1: None,
+                    nu7: None,
+                },
+            ),
+        ))
+        .unwrap();
+
+        parent_chain_work = *chain_block.index().chainwork();
+
         println!("Checking faucet txids at height {height}");
-        let block_height = Height(height);
+        let block_height = Height(*height);
         let block_txids: Vec<String> = chain_block
             .transactions()
             .iter()
@@ -371,6 +567,8 @@ async fn get_faucet_txids() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_recipient_txids() {
+    init_tracing();
+
     let (blocks, _faucet, recipient, _db_dir, _zaino_db, db_reader) =
         load_vectors_v1db_and_reader().await;
 
@@ -383,9 +581,45 @@ async fn get_recipient_txids() {
     let recipient_addr_script = AddrScript::from_script(recipient_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
-    for (height, chain_block, _compact_block, _zebra_block, _block_roots) in blocks {
+    let mut parent_chain_work = ChainWork::from_u256(0.into());
+
+    for (
+        height,
+        _chain_block,
+        _compact_block,
+        zebra_block,
+        (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+    ) in blocks.iter()
+    {
+        let chain_block = ChainBlock::try_from((
+            zebra_block.clone(),
+            sapling_root.clone(),
+            *sapling_root_size as u32,
+            orchard_root.clone(),
+            *orchard_root_size as u32,
+            parent_chain_work,
+            zebra_chain::parameters::Network::new_regtest(
+                zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                    before_overwinter: Some(1),
+                    overwinter: Some(1),
+                    sapling: Some(1),
+                    blossom: Some(1),
+                    heartwood: Some(1),
+                    canopy: Some(1),
+                    nu5: Some(1),
+                    nu6: Some(1),
+                    // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
+                    nu6_1: None,
+                    nu7: None,
+                },
+            ),
+        ))
+        .unwrap();
+
+        parent_chain_work = *chain_block.index().chainwork();
+
         println!("Checking recipient txids at height {height}");
-        let block_height = Height(height);
+        let block_height = Height(*height);
         let block_txids: Vec<String> = chain_block
             .transactions()
             .iter()
@@ -437,6 +671,8 @@ async fn get_recipient_txids() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_faucet_utxos() {
+    init_tracing();
+
     let (blocks, faucet, _recipient, _db_dir, _zaino_db, db_reader) =
         load_vectors_v1db_and_reader().await;
 
@@ -475,6 +711,8 @@ async fn get_faucet_utxos() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_recipient_utxos() {
+    init_tracing();
+
     let (blocks, _faucet, recipient, _db_dir, _zaino_db, db_reader) =
         load_vectors_v1db_and_reader().await;
 
@@ -513,6 +751,8 @@ async fn get_recipient_utxos() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_balance() {
+    init_tracing();
+
     let (blocks, faucet, recipient, _db_dir, _zaino_db, db_reader) =
         load_vectors_v1db_and_reader().await;
 
@@ -552,6 +792,8 @@ async fn get_balance() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn check_faucet_spent_map() {
+    init_tracing();
+
     let (blocks, faucet, _recipient, _db_dir, _zaino_db, db_reader) =
         load_vectors_v1db_and_reader().await;
 
@@ -564,7 +806,44 @@ async fn check_faucet_spent_map() {
     // collect faucet outpoints
     let mut faucet_outpoints = Vec::new();
     let mut faucet_ouptpoints_spent_status = Vec::new();
-    for (_height, chain_block, _compact_block, _zebra_block, _block_roots) in blocks.clone() {
+
+    let mut parent_chain_work = ChainWork::from_u256(0.into());
+
+    for (
+        _height,
+        _chain_block,
+        _compact_block,
+        zebra_block,
+        (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+    ) in blocks.iter()
+    {
+        let chain_block = ChainBlock::try_from((
+            zebra_block.clone(),
+            sapling_root.clone(),
+            *sapling_root_size as u32,
+            orchard_root.clone(),
+            *orchard_root_size as u32,
+            parent_chain_work,
+            zebra_chain::parameters::Network::new_regtest(
+                zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                    before_overwinter: Some(1),
+                    overwinter: Some(1),
+                    sapling: Some(1),
+                    blossom: Some(1),
+                    heartwood: Some(1),
+                    canopy: Some(1),
+                    nu5: Some(1),
+                    nu6: Some(1),
+                    // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
+                    nu6_1: None,
+                    nu7: None,
+                },
+            ),
+        ))
+        .unwrap();
+
+        parent_chain_work = *chain_block.index().chainwork();
+
         for tx in chain_block.transactions() {
             let txid = tx.txid();
             let outputs = tx.transparent().outputs();
@@ -649,6 +928,8 @@ async fn check_faucet_spent_map() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn check_recipient_spent_map() {
+    init_tracing();
+
     let (blocks, _faucet, recipient, _db_dir, _zaino_db, db_reader) =
         load_vectors_v1db_and_reader().await;
 
@@ -661,7 +942,44 @@ async fn check_recipient_spent_map() {
     // collect faucet outpoints
     let mut recipient_outpoints = Vec::new();
     let mut recipient_ouptpoints_spent_status = Vec::new();
-    for (_height, chain_block, _compact_block, _zebra_block, _block_roots) in blocks.clone() {
+
+    let mut parent_chain_work = ChainWork::from_u256(0.into());
+
+    for (
+        _height,
+        _chain_block,
+        _compact_block,
+        zebra_block,
+        (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+    ) in blocks.iter()
+    {
+        let chain_block = ChainBlock::try_from((
+            zebra_block.clone(),
+            sapling_root.clone(),
+            *sapling_root_size as u32,
+            orchard_root.clone(),
+            *orchard_root_size as u32,
+            parent_chain_work,
+            zebra_chain::parameters::Network::new_regtest(
+                zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                    before_overwinter: Some(1),
+                    overwinter: Some(1),
+                    sapling: Some(1),
+                    blossom: Some(1),
+                    heartwood: Some(1),
+                    canopy: Some(1),
+                    nu5: Some(1),
+                    nu6: Some(1),
+                    // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
+                    nu6_1: None,
+                    nu7: None,
+                },
+            ),
+        ))
+        .unwrap();
+
+        parent_chain_work = *chain_block.index().chainwork();
+
         for tx in chain_block.transactions() {
             let txid = tx.txid();
             let outputs = tx.transparent().outputs();

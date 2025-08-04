@@ -16,7 +16,7 @@ use crate::{read_u32_le, read_u64_le, ChainBlock, CompactSize, ZainoVersionedSer
 
 /// Reads test data from file.
 #[allow(clippy::type_complexity)]
-pub fn read_vectors_from_file<P: AsRef<Path>>(
+fn read_vectors_from_file<P: AsRef<Path>>(
     base_dir: P,
 ) -> io::Result<(
     Vec<(
@@ -150,6 +150,10 @@ pub fn read_vectors_from_file<P: AsRef<Path>>(
     Ok((full_data, faucet, recipient))
 }
 
+// TODO: Remove ChainBlocks and Compact blocks as they are no longer used,
+// `zebra_chain::block::block`s are used as the single source of block data.
+//
+// TODO: Create seperate load methods for block_data and transparent_wallet_data.
 #[allow(clippy::type_complexity)]
 pub(crate) fn load_test_vectors() -> io::Result<(
     Vec<(
