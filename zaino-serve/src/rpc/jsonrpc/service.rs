@@ -4,12 +4,13 @@ use zaino_fetch::jsonrpsee::response::GetMempoolInfoResponse;
 use zaino_state::{LightWalletIndexer, ZcashIndexer};
 
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
-
+use zebra_rpc::client::{
+    GetBlockchainInfoResponse, GetSubtreesByIndexResponse, GetTreestateResponse,
+    ValidateAddressResponse,
+};
 use zebra_rpc::methods::{
-    trees::{GetSubtrees, GetTreestate},
-    types::validate_address,
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
-    GetBlockChainInfo, GetBlockHash, GetInfo, GetRawTransaction, SentTransactionHash,
+    GetBlockHash, GetInfo, GetRawTransaction, SentTransactionHash,
 };
 
 use jsonrpsee::types::ErrorObjectOwned;
@@ -39,7 +40,7 @@ pub trait ZcashIndexerRpc {
     #[method(name = "getinfo")]
     async fn get_info(&self) -> Result<GetInfo, ErrorObjectOwned>;
 
-    /// Returns blockchain state information, as a [`GetBlockChainInfo`] JSON struct.
+    /// Returns blockchain state information, as a [`GetBlockchainInfoResponse`] JSON struct.
     ///
     /// zcashd reference: [`getblockchaininfo`](https://zcash.github.io/rpc/getblockchaininfo.html)
     /// method: post
@@ -47,10 +48,10 @@ pub trait ZcashIndexerRpc {
     ///
     /// # Notes
     ///
-    /// Some fields from the zcashd reference are missing from Zebra's [`GetBlockChainInfo`]. It only contains the fields
+    /// Some fields from the zcashd reference are missing from Zebra's [`GetBlockchainInfoResponse`]. It only contains the fields
     /// [required for lightwalletd support.](https://github.com/zcash/lightwalletd/blob/v0.4.9/common/common.go#L72-L89)
     #[method(name = "getblockchaininfo")]
-    async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, ErrorObjectOwned>;
+    async fn get_blockchain_info(&self) -> Result<GetBlockchainInfoResponse, ErrorObjectOwned>;
 
     /// Returns details on the active state of the TX memory pool.
     ///
@@ -105,7 +106,7 @@ pub trait ZcashIndexerRpc {
     async fn validate_address(
         &self,
         address: String,
-    ) -> Result<validate_address::Response, ErrorObjectOwned>;
+    ) -> Result<ValidateAddressResponse, ErrorObjectOwned>;
 
     /// Returns the total balance of a provided `addresses` in an [`AddressBalance`] instance.
     ///
@@ -215,7 +216,7 @@ pub trait ZcashIndexerRpc {
     async fn z_get_treestate(
         &self,
         hash_or_height: String,
-    ) -> Result<GetTreestate, ErrorObjectOwned>;
+    ) -> Result<GetTreestateResponse, ErrorObjectOwned>;
 
     /// Returns information about a range of Sapling or Orchard subtrees.
     ///
@@ -241,7 +242,7 @@ pub trait ZcashIndexerRpc {
         pool: String,
         start_index: NoteCommitmentSubtreeIndex,
         limit: Option<NoteCommitmentSubtreeIndex>,
-    ) -> Result<GetSubtrees, ErrorObjectOwned>;
+    ) -> Result<GetSubtreesByIndexResponse, ErrorObjectOwned>;
 
     /// Returns the raw transaction data, as a [`GetRawTransaction`] JSON string or structure.
     ///
@@ -344,7 +345,7 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
             })
     }
 
-    async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, ErrorObjectOwned> {
+    async fn get_blockchain_info(&self) -> Result<GetBlockchainInfoResponse, ErrorObjectOwned> {
         self.service_subscriber
             .inner_ref()
             .get_blockchain_info()
@@ -403,7 +404,7 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
     async fn validate_address(
         &self,
         address: String,
-    ) -> Result<validate_address::Response, ErrorObjectOwned> {
+    ) -> Result<ValidateAddressResponse, ErrorObjectOwned> {
         self.service_subscriber
             .inner_ref()
             .validate_address(address)
@@ -486,7 +487,7 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
     async fn z_get_treestate(
         &self,
         hash_or_height: String,
-    ) -> Result<GetTreestate, ErrorObjectOwned> {
+    ) -> Result<GetTreestateResponse, ErrorObjectOwned> {
         self.service_subscriber
             .inner_ref()
             .z_get_treestate(hash_or_height)
@@ -505,7 +506,7 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
         pool: String,
         start_index: NoteCommitmentSubtreeIndex,
         limit: Option<NoteCommitmentSubtreeIndex>,
-    ) -> Result<GetSubtrees, ErrorObjectOwned> {
+    ) -> Result<GetSubtreesByIndexResponse, ErrorObjectOwned> {
         self.service_subscriber
             .inner_ref()
             .z_get_subtrees_by_index(pool, start_index, limit)

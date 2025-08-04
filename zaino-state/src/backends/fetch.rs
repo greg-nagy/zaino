@@ -9,11 +9,13 @@ use tracing::{info, warn};
 use zebra_state::HashOrHeight;
 
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
-use zebra_rpc::methods::{
-    trees::{GetSubtrees, GetTreestate},
-    types::validate_address,
-    AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
-    GetBlockChainInfo, GetBlockHash, GetInfo, GetRawTransaction, SentTransactionHash,
+use zebra_rpc::{
+    client::{GetSubtreesByIndexResponse, GetTreestateResponse, ValidateAddressResponse},
+    methods::{
+        AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
+        GetBlockHashResponse, GetBlockchainInfoResponse, GetInfo, GetRawTransaction,
+        SentTransactionHash,
+    },
 };
 
 use zaino_fetch::{
@@ -200,7 +202,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
         Ok(self.fetcher.get_info().await?.into())
     }
 
-    /// Returns blockchain state information, as a [`GetBlockChainInfo`] JSON struct.
+    /// Returns blockchain state information, as a [`GetBlockchainInfoResponse`] JSON struct.
     ///
     /// zcashd reference: [`getblockchaininfo`](https://zcash.github.io/rpc/getblockchaininfo.html)
     /// method: post
@@ -208,9 +210,9 @@ impl ZcashIndexer for FetchServiceSubscriber {
     ///
     /// # Notes
     ///
-    /// Some fields from the zcashd reference are missing from Zebra's [`GetBlockChainInfo`]. It only contains the fields
+    /// Some fields from the zcashd reference are missing from Zebra's [`GetBlockchainInfoResponse`]. It only contains the fields
     /// [required for lightwalletd support.](https://github.com/zcash/lightwalletd/blob/v0.4.9/common/common.go#L72-L89)
-    async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, Self::Error> {
+    async fn get_blockchain_info(&self) -> Result<GetBlockchainInfoResponse, Self::Error> {
         Ok(self
             .fetcher
             .get_blockchain_info()
@@ -367,7 +369,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// [In the rpc definition](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/common.h#L48) there are no required params, or optional params.
     /// [The function in rpc/blockchain.cpp](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L325)
     /// where `return chainActive.Tip()->GetBlockHash().GetHex();` is the [return expression](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L339)returning a `std::string`
-    async fn get_best_blockhash(&self) -> Result<GetBlockHash, Self::Error> {
+    async fn get_best_blockhash(&self) -> Result<GetBlockHashResponse, Self::Error> {
         Ok(self.fetcher.get_best_blockhash().await?.into())
     }
 
@@ -391,7 +393,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
     async fn validate_address(
         &self,
         address: String,
-    ) -> Result<validate_address::Response, Self::Error> {
+    ) -> Result<ValidateAddressResponse, Self::Error> {
         Ok(self.fetcher.validate_address(address).await?)
     }
 
@@ -427,7 +429,10 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// negative where -1 is the last known valid block". On the other hand,
     /// `lightwalletd` only uses positive heights, so Zebra does not support
     /// negative heights.
-    async fn z_get_treestate(&self, hash_or_height: String) -> Result<GetTreestate, Self::Error> {
+    async fn z_get_treestate(
+        &self,
+        hash_or_height: String,
+    ) -> Result<GetTreestateResponse, Self::Error> {
         Ok(self
             .fetcher
             .get_treestate(hash_or_height)
@@ -458,7 +463,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
         pool: String,
         start_index: NoteCommitmentSubtreeIndex,
         limit: Option<NoteCommitmentSubtreeIndex>,
-    ) -> Result<GetSubtrees, Self::Error> {
+    ) -> Result<GetSubtreesByIndexResponse, Self::Error> {
         Ok(self
             .fetcher
             .get_subtrees_by_index(pool, start_index.0, limit.map(|limit_index| limit_index.0))
@@ -865,7 +870,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             let tx = self.get_raw_transaction(hash_hex, Some(1)).await?;
 
             let (hex, height) = if let GetRawTransaction::Object(tx_object) = tx {
-                (tx_object.hex, tx_object.height)
+                (tx_object.hex().clone(), tx_object.height())
             } else {
                 return Err(FetchServiceError::TonicStatusError(
                     tonic::Status::not_found("Error: Transaction not received"),
@@ -895,7 +900,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
         Ok(SendResponse {
             error_code: 0,
-            error_message: tx_output.inner().to_string(),
+            error_message: tx_output.hash().to_string(),
         })
     }
 
@@ -947,14 +952,9 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
     /// Returns the total balance for a list of taddrs
     async fn get_taddress_balance(&self, request: AddressList) -> Result<Balance, Self::Error> {
-        let taddrs = AddressStrings::new_valid(request.addresses).map_err(|err_obj| {
-            FetchServiceError::RpcError(RpcError::new_from_errorobject(
-                err_obj,
-                "Error in Validator",
-            ))
-        })?;
+        let taddrs = AddressStrings::new(request.addresses);
         let balance = self.z_get_address_balance(taddrs).await?;
-        let checked_balance: i64 = match i64::try_from(balance.balance) {
+        let checked_balance: i64 = match i64::try_from(balance.balance()) {
             Ok(balance) => balance,
             Err(_) => {
                 return Err(FetchServiceError::TonicStatusError(tonic::Status::unknown(
@@ -984,16 +984,10 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                     loop {
                         match channel_rx.recv().await {
                             Some(taddr) => {
-                                let taddrs =
-                                    AddressStrings::new_valid(vec![taddr]).map_err(|err_obj| {
-                                        FetchServiceError::RpcError(RpcError::new_from_errorobject(
-                                            err_obj,
-                                            "Error in Validator",
-                                        ))
-                                    })?;
+                                let taddrs = AddressStrings::new(vec![taddr]);
                                 let balance =
                                     fetch_service_clone.z_get_address_balance(taddrs).await?;
-                                total_balance += balance.balance;
+                                total_balance += balance.balance();
                             }
                             None => {
                                 return Ok(total_balance);
@@ -1117,7 +1111,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                                     }
                                 };
                                 match <FullTransaction as ParseFromSlice>::parse_from_slice(
-                                    transaction_object.hex.as_ref(),
+                                    transaction_object.hex().as_ref(),
                                     Some(vec!(txid_bytes)), None)
                                 {
                                     Ok(transaction) => {
@@ -1223,7 +1217,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                                     GetRawTransaction::Object(transaction_object) => {
                                         if channel_tx
                                             .send(Ok(RawTransaction {
-                                                data: transaction_object.hex.as_ref().to_vec(),
+                                                data: transaction_object.hex().as_ref().to_vec(),
                                                 height: mempool_height as u64,
                                             }))
                                             .await
@@ -1310,7 +1304,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             Ok(state) => {
                 let (hash, height, time, sapling, orchard) = state.into_parts();
                 Ok(TreeState {
-                    network: chain_info.chain(),
+                    network: chain_info.chain().clone(),
                     height: height.0 as u64,
                     hash: hash.to_string(),
                     time,
@@ -1337,7 +1331,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             Ok(state) => {
                 let (hash, height, time, sapling, orchard) = state.into_parts();
                 Ok(TreeState {
-                    network: chain_info.chain(),
+                    network: chain_info.chain().clone(),
                     height: height.0 as u64,
                     hash: hash.to_string(),
                     time,
@@ -1370,12 +1364,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         &self,
         request: GetAddressUtxosArg,
     ) -> Result<GetAddressUtxosReplyList, Self::Error> {
-        let taddrs = AddressStrings::new_valid(request.addresses).map_err(|err_obj| {
-            FetchServiceError::RpcError(RpcError::new_from_errorobject(
-                err_obj,
-                "Error in Validator",
-            ))
-        })?;
+        let taddrs = AddressStrings::new(request.addresses);
         let utxos = self.z_get_address_utxos(taddrs).await?;
         let mut address_utxos: Vec<GetAddressUtxosReply> = Vec::new();
         let mut entries: u32 = 0;
@@ -1426,12 +1415,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         &self,
         request: GetAddressUtxosArg,
     ) -> Result<UtxoReplyStream, Self::Error> {
-        let taddrs = AddressStrings::new_valid(request.addresses).map_err(|err_obj| {
-            FetchServiceError::RpcError(RpcError::new_from_errorobject(
-                err_obj,
-                "Error in Validator",
-            ))
-        })?;
+        let taddrs = AddressStrings::new(request.addresses);
         let utxos = self.z_get_address_utxos(taddrs).await?;
         let service_timeout = self.config.service_timeout;
         let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
@@ -1528,7 +1512,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             version: self.data.build_info().version(),
             vendor: "ZingoLabs ZainoD".to_string(),
             taddr_support: true,
-            chain_name: blockchain_info.chain(),
+            chain_name: blockchain_info.chain().clone(),
             sapling_activation_height: sapling_activation_height.0 as u64,
             consensus_branch_id,
             block_height: blockchain_info.blocks().0 as u64,

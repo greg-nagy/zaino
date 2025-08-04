@@ -11,7 +11,7 @@ use zaino_state::{
 use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind};
 use zebra_chain::{parameters::Network, subtree::NoteCommitmentSubtreeIndex};
-use zebra_rpc::methods::types::validate_address;
+use zebra_rpc::client::ValidateAddressResponse;
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetBlock, GetBlockHash};
 
 async fn create_test_manager_and_fetch_service(
@@ -129,7 +129,7 @@ async fn fetch_service_get_address_balance(validator: &ValidatorKind) {
     let recipient_balance = clients.recipient.do_balance().await;
 
     let fetch_service_balance = fetch_service_subscriber
-        .z_get_address_balance(AddressStrings::new_valid(vec![recipient_address]).unwrap())
+        .z_get_address_balance(AddressStrings::new(vec![recipient_address]))
         .await
         .unwrap();
 
@@ -142,7 +142,7 @@ async fn fetch_service_get_address_balance(validator: &ValidatorKind) {
     );
     assert_eq!(
         recipient_balance.confirmed_transparent_balance.unwrap(),
-        fetch_service_balance.balance,
+        fetch_service_balance.balance(),
     );
 
     test_manager.close().await;
@@ -490,10 +490,10 @@ async fn fetch_service_get_address_tx_ids(validator: &ValidatorKind) {
     dbg!(&chain_height);
 
     let fetch_service_txids = fetch_service_subscriber
-        .get_address_tx_ids(GetAddressTxIdsRequest::from_parts(
+        .get_address_tx_ids(GetAddressTxIdsRequest::new(
             vec![recipient_taddr],
-            chain_height - 2,
-            chain_height,
+            Some(chain_height - 2),
+            None,
         ))
         .await
         .unwrap();
@@ -538,7 +538,7 @@ async fn fetch_service_get_address_utxos(validator: &ValidatorKind) {
     clients.faucet.sync_and_await().await.unwrap();
 
     let fetch_service_utxos = fetch_service_subscriber
-        .z_get_address_utxos(AddressStrings::new_valid(vec![recipient_taddr]).unwrap())
+        .z_get_address_utxos(AddressStrings::new(vec![recipient_taddr]))
         .await
         .unwrap();
     let (_, fetch_service_txid, ..) = fetch_service_utxos[0].into_parts();
@@ -657,27 +657,8 @@ async fn fetch_service_get_best_blockhash(validator: &ValidatorKind) {
         .await
         .unwrap();
 
-    let ret: Option<GetBlockHash> = match inspected_block {
-        GetBlock::Object {
-            hash,
-            confirmations: _,
-            size: _,
-            height: _,
-            version: _,
-            merkle_root: _,
-            block_commitments: _,
-            final_sapling_root: _,
-            final_orchard_root: _,
-            tx: _,
-            time: _,
-            nonce: _,
-            solution: _,
-            bits: _,
-            difficulty: _,
-            trees: _,
-            previous_block_hash: _,
-            next_block_hash: _,
-        } => Some(hash),
+    let ret = match inspected_block {
+        GetBlock::Object(obj) => Some(obj.hash()),
         _ => None,
     };
 
@@ -685,7 +666,7 @@ async fn fetch_service_get_best_blockhash(validator: &ValidatorKind) {
         dbg!(fetch_service_subscriber.get_best_blockhash().await.unwrap());
 
     assert_eq!(
-        fetch_service_get_best_blockhash,
+        fetch_service_get_best_blockhash.hash(),
         ret.expect("ret to be Some(GetBlockHash) not None")
     );
 
@@ -716,58 +697,36 @@ async fn fetch_service_validate_address(validator: &ValidatorKind) {
     let (mut test_manager, _fetch_service, fetch_service_subscriber) =
         create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
-    let expected_validation = validate_address::Response {
-        is_valid: true,
-        address: Some("tm9iMLAuYMzJ6jtFLcA7rzUmfreGuKvr7Ma".to_owned()),
-        // scriptpubkey: Some("76a914000000000000000000000000000000000000000088ac".to_owned()),
-        // is_mine: Some(false),
-        is_script: Some(false),
-        // is_watchonly: Some(false),
-        // pubkey: None,
-        // is_compressed: None,
-        // account: None,
-    };
-
-    let fetch_service_validate_address = dbg!(fetch_service_subscriber
+    // scriptpubkey: "76a914000000000000000000000000000000000000000088ac"
+    let expected_validation = ValidateAddressResponse::new(
+        true,
+        Some("tm9iMLAuYMzJ6jtFLcA7rzUmfreGuKvr7Ma".to_string()),
+        Some(false),
+    );
+    let fetch_service_validate_address = fetch_service_subscriber
         .validate_address("tm9iMLAuYMzJ6jtFLcA7rzUmfreGuKvr7Ma".to_string())
         .await
-        .unwrap());
+        .unwrap();
 
     // Zebra has a bug when doing validation, they don't match against both regtest and testnet.
+    // This will fail when zebra correctly implements this RPC method, and then we'll need to update this test.
     if matches!(validator, ValidatorKind::Zebrad) {
         assert_ne!(fetch_service_validate_address, expected_validation);
     } else {
         assert_eq!(fetch_service_validate_address, expected_validation);
     }
 
-    // let expected_validation_script: ValidateAddressResponse = ValidateAddressResponse {
-    //     is_valid: true,
-    //     address: Some("t26YoyZ1iPgiMEWL4zGUm74eVWfhyDMXzY2".to_owned()),
-    //     scriptpubkey: Some("a914000000000000000000000000000000000000000087".to_owned()),
-    //     is_mine: Some(false),
-    //     is_script: Some(true),
-    //     is_watchonly: Some(false),
-    //     pubkey: None,
-    //     is_compressed: None,
-    //     account: None,
-    // };
+    // scriptpubkey: "a914000000000000000000000000000000000000000087"
+    let expected_validation_script = ValidateAddressResponse::new(
+        true,
+        Some("t26YoyZ1iPgiMEWL4zGUm74eVWfhyDMXzY2".to_string()),
+        Some(true),
+    );
 
-    let expected_validation_script = validate_address::Response {
-        is_valid: true,
-        address: Some("t26YoyZ1iPgiMEWL4zGUm74eVWfhyDMXzY2".to_owned()),
-        // scriptpubkey: Some("a914000000000000000000000000000000000000000087".to_owned()),
-        // is_mine: Some(false),
-        is_script: Some(true),
-        // is_watchonly: Some(false),
-        // pubkey: None,
-        // is_compressed: None,
-        // account: None,
-    };
-
-    let fetch_service_validate_address_script = dbg!(fetch_service_subscriber
+    let fetch_service_validate_address_script = fetch_service_subscriber
         .validate_address("t26YoyZ1iPgiMEWL4zGUm74eVWfhyDMXzY2".to_string())
         .await
-        .unwrap());
+        .unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
         assert_ne!(

@@ -8,6 +8,7 @@ use http::Uri;
 use reqwest::{Client, ClientBuilder, Url};
 use serde::{Deserialize, Serialize};
 use std::{
+    any::type_name,
     convert::Infallible,
     fmt, fs,
     net::SocketAddr,
@@ -19,7 +20,7 @@ use std::{
     time::Duration,
 };
 use tracing::error;
-use zebra_rpc::methods::types::validate_address;
+use zebra_rpc::client::ValidateAddressResponse;
 
 use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
@@ -332,7 +333,7 @@ impl JsonRpSeeConnector {
                 // Success
                 200..300 => {
                     let response: RpcResponse<R> = serde_json::from_slice(&body_bytes)
-                        .map_err(|e| TransportError::BadNodeData(Box::new(e)))?;
+                        .map_err(|e| TransportError::BadNodeData(Box::new(e), type_name::<R>()))?;
 
                     match (response.error, response.result) {
                         (Some(error), _) => Err(RpcRequestError::Method(
@@ -550,7 +551,7 @@ impl JsonRpSeeConnector {
     pub async fn validate_address(
         &self,
         address: String,
-    ) -> Result<validate_address::Response, RpcRequestError<Infallible>> {
+    ) -> Result<ValidateAddressResponse, RpcRequestError<Infallible>> {
         let params = vec![serde_json::to_value(address).map_err(RpcRequestError::JsonRpc)?];
         self.send_request("validateaddress", params).await
     }
@@ -725,7 +726,7 @@ async fn test_node_connection(url: Url, auth_method: AuthMethod) -> Result<(), T
         .await
         .map_err(TransportError::ReqwestError)?;
     let _response: RpcResponse<serde_json::Value> = serde_json::from_slice(&body_bytes)
-        .map_err(|e| TransportError::BadNodeData(Box::new(e)))?;
+        .map_err(|e| TransportError::BadNodeData(Box::new(e), ""))?;
     Ok(())
 }
 

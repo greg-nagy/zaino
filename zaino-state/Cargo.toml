@@ -61,6 +61,7 @@ arc-swap = "1.7.1"
 reqwest.workspace = true
 bitflags = { workspace = true }
 zcash_address = { workspace = true }
+derive_more = { version = "2.0.1", features = ["from"] }
 
 [dev-dependencies]
 zingo-infra-services = { workspace = true }
