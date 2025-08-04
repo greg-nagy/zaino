@@ -1636,7 +1636,15 @@ impl DbV1 {
 
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
-            let raw = txn.get(self.headers, &height_bytes)?;
+            let raw = match txn.get(self.headers, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "header data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             let entry = StoredEntryVar::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("header decode error: {e}")))?;
 
@@ -1659,7 +1667,15 @@ impl DbV1 {
         let raw_entries = tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
             let mut raw_entries = Vec::new();
-            let mut cursor = txn.open_ro_cursor(self.headers)?;
+            let mut cursor = match txn.open_ro_cursor(self.headers) {
+                Ok(cursor) => cursor,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "header data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             for (k, v) in cursor.iter_from(&start_bytes[..]) {
                 if k > &end_bytes[..] {
                     break;
@@ -1694,7 +1710,15 @@ impl DbV1 {
                 .map_err(|e| FinalisedStateError::Custom(e.to_string()))?;
             let height_bytes = height.to_bytes()?;
 
-            let raw = txn.get(self.txids, &height_bytes)?;
+            let raw = match txn.get(self.txids, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "txid data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             let mut cursor = Cursor::new(raw);
 
             // Parse StoredEntryVar<TxidList>:
@@ -1749,7 +1773,15 @@ impl DbV1 {
 
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
-            let raw = txn.get(self.txids, &height_bytes)?;
+            let raw = match txn.get(self.txids, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "txid data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
 
             let entry: StoredEntryVar<TxidList> = StoredEntryVar::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("txids decode error: {e}")))?;
@@ -1773,7 +1805,15 @@ impl DbV1 {
         let raw_entries = tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
             let mut raw_entries = Vec::new();
-            let mut cursor = txn.open_ro_cursor(self.txids)?;
+            let mut cursor = match txn.open_ro_cursor(self.txids) {
+                Ok(cursor) => cursor,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "txid data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             for (k, v) in cursor.iter_from(&start_bytes[..]) {
                 if k > &end_bytes[..] {
                     break;
@@ -1809,7 +1849,15 @@ impl DbV1 {
                 .map_err(|e| FinalisedStateError::Custom(e.to_string()))?;
             let height_bytes = height.to_bytes()?;
 
-            let raw = txn.get(self.transparent, &height_bytes)?;
+            let raw = match txn.get(self.transparent, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "transparent data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             let mut cursor = Cursor::new(raw);
 
             // Skip [0] StoredEntry version
@@ -1882,7 +1930,16 @@ impl DbV1 {
 
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
-            let raw = txn.get(self.transparent, &height_bytes)?;
+            let raw = match txn.get(self.transparent, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "transparent data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
+
             let entry: StoredEntryVar<TransparentTxList> = StoredEntryVar::from_bytes(raw)
                 .map_err(|e| {
                     FinalisedStateError::Custom(format!("transparent decode error: {e}"))
@@ -1907,7 +1964,15 @@ impl DbV1 {
         let raw_entries = tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
             let mut raw_entries = Vec::new();
-            let mut cursor = txn.open_ro_cursor(self.transparent)?;
+            let mut cursor = match txn.open_ro_cursor(self.transparent) {
+                Ok(cursor) => cursor,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "transparent data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             for (k, v) in cursor.iter_from(&start_bytes[..]) {
                 if k > &end_bytes[..] {
                     break;
@@ -1945,7 +2010,15 @@ impl DbV1 {
                 .map_err(|e| FinalisedStateError::Custom(e.to_string()))?;
             let height_bytes = height.to_bytes()?;
 
-            let raw = txn.get(self.sapling, &height_bytes)?;
+            let raw = match txn.get(self.sapling, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "sapling data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             let mut cursor = Cursor::new(raw);
 
             // Skip [0] StoredEntry version
@@ -2020,7 +2093,15 @@ impl DbV1 {
 
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
-            let raw = txn.get(self.sapling, &height_bytes)?;
+            let raw = match txn.get(self.sapling, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "sapling data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
 
             let entry: StoredEntryVar<SaplingTxList> = StoredEntryVar::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("sapling decode error: {e}")))?;
@@ -2044,7 +2125,15 @@ impl DbV1 {
         let raw_entries = tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
             let mut raw_entries = Vec::new();
-            let mut cursor = txn.open_ro_cursor(self.sapling)?;
+            let mut cursor = match txn.open_ro_cursor(self.sapling) {
+                Ok(cursor) => cursor,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "sapling data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             for (k, v) in cursor.iter_from(&start_bytes[..]) {
                 if k > &end_bytes[..] {
                     break;
@@ -2080,7 +2169,16 @@ impl DbV1 {
                 .map_err(|e| FinalisedStateError::Custom(e.to_string()))?;
             let height_bytes = height.to_bytes()?;
 
-            let raw = txn.get(self.orchard, &height_bytes)?;
+            let raw = match txn.get(self.orchard, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "orchard data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
+
             let mut cursor = Cursor::new(raw);
 
             // Skip [0] StoredEntry version
@@ -2155,7 +2253,16 @@ impl DbV1 {
 
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
-            let raw = txn.get(self.orchard, &height_bytes)?;
+            let raw = match txn.get(self.orchard, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "orchard data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
+
             let entry: StoredEntryVar<OrchardTxList> = StoredEntryVar::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("orchard decode error: {e}")))?;
 
@@ -2178,7 +2285,15 @@ impl DbV1 {
         let raw_entries = tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
             let mut raw_entries = Vec::new();
-            let mut cursor = txn.open_ro_cursor(self.orchard)?;
+            let mut cursor = match txn.open_ro_cursor(self.orchard) {
+                Ok(cursor) => cursor,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "orchard data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             for (k, v) in cursor.iter_from(&start_bytes[..]) {
                 if k > &end_bytes[..] {
                     break;
@@ -2210,7 +2325,15 @@ impl DbV1 {
 
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
-            let raw = txn.get(self.commitment_tree_data, &height_bytes)?;
+            let raw = match txn.get(self.commitment_tree_data, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "commitment tree data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
 
             let entry = StoredEntryFixed::from_bytes(raw).map_err(|e| {
                 FinalisedStateError::Custom(format!("commitment_tree decode error: {e}"))
@@ -2235,7 +2358,15 @@ impl DbV1 {
         let raw_entries = tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
             let mut raw_entries = Vec::new();
-            let mut cursor = txn.open_ro_cursor(self.commitment_tree_data)?;
+            let mut cursor = match txn.open_ro_cursor(self.commitment_tree_data) {
+                Ok(cursor) => cursor,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "commitment tree data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             for (k, v) in cursor.iter_from(&start_bytes[..]) {
                 if k > &end_bytes[..] {
                     break;
@@ -2340,12 +2471,18 @@ impl DbV1 {
 
             let mut raw_records = Vec::new();
 
-            for (key, val) in cursor.iter_dup_of(&addr_bytes)? {
+            let iter = match cursor.iter_dup_of(&addr_bytes) {
+                Ok(iter) => iter,
+                Err(lmdb::Error::NotFound) => return Ok(None),
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
+
+            for (key, val) in iter {
                 if key.len() != AddrScript::VERSIONED_LEN {
-                    break;
+                    continue;
                 }
                 if val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN {
-                    break;
+                    continue;
                 }
                 raw_records.push(val.to_vec());
             }
@@ -2423,10 +2560,20 @@ impl DbV1 {
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
 
-            let mut cursor = txn.open_ro_cursor(self.address_history)?;
+            let mut cursor = match txn.open_ro_cursor(self.address_history) {
+                Ok(cursor) => cursor,
+                Err(lmdb::Error::NotFound) => return Ok(None),
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             let mut set: HashSet<TxLocation> = HashSet::new();
 
-            for (key, val) in cursor.iter_dup_of(&addr_bytes)? {
+            let iter = match cursor.iter_dup_of(&addr_bytes) {
+                Ok(iter) => iter,
+                Err(lmdb::Error::NotFound) => return Ok(None),
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
+
+            for (key, val) in iter {
                 if key.len() != AddrScript::VERSIONED_LEN
                     || val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN
                 {
@@ -2482,10 +2629,20 @@ impl DbV1 {
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
 
-            let mut cursor = txn.open_ro_cursor(self.address_history)?;
+            let mut cursor = match txn.open_ro_cursor(self.address_history) {
+                Ok(cursor) => cursor,
+                Err(lmdb::Error::NotFound) => return Ok(None),
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             let mut utxos = Vec::new();
 
-            for (key, val) in cursor.iter_dup_of(&addr_bytes)? {
+            let iter = match cursor.iter_dup_of(&addr_bytes) {
+                Ok(iter) => iter,
+                Err(lmdb::Error::NotFound) => return Ok(None),
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
+
+            for (key, val) in iter {
                 if key.len() != AddrScript::VERSIONED_LEN
                     || val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN
                 {
@@ -2550,10 +2707,29 @@ impl DbV1 {
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
 
-            let mut cursor = txn.open_ro_cursor(self.address_history)?;
+            let mut cursor = match txn.open_ro_cursor(self.address_history) {
+                Ok(cursor) => cursor,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "no data for address".to_string(),
+                    ))
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
+
             let mut balance: i64 = 0;
 
-            for (key, val) in cursor.iter_dup_of(&addr_bytes)? {
+            let iter = match cursor.iter_dup_of(&addr_bytes) {
+                Ok(iter) => iter,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "no data for address".to_string(),
+                    ))
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
+
+            for (key, val) in iter {
                 if key.len() != AddrScript::VERSIONED_LEN
                     || val.len() != StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN
                 {
@@ -2604,35 +2780,74 @@ impl DbV1 {
             let txn = self.env.begin_ro_txn()?;
 
             // Fetch header data
-            let raw = txn.get(self.headers, &height_bytes)?;
+            let raw = match txn.get(self.headers, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "block data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             let header: BlockHeaderData = *StoredEntryVar::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("header decode error: {e}")))?
                 .inner();
 
             // fetch transaction data
-            let raw = txn.get(self.txids, &height_bytes)?;
+            let raw = match txn.get(self.txids, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "block data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             let txids_list = StoredEntryVar::<TxidList>::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("txids decode error: {e}")))?
                 .inner()
                 .clone();
             let txids = txids_list.tx();
 
-            let raw = txn.get(self.transparent, &height_bytes)?;
-
+            let raw = match txn.get(self.transparent, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "block data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             let transparent_list = StoredEntryVar::<TransparentTxList>::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("transparent decode error: {e}")))?
                 .inner()
                 .clone();
             let transparent = transparent_list.tx();
 
-            let raw = txn.get(self.sapling, &height_bytes)?;
+            let raw = match txn.get(self.sapling, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "block data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             let sapling_list = StoredEntryVar::<SaplingTxList>::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("sapling decode error: {e}")))?
                 .inner()
                 .clone();
             let sapling = sapling_list.tx();
 
-            let raw = txn.get(self.orchard, &height_bytes)?;
+            let raw = match txn.get(self.orchard, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "block data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             let orchard_list = StoredEntryVar::<OrchardTxList>::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("orchard decode error: {e}")))?
                 .inner()
@@ -2666,7 +2881,16 @@ impl DbV1 {
                 .collect();
 
             // fetch commitment tree data
-            let raw = txn.get(self.commitment_tree_data, &height_bytes)?;
+            let raw = match txn.get(self.commitment_tree_data, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "block data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
+
             let commitment_tree_data: CommitmentTreeData = *StoredEntryFixed::from_bytes(raw)
                 .map_err(|e| {
                     FinalisedStateError::Custom(format!("commitment_tree decode error: {e}"))
@@ -2699,27 +2923,59 @@ impl DbV1 {
             let txn = self.env.begin_ro_txn()?;
 
             // Fetch header data
-            let raw = txn.get(self.headers, &height_bytes)?;
+            let raw = match txn.get(self.headers, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "block data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             let header: BlockHeaderData = *StoredEntryVar::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("header decode error: {e}")))?
                 .inner();
 
             // fetch transaction data
-            let raw = txn.get(self.txids, &height_bytes)?;
+            let raw = match txn.get(self.txids, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "block data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             let txids_list = StoredEntryVar::<TxidList>::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("txids decode error: {e}")))?
                 .inner()
                 .clone();
             let txids = txids_list.tx();
 
-            let raw = txn.get(self.sapling, &height_bytes)?;
+            let raw = match txn.get(self.sapling, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "block data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             let sapling_list = StoredEntryVar::<SaplingTxList>::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("sapling decode error: {e}")))?
                 .inner()
                 .clone();
             let sapling = sapling_list.tx();
 
-            let raw = txn.get(self.orchard, &height_bytes)?;
+            let raw = match txn.get(self.orchard, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "block data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
             let orchard_list = StoredEntryVar::<OrchardTxList>::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("orchard decode error: {e}")))?
                 .inner()
@@ -2780,7 +3036,16 @@ impl DbV1 {
                 .collect();
 
             // fetch commitment tree data
-            let raw = txn.get(self.commitment_tree_data, &height_bytes)?;
+            let raw = match txn.get(self.commitment_tree_data, &height_bytes) {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "block data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
+
             let commitment_tree_data: CommitmentTreeData = *StoredEntryFixed::from_bytes(raw)
                 .map_err(|e| {
                     FinalisedStateError::Custom(format!("commitment_tree decode error: {e}"))
@@ -2815,9 +3080,15 @@ impl DbV1 {
     async fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
-            let raw = txn
-                .get(self.metadata, b"metadata")
-                .map_err(FinalisedStateError::LmdbError)?;
+            let raw = match txn.get(self.metadata, b"metadata") {
+                Ok(val) => val,
+                Err(lmdb::Error::NotFound) => {
+                    return Err(FinalisedStateError::DataUnavailable(
+                        "block data missing from db".into(),
+                    ));
+                }
+                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+            };
 
             let entry = StoredEntryFixed::from_bytes(raw)
                 .map_err(|e| FinalisedStateError::Custom(format!("metadata decode error: {e}")))?;
@@ -3218,7 +3489,16 @@ impl DbV1 {
                     .index()
                     .hash();
 
-                self.validate_block_blocking(height, hash)?;
+                match self.validate_block_blocking(height, hash) {
+                    Ok(()) => {}
+                    Err(FinalisedStateError::LmdbError(lmdb::Error::NotFound)) => {
+                        return Err(FinalisedStateError::DataUnavailable(
+                            "block data unavailable".into(),
+                        ));
+                    }
+                    Err(e) => return Err(e),
+                }
+
                 h += 1;
             }
             Ok::<_, FinalisedStateError>((start, end))
@@ -3254,7 +3534,9 @@ impl DbV1 {
                     let ro = self.env.begin_ro_txn()?;
                     let bytes = ro.get(self.headers, &hkey).map_err(|e| {
                         if e == lmdb::Error::NotFound {
-                            FinalisedStateError::Custom("height not found in best chain".into())
+                            FinalisedStateError::DataUnavailable(
+                                "height not found in best chain".into(),
+                            )
                         } else {
                             FinalisedStateError::LmdbError(e)
                         }
@@ -3265,7 +3547,15 @@ impl DbV1 {
                         .index()
                         .hash();
 
-                    self.validate_block_blocking(height, hash)?;
+                    match self.validate_block_blocking(height, hash) {
+                        Ok(()) => {}
+                        Err(FinalisedStateError::LmdbError(lmdb::Error::NotFound)) => {
+                            return Err(FinalisedStateError::DataUnavailable(
+                                "block data unavailable".into(),
+                            ));
+                        }
+                        Err(e) => return Err(e),
+                    }
 
                     Ok::<Hash, FinalisedStateError>(hash)
                 })?;
@@ -3277,7 +3567,16 @@ impl DbV1 {
                 let height = self.resolve_hash_or_height(hash_or_height).await?;
                 let hash = Hash::from(z_hash);
                 tokio::task::block_in_place(|| {
-                    self.validate_block_blocking(height, hash)?;
+                    match self.validate_block_blocking(height, hash) {
+                        Ok(()) => {}
+                        Err(FinalisedStateError::LmdbError(lmdb::Error::NotFound)) => {
+                            return Err(FinalisedStateError::DataUnavailable(
+                                "block data unavailable".into(),
+                            ));
+                        }
+                        Err(e) => return Err(e),
+                    }
+
                     Ok::<Height, FinalisedStateError>(height)
                 })?;
                 height
@@ -3300,7 +3599,7 @@ impl DbV1 {
         match hash_or_height {
             // Fast path: we already have the hash.
             HashOrHeight::Height(z_height) => Ok(Height::try_from(z_height.0)
-                .map_err(|_| FinalisedStateError::Custom("height out of range".into()))?),
+                .map_err(|_| FinalisedStateError::DataUnavailable("height out of range".into()))?),
 
             // Height lookup path.
             HashOrHeight::Hash(z_hash) => {
@@ -3311,7 +3610,9 @@ impl DbV1 {
                     let ro = self.env.begin_ro_txn()?;
                     let bytes = ro.get(self.heights, &hkey).map_err(|e| {
                         if e == lmdb::Error::NotFound {
-                            FinalisedStateError::Custom("height not found in best chain".into())
+                            FinalisedStateError::DataUnavailable(
+                                "height not found in best chain".into(),
+                            )
                         } else {
                             FinalisedStateError::LmdbError(e)
                         }

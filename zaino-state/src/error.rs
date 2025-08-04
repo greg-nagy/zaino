@@ -405,13 +405,17 @@ impl<T: ToString> From<RpcRequestError<T>> for FinalisedStateError {
 // TODO: Update name to DbError when ZainoDB replaces legacy finalised state.
 #[derive(Debug, thiserror::Error)]
 pub enum FinalisedStateError {
-    /// Custom Errors. *Remove before production.
+    /// Custom Errors. *Remove before production*.
     #[error("Custom error: {0}")]
     Custom(String),
 
-    /// Required data is missing from the finalised state.
+    /// Requested data is missing from the finalised state.
+    ///
+    /// This could be due to the databae not yet being synced or due to a bad request input.
+    ///
+    /// We could split this into 2 distinct types if needed.
     #[error("Missing data: {0}")]
-    MissingData(String),
+    DataUnavailable(String),
 
     /// A block is present on disk but failed internal validation.
     ///
@@ -434,7 +438,6 @@ pub enum FinalisedStateError {
     #[error("blockchain source error: {0}")]
     BlockchainSourceError(#[from] crate::chain_index::source::BlockchainSourceError),
 
-    // TODO: Add `InvalidRequestError` and return for invalid requests.
     /// Critical Errors, Restart Zaino.
     #[error("Critical error: {0}")]
     Critical(String),

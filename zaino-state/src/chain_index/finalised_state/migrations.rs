@@ -176,7 +176,7 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
                             ))
                             .await?
                             .ok_or_else(|| {
-                                FinalisedStateError::MissingData(format!(
+                                FinalisedStateError::Custom(format!(
                                     "block not found at height {}",
                                     height
                                 ))
@@ -187,13 +187,13 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
                             source.get_commitment_tree_roots(hash).await?;
                         let (sapling_root, sapling_root_size) =
                             sapling_root_data.ok_or_else(|| {
-                                FinalisedStateError::MissingData(format!(
+                                FinalisedStateError::Custom(format!(
                         "sapling commitment tree data missing for block {hash:?} at height {height}"
                     ))
                             })?;
                         let (orchard_root, orchard_root_size) =
                             orchard_root_data.ok_or_else(|| {
-                                FinalisedStateError::MissingData(format!(
+                                FinalisedStateError::Custom(format!(
                         "orchard commitment tree data missing for block {hash:?} at height {height}"
                     ))
                             })?;

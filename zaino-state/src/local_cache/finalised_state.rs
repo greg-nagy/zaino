@@ -361,7 +361,7 @@ impl FinalisedState {
                                     }
                                 }
                             }
-                            Err(_) => Err(FinalisedStateError::MissingData(format!(
+                            Err(_) => Err(FinalisedStateError::Custom(format!(
                                 "Block {hash_or_height:?} not found in finalised state or validator."
                             ))),
                         }
@@ -616,7 +616,7 @@ impl FinalisedState {
         let hash_bytes: &[u8] = match txn.get(self.heights_to_hashes, &height_key) {
             Ok(bytes) => bytes,
             Err(lmdb::Error::NotFound) => {
-                return Err(FinalisedStateError::MissingData(format!(
+                return Err(FinalisedStateError::Custom(format!(
                     "No hash found for height {height}"
                 )));
             }
@@ -637,9 +637,7 @@ impl FinalisedState {
             let height = DbHeight::from_be_bytes(height_bytes)?;
             Ok(height.0)
         } else {
-            Err(FinalisedStateError::MissingData(
-                "No heights found in LMDB.".to_string(),
-            ))
+            Ok(Height(0))
         }
     }
 
