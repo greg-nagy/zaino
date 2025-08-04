@@ -14,7 +14,7 @@ use crate::chain_index::tests::vectors::{build_mockchain_source, load_test_vecto
 use crate::error::FinalisedStateError;
 use crate::{ChainBlock, Height};
 
-async fn spawn_v0_zaino_db(
+pub(crate) async fn spawn_v0_zaino_db(
     source: MockchainSource,
 ) -> Result<(TempDir, ZainoDB), FinalisedStateError> {
     let temp_dir: TempDir = tempfile::tempdir().unwrap();
@@ -50,7 +50,7 @@ async fn spawn_v0_zaino_db(
     Ok((temp_dir, zaino_db))
 }
 
-async fn load_vectors_and_spawn_and_sync_zaino_db() -> (
+pub(crate) async fn load_vectors_and_spawn_and_sync_v0_zaino_db() -> (
     Vec<(
         u32,
         ChainBlock,
@@ -83,7 +83,7 @@ async fn load_vectors_and_spawn_and_sync_zaino_db() -> (
     (blocks, faucet, recipient, db_dir, zaino_db)
 }
 
-async fn load_vectors_db_and_reader() -> (
+pub(crate) async fn load_vectors_v0db_and_reader() -> (
     Vec<(
         u32,
         ChainBlock,
@@ -103,7 +103,7 @@ async fn load_vectors_db_and_reader() -> (
     DbReader,
 ) {
     let (blocks, faucet, recipient, db_dir, zaino_db) =
-        load_vectors_and_spawn_and_sync_zaino_db().await;
+        load_vectors_and_spawn_and_sync_v0_zaino_db().await;
 
     let zaino_db = std::sync::Arc::new(zaino_db);
 
@@ -122,7 +122,7 @@ async fn load_vectors_db_and_reader() -> (
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn add_blocks_to_db_and_verify() {
     let (_blocks, _faucet, _recipient, _db_dir, zaino_db) =
-        load_vectors_and_spawn_and_sync_zaino_db().await;
+        load_vectors_and_spawn_and_sync_v0_zaino_db().await;
     zaino_db.wait_until_ready().await;
     dbg!(zaino_db.status().await);
     dbg!(zaino_db.db_height().await.unwrap());
@@ -131,7 +131,7 @@ async fn add_blocks_to_db_and_verify() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn delete_blocks_from_db() {
     let (_blocks, _faucet, _recipient, _db_dir, zaino_db) =
-        load_vectors_and_spawn_and_sync_zaino_db().await;
+        load_vectors_and_spawn_and_sync_v0_zaino_db().await;
 
     for h in (1..=200).rev() {
         // dbg!("Deleting block at height {}", h);
@@ -224,7 +224,7 @@ async fn load_db_from_file() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn create_db_reader() {
     let (blocks, _faucet, _recipient, _db_dir, zaino_db, db_reader) =
-        load_vectors_db_and_reader().await;
+        load_vectors_v0db_and_reader().await;
 
     let (data_height, _, _, _, _) = blocks.last().unwrap();
     let db_height = dbg!(zaino_db.db_height().await.unwrap()).unwrap();
@@ -237,7 +237,7 @@ async fn create_db_reader() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_compact_blocks() {
     let (blocks, _faucet, _recipient, _db_dir, _zaino_db, db_reader) =
-        load_vectors_db_and_reader().await;
+        load_vectors_v0db_and_reader().await;
 
     for (height, _, compact_block, _, _) in blocks.iter() {
         let reader_compact_block = db_reader.get_compact_block(Height(*height)).await.unwrap();

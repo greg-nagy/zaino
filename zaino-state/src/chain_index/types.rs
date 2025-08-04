@@ -1160,7 +1160,17 @@ impl ChainBlock {
         let vtx: Vec<zaino_proto::proto::compact_formats::CompactTx> = self
             .transactions()
             .iter()
-            .map(|tx| tx.to_compact_tx(None))
+            .filter_map(|tx| {
+                let has_shielded = !tx.sapling().spends().is_empty()
+                    || !tx.sapling().outputs().is_empty()
+                    || !tx.orchard().actions().is_empty();
+
+                if !has_shielded {
+                    return None;
+                }
+
+                Some(tx.to_compact_tx(None))
+            })
             .collect();
 
         let sapling_commitment_tree_size = self.commitment_tree_data().sizes().sapling();
@@ -1172,7 +1182,6 @@ impl ChainBlock {
             hash,
             prev_hash,
             time: self.data().time() as u32,
-            // Header not currently used by CompactBlocks.
             header: vec![],
             vtx,
             chain_metadata: Some(zaino_proto::proto::compact_formats::ChainMetadata {
@@ -1448,8 +1457,15 @@ impl
                     .collect(),
             );
 
-            let txdata =
-                CompactTxData::new(i as u64, trnsctn.hash().0, transparent, sapling, orchard);
+            let txdata = CompactTxData::new(
+                i as u64,
+                // Convert txids to server order (reverse bytes),
+                // required for internal block validation logic (merkle root check).
+                trnsctn.hash().bytes_in_display_order(),
+                transparent,
+                sapling,
+                orchard,
+            );
             transactions.push(txdata);
         }
 

@@ -12,11 +12,12 @@ use super::{
 
 use crate::{
     chain_index::source::BlockchainSourceInterface, config::BlockCacheConfig,
-    error::FinalisedStateError, ChainBlock, ChainWork, Hash,
+    error::FinalisedStateError, ChainBlock, ChainWork, Hash, Height,
 };
 
 use async_trait::async_trait;
 use std::sync::Arc;
+use tracing::info;
 use zebra_chain::parameters::NetworkKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -131,6 +132,7 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
         cfg: BlockCacheConfig,
         source: T,
     ) -> Result<(), FinalisedStateError> {
+        info!("Starting v0.0.0 to v1.0.0 migration.");
         // Open V1 as shadow
         let shadow = Arc::new(DbBackend::spawn_v1(&cfg).await?);
         router.set_shadow(Arc::clone(&shadow), Capability::empty());
@@ -145,16 +147,16 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
                 // build shadow to primary_db_height,
                 // start from shadow_db_height in case database what shutdown mid-migration.
                 let mut parent_chain_work = ChainWork::from_u256(0.into());
-                loop {
-                    let shadow_db_height = shadow
-                        .db_height()
-                        .await?
-                        .expect("height always some in the finalised state");
-                    let primary_db_height = router
-                        .db_height()
-                        .await?
-                        .expect("height always some in the finalised state");
 
+                let mut shadow_db_height = shadow.db_height().await?.unwrap_or(Height(0));
+                let mut primary_db_height = router.db_height().await?.unwrap_or(Height(0));
+
+                info!(
+                    "Starting shadow database build, current database tips: v0:{} v1:{}",
+                    primary_db_height, shadow_db_height
+                );
+
+                loop {
                     if shadow_db_height >= primary_db_height {
                         break;
                     }
@@ -211,18 +213,25 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
                     }
 
                     std::thread::sleep(std::time::Duration::from_millis(100));
+
+                    shadow_db_height = shadow.db_height().await?.unwrap_or(Height(0));
+                    primary_db_height = router.db_height().await?.unwrap_or(Height(0));
                 }
 
                 // update db metadata migration status
                 let mut metadata = shadow.get_metadata().await?;
                 metadata.migration_status = MigrationStatus::Complete;
                 shadow.update_metadata(metadata).await?;
+
+                info!("v1 database build complete.");
             }
 
             MigrationStatus::Complete => {
                 // Migration complete, continue with DbV0 deletion.
             }
         }
+
+        info!("promoting v1 database to primary.");
 
         // Promote V1 to primary
         let db_v0 = router.promote_shadow();
@@ -248,6 +257,8 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
             };
             let db_path = cfg.db_path.join(db_path_dir);
 
+            info!("Wiping v0 database fropm disk.");
+
             match tokio::fs::remove_dir_all(&db_path).await {
                 Ok(_) => tracing::info!("Deleted old database at {}", db_path.display()),
                 Err(e) => tracing::error!(
@@ -257,6 +268,8 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
                 ),
             }
         });
+
+        info!("v0.0.0 to v1.0.0 migration complete.");
 
         Ok(())
     }

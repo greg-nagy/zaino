@@ -15,6 +15,7 @@ use db::DbBackend;
 use migrations::MigrationManager;
 use reader::*;
 use router::Router;
+use tracing::info;
 use zebra_chain::parameters::NetworkKind;
 
 use crate::{
@@ -44,7 +45,7 @@ impl ZainoDB {
     where
         T: BlockchainSourceInterface,
     {
-        let version_opt = Self::try_find_current_db_version(&cfg).await;
+        let version_opt = dbg!(Self::try_find_current_db_version(&cfg).await);
 
         let target_db_version = match cfg.db_version {
             0 => DbVersion {
@@ -60,22 +61,40 @@ impl ZainoDB {
         };
 
         let backend = match version_opt {
-            Some(version) => match version {
-                0 => DbBackend::spawn_v0(&cfg).await?,
-                1 => DbBackend::spawn_v1(&cfg).await?,
-                _ => {
-                    return Err(FinalisedStateError::Custom(format!(
-                        "unsupported database version: DbV{version}"
-                    )))
+            Some(version) => {
+                info!("Opening ZainoDBv{} from file.", version);
+                match version {
+                    0 => DbBackend::spawn_v0(&cfg).await?,
+                    1 => DbBackend::spawn_v1(&cfg).await?,
+                    _ => {
+                        return Err(FinalisedStateError::Custom(format!(
+                            "unsupported database version: DbV{version}"
+                        )))
+                    }
                 }
-            },
-            None => DbBackend::spawn_v1(&cfg).await?,
+            }
+            None => {
+                info!("Creating new ZainoDBv{}.", target_db_version);
+                match target_db_version.major() {
+                    0 => DbBackend::spawn_v0(&cfg).await?,
+                    1 => DbBackend::spawn_v1(&cfg).await?,
+                    _ => {
+                        return Err(FinalisedStateError::Custom(format!(
+                            "unsupported database version: DbV{target_db_version}"
+                        )))
+                    }
+                }
+            }
         };
         let current_db_version = backend.get_metadata().await?.version();
 
         let router = Arc::new(Router::new(Arc::new(backend)));
 
         if version_opt.is_some() && current_db_version < target_db_version {
+            info!(
+                "Starting ZainoDB migration manager, migratiing database from v{} to v{}.",
+                current_db_version, target_db_version
+            );
             MigrationManager::migrate_to(
                 Arc::clone(&router),
                 &cfg,
