@@ -2,7 +2,7 @@
 
 use crate::Hash;
 
-use std::any::type_name;
+use std::{any::type_name, fmt::Display};
 
 use zaino_fetch::jsonrpsee::connector::RpcRequestError;
 
@@ -463,3 +463,76 @@ pub enum FinalisedStateError {
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("Unexpected status error: {0:?}")]
 pub struct StatusError(pub crate::status::StatusType);
+
+#[derive(Debug, thiserror::Error)]
+#[error("{kind}: {message}")]
+/// The set of errors that can occur during the public API calls
+/// of a NodeBackedChainIndex
+pub struct ChainIndexError {
+    pub(crate) kind: ChainIndexErrorKind,
+    pub(crate) message: String,
+    pub(crate) source: Option<Box<dyn std::error::Error + Send + Sync + 'static>>,
+}
+
+#[derive(Debug)]
+/// The high-level kinds of thing that can fail
+pub enum ChainIndexErrorKind {
+    /// Zaino is in some way nonfunctional
+    InternalServerError,
+    /// The given snapshot contains invalid data.
+    // This variant isn't used yet...it should indicate
+    // that the provided snapshot contains information unknown to Zebra
+    // Unlike an internal server error, generating a new snapshot may solve
+    // whatever went wrong
+    #[allow(dead_code)]
+    InvalidSnapshot,
+}
+
+impl Display for ChainIndexErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            ChainIndexErrorKind::InternalServerError => "internal server error",
+            ChainIndexErrorKind::InvalidSnapshot => "invalid snapshot",
+        })
+    }
+}
+
+impl ChainIndexError {
+    pub(crate) fn backing_validator(value: impl std::error::Error + Send + Sync + 'static) -> Self {
+        Self {
+            kind: ChainIndexErrorKind::InternalServerError,
+            message: "InternalServerError: error receiving data from backing node".to_string(),
+            source: Some(Box::new(value)),
+        }
+    }
+
+    pub(crate) fn database_hole(missing_block: impl Display) -> Self {
+        Self {
+            kind: ChainIndexErrorKind::InternalServerError,
+            message: format!(
+                "InternalServerError: hole in validator database, missing block {missing_block}"
+            ),
+            source: None,
+        }
+    }
+}
+impl From<FinalisedStateError> for ChainIndexError {
+    fn from(value: FinalisedStateError) -> Self {
+        match value {
+            FinalisedStateError::Custom(_) => todo!(),
+            FinalisedStateError::MissingData(_) => todo!(),
+            FinalisedStateError::InvalidBlock {
+                height,
+                hash,
+                reason,
+            } => todo!(),
+            FinalisedStateError::FeatureUnavailable(_) => todo!(),
+            FinalisedStateError::Critical(_) => todo!(),
+            FinalisedStateError::LmdbError(error) => todo!(),
+            FinalisedStateError::SerdeJsonError(error) => todo!(),
+            FinalisedStateError::StatusError(status_error) => todo!(),
+            FinalisedStateError::JsonRpcConnectorError(transport_error) => todo!(),
+            FinalisedStateError::IoError(error) => todo!(),
+        }
+    }
+}

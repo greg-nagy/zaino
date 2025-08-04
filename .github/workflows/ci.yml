@@ -24,13 +24,13 @@ jobs:
       image-tag: ${{ steps.taggen.outputs.tag }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Compute version-based image tag
         id: taggen
         run: |
           source .env.testing-artifacts
-          export RUST_VERSION ZCASH_VERSION ZEBRA_VERSION
+          export RUST_VERSION ZCASH_VERSION ZEBRA_VERSION DOCKER_DIR_HASH
           TAG=$(./utils/get-ci-image-tag.sh)
           echo "TAG= $TAG"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
@@ -113,6 +113,7 @@ jobs:
           cargo check --all-features
           cargo check --tests --all-features
 
+
   test:
     name: Tests
     needs: [compute-tag, build-test-artifacts]
@@ -123,11 +124,21 @@ jobs:
       fail-fast: false
       matrix:
         partition:
+          - "integration-tests::chain_cache"
           - "integration-tests::fetch_service"
-          - "integration-tests::state_service"
+          - "integration-tests::json_server"
           - "integration-tests::local_cache"
+          - "integration-tests::state_service"
+          - "integration-tests::test_vectors"
           - "integration-tests::wallet_to_validator"
+          - "zaino-fetch"
+          - "zaino-proto"
+          - "zaino-serve"
+          - "zaino-state"
           - "zaino-testutils"
+          - "zainod"
+          - "zainod::config"
+          - "zainod::bin/zainod"
 
     steps:
       - uses: actions/checkout@v4
@@ -145,10 +156,10 @@ jobs:
             ~/.cargo
             target/debug/deps
 
-      - name: Copy bins into test_binaries
+      - name: Setup test binaries
         run: |
-          mkdir -p ./test_binaries/bins
-          cp /usr/local/bin/* ./test_binaries/bins/
+          # Run the entrypoint script with the actual working directory
+          /usr/local/bin/entrypoint.sh "$(pwd)"
 
       - name: Restore nextest archive from S3
         uses: tespkg/actions-cache/restore@v1
@@ -161,15 +172,16 @@ jobs:
           path: nextest-archive.tar.zst
 
       - name: Run Tests (Nextest)
+        env:
+          TEST_BINARIES_DIR: ${{ github.workspace }}/test_binaries/bins
         run: |
-          cargo nextest run --verbose --profile ci --retries 2 --archive-file nextest-archive.tar.zst \
+          cargo nextest run --verbose --profile ci --retries 2 --no-tests warn --archive-file nextest-archive.tar.zst \
             --workspace-remap ./ --filterset "binary_id(${{ matrix.partition }})" ${{ env.NEXTEST-FLAGS }}
 
       - name: Test Summary
         uses: test-summary/action@v2
         with:
           paths: "target/nextest/ci/junit.xml"
-        if: always()
 
   fmt:
     name: Rustfmt

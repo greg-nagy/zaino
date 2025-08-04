@@ -18,7 +18,7 @@ use crate::{
     CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactSize, CompactTxData,
     FixedEncodedLen as _, Hash, Height, OrchardCompactTx, OrchardTxList, Outpoint,
     SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
-    TxInCompact, TxIndex, TxOutCompact, TxidList, ZainoVersionedSerialise as _,
+    TxInCompact, TxLocation, TxOutCompact, TxidList, ZainoVersionedSerialise as _,
 };
 
 use zebra_chain::parameters::NetworkKind;
@@ -191,12 +191,15 @@ impl BlockCoreExt for DbV1 {
         self.get_block_range_txids(start, end).await
     }
 
-    async fn get_txid(&self, tx_index: TxIndex) -> Result<Hash, FinalisedStateError> {
-        self.get_txid(tx_index).await
+    async fn get_txid(&self, tx_location: TxLocation) -> Result<Hash, FinalisedStateError> {
+        self.get_txid(tx_location).await
     }
 
-    async fn get_tx_index(&self, txid: &Hash) -> Result<Option<TxIndex>, FinalisedStateError> {
-        self.get_tx_index(txid).await
+    async fn get_tx_location(
+        &self,
+        txid: &Hash,
+    ) -> Result<Option<TxLocation>, FinalisedStateError> {
+        self.get_tx_location(txid).await
     }
 }
 
@@ -204,9 +207,9 @@ impl BlockCoreExt for DbV1 {
 impl BlockTransparentExt for DbV1 {
     async fn get_transparent(
         &self,
-        tx_index: TxIndex,
+        tx_location: TxLocation,
     ) -> Result<Option<TransparentCompactTx>, FinalisedStateError> {
-        self.get_transparent(tx_index).await
+        self.get_transparent(tx_location).await
     }
 
     async fn get_block_transparent(
@@ -229,9 +232,9 @@ impl BlockTransparentExt for DbV1 {
 impl BlockShieldedExt for DbV1 {
     async fn get_sapling(
         &self,
-        tx_index: TxIndex,
+        tx_location: TxLocation,
     ) -> Result<Option<SaplingCompactTx>, FinalisedStateError> {
-        self.get_sapling(tx_index).await
+        self.get_sapling(tx_location).await
     }
 
     async fn get_block_sapling(
@@ -251,9 +254,9 @@ impl BlockShieldedExt for DbV1 {
 
     async fn get_orchard(
         &self,
-        tx_index: TxIndex,
+        tx_location: TxLocation,
     ) -> Result<Option<OrchardCompactTx>, FinalisedStateError> {
-        self.get_orchard(tx_index).await
+        self.get_orchard(tx_location).await
     }
 
     async fn get_block_orchard(
@@ -319,18 +322,18 @@ impl TransparentHistExt for DbV1 {
     async fn addr_and_index_records(
         &self,
         addr_script: AddrScript,
-        tx_index: TxIndex,
+        tx_location: TxLocation,
     ) -> Result<Option<Vec<AddrEventBytes>>, FinalisedStateError> {
-        self.addr_and_index_records(addr_script, tx_index).await
+        self.addr_and_index_records(addr_script, tx_location).await
     }
 
-    async fn addr_tx_indexes_by_range(
+    async fn addr_tx_locations_by_range(
         &self,
         addr_script: AddrScript,
         start_height: Height,
         end_height: Height,
-    ) -> Result<Option<Vec<TxIndex>>, FinalisedStateError> {
-        self.addr_tx_indexes_by_range(addr_script, start_height, end_height)
+    ) -> Result<Option<Vec<TxLocation>>, FinalisedStateError> {
+        self.addr_tx_locations_by_range(addr_script, start_height, end_height)
             .await
     }
 
@@ -339,7 +342,7 @@ impl TransparentHistExt for DbV1 {
         addr_script: AddrScript,
         start_height: Height,
         end_height: Height,
-    ) -> Result<Option<Vec<(TxIndex, u16, u64)>>, FinalisedStateError> {
+    ) -> Result<Option<Vec<(TxLocation, u16, u64)>>, FinalisedStateError> {
         self.addr_utxos_by_range(addr_script, start_height, end_height)
             .await
     }
@@ -357,14 +360,14 @@ impl TransparentHistExt for DbV1 {
     async fn get_outpoint_spender(
         &self,
         outpoint: Outpoint,
-    ) -> Result<Option<TxIndex>, FinalisedStateError> {
+    ) -> Result<Option<TxLocation>, FinalisedStateError> {
         self.get_outpoint_spender(outpoint).await
     }
 
     async fn get_outpoint_spenders(
         &self,
         outpoints: Vec<Outpoint>,
-    ) -> Result<Vec<Option<TxIndex>>, FinalisedStateError> {
+    ) -> Result<Vec<Option<TxLocation>>, FinalisedStateError> {
         self.get_outpoint_spenders(outpoints).await
     }
 }
@@ -405,7 +408,7 @@ pub(crate) struct DbV1 {
     ///
     /// Used for hash based fetch of the best chain (and random access).
     heights: Database,
-    /// Spent outpoints: `Outpoint` -> `StoredEntry<Vec<TxIndex>>`
+    /// Spent outpoints: `Outpoint` -> `StoredEntry<Vec<TxLocation>>`
     ///
     /// Used to check spent status of given outpoints, retuning spending tx.
     spent: Database,
@@ -703,7 +706,7 @@ impl DbV1 {
         }
     }
 
-    /// Validate every stored `TxIndex`.
+    /// Validate every stored `TxLocation`.
     async fn initial_spent_scan(&self) -> Result<(), FinalisedStateError> {
         let env = self.env.clone();
         let spent = self.spent;
@@ -713,7 +716,7 @@ impl DbV1 {
             let mut cursor = ro.open_ro_cursor(spent)?;
 
             for (key_bytes, val_bytes) in cursor.iter() {
-                let entry = StoredEntryFixed::<TxIndex>::from_bytes(val_bytes).map_err(|e| {
+                let entry = StoredEntryFixed::<TxLocation>::from_bytes(val_bytes).map_err(|e| {
                     FinalisedStateError::Custom(format!("corrupt spent entry: {e}"))
                 })?;
 
@@ -893,7 +896,7 @@ impl DbV1 {
         let mut sapling = Vec::with_capacity(tx_len);
         let mut orchard = Vec::with_capacity(tx_len);
 
-        let mut spent_map: HashMap<Outpoint, TxIndex> = HashMap::new();
+        let mut spent_map: HashMap<Outpoint, TxLocation> = HashMap::new();
         #[allow(clippy::type_complexity)]
         let mut addrhist_inputs_map: HashMap<
             AddrScript,
@@ -901,11 +904,11 @@ impl DbV1 {
         > = HashMap::new();
         let mut addrhist_outputs_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
 
-        for (tx_pos, tx) in block.transactions().iter().enumerate() {
-            let h = Hash::from_bytes_in_display_order(tx.txid());
+        for (tx_index, tx) in block.transactions().iter().enumerate() {
+            let hash = Hash::from_bytes_in_display_order(tx.txid());
 
-            if txid_set.insert(h) {
-                txids.push(h);
+            if txid_set.insert(hash) {
+                txids.push(hash);
             }
 
             // Transparent transactions
@@ -933,13 +936,13 @@ impl DbV1 {
             };
             orchard.push(orchard_data);
 
-            // Transaction index
-            let tx_index = TxIndex::new(block_height.into(), tx_pos as u16);
+            // Transaction location
+            let tx_location = TxLocation::new(block_height.into(), tx_index as u16);
 
             // Transparent Outputs: Build Address History
             DbV1::build_transaction_output_histories(
                 &mut addrhist_outputs_map,
-                tx_index,
+                tx_location,
                 tx.transparent().outputs().iter().enumerate(),
             );
 
@@ -949,51 +952,51 @@ impl DbV1 {
                     continue;
                 }
                 let prev_outpoint = Outpoint::new(*input.prevout_txid(), input.prevout_index());
-                spent_map.insert(prev_outpoint, tx_index);
+                spent_map.insert(prev_outpoint, tx_location);
 
                 //Check if output is in *this* block, else fetch from DB.
                 let prev_tx_hash = Hash(*prev_outpoint.prev_txid());
                 if txid_set.contains(&prev_tx_hash) {
                     // Fetch transaction index within block
-                    if let Some(tx_pos) = txids.iter().position(|h| h == &prev_tx_hash) {
+                    if let Some(tx_index) = txids.iter().position(|h| h == &prev_tx_hash) {
                         // Fetch Transparent data for transaction
-                        if let Some(Some(prev_transparent)) = transparent.get(tx_pos) {
+                        if let Some(Some(prev_transparent)) = transparent.get(tx_index) {
                             // Fetch output from transaction
                             if let Some(prev_output) = prev_transparent
                                 .outputs()
                                 .get(prev_outpoint.prev_index() as usize)
                             {
-                                let prev_output_tx_index =
-                                    TxIndex::new(block_height.0, tx_pos as u16);
+                                let prev_output_tx_location =
+                                    TxLocation::new(block_height.0, tx_index as u16);
                                 DbV1::build_input_history(
                                     &mut addrhist_inputs_map,
-                                    tx_index,
+                                    tx_location,
                                     input_index as u16,
                                     input,
                                     prev_output,
-                                    prev_output_tx_index,
+                                    prev_output_tx_location,
                                 );
                             }
                         }
                     }
-                } else if let Ok((prev_output, prev_output_tx_index)) =
+                } else if let Ok((prev_output, prev_output_tx_location)) =
                     tokio::task::block_in_place(|| {
                         let prev_output = self.get_previous_output_blocking(prev_outpoint)?;
-                        let prev_output_tx_index = self
+                        let prev_output_tx_location = self
                             .find_txid_index_blocking(&Hash::from(*prev_outpoint.prev_txid()))?
                             .ok_or_else(|| {
                                 FinalisedStateError::Custom("Previous txid not found".into())
                             })?;
-                        Ok::<(_, _), FinalisedStateError>((prev_output, prev_output_tx_index))
+                        Ok::<(_, _), FinalisedStateError>((prev_output, prev_output_tx_location))
                     })
                 {
                     DbV1::build_input_history(
                         &mut addrhist_inputs_map,
-                        tx_index,
+                        tx_location,
                         input_index as u16,
                         input,
                         &prev_output,
-                        prev_output_tx_index,
+                        prev_output_tx_location,
                     );
                 } else {
                     return Err(FinalisedStateError::InvalidBlock {
@@ -1089,14 +1092,14 @@ impl DbV1 {
             // Write spent to ZainoDB
             let mut txn = zaino_db.env.begin_rw_txn()?;
 
-            for (outpoint, tx_index) in spent_map {
+            for (outpoint, tx_location) in spent_map {
                 let outpoint_bytes = &outpoint.to_bytes()?;
-                let tx_index_entry_bytes =
-                    StoredEntryFixed::new(outpoint_bytes, tx_index).to_bytes()?;
+                let tx_location_entry_bytes =
+                    StoredEntryFixed::new(outpoint_bytes, tx_location).to_bytes()?;
                 txn.put(
                     zaino_db.spent,
                     &outpoint_bytes,
-                    &tx_index_entry_bytes,
+                    &tx_location_entry_bytes,
                     WriteFlags::NO_OVERWRITE,
                 )?;
             }
@@ -1167,7 +1170,7 @@ impl DbV1 {
                     // mark corresponding output as spent
                     let _updated = zaino_db.mark_addr_hist_record_spent_blocking(
                         &prev_output_script,
-                        prev_output_record.tx_index(),
+                        prev_output_record.tx_location(),
                         prev_output_record.out_index(),
                     )?;
                 }
@@ -1316,7 +1319,7 @@ impl DbV1 {
         > = HashMap::new();
         let mut addrhist_outputs_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
 
-        for (tx_pos, tx) in block.transactions().iter().enumerate() {
+        for (tx_index, tx) in block.transactions().iter().enumerate() {
             let h = Hash::from_bytes_in_display_order(tx.txid());
 
             if txid_set.insert(h) {
@@ -1332,13 +1335,13 @@ impl DbV1 {
                 };
             transparent.push(transparent_data);
 
-            // Transaction index
-            let tx_index = TxIndex::new(block_height.into(), tx_pos as u16);
+            // Transaction location
+            let tx_location = TxLocation::new(block_height.into(), tx_index as u16);
 
             // Transparent Outputs: Build Address History
             DbV1::build_transaction_output_histories(
                 &mut addrhist_outputs_map,
-                tx_index,
+                tx_location,
                 tx.transparent().outputs().iter().enumerate(),
             );
 
@@ -1354,32 +1357,32 @@ impl DbV1 {
                 let prev_tx_hash = Hash(*prev_outpoint.prev_txid());
                 if txid_set.contains(&prev_tx_hash) {
                     // Fetch transaction index within block
-                    if let Some(tx_pos) = txids.iter().position(|h| h == &prev_tx_hash) {
+                    if let Some(tx_index) = txids.iter().position(|h| h == &prev_tx_hash) {
                         // Fetch Transparent data for transaction
-                        if let Some(Some(prev_transparent)) = transparent.get(tx_pos) {
+                        if let Some(Some(prev_transparent)) = transparent.get(tx_index) {
                             // Fetch output from transaction
                             if let Some(prev_output) = prev_transparent
                                 .outputs()
                                 .get(prev_outpoint.prev_index() as usize)
                             {
-                                let prev_output_tx_index =
-                                    TxIndex::new(block_height.0, tx_pos as u16);
+                                let prev_output_tx_location =
+                                    TxLocation::new(block_height.0, tx_index as u16);
                                 DbV1::build_input_history(
                                     &mut addrhist_inputs_map,
-                                    tx_index,
+                                    tx_location,
                                     input_index as u16,
                                     input,
                                     prev_output,
-                                    prev_output_tx_index,
+                                    prev_output_tx_location,
                                 );
                             }
                         }
                     }
-                } else if let Ok((prev_output, prev_output_tx_index)) =
+                } else if let Ok((prev_output, prev_output_tx_location)) =
                     tokio::task::block_in_place(|| {
                         let prev_output = self.get_previous_output_blocking(prev_outpoint)?;
 
-                        let prev_output_tx_index = self
+                        let prev_output_tx_location = self
                             .find_txid_index_blocking(&Hash::from(*prev_outpoint.prev_txid()))
                             .map_err(|e| FinalisedStateError::InvalidBlock {
                                 height: block.height().expect("already  checked height is some").0,
@@ -1392,16 +1395,16 @@ impl DbV1 {
                                 reason: "Invalid block data: invalid txid data.".to_string(),
                             })?;
 
-                        Ok::<(_, _), FinalisedStateError>((prev_output, prev_output_tx_index))
+                        Ok::<(_, _), FinalisedStateError>((prev_output, prev_output_tx_location))
                     })
                 {
                     DbV1::build_input_history(
                         &mut addrhist_inputs_map,
-                        tx_index,
+                        tx_location,
                         input_index as u16,
                         input,
                         &prev_output,
-                        prev_output_tx_index,
+                        prev_output_tx_location,
                     );
                 } else {
                     return Err(FinalisedStateError::InvalidBlock {
@@ -1460,7 +1463,7 @@ impl DbV1 {
                         let _updated = zaino_db
                             .mark_addr_hist_record_unspent_blocking(
                                 prev_output_script,
-                                prev_output_record.tx_index(),
+                                prev_output_record.tx_location(),
                                 prev_output_record.out_index(),
                             )
                             // TODO: check internals to propagate important errors.
@@ -1602,8 +1605,11 @@ impl DbV1 {
         Ok((validated_start, validated_end))
     }
 
-    // Fetch the TxIndex for the given txid, transaction data is indexed by Txidex internally.
-    async fn get_tx_index(&self, txid: &Hash) -> Result<Option<TxIndex>, FinalisedStateError> {
+    // Fetch the TxLocation for the given txid, transaction data is indexed by TxLocation internally.
+    async fn get_tx_location(
+        &self,
+        txid: &Hash,
+    ) -> Result<Option<TxLocation>, FinalisedStateError> {
         if let Some(index) = tokio::task::block_in_place(|| self.find_txid_index_blocking(txid))? {
             Ok(Some(index))
         } else {
@@ -1666,18 +1672,18 @@ impl DbV1 {
             .collect()
     }
 
-    /// Fetch the txid bytes for a given TxIndex.
+    /// Fetch the txid bytes for a given TxLocation.
     ///
     /// This uses an optimized lookup without decoding the full TxidList.
     ///
     /// NOTE: This method currently ignores the txid version byte for efficiency.
-    async fn get_txid(&self, tx_index: TxIndex) -> Result<Hash, FinalisedStateError> {
+    async fn get_txid(&self, tx_location: TxLocation) -> Result<Hash, FinalisedStateError> {
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
 
             use std::io::Cursor;
 
-            let height = Height::try_from(tx_index.block_index())
+            let height = Height::try_from(tx_location.block_height())
                 .map_err(|e| FinalisedStateError::Custom(e.to_string()))?;
             let height_bytes = height.to_bytes()?;
 
@@ -1701,7 +1707,7 @@ impl DbV1 {
             let list_len = CompactSize::read(&mut cursor)
                 .map_err(|e| FinalisedStateError::Custom(format!("txid list len error: {e}")))?;
 
-            let idx = tx_index.tx_index() as usize;
+            let idx = tx_location.tx_index() as usize;
             if idx >= list_len as usize {
                 return Err(FinalisedStateError::Custom(
                     "tx_index out of range in txid list".to_string(),
@@ -1780,19 +1786,19 @@ impl DbV1 {
             .collect()
     }
 
-    /// Fetch the serialized TransparentCompactTx for the given TxIndex, if present.
+    /// Fetch the serialized TransparentCompactTx for the given TxLocation, if present.
     ///
     /// This uses an optimized lookup without decoding the full TxidList.
     async fn get_transparent(
         &self,
-        tx_index: TxIndex,
+        tx_location: TxLocation,
     ) -> Result<Option<TransparentCompactTx>, FinalisedStateError> {
         use std::io::{Cursor, Read};
 
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
 
-            let height = Height::try_from(tx_index.block_index())
+            let height = Height::try_from(tx_location.block_height())
                 .map_err(|e| FinalisedStateError::Custom(e.to_string()))?;
             let height_bytes = height.to_bytes()?;
 
@@ -1814,7 +1820,7 @@ impl DbV1 {
             let list_len = CompactSize::read(&mut cursor)
                 .map_err(|e| FinalisedStateError::Custom(format!("txid list len error: {e}")))?;
 
-            let idx = tx_index.tx_index() as usize;
+            let idx = tx_location.tx_index() as usize;
             if idx >= list_len as usize {
                 return Err(FinalisedStateError::Custom(
                     "tx_index out of range in transparent tx data".to_string(),
@@ -1916,19 +1922,19 @@ impl DbV1 {
             .collect()
     }
 
-    /// Fetch the serialized SaplingCompactTx for the given TxIndex, if present.
+    /// Fetch the serialized SaplingCompactTx for the given TxLocation, if present.
     ///
     /// This uses an optimized lookup without decoding the full TxidList.
     async fn get_sapling(
         &self,
-        tx_index: TxIndex,
+        tx_location: TxLocation,
     ) -> Result<Option<SaplingCompactTx>, FinalisedStateError> {
         use std::io::{Cursor, Read};
 
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
 
-            let height = Height::try_from(tx_index.block_index())
+            let height = Height::try_from(tx_location.block_height())
                 .map_err(|e| FinalisedStateError::Custom(e.to_string()))?;
             let height_bytes = height.to_bytes()?;
 
@@ -1951,7 +1957,7 @@ impl DbV1 {
                 FinalisedStateError::Custom(format!("sapling tx list len error: {e}"))
             })?;
 
-            let idx = tx_index.tx_index() as usize;
+            let idx = tx_location.tx_index() as usize;
             if idx >= list_len as usize {
                 return Err(FinalisedStateError::Custom(
                     "tx_index out of range in sapling tx list".to_string(),
@@ -2051,19 +2057,19 @@ impl DbV1 {
             .collect()
     }
 
-    /// Fetch the serialized OrchardCompactTx for the given TxIndex, if present.
+    /// Fetch the serialized OrchardCompactTx for the given TxLocation, if present.
     ///
     /// This uses an optimized lookup without decoding the full TxidList.
     async fn get_orchard(
         &self,
-        tx_index: TxIndex,
+        tx_location: TxLocation,
     ) -> Result<Option<OrchardCompactTx>, FinalisedStateError> {
         use std::io::{Cursor, Read};
 
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
 
-            let height = Height::try_from(tx_index.block_index())
+            let height = Height::try_from(tx_location.block_height())
                 .map_err(|e| FinalisedStateError::Custom(e.to_string()))?;
             let height_bytes = height.to_bytes()?;
 
@@ -2086,7 +2092,7 @@ impl DbV1 {
                 FinalisedStateError::Custom(format!("orchard tx list len error: {e}"))
             })?;
 
-            let idx = tx_index.tx_index() as usize;
+            let idx = tx_location.tx_index() as usize;
             if idx >= list_len as usize {
                 return Err(FinalisedStateError::Custom(
                     "tx_index out of range in orchard tx list".to_string(),
@@ -2244,22 +2250,22 @@ impl DbV1 {
             .collect()
     }
 
-    /// Fetch the `TxIndex` that spent a given outpoint, if any.
+    /// Fetch the `TxLocation` that spent a given outpoint, if any.
     ///
     /// Returns:
-    /// - `Ok(Some(TxIndex))` if the outpoint is spent.
+    /// - `Ok(Some(TxLocation))` if the outpoint is spent.
     /// - `Ok(None)` if no entry exists (not spent or not known).
     /// - `Err(...)` on deserialization or DB error.
     async fn get_outpoint_spender(
         &self,
         outpoint: Outpoint,
-    ) -> Result<Option<TxIndex>, FinalisedStateError> {
+    ) -> Result<Option<TxLocation>, FinalisedStateError> {
         let key = outpoint.to_bytes()?;
         let txn = self.env.begin_ro_txn()?;
 
         tokio::task::block_in_place(|| match txn.get(self.spent, &key) {
             Ok(bytes) => {
-                let entry = StoredEntryFixed::<TxIndex>::from_bytes(bytes).map_err(|e| {
+                let entry = StoredEntryFixed::<TxLocation>::from_bytes(bytes).map_err(|e| {
                     FinalisedStateError::Custom(format!("spent entry decode error: {e}"))
                 })?;
                 Ok(Some(entry.item))
@@ -2269,16 +2275,16 @@ impl DbV1 {
         })
     }
 
-    /// Fetch the `TxIndex` entries for a batch of outpoints.
+    /// Fetch the `TxLocation` entries for a batch of outpoints.
     ///
     /// For each input:
-    /// - Returns `Some(TxIndex)` if spent,
+    /// - Returns `Some(TxLocation)` if spent,
     /// - `None` if not found,
     /// - or returns `Err` immediately if any DB or decode error occurs.
     async fn get_outpoint_spenders(
         &self,
         outpoints: Vec<Outpoint>,
-    ) -> Result<Vec<Option<TxIndex>>, FinalisedStateError> {
+    ) -> Result<Vec<Option<TxLocation>>, FinalisedStateError> {
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
 
@@ -2289,7 +2295,7 @@ impl DbV1 {
                     match txn.get(self.spent, &key) {
                         Ok(bytes) => {
                             let entry =
-                                StoredEntryFixed::<TxIndex>::from_bytes(bytes).map_err(|e| {
+                                StoredEntryFixed::<TxLocation>::from_bytes(bytes).map_err(|e| {
                                     FinalisedStateError::Custom(format!(
                                         "spent entry decode error for {outpoint:?}: {e}"
                                     ))
@@ -2353,7 +2359,7 @@ impl DbV1 {
         })
     }
 
-    /// Fetch all address history records for a given address and TxIndex.
+    /// Fetch all address history records for a given address and TxLocation.
     ///
     /// Returns:
     /// - `Ok(Some(records))` if one or more matching records are found at that index,
@@ -2362,12 +2368,12 @@ impl DbV1 {
     async fn addr_and_index_records(
         &self,
         addr_script: AddrScript,
-        tx_index: TxIndex,
+        tx_location: TxLocation,
     ) -> Result<Option<Vec<AddrEventBytes>>, FinalisedStateError> {
         let addr_bytes = addr_script.to_bytes()?;
 
         let rec_results = tokio::task::block_in_place(|| {
-            self.addr_hist_records_by_addr_and_index_blocking(&addr_bytes, tx_index)
+            self.addr_hist_records_by_addr_and_index_blocking(&addr_bytes, tx_location)
         });
 
         let raw_records = match rec_results {
@@ -2391,19 +2397,19 @@ impl DbV1 {
         Ok(Some(records))
     }
 
-    /// Fetch all distinct `TxIndex` values for `addr_script` within the
+    /// Fetch all distinct `TxLocation` values for `addr_script` within the
     /// height range `[start_height, end_height]` (inclusive).
     ///
     /// Returns:
     /// - `Ok(Some(vec))` if one or more matching records are found,
     /// - `Ok(None)` if no matches found (not an error),
     /// - `Err(...)` on decode or DB failure.
-    async fn addr_tx_indexes_by_range(
+    async fn addr_tx_locations_by_range(
         &self,
         addr_script: AddrScript,
         start_height: Height,
         end_height: Height,
-    ) -> Result<Option<Vec<TxIndex>>, FinalisedStateError> {
+    ) -> Result<Option<Vec<TxLocation>>, FinalisedStateError> {
         dbg!(&addr_script, &start_height, &end_height);
         let addr_bytes = addr_script.to_bytes()?;
 
@@ -2411,7 +2417,7 @@ impl DbV1 {
             let txn = self.env.begin_ro_txn()?;
 
             let mut cursor = txn.open_ro_cursor(self.address_history)?;
-            let mut set: HashSet<TxIndex> = HashSet::new();
+            let mut set: HashSet<TxLocation> = HashSet::new();
 
             for (key, val) in cursor.iter_dup_of(&addr_bytes)? {
                 if key.len() != AddrScript::VERSIONED_LEN
@@ -2420,7 +2426,7 @@ impl DbV1 {
                     continue;
                 }
 
-                // Parse the tx_index out of val:
+                // Parse the tx_location out of val:
                 // - [0] StoredEntry tag
                 // - [1] record tag
                 // - [2..=5] height
@@ -2430,16 +2436,16 @@ impl DbV1 {
                 // - [11..=18] value
                 // - [19..=50] checksum
 
-                let h = u32::from_be_bytes([val[2], val[3], val[4], val[5]]);
-                if h < start_height.0 || h > end_height.0 {
+                let block_height = u32::from_be_bytes([val[2], val[3], val[4], val[5]]);
+                if block_height < start_height.0 || block_height > end_height.0 {
                     continue;
                 }
 
-                let tx_idx = u16::from_be_bytes([val[6], val[7]]);
-                set.insert(TxIndex::new(h, tx_idx));
+                let tx_index = u16::from_be_bytes([val[6], val[7]]);
+                set.insert(TxLocation::new(block_height, tx_index));
             }
             let mut indices: Vec<_> = set.into_iter().collect();
-            indices.sort_by_key(|txi| (txi.block_index(), txi.tx_index()));
+            indices.sort_by_key(|txi| (txi.block_height(), txi.tx_index()));
 
             if indices.is_empty() {
                 Ok(None)
@@ -2452,7 +2458,7 @@ impl DbV1 {
     /// Fetch all UTXOs (unspent mined outputs) for `addr_script` within the
     /// height range `[start_height, end_height]` (inclusive).
     ///
-    /// Each entry is `(TxIndex, vout, value)`.
+    /// Each entry is `(TxLocation, vout, value)`.
     ///
     /// Returns:
     /// - `Ok(Some(vec))` if one or more UTXOs are found,
@@ -2463,7 +2469,7 @@ impl DbV1 {
         addr_script: AddrScript,
         start_height: Height,
         end_height: Height,
-    ) -> Result<Option<Vec<(TxIndex, u16, u64)>>, FinalisedStateError> {
+    ) -> Result<Option<Vec<(TxLocation, u16, u64)>>, FinalisedStateError> {
         let addr_bytes = addr_script.to_bytes()?;
 
         tokio::task::block_in_place(|| {
@@ -2479,7 +2485,7 @@ impl DbV1 {
                     continue;
                 }
 
-                // Parse the tx_index out of val:
+                // Parse the tx_location out of val:
                 // - [0] StoredEntry tag
                 // - [1] record tag
                 // - [2..=5] height
@@ -2489,8 +2495,8 @@ impl DbV1 {
                 // - [11..=18] value
                 // - [19..=50] checksum
 
-                let height = u32::from_be_bytes([val[2], val[3], val[4], val[5]]);
-                if height < start_height.0 || height > end_height.0 {
+                let block_height = u32::from_be_bytes([val[2], val[3], val[4], val[5]]);
+                if block_height < start_height.0 || block_height > end_height.0 {
                     continue;
                 }
 
@@ -2501,13 +2507,13 @@ impl DbV1 {
                     continue;
                 }
 
-                let tx_idx = u16::from_be_bytes([val[6], val[7]]);
+                let tx_index = u16::from_be_bytes([val[6], val[7]]);
                 let vout = u16::from_be_bytes([val[8], val[9]]);
                 let value = u64::from_le_bytes([
                     val[11], val[12], val[13], val[14], val[15], val[16], val[17], val[18],
                 ]);
 
-                utxos.push((TxIndex::new(height, tx_idx), vout, value));
+                utxos.push((TxLocation::new(block_height, tx_index), vout, value));
             }
 
             if utxos.is_empty() {
@@ -2547,7 +2553,7 @@ impl DbV1 {
                     continue;
                 }
 
-                // Parse the tx_index out of val:
+                // Parse the tx_location out of val:
                 // - [0] StoredEntry tag
                 // - [1] record tag
                 // - [2..=5] height
@@ -3028,7 +3034,7 @@ impl DbV1 {
 
         for (tx_index, tx_opt) in tx_list.iter().enumerate() {
             let tx_index = tx_index as u16;
-            let txid_index = TxIndex::new(height.0, tx_index);
+            let txid_index = TxLocation::new(height.0, tx_index);
 
             let Some(tx) = tx_opt else { continue };
 
@@ -3073,13 +3079,13 @@ impl DbV1 {
                 let val = ro
                     .get(self.spent, &outpoint_bytes)
                     .map_err(|_| fail(&format!("missing spent index for outpoint {outpoint:?}")))?;
-                let entry = StoredEntryFixed::<TxIndex>::from_bytes(val)
+                let entry = StoredEntryFixed::<TxLocation>::from_bytes(val)
                     .map_err(|e| fail(&format!("corrupt spent entry: {e}")))?;
                 if !entry.verify(&outpoint_bytes) {
                     return Err(fail("spent entry checksum mismatch"));
                 }
                 if entry.inner() != &txid_index {
-                    return Err(fail("spent entry has wrong TxIndex"));
+                    return Err(fail("spent entry has wrong TxLocation"));
                 }
 
                 // Check addrhist input record
@@ -3533,7 +3539,7 @@ impl DbV1 {
         Ok(())
     }
 
-    /// Returns all raw AddrHist records for a given AddrScript and TxIndex.
+    /// Returns all raw AddrHist records for a given AddrScript and TxLocation.
     ///
     /// Returns a Vec of serialized entries, for given addr_script and ix_index.
     ///
@@ -3543,7 +3549,7 @@ impl DbV1 {
     fn addr_hist_records_by_addr_and_index_blocking(
         &self,
         addr_script_bytes: &Vec<u8>,
-        tx_index: TxIndex,
+        tx_location: TxLocation,
     ) -> Result<Vec<Vec<u8>>, FinalisedStateError> {
         let txn = self.env.begin_ro_txn()?;
 
@@ -3560,7 +3566,7 @@ impl DbV1 {
                 break;
             }
 
-            // Check tx_index match without deserializing
+            // Check tx_location match without deserializing
             // - [0] StoredEntry tag
             // - [1] record tag
             // - [2..=5] height
@@ -3573,7 +3579,7 @@ impl DbV1 {
             let block_index = u32::from_be_bytes([val[2], val[3], val[4], val[5]]);
             let tx_idx = u16::from_be_bytes([val[6], val[7]]);
 
-            if block_index == tx_index.block_index() && tx_idx == tx_index.tx_index() {
+            if block_index == tx_location.block_height() && tx_idx == tx_location.tx_index() {
                 results.push(val.to_vec());
             }
         }
@@ -3585,13 +3591,13 @@ impl DbV1 {
     #[inline]
     fn build_transaction_output_histories<'a>(
         map: &mut HashMap<AddrScript, Vec<AddrHistRecord>>,
-        tx_index: TxIndex,
+        tx_location: TxLocation,
         outputs: impl Iterator<Item = (usize, &'a TxOutCompact)>,
     ) {
         for (output_idx, output) in outputs {
             let addr_script = AddrScript::new(*output.script_hash(), output.script_type());
             let output_record = AddrHistRecord::new(
-                tx_index,
+                tx_location,
                 output_idx as u16,
                 output.value(),
                 AddrHistRecord::FLAG_MINED,
@@ -3608,15 +3614,15 @@ impl DbV1 {
     #[allow(clippy::type_complexity)]
     fn build_input_history(
         map: &mut HashMap<AddrScript, Vec<(AddrHistRecord, (AddrScript, AddrHistRecord))>>,
-        input_tx_index: TxIndex,
+        input_tx_location: TxLocation,
         input_index: u16,
         input: &TxInCompact,
         prev_output: &TxOutCompact,
-        prev_output_tx_index: TxIndex,
+        prev_output_tx_location: TxLocation,
     ) {
         let addr_script = AddrScript::new(*prev_output.script_hash(), prev_output.script_type());
         let input_record = AddrHistRecord::new(
-            input_tx_index,
+            input_tx_location,
             input_index,
             prev_output.value(),
             AddrHistRecord::FLAG_IS_INPUT,
@@ -3624,7 +3630,7 @@ impl DbV1 {
         let prev_output_record = (
             AddrScript::new(*prev_output.script_hash(), prev_output.script_type()),
             AddrHistRecord::new(
-                prev_output_tx_index,
+                prev_output_tx_location,
                 input.prevout_index() as u16,
                 prev_output.value(),
                 AddrHistRecord::FLAG_MINED,
@@ -3731,7 +3737,7 @@ impl DbV1 {
     }
 
     /// Mark a specific AddrHistRecord as spent in the addrhist DB.
-    /// Looks up a record by script and tx_index, sets FLAG_SPENT, and updates it in place.
+    /// Looks up a record by script and tx_location, sets FLAG_SPENT, and updates it in place.
     ///
     /// Returns Ok(true) if a record was updated, Ok(false) if not found, or Err on DB error.
     ///
@@ -3739,7 +3745,7 @@ impl DbV1 {
     fn mark_addr_hist_record_spent_blocking(
         &self,
         addr_script: &AddrScript,
-        tx_index: TxIndex,
+        tx_location: TxLocation,
         vout: u16,
     ) -> Result<bool, FinalisedStateError> {
         let addr_bytes = addr_script.to_bytes()?;
@@ -3759,7 +3765,7 @@ impl DbV1 {
                 let mut hist_record = [0u8; StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN];
                 hist_record.copy_from_slice(val);
 
-                // Parse the tx_index out of arr:
+                // Parse the tx_location out of arr:
                 // - [0] StoredEntry tag
                 // - [1] record tag
                 // - [2..=5] height
@@ -3769,7 +3775,7 @@ impl DbV1 {
                 // - [11..=18] value
                 // - [19..=50] checksum
 
-                let block_index = u32::from_be_bytes([
+                let block_height = u32::from_be_bytes([
                     hist_record[2],
                     hist_record[3],
                     hist_record[4],
@@ -3786,9 +3792,9 @@ impl DbV1 {
                     continue;
                 }
 
-                // Match on (height, tx_index, vout).
-                if block_index == tx_index.block_index()
-                    && tx_idx == tx_index.tx_index()
+                // Match on (height, tx_location, vout).
+                if block_height == tx_location.block_height()
+                    && tx_idx == tx_location.tx_index()
                     && rec_vout == vout
                 {
                     // Flip FLAG_SPENT.
@@ -3814,7 +3820,7 @@ impl DbV1 {
     }
 
     /// Mark a specific AddrHistRecord as unspent in the addrhist DB.
-    /// Looks up a record by script and tx_index, sets FLAG_SPENT, and updates it in place.
+    /// Looks up a record by script and tx_location, sets FLAG_SPENT, and updates it in place.
     ///
     /// Returns Ok(true) if a record was updated, Ok(false) if not found, or Err on DB error.
     ///
@@ -3822,7 +3828,7 @@ impl DbV1 {
     fn mark_addr_hist_record_unspent_blocking(
         &self,
         addr_script: &AddrScript,
-        tx_index: TxIndex,
+        tx_location: TxLocation,
         vout: u16,
     ) -> Result<bool, FinalisedStateError> {
         let addr_bytes = addr_script.to_bytes()?;
@@ -3842,7 +3848,7 @@ impl DbV1 {
                 let mut hist_record = [0u8; StoredEntryFixed::<AddrEventBytes>::VERSIONED_LEN];
                 hist_record.copy_from_slice(val);
 
-                // Parse the tx_index out of arr:
+                // Parse the tx_location out of arr:
                 // - [0] StoredEntry tag
                 // - [1] record tag
                 // - [2..=5] height
@@ -3852,7 +3858,7 @@ impl DbV1 {
                 // - [11..=18] value
                 // - [19..=50] checksum
 
-                let block_index = u32::from_be_bytes([
+                let block_height = u32::from_be_bytes([
                     hist_record[2],
                     hist_record[3],
                     hist_record[4],
@@ -3869,9 +3875,9 @@ impl DbV1 {
                     continue;
                 }
 
-                // Match on (height, tx_index, vout).
-                if block_index == tx_index.block_index()
-                    && tx_idx == tx_index.tx_index()
+                // Match on (height, tx_location, vout).
+                if block_height == tx_location.block_height()
+                    && tx_idx == tx_location.tx_index()
                     && rec_vout == vout
                 {
                     // Flip FLAG_SPENT.
@@ -3908,43 +3914,44 @@ impl DbV1 {
     ) -> Result<TxOutCompact, FinalisedStateError> {
         // Find the tx’s location in the chain
         let prev_txid = Hash::from(*outpoint.prev_txid());
-        let tx_index = self
+        let tx_location = self
             .find_txid_index_blocking(&prev_txid)?
             .ok_or_else(|| FinalisedStateError::Custom("Previous txid not found".into()))?;
 
         // Fetch the output from the transparent db.
-        let block_height = tx_index.block_index();
-        let tx_pos = tx_index.tx_index() as usize;
-        let out_pos = outpoint.prev_index() as usize;
+        let block_height = tx_location.block_height();
+        let tx_index = tx_location.tx_index() as usize;
+        let out_index = outpoint.prev_index() as usize;
 
         let ro = self.env.begin_ro_txn()?;
         let height_key = Height(block_height).to_bytes()?;
         let stored_bytes = ro.get(self.transparent, &height_key)?;
 
-        Self::find_txout_in_stored_transparent_tx_list(stored_bytes, tx_pos, out_pos).ok_or_else(
-            || FinalisedStateError::Custom("Previous output not found at given index".into()),
-        )
+        Self::find_txout_in_stored_transparent_tx_list(stored_bytes, tx_index, out_index)
+            .ok_or_else(|| {
+                FinalisedStateError::Custom("Previous output not found at given index".into())
+            })
     }
 
-    /// Finds a TxIndex [block_height, tx_index] from a given txid.
+    /// Finds a TxLocation [block_height, tx_index] from a given txid.
     /// Used for Txid based lookup in transaction DBs.
     ///
     /// WARNING: This is a blocking function and **MUST** be called within a blocking thread / task.
     fn find_txid_index_blocking(
         &self,
         txid: &Hash,
-    ) -> Result<Option<TxIndex>, FinalisedStateError> {
+    ) -> Result<Option<TxLocation>, FinalisedStateError> {
         let ro = self.env.begin_ro_txn()?;
         let mut cursor = ro.open_ro_cursor(self.txids)?;
 
         let target: [u8; 32] = (*txid).into();
 
         for (height_bytes, stored_bytes) in cursor.iter() {
-            if let Some(tx_idx) =
+            if let Some(tx_index) =
                 Self::find_txid_position_in_stored_txid_list(&target, stored_bytes)
             {
                 let height = Height::from_bytes(height_bytes)?;
-                return Ok(Some(TxIndex::new(height.0, tx_idx as u16)));
+                return Ok(Some(TxLocation::new(height.0, tx_index as u16)));
             }
         }
         Ok(None)
