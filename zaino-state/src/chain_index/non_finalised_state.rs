@@ -25,7 +25,7 @@ use crate::ChainBlock;
 pub struct NonFinalizedState {
     /// We need access to the validator's best block hash, as well
     /// as a source of blocks
-    source: BlockchainSource,
+    pub(super) source: BlockchainSource,
     staged: Mutex<mpsc::Receiver<ChainBlock>>,
     staging_sender: mpsc::Sender<ChainBlock>,
     /// This lock should not be exposed to consumers. Rather,
@@ -44,6 +44,8 @@ pub struct NonfinalizedBlockCacheSnapshot {
     /// all blocks known to have been on-chain before being
     /// removed by a reorg. Blocks reorged away have no height.
     pub blocks: HashMap<Hash, ChainBlock>,
+    /// hashes indexed by height
+    pub heights_to_hashes: HashMap<Height, Hash>,
     // Do we need height here?
     /// The highest known block
     pub best_tip: (Height, Hash),
@@ -59,7 +61,7 @@ pub enum NodeConnectionError {
     ConnectionFailure(reqwest::Error),
     /// The Zebrad provided invalid or corrupt data. Something has gone wrong
     /// and we need to shut down.
-    UnrecoverableError(Box<dyn std::error::Error>),
+    UnrecoverableError(Box<dyn std::error::Error + Send>),
 }
 
 #[derive(Debug)]
@@ -280,12 +282,14 @@ impl NonFinalizedState {
         let best_tip = (Height(1), chainblock.index().hash);
 
         let mut blocks = HashMap::new();
-        blocks.insert(chainblock.index().hash, chainblock);
+        let mut heights_to_hashes = HashMap::new();
+        let hash = chainblock.index().hash;
+        blocks.insert(hash, chainblock);
+        heights_to_hashes.insert(Height(1), hash);
 
-        dbg!(&best_tip);
-        dbg!(&blocks);
         let current = ArcSwap::new(Arc::new(NonfinalizedBlockCacheSnapshot {
             blocks,
+            heights_to_hashes,
             best_tip,
         }));
         Ok(Self {
@@ -618,7 +622,7 @@ impl NonFinalizedState {
         let (_newly_finalzed, blocks): (HashMap<_, _>, HashMap<Hash, _>) = new
             .into_iter()
             .partition(|(_hash, block)| match block.index().height() {
-                Some(height) => height <= finalized_height,
+                Some(height) => height < finalized_height,
                 None => false,
             });
         // TODO: At this point, we need to ensure the newly-finalized blocks are known
@@ -630,10 +634,20 @@ impl NonFinalizedState {
                 _ => acc,
             }
         });
+        let heights_to_hashes = blocks
+            .iter()
+            .filter_map(|(hash, chainblock)| {
+                chainblock.index().height.map(|height| (height, *hash))
+            })
+            .collect();
         // Need to get best hash at some point in this process
         let stored = self.current.compare_and_swap(
             &snapshot,
-            Arc::new(NonfinalizedBlockCacheSnapshot { blocks, best_tip }),
+            Arc::new(NonfinalizedBlockCacheSnapshot {
+                blocks,
+                heights_to_hashes,
+                best_tip,
+            }),
         );
         if Arc::ptr_eq(&stored, &snapshot) {
             Ok(())
@@ -658,7 +672,7 @@ pub enum UpdateError {
 }
 
 /// A connection to a validator.
-#[derive(Clone)]
+#[derive(Clone, derive_more::From)]
 pub enum BlockchainSource {
     /// The connection is via direct read access to a zebrad's data file
     State(ReadStateService),
@@ -667,7 +681,7 @@ pub enum BlockchainSource {
 }
 
 #[derive(Debug, thiserror::Error)]
-enum BlockchainSourceError {
+pub(crate) enum BlockchainSourceError {
     // TODO: Add logic for handling recoverable errors if any are identified
     // one candidate may be ephemerable network hiccoughs
     #[error("critical error in backing block source: {0}")]
@@ -678,7 +692,7 @@ type BlockchainSourceResult<T> = Result<T, BlockchainSourceError>;
 
 /// Methods that will dispatch to a ReadStateService or JsonRpSeeConnector
 impl BlockchainSource {
-    async fn get_block(
+    pub(super) async fn get_block(
         &self,
         id: HashOrHeight,
     ) -> BlockchainSourceResult<Option<Arc<zebra_chain::block::Block>>> {

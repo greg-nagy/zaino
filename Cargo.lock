@@ -5999,6 +5999,7 @@ dependencies = [
  "chrono",
  "core2 0.4.0",
  "dashmap",
+ "derive_more",
  "futures",
  "hex",
  "http",
