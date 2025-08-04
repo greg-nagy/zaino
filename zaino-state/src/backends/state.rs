@@ -1187,15 +1187,6 @@ impl ZcashIndexer for StateServiceSubscriber {
         Ok(self.block_cache.get_chain_height().await?)
     }
 
-    /// TODO:
-    ///
-    /// The following fields are needed:
-    ///
-    /// - is_script: I should be able to get it from the script_pubkey
-    /// - is_watch_only: no idea
-    /// - pubkey: hex value of the raw pubkey. I should be able to get it from...
-    /// - is_compressed: ...
-    /// - account: DEPRECATED. However, I should ...
     async fn validate_address(
         &self,
         raw_address: String,
