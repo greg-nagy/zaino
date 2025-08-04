@@ -14,7 +14,7 @@ use crate::chain_index::tests::vectors::{build_mockchain_source, load_test_vecto
 use crate::error::FinalisedStateError;
 use crate::{AddrScript, ChainBlock, Height, Outpoint};
 
-async fn spawn_default_zaino_db(
+async fn spawn_v1_zaino_db(
     source: MockchainSource,
 ) -> Result<(TempDir, ZainoDB), FinalisedStateError> {
     let temp_dir: TempDir = tempfile::tempdir().unwrap();
@@ -72,7 +72,7 @@ async fn load_vectors_and_spawn_and_sync_zaino_db() -> (
 
     let source = build_mockchain_source(blocks.clone());
 
-    let (db_dir, zaino_db) = spawn_default_zaino_db(source).await.unwrap();
+    let (db_dir, zaino_db) = spawn_v1_zaino_db(source).await.unwrap();
     for (_h, chain_block, _compact_block, _zebra_block, _block_roots) in blocks.clone() {
         // dbg!("Writing block at height {}", _h);
         // if _h == 1 {
