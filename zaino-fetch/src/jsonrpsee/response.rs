@@ -11,10 +11,7 @@ use zebra_chain::{
     value_balance::ValueBalance,
     work::difficulty::CompactDifficulty,
 };
-// use zebra_rpc::methods::{
-//     opthex,
-//     types::{get_blockchain_info::Balance, validate_address},
-// };
+
 use zebra_rpc::{
     client::{GetBlockchainInfoBalance, ValidateAddressResponse},
     methods::opthex,

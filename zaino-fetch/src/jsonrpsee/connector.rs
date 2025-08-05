@@ -547,7 +547,14 @@ impl JsonRpSeeConnector {
             .await
     }
 
-    /// TODO: add doc comment
+    /// Return information about the given Zcash address.
+    ///
+    /// # Parameters
+    /// - `address`: (string, required, example="tmHMBeeYRuc2eVicLNfP15YLxbQsooCA6jb") The Zcash transparent address to validate.
+    ///
+    /// zcashd reference: [`validateaddress`](https://zcash.github.io/rpc/validateaddress.html)
+    /// method: post
+    /// tags: blockchain
     pub async fn validate_address(
         &self,
         address: String,
