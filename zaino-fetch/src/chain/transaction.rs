@@ -422,10 +422,6 @@ struct TransactionData {
     ///
     /// Size\[bytes\]: Vec<8+CompactSize>
     transparent_outputs: Vec<TxOut>,
-    // /// Unix-epoch UTC time or block height, encoded as in Bitcoin (TODO: what does this mean?).
-    // ///
-    // /// Size\[bytes\]: 4
-    // lock_time: Option<u32>,
     // NLockTime \[IGNORED\] - Size\[bytes\]: 4
     // NExpiryHeight \[IGNORED\] - Size\[bytes\]: 4
     // ValueBalanceSapling - Size\[bytes\]: 8
