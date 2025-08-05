@@ -23,7 +23,7 @@ use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
-        response::{GetAddressDeltasRequest, GetAddressDeltasResponse, GetMempoolInfoResponse},
+        response::{BlockInfo, GetAddressDeltasRequest, GetAddressDeltasResponse, GetMempoolInfoResponse},
     },
 };
 use zaino_proto::proto::{
@@ -61,7 +61,7 @@ use zebra_state::{
 };
 
 use chrono::{DateTime, Utc};
-use futures::{stream, TryFutureExt as _, TryStreamExt as _};
+use futures::{TryFutureExt as _, TryStreamExt as _};
 use hex::{FromHex as _, ToHex};
 use indexmap::IndexMap;
 use std::{collections::HashSet, future::poll_fn, str::FromStr, sync::Arc};
@@ -807,6 +807,67 @@ impl StateServiceSubscriber {
         }
     }
 
+
+
+    /// Fetches transaction objects for addresses within a given block range.
+    /// This method takes addresses and a block range and returns full transaction objects.
+    /// It's based on the existing get_taddress_txids implementation but returns a Vec instead of streaming.
+    async fn get_address_txs(
+        &self,
+        addresses: Vec<String>,
+        start: u32,
+        end: u32,
+    ) -> Result<Vec<Box<TransactionObject>>, StateServiceError> {
+        // Convert to GetAddressTxIdsRequest for compatibility with existing helper
+        let tx_ids_request = GetAddressTxIdsRequest::from_parts(addresses, start, end);
+        
+        // Get transaction IDs using existing method
+        let txids = self.get_address_tx_ids(tx_ids_request).await?;
+        
+        // Fetch full transaction objects for each transaction ID
+        let mut transactions = Vec::new();
+        for txid in txids {
+            match self.get_raw_transaction(txid, Some(1)).await? {
+                GetRawTransaction::Object(transaction_obj) => {
+                    transactions.push(transaction_obj);
+                }
+                GetRawTransaction::Raw(_) => {
+                    // This shouldn't happen when verbose=1, but handle it gracefully
+                    continue;
+                }
+            }
+        }
+        
+        Ok(transactions)
+    }
+
+    /// Creates a BlockInfo from a block height using direct state service calls.
+    /// This is more efficient than using RPC calls.
+    async fn block_info_from_height(&self, height: u32) -> Result<BlockInfo, StateServiceError> {
+        use zebra_state::{HashOrHeight, ReadRequest};
+        
+        let hash_or_height = HashOrHeight::Height(zebra_chain::block::Height(height));
+        
+        let response = self
+            .read_state_service
+            .clone()
+            .ready()
+            .await?
+            .call(ReadRequest::BlockHeader(hash_or_height))
+            .await?;
+
+        match response {
+            ReadResponse::BlockHeader { hash, .. } => Ok(BlockInfo::new(
+                hex::encode(hash.bytes_in_display_order()),
+                height,
+            )),
+            _ => Err(StateServiceError::RpcError(RpcError::new_from_legacycode(
+                LegacyCode::InvalidParameter,
+                format!("Block not found at height {}", height),
+            ))),
+        }
+    }
+
 }
 
 #[async_trait]
@@ -842,75 +903,16 @@ impl ZcashIndexer for StateServiceSubscriber {
         &self,
         request: GetAddressDeltasRequest,
     ) -> Result<GetAddressDeltasResponse, Self::Error> {
-        // Extract parameters from the request
-        let (addresses, start, end, chaininfo) = request.into_parts();
+        let transactions = self.get_address_txs(request.addresses.clone(), request.start, request.end).await?;
+        let deltas = GetAddressDeltasResponse::process_transactions_to_deltas(&transactions, &request.addresses);
         
-        // Convert to GetAddressTxIdsRequest for compatibility with existing get_address_tx_ids method
-        let tx_ids_request = GetAddressTxIdsRequest::from_parts(addresses.clone(), start, end);
-        let txids = self.get_address_tx_ids(tx_ids_request).await?;
-
-        // Fetch transaction objects, filtering out raw transactions
-        let tx_fetches = stream::iter(txids.into_iter())
-            .then(|txid| async move { self.get_raw_transaction(txid.to_string(), Some(1)).await });
-
-        // TODO: Fix the and_then issue - this is a known compilation problem 
-        // that existed in the original code as well
-        let transactions: Vec<Box<TransactionObject>> = Vec::new(); // Placeholder
-        // tx_fetches
-        //     .try_filter_map(|res| async {
-        //         res.and_then(|raw_tx| match raw_tx {
-        //             GetRawTransaction::Raw(_) => Ok(None), // Filter out raw transactions
-        //             GetRawTransaction::Object(tx) => Ok(Some(tx)), // Keep transaction objects
-        //         })
-        //     })
-        //     .try_collect()
-        //     .await?;
-
-        // Choose response format based on chaininfo parameter
-        if chaininfo {
-            // Fetch block information for start and end heights
-            let start_block = self.z_get_block(start.to_string(), Some(1)).await?;
-            let end_block = self.z_get_block(end.to_string(), Some(1)).await?;
-
-            let (start_hash, start_height) = match start_block {
-                GetBlock::Object { hash, height, .. } => {
-                    let height = height.map(|h| h.0).unwrap_or(start);
-                    (hex::encode(hash.0.bytes_in_display_order()), height)
-                }
-                _ => return Err(StateServiceError::RpcError(RpcError::new_from_legacycode(
-                    LegacyCode::InvalidParameter,
-                    "Unable to get start block information".to_string(),
-                ))),
-            };
-
-            let (end_hash, end_height) = match end_block {
-                GetBlock::Object { hash, height, .. } => {
-                    let height = height.map(|h| h.0).unwrap_or(end);
-                    (hex::encode(hash.0.bytes_in_display_order()), height)
-                }
-                _ => return Err(StateServiceError::RpcError(RpcError::new_from_legacycode(
-                    LegacyCode::InvalidParameter,
-                    "Unable to get end block information".to_string(),
-                ))),
-            };
-
-            use zaino_fetch::jsonrpsee::response::BlockInfo;
-            
-            Ok(GetAddressDeltasResponse::from_transactions_with_chain_info(
-                &transactions,
-                &addresses,
-                BlockInfo {
-                    hash: start_hash,
-                    height: start_height,
-                },
-                BlockInfo {
-                    hash: end_hash,
-                    height: end_height,
-                },
-            ))
-        } else {
-            // Simple response format
-            Ok(GetAddressDeltasResponse::from_transactions_simple(&transactions, &addresses))
+        match request.chaininfo {
+            true => Ok(GetAddressDeltasResponse::with_chain_info(
+                deltas, 
+                self.block_info_from_height(request.start).await?, 
+                self.block_info_from_height(request.end).await?
+            )),
+            false => Ok(GetAddressDeltasResponse::simple(deltas)),
         }
     }
 

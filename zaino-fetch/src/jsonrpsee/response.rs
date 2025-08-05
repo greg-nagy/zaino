@@ -39,6 +39,16 @@ pub struct BlockInfo {
     pub height: u32,
 }
 
+impl BlockInfo {
+    /// Creates a new BlockInfo from hash and height.
+    pub fn new(hash: String, height: u32) -> Self {
+        Self { hash, height }
+    }
+
+    // Note: The from_height method will be implemented as a separate function
+    // that takes a StateServiceSubscriber, to avoid circular dependencies
+}
+
 /// Request parameters for the `getaddressdeltas` RPC method.
 /// Extends the basic address/height range with chaininfo support.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -79,6 +89,7 @@ impl GetAddressDeltasRequest {
     pub fn into_parts(self) -> (Vec<String>, u32, u32, bool) {
         (self.addresses, self.start, self.end, self.chaininfo)
     }
+
 }
 
 /// Response to a `getaddressdeltas` RPC request.
@@ -179,6 +190,7 @@ impl GetAddressDeltasResponse {
         let deltas = Self::process_transactions_to_deltas(transactions, target_addresses);
         Self::with_chain_info(deltas, start, end)
     }
+
 }
 
 impl ResponseToError for GetAddressDeltasResponse {
