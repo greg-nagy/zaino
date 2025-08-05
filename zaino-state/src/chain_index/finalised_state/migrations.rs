@@ -84,8 +84,7 @@ impl MigrationManager {
         while current_version < target_version {
             let step = get_migration_step(current_version).ok_or_else(|| {
                 FinalisedStateError::Custom(format!(
-                    "Missing migration from version {}",
-                    current_version
+                    "Missing migration from version {current_version}"
                 ))
             })?;
 
@@ -96,8 +95,7 @@ impl MigrationManager {
 
         if current_version != target_version {
             return Err(FinalisedStateError::Custom(format!(
-                "Could not migrate fully: stopped at {} but target is {}",
-                current_version, target_version
+                "Could not migrate fully: stopped at {current_version} but target is {target_version}"
             )));
         }
 
@@ -178,8 +176,7 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
                             .await?
                             .ok_or_else(|| {
                                 FinalisedStateError::Custom(format!(
-                                    "block not found at height {}",
-                                    height
+                                    "block not found at height {height}"
                                 ))
                             })?;
                         let hash = Hash::from(block.hash().0);

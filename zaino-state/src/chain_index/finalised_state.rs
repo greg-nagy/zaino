@@ -250,16 +250,14 @@ impl ZainoDB {
                     (None, _) => {
                         return Err(FinalisedStateError::BlockchainSourceError(
                             BlockchainSourceError::Unrecoverable(format!(
-                                "missing Sapling commitment tree root for block {}",
-                                block_hash
+                                "missing Sapling commitment tree root for block {block_hash}"
                             )),
                         ));
                     }
                     (_, None) => {
                         return Err(FinalisedStateError::BlockchainSourceError(
                             BlockchainSourceError::Unrecoverable(format!(
-                                "missing Orchard commitment tree root for block {}",
-                                block_hash
+                                "missing Orchard commitment tree root for block {block_hash}"
                             )),
                         ));
                     }

@@ -287,7 +287,7 @@ impl fmt::Display for MigrationStatus {
             MigrationStatus::FinalBuildInProgress => "Final build in progress",
             MigrationStatus::Complete => "Complete",
         };
-        write!(f, "{}", status_str)
+        write!(f, "{status_str}")
     }
 }
 
