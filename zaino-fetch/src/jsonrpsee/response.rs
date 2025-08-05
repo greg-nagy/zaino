@@ -10,7 +10,13 @@ use zebra_chain::{
     block::Height,
     work::difficulty::CompactDifficulty,
 };
-use zebra_rpc::methods::{opthex, types::{get_blockchain_info::Balance, transaction::{Input, Output}}};
+use zebra_rpc::methods::{
+    opthex,
+    types::{
+        get_blockchain_info::Balance,
+        transaction::{Input, Output},
+    },
+};
 
 use crate::jsonrpsee::connector::ResponseToError;
 
@@ -24,14 +30,155 @@ impl TryFrom<RpcError> for Infallible {
     }
 }
 
-// todo! add intermediate struct with variants
+/// Block information for getaddressdeltas responses with chaininfo.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct BlockInfo {
+    /// The block hash, hex-encoded
+    pub hash: String,
+    /// The block height
+    pub height: u32,
+}
+
+/// Request parameters for the `getaddressdeltas` RPC method.
+/// Extends the basic address/height range with chaininfo support.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct GetAddressDeltasRequest {
+    /// List of base58check encoded addresses
+    pub addresses: Vec<String>,
+    /// Start block height (inclusive)
+    pub start: u32,
+    /// End block height (inclusive)
+    pub end: u32,
+    /// Whether to include chain info in response (defaults to false)
+    #[serde(default)]
+    pub chaininfo: bool,
+}
+
+impl GetAddressDeltasRequest {
+    /// Creates a new request with the given parameters.
+    pub fn new(addresses: Vec<String>, start: u32, end: u32, chaininfo: bool) -> Self {
+        Self {
+            addresses,
+            start,
+            end,
+            chaininfo,
+        }
+    }
+
+    /// Creates a new request without chaininfo (defaults to false).
+    pub fn simple(addresses: Vec<String>, start: u32, end: u32) -> Self {
+        Self::new(addresses, start, end, false)
+    }
+
+    /// Creates a new request with chaininfo enabled.
+    pub fn with_chaininfo(addresses: Vec<String>, start: u32, end: u32) -> Self {
+        Self::new(addresses, start, end, true)
+    }
+
+    /// Decomposes the request into its constituent parts.
+    pub fn into_parts(self) -> (Vec<String>, u32, u32, bool) {
+        (self.addresses, self.start, self.end, self.chaininfo)
+    }
+}
+
 /// Response to a `getaddressdeltas` RPC request.
 ///
-/// This is used for the output parameter of [`JsonRpcConnector::get_address_deltas`].
+/// This enum supports both simple array responses and extended responses with chain info.
+/// The format depends on the `chaininfo` parameter in the request.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct GetAddressDeltasResponse {
-    deltas: Vec<AddressDelta>,
-    // todo! fill the rest of the fields
+#[serde(untagged)]
+pub enum GetAddressDeltasResponse {
+    /// Simple array format (chaininfo = false or not specified)
+    /// Returns: [AddressDelta, AddressDelta, ...]
+    Simple(Vec<AddressDelta>),
+    /// Extended format with chain info (chaininfo = true)
+    /// Returns: {"deltas": [...], "start": {...}, "end": {...}}
+    WithChainInfo {
+        /// The address deltas
+        deltas: Vec<AddressDelta>,
+        /// Information about the start block
+        start: BlockInfo,
+        /// Information about the end block
+        end: BlockInfo,
+    },
+}
+
+impl GetAddressDeltasResponse {
+    /// Creates a simple response from a list of deltas (chaininfo = false).
+    pub fn simple(deltas: Vec<AddressDelta>) -> Self {
+        Self::Simple(deltas)
+    }
+
+    /// Creates a response with chain info from deltas and block information (chaininfo = true).
+    pub fn with_chain_info(deltas: Vec<AddressDelta>, start: BlockInfo, end: BlockInfo) -> Self {
+        Self::WithChainInfo { deltas, start, end }
+    }
+
+    /// Processes transaction objects into address deltas for specific addresses.
+    /// This is a pure function that can be easily unit tested.
+    pub fn process_transactions_to_deltas(
+        transactions: &[Box<zebra_rpc::methods::types::transaction::TransactionObject>],
+        target_addresses: &[String],
+    ) -> Vec<AddressDelta> {
+        transactions
+            .iter()
+            .flat_map(|tx| {
+                let txid = hex::encode(tx.hex.as_ref());
+                let height = tx.height.unwrap_or(0);
+
+                // Process inputs (spends - negative deltas)
+                let txid_clone = txid.clone();
+                let input_deltas = tx
+                    .inputs
+                    .iter()
+                    .flatten()
+                    .enumerate()
+                    .filter_map(move |(input_index, input)| {
+                        AddressDelta::from_input(
+                            input,
+                            input_index as u32,
+                            &txid_clone,
+                            height,
+                            target_addresses,
+                        )
+                    });
+
+                // Process outputs (receives - positive deltas)
+                let output_deltas = tx
+                    .outputs
+                    .iter()
+                    .flatten()
+                    .flat_map(move |output| {
+                        AddressDelta::from_output(output, &txid, height, target_addresses)
+                    });
+
+                // Chain input and output deltas together
+                input_deltas.chain(output_deltas)
+            })
+            .collect()
+    }
+
+    /// Creates a simple response from transaction objects and target addresses.
+    /// This is a pure function that combines transaction processing and response creation.
+    pub fn from_transactions_simple(
+        transactions: &[Box<zebra_rpc::methods::types::transaction::TransactionObject>],
+        target_addresses: &[String],
+    ) -> Self {
+        let deltas = Self::process_transactions_to_deltas(transactions, target_addresses);
+        Self::simple(deltas)
+    }
+
+    /// Creates a response with chain info from transaction objects, target addresses, and block info.
+    /// This is a pure function that combines transaction processing and response creation.
+    pub fn from_transactions_with_chain_info(
+        transactions: &[Box<zebra_rpc::methods::types::transaction::TransactionObject>],
+        target_addresses: &[String],
+        start: BlockInfo,
+        end: BlockInfo,
+    ) -> Self {
+        let deltas = Self::process_transactions_to_deltas(transactions, target_addresses);
+        Self::with_chain_info(deltas, start, end)
+    }
 }
 
 impl ResponseToError for GetAddressDeltasResponse {

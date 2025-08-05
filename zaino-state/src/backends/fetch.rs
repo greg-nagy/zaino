@@ -19,7 +19,7 @@ use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
-        response::{GetAddressDeltasResponse, GetMempoolInfoResponse},
+        response::{GetAddressDeltasRequest, GetAddressDeltasResponse, GetMempoolInfoResponse},
     },
 };
 
@@ -201,7 +201,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// tags: address
     async fn get_address_deltas(
         &self,
-        request: GetAddressTxIdsRequest,
+        request: GetAddressDeltasRequest,
     ) -> Result<GetAddressDeltasResponse, Self::Error> {
         todo!()
     }

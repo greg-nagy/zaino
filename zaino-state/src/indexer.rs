@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use tokio::{sync::mpsc, time::timeout};
 use tracing::warn;
-use zaino_fetch::jsonrpsee::response::{GetAddressDeltasResponse, GetMempoolInfoResponse};
+use zaino_fetch::jsonrpsee::response::{GetAddressDeltasRequest, GetAddressDeltasResponse, GetMempoolInfoResponse};
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
     service::{
@@ -168,7 +168,7 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// tags: address
     async fn get_address_deltas(
         &self,
-        request: GetAddressTxIdsRequest, // todo! expand this type to also take in chainInfo field
+        request: GetAddressDeltasRequest,
     ) -> Result<GetAddressDeltasResponse, Self::Error> {
         todo!()
     }
