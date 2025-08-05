@@ -11,6 +11,7 @@ use zaino_state::{
 use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind};
 use zebra_chain::{parameters::Network, subtree::NoteCommitmentSubtreeIndex};
+use zebra_rpc::client::ValidateAddressResponse;
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetBlock, GetBlockHash};
 
 async fn create_test_manager_and_fetch_service(
@@ -692,6 +693,56 @@ async fn fetch_service_get_block_count(validator: &ValidatorKind) {
     test_manager.close().await;
 }
 
+async fn fetch_service_validate_address(validator: &ValidatorKind) {
+    let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+        create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
+
+    // scriptpubkey: "76a914000000000000000000000000000000000000000088ac"
+    let expected_validation = ValidateAddressResponse::new(
+        true,
+        Some("tm9iMLAuYMzJ6jtFLcA7rzUmfreGuKvr7Ma".to_string()),
+        Some(false),
+    );
+    let fetch_service_validate_address = fetch_service_subscriber
+        .validate_address("tm9iMLAuYMzJ6jtFLcA7rzUmfreGuKvr7Ma".to_string())
+        .await
+        .unwrap();
+
+    // Zebra has a bug when doing validation, they don't match against both regtest and testnet.
+    // This will fail when zebra correctly implements this RPC method, and then we'll need to update this test.
+    if matches!(validator, ValidatorKind::Zebrad) {
+        assert_ne!(fetch_service_validate_address, expected_validation);
+    } else {
+        assert_eq!(fetch_service_validate_address, expected_validation);
+    }
+
+    // scriptpubkey: "a914000000000000000000000000000000000000000087"
+    let expected_validation_script = ValidateAddressResponse::new(
+        true,
+        Some("t26YoyZ1iPgiMEWL4zGUm74eVWfhyDMXzY2".to_string()),
+        Some(true),
+    );
+
+    let fetch_service_validate_address_script = fetch_service_subscriber
+        .validate_address("t26YoyZ1iPgiMEWL4zGUm74eVWfhyDMXzY2".to_string())
+        .await
+        .unwrap();
+
+    if matches!(validator, ValidatorKind::Zebrad) {
+        assert_ne!(
+            fetch_service_validate_address_script,
+            expected_validation_script
+        );
+    } else {
+        assert_eq!(
+            fetch_service_validate_address_script,
+            expected_validation_script
+        );
+    }
+
+    test_manager.close().await;
+}
+
 async fn fetch_service_get_block_nullifiers(validator: &ValidatorKind) {
     let (mut test_manager, _fetch_service, fetch_service_subscriber) =
         create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
@@ -1338,6 +1389,16 @@ mod zcashd {
         }
     }
 
+    mod validation {
+
+        use super::*;
+
+        #[tokio::test]
+        pub(crate) async fn validate_address() {
+            fetch_service_validate_address(&ValidatorKind::Zcashd).await;
+        }
+    }
+
     mod get {
 
         use super::*;
@@ -1520,6 +1581,16 @@ mod zebrad {
                 zaino_testutils::ZEBRAD_CHAIN_CACHE_DIR.clone(),
             )
             .await;
+        }
+    }
+
+    mod validation {
+
+        use super::*;
+
+        #[tokio::test]
+        pub(crate) async fn validate_address() {
+            fetch_service_validate_address(&ValidatorKind::Zebrad).await;
         }
     }
 
