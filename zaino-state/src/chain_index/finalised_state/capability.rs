@@ -291,7 +291,6 @@ impl fmt::Display for MigrationStatus {
     }
 }
 
-
 impl ZainoVersionedSerialise for MigrationStatus {
     const VERSION: u8 = version::V1;
 

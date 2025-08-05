@@ -487,11 +487,9 @@ impl DbV0 {
                     Ok(db_hash.0)
                 }
                 // no block in db, this must be genesis block.
-                Err(lmdb::Error::NotFound) => {
-                    Err(FinalisedStateError::Custom(format!(
-                        "first block must be height 1, got {block_height:?}"
-                    )))
-                }
+                Err(lmdb::Error::NotFound) => Err(FinalisedStateError::Custom(format!(
+                    "first block must be height 1, got {block_height:?}"
+                ))),
                 Err(e) => Err(FinalisedStateError::LmdbError(e)),
             }
         })?;
