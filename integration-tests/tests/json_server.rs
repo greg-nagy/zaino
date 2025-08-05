@@ -158,7 +158,7 @@ async fn launch_json_server_check_info(enable_cookie_auth: bool) {
         errors,
         _,
     ) = zcashd_info.into_parts();
-    let cleaned_zcashd_info = GetInfo::from_parts(
+    let cleaned_zcashd_info = GetInfo::new(
         version,
         build,
         subversion,
@@ -189,7 +189,7 @@ async fn launch_json_server_check_info(enable_cookie_auth: bool) {
         errors,
         _,
     ) = zaino_info.into_parts();
-    let cleaned_zaino_info = GetInfo::from_parts(
+    let cleaned_zaino_info = GetInfo::new(
         version,
         build,
         subversion,
@@ -263,6 +263,45 @@ async fn get_block_count_inner() {
     test_manager.close().await;
 }
 
+async fn validate_address_inner() {
+    let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
+        create_test_manager_and_fetch_services(false, false).await;
+
+    // Using a testnet transparent address
+    let address_string = "tmHMBeeYRuc2eVicLNfP15YLxbQsooCA6jb";
+
+    let address_with_script = "t3TAfQ9eYmXWGe3oPae1XKhdTxm8JvsnFRL";
+
+    let zcashd_valid = zcashd_subscriber
+        .validate_address(address_string.to_string())
+        .await
+        .unwrap();
+
+    let zaino_valid = zaino_subscriber
+        .validate_address(address_string.to_string())
+        .await
+        .unwrap();
+
+    assert_eq!(zcashd_valid, zaino_valid, "Address should be valid");
+
+    let zcashd_valid_script = zcashd_subscriber
+        .validate_address(address_with_script.to_string())
+        .await
+        .unwrap();
+
+    let zaino_valid_script = zaino_subscriber
+        .validate_address(address_with_script.to_string())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        zcashd_valid_script, zaino_valid_script,
+        "Address should be valid"
+    );
+
+    test_manager.close().await;
+}
+
 async fn z_get_address_balance_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
         create_test_manager_and_fetch_services(false, true).await;
@@ -288,12 +327,12 @@ async fn z_get_address_balance_inner() {
     let recipient_balance = clients.recipient.do_balance().await;
 
     let zcashd_service_balance = zcashd_subscriber
-        .z_get_address_balance(AddressStrings::new_valid(vec![recipient_taddr.clone()]).unwrap())
+        .z_get_address_balance(AddressStrings::new(vec![recipient_taddr.clone()]))
         .await
         .unwrap();
 
     let zaino_service_balance = zaino_subscriber
-        .z_get_address_balance(AddressStrings::new_valid(vec![recipient_taddr]).unwrap())
+        .z_get_address_balance(AddressStrings::new(vec![recipient_taddr]))
         .await
         .unwrap();
 
@@ -307,7 +346,7 @@ async fn z_get_address_balance_inner() {
     );
     assert_eq!(
         recipient_balance.confirmed_transparent_balance.unwrap(),
-        zcashd_service_balance.balance,
+        zcashd_service_balance.balance(),
     );
     assert_eq!(zcashd_service_balance, zaino_service_balance);
 
@@ -344,7 +383,7 @@ async fn z_get_block_inner() {
 
     let hash = match zcashd_block {
         zebra_rpc::methods::GetBlock::Raw(_) => panic!("expected object"),
-        zebra_rpc::methods::GetBlock::Object { hash, .. } => hash.0.to_string(),
+        zebra_rpc::methods::GetBlock::Object(obj) => obj.hash().to_string(),
     };
     let zaino_get_block_by_hash = zaino_subscriber
         .z_get_block(hash.clone(), Some(1))
@@ -564,19 +603,19 @@ async fn get_address_tx_ids_inner() {
     dbg!(&chain_height);
 
     let zcashd_txids = zcashd_subscriber
-        .get_address_tx_ids(GetAddressTxIdsRequest::from_parts(
+        .get_address_tx_ids(GetAddressTxIdsRequest::new(
             vec![recipient_taddr.clone()],
-            chain_height - 2,
-            chain_height,
+            Some(chain_height - 2),
+            Some(chain_height),
         ))
         .await
         .unwrap();
 
     let zaino_txids = zaino_subscriber
-        .get_address_tx_ids(GetAddressTxIdsRequest::from_parts(
+        .get_address_tx_ids(GetAddressTxIdsRequest::new(
             vec![recipient_taddr],
-            chain_height - 2,
-            chain_height,
+            Some(chain_height - 2),
+            Some(chain_height),
         ))
         .await
         .unwrap();
@@ -615,13 +654,13 @@ async fn z_get_address_utxos_inner() {
     clients.faucet.sync_and_await().await.unwrap();
 
     let zcashd_utxos = zcashd_subscriber
-        .z_get_address_utxos(AddressStrings::new_valid(vec![recipient_taddr.clone()]).unwrap())
+        .z_get_address_utxos(AddressStrings::new(vec![recipient_taddr.clone()]))
         .await
         .unwrap();
     let (_, zcashd_txid, ..) = zcashd_utxos[0].into_parts();
 
     let zaino_utxos = zaino_subscriber
-        .z_get_address_utxos(AddressStrings::new_valid(vec![recipient_taddr]).unwrap())
+        .z_get_address_utxos(AddressStrings::new(vec![recipient_taddr]))
         .await
         .unwrap();
     let (_, zaino_txid, ..) = zaino_utxos[0].into_parts();
@@ -694,6 +733,11 @@ mod zcashd {
             }
 
             test_manager.close().await;
+        }
+
+        #[tokio::test]
+        async fn validate_address() {
+            validate_address_inner().await;
         }
 
         #[tokio::test]
