@@ -23,7 +23,9 @@ use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
-        response::{BlockInfo, GetAddressDeltasRequest, GetAddressDeltasResponse, GetMempoolInfoResponse},
+        response::{
+            BlockInfo, GetAddressDeltasRequest, GetAddressDeltasResponse, GetMempoolInfoResponse,
+        },
     },
 };
 use zaino_proto::proto::{
@@ -807,12 +809,10 @@ impl StateServiceSubscriber {
         }
     }
 
-
-
     /// Fetches transaction objects for addresses within a given block range.
     /// This method takes addresses and a block range and returns full transaction objects.
     /// It's based on the existing get_taddress_txids implementation but returns a Vec instead of streaming.
-    async fn get_address_txs(
+    async fn get_taddress_txs(
         &self,
         addresses: Vec<String>,
         start: u32,
@@ -820,10 +820,10 @@ impl StateServiceSubscriber {
     ) -> Result<Vec<Box<TransactionObject>>, StateServiceError> {
         // Convert to GetAddressTxIdsRequest for compatibility with existing helper
         let tx_ids_request = GetAddressTxIdsRequest::from_parts(addresses, start, end);
-        
+
         // Get transaction IDs using existing method
         let txids = self.get_address_tx_ids(tx_ids_request).await?;
-        
+
         // Fetch full transaction objects for each transaction ID
         let mut transactions = Vec::new();
         for txid in txids {
@@ -837,7 +837,7 @@ impl StateServiceSubscriber {
                 }
             }
         }
-        
+
         Ok(transactions)
     }
 
@@ -845,9 +845,9 @@ impl StateServiceSubscriber {
     /// This is more efficient than using RPC calls.
     async fn block_info_from_height(&self, height: u32) -> Result<BlockInfo, StateServiceError> {
         use zebra_state::{HashOrHeight, ReadRequest};
-        
+
         let hash_or_height = HashOrHeight::Height(zebra_chain::block::Height(height));
-        
+
         let response = self
             .read_state_service
             .clone()
@@ -867,7 +867,6 @@ impl StateServiceSubscriber {
             ))),
         }
     }
-
 }
 
 #[async_trait]
@@ -903,14 +902,19 @@ impl ZcashIndexer for StateServiceSubscriber {
         &self,
         request: GetAddressDeltasRequest,
     ) -> Result<GetAddressDeltasResponse, Self::Error> {
-        let transactions = self.get_address_txs(request.addresses.clone(), request.start, request.end).await?;
-        let deltas = GetAddressDeltasResponse::process_transactions_to_deltas(&transactions, &request.addresses);
-        
+        let transactions = self
+            .get_taddress_txs(request.addresses.clone(), request.start, request.end)
+            .await?;
+        let deltas = GetAddressDeltasResponse::process_transactions_to_deltas(
+            &transactions,
+            &request.addresses,
+        );
+
         match request.chaininfo {
             true => Ok(GetAddressDeltasResponse::with_chain_info(
-                deltas, 
-                self.block_info_from_height(request.start).await?, 
-                self.block_info_from_height(request.end).await?
+                deltas,
+                self.block_info_from_height(request.start).await?,
+                self.block_info_from_height(request.end).await?,
             )),
             false => Ok(GetAddressDeltasResponse::simple(deltas)),
         }
