@@ -246,6 +246,7 @@ pub(crate) mod test {
 
     /// A test-only mock implementation of BlockchainReader using ordered lists by height.
     #[derive(Clone)]
+    #[allow(clippy::type_complexity)]
     pub(crate) struct MockchainSource {
         blocks: Vec<Arc<Block>>,
         roots: Vec<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>,
@@ -255,6 +256,7 @@ pub(crate) mod test {
     impl MockchainSource {
         /// Creates a new MockchainSource.
         /// All inputs must be the same length, and ordered by ascending height starting from `height_offset`.
+        #[allow(clippy::type_complexity)]
         pub(crate) fn new(
             blocks: Vec<Arc<Block>>,
             roots: Vec<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>,
@@ -326,7 +328,7 @@ pub(crate) mod test {
         ) -> BlockchainSourceResult<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>
         {
             let index = self.hashes.iter().position(|h| h == &id);
-            Ok(index.map(|i| self.roots[i].clone()).unwrap_or((None, None)))
+            Ok(index.map(|i| self.roots[i]).unwrap_or((None, None)))
         }
     }
 }

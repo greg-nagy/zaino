@@ -180,6 +180,7 @@ pub(crate) fn load_test_vectors() -> io::Result<(
     read_vectors_from_file(&base_dir)
 }
 
+#[allow(clippy::type_complexity)]
 pub(crate) fn build_mockchain_source(
     // the input data for this function could be reduced for wider use
     // but is more simple to pass all test block data here.
@@ -233,9 +234,7 @@ pub(crate) fn build_mockchain_source(
         block_hashes.push(*chain_block.index().hash());
     }
 
-    let source = MockchainSource::new(zebra_blocks, block_roots, block_hashes);
-
-    source
+    MockchainSource::new(zebra_blocks, block_roots, block_hashes)
 }
 
 // ***** Tests *****

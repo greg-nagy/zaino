@@ -488,11 +488,11 @@ impl DbV0 {
                 }
                 // no block in db, this must be genesis block.
                 Err(lmdb::Error::NotFound) => {
-                    return Err(FinalisedStateError::Custom(format!(
+                    Err(FinalisedStateError::Custom(format!(
                         "first block must be height 1, got {block_height:?}"
-                    )));
+                    )))
                 }
-                Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+                Err(e) => Err(FinalisedStateError::LmdbError(e)),
             }
         })?;
         let hash_key = serde_json::to_vec(&DbHash(zebra_block_hash))?;

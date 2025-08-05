@@ -197,7 +197,7 @@ pub struct BlockCacheConfig {
     ///
     /// NOTE: map_capacity and shard map must both be set for either to be used.
     pub map_shard_amount: Option<usize>,
-    ///
+    /// Database version selected to be run.
     pub db_version: u32,
     /// Block Cache database file path.
     pub db_path: PathBuf,
@@ -216,6 +216,7 @@ pub struct BlockCacheConfig {
 impl BlockCacheConfig {
     /// Returns a new instance of [`FetchServiceConfig`].
     #[allow(dead_code)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         map_capacity: Option<usize>,
         map_shard_amount: Option<usize>,

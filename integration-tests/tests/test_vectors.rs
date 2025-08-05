@@ -410,8 +410,8 @@ async fn create_200_block_regtest_chain_vectors() {
                 let chain_block = ChainBlock::try_from((
                     full_block.clone(),
                     parent_chain_work,
-                    sapling_root.into(),
-                    orchard_root.into(),
+                    sapling_root,
+                    orchard_root,
                     parent_block_sapling_tree_size,
                     parent_block_orchard_tree_size,
                 ))
@@ -553,6 +553,7 @@ fn display_txids_to_server(txids: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
         .collect()
 }
 
+#[allow(clippy::type_complexity)]
 pub fn write_vectors_to_file<P: AsRef<Path>>(
     base_dir: P,
     block_data: &[(

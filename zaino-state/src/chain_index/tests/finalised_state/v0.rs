@@ -351,9 +351,9 @@ async fn get_compact_blocks() {
     {
         let chain_block = ChainBlock::try_from((
             zebra_block.clone(),
-            sapling_root.clone(),
+            *sapling_root,
             *sapling_root_size as u32,
-            orchard_root.clone(),
+            *orchard_root,
             *orchard_root_size as u32,
             parent_chain_work,
             zebra_chain::parameters::Network::new_regtest(

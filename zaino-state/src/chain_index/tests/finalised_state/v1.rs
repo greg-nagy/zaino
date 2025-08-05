@@ -404,9 +404,9 @@ async fn get_chain_blocks() {
     {
         let chain_block = ChainBlock::try_from((
             zebra_block.clone(),
-            sapling_root.clone(),
+            *sapling_root,
             *sapling_root_size as u32,
-            orchard_root.clone(),
+            *orchard_root,
             *orchard_root_size as u32,
             parent_chain_work,
             zebra_chain::parameters::Network::new_regtest(
@@ -454,9 +454,9 @@ async fn get_compact_blocks() {
     {
         let chain_block = ChainBlock::try_from((
             zebra_block.clone(),
-            sapling_root.clone(),
+            *sapling_root,
             *sapling_root_size as u32,
-            orchard_root.clone(),
+            *orchard_root,
             *orchard_root_size as u32,
             parent_chain_work,
             zebra_chain::parameters::Network::new_regtest(
@@ -514,9 +514,9 @@ async fn get_faucet_txids() {
     {
         let chain_block = ChainBlock::try_from((
             zebra_block.clone(),
-            sapling_root.clone(),
+            *sapling_root,
             *sapling_root_size as u32,
-            orchard_root.clone(),
+            *orchard_root,
             *orchard_root_size as u32,
             parent_chain_work,
             zebra_chain::parameters::Network::new_regtest(
@@ -612,9 +612,9 @@ async fn get_recipient_txids() {
     {
         let chain_block = ChainBlock::try_from((
             zebra_block.clone(),
-            sapling_root.clone(),
+            *sapling_root,
             *sapling_root_size as u32,
-            orchard_root.clone(),
+            *orchard_root,
             *orchard_root_size as u32,
             parent_chain_work,
             zebra_chain::parameters::Network::new_regtest(
@@ -838,9 +838,9 @@ async fn check_faucet_spent_map() {
     {
         let chain_block = ChainBlock::try_from((
             zebra_block.clone(),
-            sapling_root.clone(),
+            *sapling_root,
             *sapling_root_size as u32,
-            orchard_root.clone(),
+            *orchard_root,
             *orchard_root_size as u32,
             parent_chain_work,
             zebra_chain::parameters::Network::new_regtest(
@@ -974,9 +974,9 @@ async fn check_recipient_spent_map() {
     {
         let chain_block = ChainBlock::try_from((
             zebra_block.clone(),
-            sapling_root.clone(),
+            *sapling_root,
             *sapling_root_size as u32,
-            orchard_root.clone(),
+            *orchard_root,
             *orchard_root_size as u32,
             parent_chain_work,
             zebra_chain::parameters::Network::new_regtest(

@@ -40,6 +40,7 @@ pub trait MigrationStep<T: BlockchainSourceInterface> {
     ) -> Result<(), FinalisedStateError>;
 }
 
+#[allow(clippy::type_complexity)]
 struct Migration<T: BlockchainSourceInterface> {
     from: DbVersion,
     to: DbVersion,
@@ -207,7 +208,7 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
                             parent_chain_work,
                             cfg.network.clone(),
                         ))
-                        .map_err(|e| FinalisedStateError::Custom(e))?;
+                        .map_err(FinalisedStateError::Custom)?;
 
                         shadow.write_block(chain_block).await?;
                     }

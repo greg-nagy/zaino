@@ -268,7 +268,9 @@ impl core::fmt::Display for DbVersion {
 ///       enabling the deletion of the old database before the the database is rebuilt in full.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
+#[derive(Default)]
 pub(crate) enum MigrationStatus {
+    #[default]
     Empty,
     PartialBuidInProgress,
     PartialBuildComplete,
@@ -289,11 +291,6 @@ impl fmt::Display for MigrationStatus {
     }
 }
 
-impl Default for MigrationStatus {
-    fn default() -> Self {
-        MigrationStatus::Empty
-    }
-}
 
 impl ZainoVersionedSerialise for MigrationStatus {
     const VERSION: u8 = version::V1;

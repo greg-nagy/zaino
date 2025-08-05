@@ -109,7 +109,7 @@ impl Router {
 
         let cap = new_primary.capability();
 
-        let old_primary = self.primary.swap(Arc::clone(&new_primary).into());
+        let old_primary = self.primary.swap(Arc::clone(&new_primary));
         self.primary_mask.store(cap.bits(), Ordering::Release);
         self.shadow_mask.store(0, Ordering::Release);
 

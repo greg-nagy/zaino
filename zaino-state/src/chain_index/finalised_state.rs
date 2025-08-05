@@ -240,17 +240,7 @@ impl ZainoDB {
                 }
             };
 
-            let block_hash = match Hash::try_from(block.hash().0) {
-                Ok(hash) => hash,
-                Err(_) => {
-                    return Err(FinalisedStateError::BlockchainSourceError(
-                        BlockchainSourceError::Unrecoverable(format!(
-                            "error decoding block hash at height {} from validator",
-                            height.0
-                        )),
-                    ));
-                }
-            };
+            let block_hash = Hash::from(block.hash().0);
 
             let (sapling_root, sapling_size, orchard_root, orchard_size) =
                 match source.get_commitment_tree_roots(block_hash).await? {
