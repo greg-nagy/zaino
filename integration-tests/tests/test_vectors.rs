@@ -627,17 +627,17 @@ pub fn read_vectors_from_file<P: AsRef<Path>>(
 #[tokio::test]
 async fn varying_block_and_transaction_deserialization() {
     let mut test_manager = TestManager::launch_with_activation_heights(
-        &ValidatorKind::Zcashd,
+        &ValidatorKind::Zebrad,
         &BackendType::Fetch,
         Some(zaino_testutils::Network::Regtest),
         Some(ActivationHeights {
-            overwinter: 300.into(),
-            sapling: 300.into(),
-            blossom: 300.into(),
-            heartwood: 300.into(),
-            canopy: 300.into(),
-            nu5: 300.into(),
-            nu6: 300.into(),
+            overwinter: 1.into(),
+            sapling: 1.into(),
+            blossom: 1.into(),
+            heartwood: 1.into(),
+            canopy: 1.into(),
+            nu5: 103.into(),
+            nu6: 103.into(),
         }),
         None,
         true,
@@ -672,13 +672,13 @@ async fn varying_block_and_transaction_deserialization() {
         Network::new_regtest(
             zebra_chain::parameters::testnet::ConfiguredActivationHeights {
                 before_overwinter: Some(1),
-                overwinter: Some(300),
-                sapling: Some(300),
-                blossom: Some(300),
-                heartwood: Some(300),
-                canopy: Some(300),
-                nu5: Some(300),
-                nu6: Some(300),
+                overwinter: Some(1),
+                sapling: Some(1),
+                blossom: Some(1),
+                heartwood: Some(1),
+                canopy: Some(1),
+                nu5: Some(103),
+                nu6: Some(103),
                 nu6_1: None,
                 nu7: None,
             },
@@ -700,12 +700,55 @@ async fn varying_block_and_transaction_deserialization() {
 
     clients.faucet.sync_and_await().await.unwrap();
 
+    // This is necessary when running Zebrad
+    test_manager.local_net.generate_blocks(100).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    clients.faucet.sync_and_await().await.unwrap();
+
+    // Currently failing on first send.
+    // Seems like zingolib generates the transaction with the wrong transaction version
+    clients.faucet.quick_shield().await.unwrap();
+    test_manager.local_net.generate_blocks(1).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    clients.faucet.sync_and_await().await.unwrap();
+
     zaino_testutils::from_inputs::quick_send(
         &mut clients.faucet,
         vec![(recipient_address.as_str(), 250_000, None)],
     )
     .await
     .unwrap();
+    test_manager.local_net.generate_blocks(1).await.unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+    clients.recipient.sync_and_await().await.unwrap();
+    let recipient_balance = clients.recipient.do_balance().await;
+
+    let fetch_service_balance = fetch_service_subscriber
+        .z_get_address_balance(AddressStrings::new(vec![recipient_address]))
+        .await
+        .unwrap();
+
+    let latest_block = fetch_service_subscriber.get_block_count().await.unwrap();
+
+    dbg!(recipient_balance.clone());
+    dbg!(fetch_service_balance);
+
+    dbg!(latest_block.0);
+
+    assert_eq!(
+        recipient_balance.confirmed_transparent_balance.unwrap(),
+        250_000,
+    );
+    assert_eq!(
+        recipient_balance.confirmed_transparent_balance.unwrap(),
+        fetch_service_balance.balance(),
+    );
+
+    test_manager.close().await;
+
+    // clients.recipient.sync_and_await().await.unwrap();
+    // clients.faucet.sync_and_await().await.unwrap();
 
     // test_manager.local_net.generate_blocks(1).await.unwrap();
     // tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
