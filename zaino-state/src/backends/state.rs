@@ -861,7 +861,6 @@ impl StateServiceSubscriber {
     }
 
     /// Creates a BlockInfo from a block height using direct state service calls.
-    /// This is more efficient than using RPC calls.
     async fn block_info_from_height(&self, height: u32) -> Result<BlockInfo, StateServiceError> {
         use zebra_state::{HashOrHeight, ReadRequest};
 
