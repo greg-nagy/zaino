@@ -7,50 +7,15 @@ use super::{
     finalised_state::ZainoDB,
     non_finalised_state::{InitError, NonFinalizedState, NonfinalizedBlockCacheSnapshot},
 };
-use futures::{Stream, TryFutureExt};
+use super::{ChainIndex, NodeBackedChainIndex};
+use futures::{FutureExt, Stream, TryFutureExt};
 use tokio_stream::StreamExt;
 pub use zebra_chain::parameters::Network as ZebraNetwork;
 use zebra_chain::serialization::ZcashSerialize;
 use zebra_state::HashOrHeight;
 
-/// The combined index. Contains a view of the mempool, and the full
-/// chain state, both finalized and non-finalized, to allow queries over
-/// the entire chain at once. Backed by a source of blocks, either
-/// a zebra ReadStateService (direct read access to a running
-/// zebrad's database) or a jsonRPC connection to a validator.
-///
-/// TODO: Currently only contains the non-finalized state.
-pub struct NodeBackedChainIndex {
-    // TODO: finalized state
-    // TODO: mempool
-    non_finalized_state: Arc<NonFinalizedState>,
-    finalized_state: Arc<ZainoDB>,
-}
-
 impl NodeBackedChainIndex {
-    /// Creates a new chainindex from a connection to a validator
-    /// Currently this is a ReadStateService or JsonRpSeeConnector
-    pub async fn new<T>(
-        source: T,
-        config: crate::config::BlockCacheConfig,
-    ) -> Result<Self, InitError>
-    where
-        for<'a> &'a T: Into<BlockchainSource> + Send,
-    {
-        let (non_finalized_state, finalized_state) = futures::try_join!(
-            NonFinalizedState::initialize((&source).into(), config.network.clone()),
-            ZainoDB::spawn(config, (&source).into())
-                .map_err(InitError::FinalisedStateInitialzationError)
-        )?;
-        let chain_index = Self {
-            non_finalized_state: Arc::new(non_finalized_state),
-            finalized_state: Arc::new(finalized_state),
-        };
-        chain_index.start_sync_loop();
-        Ok(chain_index)
-    }
-
-    fn start_sync_loop(
+    pub(super) fn start_sync_loop(
         &self,
     ) -> tokio::task::JoinHandle<
         Result<std::convert::Infallible, super::non_finalised_state::SyncError>,
@@ -153,21 +118,22 @@ impl NodeBackedChainIndex {
 
     async fn get_range_boundary_hash(
         &self,
-        boundary: Option<HashOrHeight>,
-        fallback: impl FnOnce() -> HashOrHeight,
+        boundary: types::Height,
         non_finalized_snapshot: &NonfinalizedBlockCacheSnapshot,
     ) -> Result<Option<types::Hash>, ChainIndexError> {
-        let boundary_fallback = boundary.unwrap_or_else(fallback);
-        let Some(block_hash) = (match self
-            .get_chainblock_by_hashorheight(non_finalized_snapshot, &boundary_fallback)
+        match self
+            .get_chainblock_by_hashorheight(
+                non_finalized_snapshot,
+                &HashOrHeight::Height(boundary.into()),
+            )
             .await
             .map(|chain_block| chain_block.map(|cb| *cb.hash()))
         {
-            Ok(hash) => hash,
+            Ok(hash) => Ok(hash),
             Err(FinalisedStateError::FeatureUnavailable(_)) => self
                 .non_finalized_state
                 .source
-                .hash_or_height_to_hash(boundary_fallback)
+                .hash_or_height_to_hash(HashOrHeight::Height(boundary.into()))
                 .await
                 .map_err(|_e| ChainIndexError {
                     kind: ChainIndexErrorKind::InternalServerError,
@@ -175,68 +141,10 @@ impl NodeBackedChainIndex {
                             fetch from backing node failed"
                         .to_string(),
                     source: None,
-                })?,
-            Err(e) => return Err(e.into()),
-        }) else {
-            return if boundary.is_some() {
-                Ok(None)
-            } else {
-                Err(ChainIndexError {
-                    kind: ChainIndexErrorKind::InternalServerError,
-                    message: "fallback block boundary missing from database".to_string(),
-                    source: None,
-                })
-            };
-        };
-        Ok(Some(block_hash))
+                }),
+            Err(e) => Err(e.into()),
+        }
     }
-}
-
-/// The interface to the chain index
-pub trait ChainIndex {
-    /// A snapshot of the nonfinalized state, needed for atomic access
-    type Snapshot;
-
-    /// How it can fail
-    type Error;
-
-    /// Takes a snapshot of the non_finalized state. All NFS-interfacing query
-    /// methods take a snapshot. The query will check the index
-    /// it existed at the moment the snapshot was taken.
-    fn snapshot_nonfinalized_state(&self) -> Self::Snapshot;
-
-    /// Given inclusive start and end indexes, stream all blocks
-    /// between the given indexes. Can be specified
-    /// by hash or height.
-    #[allow(clippy::type_complexity)]
-    fn get_block_range(
-        &self,
-        nonfinalized_snapshot: &Self::Snapshot,
-        start: Option<HashOrHeight>,
-        end: Option<HashOrHeight>,
-    ) -> impl std::future::Future<
-        Output = Result<Option<impl Stream<Item = Result<Vec<u8>, Self::Error>>>, Self::Error>,
-    > + Send;
-    /// Finds the newest ancestor of the given block on the main
-    /// chain, or the block itself if it is on the main chain.
-    fn find_fork_point(
-        &self,
-        snapshot: &Self::Snapshot,
-        block_hash: &types::Hash,
-    ) -> Result<Option<(types::Hash, types::Height)>, Self::Error>;
-    /// given a transaction id, returns the transaction
-    fn get_raw_transaction(
-        &self,
-        snapshot: &Self::Snapshot,
-        txid: [u8; 32],
-    ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>>;
-    /// Given a transaction ID, returns all known hashes and heights of blocks
-    /// containing that transaction. Height is None for blocks not on the best chain.
-    fn get_transaction_status(
-        &self,
-        snapshot: &Self::Snapshot,
-        txid: [u8; 32],
-    ) -> Result<HashMap<types::Hash, Option<types::Height>>, Self::Error>;
 }
 
 impl ChainIndex for NodeBackedChainIndex {
@@ -250,61 +158,59 @@ impl ChainIndex for NodeBackedChainIndex {
         self.non_finalized_state.get_snapshot()
     }
 
-    /// Given inclusive start and end indexes, stream all blocks
-    /// between the given indexes. Can be specified
-    /// by hash or height. Returns None if the start or end
-    /// block cannot be found
+    /// Given inclusive start and end heights, stream all blocks
+    /// between the given heights.
+    /// Returns None if the specified end height
+    /// is greater than the snapshot's tip
     fn get_block_range(
         &self,
         nonfinalized_snapshot: &Self::Snapshot,
-        start: Option<HashOrHeight>,
-        end: Option<HashOrHeight>,
-    ) -> impl Future<
-        Output = Result<Option<impl Stream<Item = Result<Vec<u8>, Self::Error>>>, Self::Error>,
-    > {
-        async move {
-            let fallback_to_genesis = || HashOrHeight::Height(zebra_chain::block::Height(0));
-            let Some(start_block_hash) = self
-                .get_range_boundary_hash(start, fallback_to_genesis, nonfinalized_snapshot)
-                .await?
-            else {
-                return Ok(None);
-            };
-            let fallback_to_best_tip =
-                || HashOrHeight::Hash(nonfinalized_snapshot.best_tip.1.into());
-            let Some(end_block_hash) = self
-                .get_range_boundary_hash(end, fallback_to_best_tip, nonfinalized_snapshot)
-                .await?
-            else {
-                return Ok(None);
-            };
-
-            let mut nonfinalized_block =
-                nonfinalized_snapshot.get_chainblock_by_hash(&end_block_hash);
-            let first_nonfinalized_hash = nonfinalized_snapshot
-                .get_chainblock_by_hash(&start_block_hash)
-                .map(|block| block.index().hash());
-
-            // TODO: combine with finalized state when available
-            let mut nonfinalized_range = vec![];
-            while let Some(block) = nonfinalized_block {
-                nonfinalized_range.push(*block.hash());
-                nonfinalized_block = if Some(block.index().parent_hash()) != first_nonfinalized_hash
-                {
-                    nonfinalized_snapshot.get_chainblock_by_hash(block.index().parent_hash())
-                } else {
-                    None
-                }
-            }
-
-            Ok(Some(tokio_stream::iter(nonfinalized_range).then(
-                async |hash| {
-                    self.get_fullblock_bytes_from_node(HashOrHeight::Hash(hash.into()))
+        start: types::Height,
+        end: std::option::Option<types::Height>,
+    ) -> Option<impl Stream<Item = Result<Vec<u8>, Self::Error>>> {
+        let end = end.unwrap_or(nonfinalized_snapshot.best_tip.0);
+        if end <= nonfinalized_snapshot.best_tip.0 {
+            Some(
+                futures::stream::iter((start.0)..=(end.0)).then(move |height| async move {
+                    match self
+                        .finalized_state
+                        .to_reader()
+                        .get_block_hash(types::Height(height))
                         .await
-                        .map_err(ChainIndexError::backing_validator)?
-                        .ok_or(ChainIndexError::database_hole(hash))
-                },
-            )))
+                    {
+                        Ok(Some(hash)) => {
+                            return self
+                                .get_fullblock_bytes_from_node(HashOrHeight::Hash(hash.into()))
+                                .await?
+                                .ok_or(ChainIndexError::database_hole(hash))
+                        }
+                        Err(e) => {
+                            return Err(ChainIndexError {
+                                kind: ChainIndexErrorKind::InternalServerError,
+                                message: "".to_string(),
+                                source: Some(Box::new(e)),
+                            })
+                        }
+                        Ok(None) => {
+                            match nonfinalized_snapshot
+                                .get_chainblock_by_height(&types::Height(height))
+                            {
+                                Some(block) => {
+                                    return self
+                                        .get_fullblock_bytes_from_node(HashOrHeight::Hash(
+                                            (*block.hash()).into(),
+                                        ))
+                                        .await?
+                                        .ok_or(ChainIndexError::database_hole(block.hash()))
+                                }
+                                None => return Err(ChainIndexError::database_hole(height)),
+                            }
+                        }
+                    }
+                }),
+            )
+        } else {
+            None
         }
     }
 
