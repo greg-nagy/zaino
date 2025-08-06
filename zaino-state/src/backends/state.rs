@@ -812,9 +812,9 @@ impl StateServiceSubscriber {
     /// Fetches transaction objects for addresses within a given block range.
     /// This method takes addresses and a block range and returns full transaction objects.
     /// Uses parallel async calls for efficient transaction fetching.
-    /// 
+    ///
     /// # Arguments
-    /// * `fail_fast` - If true, fails immediately when any transaction fetch fails. 
+    /// * `fail_fast` - If true, fails immediately when any transaction fetch fails.
     ///                 If false, continues and returns partial results, filtering out failed fetches.
     async fn get_taddress_txs(
         &self,
@@ -831,10 +831,11 @@ impl StateServiceSubscriber {
 
         // Fetch all transactions in parallel
         let results = futures::future::join_all(
-            txids.into_iter().map(|txid| async {
-                self.clone().get_raw_transaction(txid, Some(1)).await
-            })
-        ).await;
+            txids
+                .into_iter()
+                .map(|txid| async { self.clone().get_raw_transaction(txid, Some(1)).await }),
+        )
+        .await;
 
         let transactions = results
             .into_iter()
@@ -920,9 +921,12 @@ impl ZcashIndexer for StateServiceSubscriber {
         &self,
         request: GetAddressDeltasRequest,
     ) -> Result<GetAddressDeltasResponse, Self::Error> {
+        // get all transactions for provided addresses and block range
         let transactions = self
             .get_taddress_txs(request.addresses.clone(), request.start, request.end, true)
             .await?;
+
+        // get deltas for all transactions in a single vector
         let deltas = GetAddressDeltasResponse::process_transactions_to_deltas(
             &transactions,
             &request.addresses,
