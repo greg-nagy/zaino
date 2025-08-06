@@ -811,12 +811,17 @@ impl StateServiceSubscriber {
 
     /// Fetches transaction objects for addresses within a given block range.
     /// This method takes addresses and a block range and returns full transaction objects.
-    /// It's based on the existing get_taddress_txids implementation but returns a Vec instead of streaming.
+    /// Uses parallel async calls for efficient transaction fetching.
+    /// 
+    /// # Arguments
+    /// * `fail_fast` - If true, fails immediately when any transaction fetch fails. 
+    ///                 If false, continues and returns partial results, filtering out failed fetches.
     async fn get_taddress_txs(
         &self,
         addresses: Vec<String>,
         start: u32,
         end: u32,
+        fail_fast: bool,
     ) -> Result<Vec<Box<TransactionObject>>, StateServiceError> {
         // Convert to GetAddressTxIdsRequest for compatibility with existing helper
         let tx_ids_request = GetAddressTxIdsRequest::from_parts(addresses, start, end);
@@ -824,19 +829,32 @@ impl StateServiceSubscriber {
         // Get transaction IDs using existing method
         let txids = self.get_address_tx_ids(tx_ids_request).await?;
 
-        // Fetch full transaction objects for each transaction ID
-        let mut transactions = Vec::new();
-        for txid in txids {
-            match self.get_raw_transaction(txid, Some(1)).await? {
-                GetRawTransaction::Object(transaction_obj) => {
-                    transactions.push(transaction_obj);
+        // Fetch all transactions in parallel
+        let results = futures::future::join_all(
+            txids.into_iter().map(|txid| async {
+                self.clone().get_raw_transaction(txid, Some(1)).await
+            })
+        ).await;
+
+        let transactions = results
+            .into_iter()
+            .filter_map(|result| {
+                match (fail_fast, result) {
+                    // Fail-fast mode: propagate errors
+                    (true, Err(e)) => return Some(Err(e)),
+                    (true, Ok(tx)) => Some(Ok(tx)),
+                    // Filter mode: skip errors
+                    (false, Err(_)) => None,
+                    (false, Ok(tx)) => Some(Ok(tx)),
                 }
-                GetRawTransaction::Raw(_) => {
-                    // This shouldn't happen when verbose=1, but handle it gracefully
-                    continue;
-                }
-            }
-        }
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .filter_map(|tx| match tx {
+                GetRawTransaction::Object(transaction_obj) => Some(transaction_obj),
+                GetRawTransaction::Raw(_) => None,
+            })
+            .collect();
 
         Ok(transactions)
     }
@@ -903,7 +921,7 @@ impl ZcashIndexer for StateServiceSubscriber {
         request: GetAddressDeltasRequest,
     ) -> Result<GetAddressDeltasResponse, Self::Error> {
         let transactions = self
-            .get_taddress_txs(request.addresses.clone(), request.start, request.end)
+            .get_taddress_txs(request.addresses.clone(), request.start, request.end, true)
             .await?;
         let deltas = GetAddressDeltasResponse::process_transactions_to_deltas(
             &transactions,
