@@ -89,7 +89,6 @@ impl GetAddressDeltasRequest {
     pub fn into_parts(self) -> (Vec<String>, u32, u32, bool) {
         (self.addresses, self.start, self.end, self.chaininfo)
     }
-
 }
 
 /// Response to a `getaddressdeltas` RPC request.
@@ -115,16 +114,6 @@ pub enum GetAddressDeltasResponse {
 }
 
 impl GetAddressDeltasResponse {
-    /// Creates a simple response from a list of deltas (chaininfo = false).
-    pub fn simple(deltas: Vec<AddressDelta>) -> Self {
-        Self::Simple(deltas)
-    }
-
-    /// Creates a response with chain info from deltas and block information (chaininfo = true).
-    pub fn with_chain_info(deltas: Vec<AddressDelta>, start: BlockInfo, end: BlockInfo) -> Self {
-        Self::WithChainInfo { deltas, start, end }
-    }
-
     /// Processes transaction objects into address deltas for specific addresses.
     /// This is a pure function that can be easily unit tested.
     pub fn process_transactions_to_deltas(
@@ -139,12 +128,8 @@ impl GetAddressDeltasResponse {
 
                 // Process inputs (spends - negative deltas)
                 let txid_clone = txid.clone();
-                let input_deltas = tx
-                    .inputs
-                    .iter()
-                    .flatten()
-                    .enumerate()
-                    .filter_map(move |(input_index, input)| {
+                let input_deltas = tx.inputs.iter().flatten().enumerate().filter_map(
+                    move |(input_index, input)| {
                         AddressDelta::from_input(
                             input,
                             input_index as u32,
@@ -152,16 +137,13 @@ impl GetAddressDeltasResponse {
                             height,
                             target_addresses,
                         )
-                    });
+                    },
+                );
 
                 // Process outputs (receives - positive deltas)
-                let output_deltas = tx
-                    .outputs
-                    .iter()
-                    .flatten()
-                    .flat_map(move |output| {
-                        AddressDelta::from_output(output, &txid, height, target_addresses)
-                    });
+                let output_deltas = tx.outputs.iter().flatten().flat_map(move |output| {
+                    AddressDelta::from_output(output, &txid, height, target_addresses)
+                });
 
                 // Chain input and output deltas together
                 input_deltas.chain(output_deltas)
@@ -190,7 +172,6 @@ impl GetAddressDeltasResponse {
         let deltas = Self::process_transactions_to_deltas(transactions, target_addresses);
         Self::with_chain_info(deltas, start, end)
     }
-
 }
 
 impl ResponseToError for GetAddressDeltasResponse {

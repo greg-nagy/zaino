@@ -933,12 +933,12 @@ impl ZcashIndexer for StateServiceSubscriber {
         );
 
         match request.chaininfo {
-            true => Ok(GetAddressDeltasResponse::with_chain_info(
+            true => Ok(GetAddressDeltasResponse::WithChainInfo {
+                start: self.block_info_from_height(request.start).await?,
+                end: self.block_info_from_height(request.end).await?,
                 deltas,
-                self.block_info_from_height(request.start).await?,
-                self.block_info_from_height(request.end).await?,
-            )),
-            false => Ok(GetAddressDeltasResponse::simple(deltas)),
+            }),
+            false => Ok(GetAddressDeltasResponse::Simple(deltas)),
         }
     }
 
