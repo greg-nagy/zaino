@@ -120,11 +120,9 @@ mod chain_query_interface {
 
     use futures::TryStreamExt as _;
     use zaino_state::{
-        bench::chain_index::{
-            self,
-            interface::{ChainIndex, NodeBackedChainIndex},
-        },
-        StateService, StateServiceConfig, ZcashService as _,
+        bench::chain_index::{self, ChainIndex},
+        chain_index::NodeBackedChainIndex,
+        Height, StateService, StateServiceConfig, ZcashService as _,
     };
     use zebra_chain::serialization::{ZcashDeserialize, ZcashDeserializeInto};
 
@@ -231,9 +229,7 @@ mod chain_query_interface {
         let snapshot = chain_index.snapshot_nonfinalized_state();
         assert_eq!(snapshot.as_ref().blocks.len(), 6);
         let range = chain_index
-            .get_block_range(&snapshot, None, None)
-            .await
-            .unwrap()
+            .get_block_range(&snapshot, Height::try_from(0).unwrap(), None)
             .unwrap()
             .try_collect::<Vec<_>>()
             .await

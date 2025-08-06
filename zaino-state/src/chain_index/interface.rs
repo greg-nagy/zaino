@@ -1,14 +1,11 @@
 use crate::error::{ChainIndexError, ChainIndexErrorKind, FinalisedStateError};
-use std::{borrow::Cow, collections::HashMap, future::Future, sync::Arc, time::Duration};
+use std::{borrow::Cow, collections::HashMap, sync::Arc, time::Duration};
 
-use super::source::{BlockchainSource, BlockchainSourceInterface};
+use super::non_finalised_state::NonfinalizedBlockCacheSnapshot;
+use super::source::BlockchainSourceInterface;
 use super::types::{self, ChainBlock};
-use super::{
-    finalised_state::ZainoDB,
-    non_finalised_state::{InitError, NonFinalizedState, NonfinalizedBlockCacheSnapshot},
-};
 use super::{ChainIndex, NodeBackedChainIndex};
-use futures::{FutureExt, Stream, TryFutureExt};
+use futures::Stream;
 use tokio_stream::StreamExt;
 pub use zebra_chain::parameters::Network as ZebraNetwork;
 use zebra_chain::serialization::ZcashSerialize;

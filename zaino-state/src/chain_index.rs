@@ -41,9 +41,10 @@ pub trait ChainIndex {
     /// it existed at the moment the snapshot was taken.
     fn snapshot_nonfinalized_state(&self) -> Self::Snapshot;
 
-    /// Given inclusive start and end indexes, stream all blocks
-    /// between the given indexes. Can be specified
-    /// by hash or height.
+    /// Given inclusive start and end heights, stream all blocks
+    /// between the given heights.
+    /// Returns None if the specified end height
+    /// is greater than the snapshot's tip
     #[allow(clippy::type_complexity)]
     fn get_block_range(
         &self,

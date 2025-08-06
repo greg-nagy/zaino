@@ -2,7 +2,7 @@
 
 use crate::Hash;
 
-use std::{any::type_name, fmt::Display, future::Future};
+use std::{any::type_name, fmt::Display};
 
 use zaino_fetch::jsonrpsee::connector::RpcRequestError;
 

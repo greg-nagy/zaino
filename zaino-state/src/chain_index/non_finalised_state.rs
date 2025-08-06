@@ -8,17 +8,11 @@ use crate::{
     OrchardCompactTx, SaplingCompactTx, TransparentCompactTx, TxInCompact, TxOutCompact,
 };
 use arc_swap::ArcSwap;
-use futures::{future::join, lock::Mutex};
+use futures::lock::Mutex;
 use primitive_types::U256;
 use tokio::sync::mpsc;
-use tower::Service;
-use zaino_fetch::jsonrpsee::{
-    connector::{JsonRpSeeConnector, RpcRequestError},
-    response::{GetBlockError, GetBlockResponse, GetTreestateResponse},
-};
-use zcash_primitives::merkle_tree::read_commitment_tree;
-use zebra_chain::{parameters::Network, serialization::ZcashDeserialize};
-use zebra_state::{HashOrHeight, ReadResponse, ReadStateService};
+use zebra_chain::parameters::Network;
+use zebra_state::HashOrHeight;
 
 use crate::ChainBlock;
 
@@ -110,6 +104,7 @@ pub enum InitError {
     /// the connected node returned garbage data
     InvalidNodeData(Box<dyn std::error::Error + Send + Sync + 'static>),
     #[error(transparent)]
+    /// The finalized state failed to initialize
     FinalisedStateInitialzationError(#[from] FinalisedStateError),
 }
 
