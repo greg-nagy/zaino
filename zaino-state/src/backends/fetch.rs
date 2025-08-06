@@ -10,7 +10,7 @@ use zebra_state::HashOrHeight;
 
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::{
-    client::{GetSubtreesByIndexResponse, GetTreestateResponse},
+    client::{GetSubtreesByIndexResponse, GetTreestateResponse, ValidateAddressResponse},
     methods::{
         AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
         GetBlockHashResponse, GetBlockchainInfoResponse, GetInfo, GetRawTransaction,
@@ -380,6 +380,21 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// tags: blockchain
     async fn get_block_count(&self) -> Result<Height, Self::Error> {
         Ok(self.fetcher.get_block_count().await?.into())
+    }
+
+    /// Return information about the given Zcash address.
+    ///
+    /// # Parameters
+    /// - `address`: (string, required, example="tmHMBeeYRuc2eVicLNfP15YLxbQsooCA6jb") The Zcash transparent address to validate.
+    ///
+    /// zcashd reference: [`validateaddress`](https://zcash.github.io/rpc/validateaddress.html)
+    /// method: post
+    /// tags: blockchain
+    async fn validate_address(
+        &self,
+        address: String,
+    ) -> Result<ValidateAddressResponse, Self::Error> {
+        Ok(self.fetcher.validate_address(address).await?)
     }
 
     /// Returns all transaction ids in the memory pool, as a JSON array.

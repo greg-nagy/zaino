@@ -1,7 +1,7 @@
 use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
 use zaino_state::{
-    bench::chain_index::non_finalised_state::{BlockchainSource, NonFinalizedState},
-    BackendType,
+    bench::chain_index::non_finalised_state::NonFinalizedState,
+    chain_index::source::BlockchainSource, BackendType,
 };
 use zaino_testutils::{TestManager, Validator as _, ValidatorKind};
 

@@ -405,13 +405,17 @@ impl<T: ToString> From<RpcRequestError<T>> for FinalisedStateError {
 // TODO: Update name to DbError when ZainoDB replaces legacy finalised state.
 #[derive(Debug, thiserror::Error)]
 pub enum FinalisedStateError {
-    /// Custom Errors. *Remove before production.
+    /// Custom Errors. *Remove before production*.
     #[error("Custom error: {0}")]
     Custom(String),
 
-    /// Required data is missing from the non-finalised state.
+    /// Requested data is missing from the finalised state.
+    ///
+    /// This could be due to the databae not yet being synced or due to a bad request input.
+    ///
+    /// We could split this into 2 distinct types if needed.
     #[error("Missing data: {0}")]
-    MissingData(String),
+    DataUnavailable(String),
 
     /// A block is present on disk but failed internal validation.
     ///
@@ -430,7 +434,10 @@ pub enum FinalisedStateError {
     #[error("feature unavailable: {0}")]
     FeatureUnavailable(&'static str),
 
-    // TODO: Add `InvalidRequestError` and return for invalid requests.
+    /// Errors originating from the BlockchainSource in use.
+    #[error("blockchain source error: {0}")]
+    BlockchainSourceError(#[from] crate::chain_index::source::BlockchainSourceError),
+
     /// Critical Errors, Restart Zaino.
     #[error("Critical error: {0}")]
     Critical(String),
@@ -520,7 +527,7 @@ impl From<FinalisedStateError> for ChainIndexError {
     fn from(value: FinalisedStateError) -> Self {
         match value {
             FinalisedStateError::Custom(_) => todo!(),
-            FinalisedStateError::MissingData(_) => todo!(),
+            FinalisedStateError::DataUnavailable(_) => todo!(),
             FinalisedStateError::InvalidBlock {
                 height,
                 hash,
@@ -533,6 +540,7 @@ impl From<FinalisedStateError> for ChainIndexError {
             FinalisedStateError::StatusError(status_error) => todo!(),
             FinalisedStateError::JsonRpcConnectorError(transport_error) => todo!(),
             FinalisedStateError::IoError(error) => todo!(),
+            FinalisedStateError::BlockchainSourceError(blockchain_source_error) => todo!(),
         }
     }
 }

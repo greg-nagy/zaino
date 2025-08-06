@@ -1,12 +1,11 @@
 use crate::error::{ChainIndexError, ChainIndexErrorKind, FinalisedStateError};
 use std::{borrow::Cow, collections::HashMap, future::Future, sync::Arc, time::Duration};
 
+use super::source::{BlockchainSource, BlockchainSourceInterface};
 use super::types::{self, ChainBlock};
 use super::{
     finalised_state::ZainoDB,
-    non_finalised_state::{
-        BlockchainSource, InitError, NonFinalizedState, NonfinalizedBlockCacheSnapshot,
-    },
+    non_finalised_state::{InitError, NonFinalizedState, NonfinalizedBlockCacheSnapshot},
 };
 use futures::{Stream, TryFutureExt};
 use tokio_stream::StreamExt;
@@ -25,7 +24,7 @@ pub struct NodeBackedChainIndex {
     // TODO: finalized state
     // TODO: mempool
     non_finalized_state: Arc<NonFinalizedState>,
-    finalized_state: ZainoDB,
+    finalized_state: Arc<ZainoDB>,
 }
 
 impl NodeBackedChainIndex {
@@ -36,15 +35,16 @@ impl NodeBackedChainIndex {
         config: crate::config::BlockCacheConfig,
     ) -> Result<Self, InitError>
     where
-        T: Into<BlockchainSource> + Send + Sync + 'static,
+        for<'a> &'a T: Into<BlockchainSource> + Send,
     {
         let (non_finalized_state, finalized_state) = futures::try_join!(
-            NonFinalizedState::initialize(source.into(), config.network.clone()),
-            ZainoDB::spawn(config).map_err(InitError::FinalisedStateInitialzationError)
+            NonFinalizedState::initialize((&source).into(), config.network.clone()),
+            ZainoDB::spawn(config, (&source).into())
+                .map_err(InitError::FinalisedStateInitialzationError)
         )?;
         let chain_index = Self {
             non_finalized_state: Arc::new(non_finalized_state),
-            finalized_state,
+            finalized_state: Arc::new(finalized_state),
         };
         chain_index.start_sync_loop();
         Ok(chain_index)
@@ -123,14 +123,10 @@ impl NodeBackedChainIndex {
                 }
                 HashOrHeight::Height(height) => types::Height(height.0),
             };
-            if let Some(chainblocks) = self.finalized_state.chain_block() {
-                chainblocks
-                    .get_chain_block(height)
-                    .await
-                    .map(|b| b.map(Cow::Owned))
-            } else {
-                Ok(None)
-            }
+            (&self.finalized_state.to_reader())
+                .get_chain_block(height)
+                .await
+                .map(|b| b.map(Cow::Owned))
         }
     }
 
