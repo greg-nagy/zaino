@@ -150,28 +150,6 @@ impl GetAddressDeltasResponse {
             })
             .collect()
     }
-
-    /// Creates a simple response from transaction objects and target addresses.
-    /// This is a pure function that combines transaction processing and response creation.
-    pub fn from_transactions_simple(
-        transactions: &[Box<zebra_rpc::methods::types::transaction::TransactionObject>],
-        target_addresses: &[String],
-    ) -> Self {
-        let deltas = Self::process_transactions_to_deltas(transactions, target_addresses);
-        Self::simple(deltas)
-    }
-
-    /// Creates a response with chain info from transaction objects, target addresses, and block info.
-    /// This is a pure function that combines transaction processing and response creation.
-    pub fn from_transactions_with_chain_info(
-        transactions: &[Box<zebra_rpc::methods::types::transaction::TransactionObject>],
-        target_addresses: &[String],
-        start: BlockInfo,
-        end: BlockInfo,
-    ) -> Self {
-        let deltas = Self::process_transactions_to_deltas(transactions, target_addresses);
-        Self::with_chain_info(deltas, start, end)
-    }
 }
 
 impl ResponseToError for GetAddressDeltasResponse {
