@@ -1,3 +1,4 @@
+use zaino_fetch::jsonrpsee::response::{GetAddressDeltasRequest, GetAddressDeltasResponse};
 use zaino_state::{BackendType, FetchServiceError};
 use zaino_state::{
     FetchService, FetchServiceConfig, FetchServiceSubscriber, LightWalletIndexer, StateService,
@@ -9,7 +10,6 @@ use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind, ZEBRAD_TESTNET_CACHE_DIR};
 use zebra_chain::{parameters::Network, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetInfo};
-use zaino_fetch::jsonrpsee::response::{GetAddressDeltasRequest, GetAddressDeltasResponse};
 
 async fn create_test_manager_and_services(
     validator: &ValidatorKind,
@@ -1111,20 +1111,32 @@ async fn state_service_get_address_deltas(validator: &ValidatorKind) {
         .await
         .unwrap();
 
-    assert_eq!(fetch_service_chain_info_deltas, state_service_chain_info_deltas);
+    assert_eq!(
+        fetch_service_chain_info_deltas,
+        state_service_chain_info_deltas
+    );
 
     // Validate response structure
     match &state_service_simple_deltas {
         GetAddressDeltasResponse::Simple(deltas) => {
-            assert!(!deltas.is_empty(), "Should have at least one delta for the transaction");
+            assert!(
+                !deltas.is_empty(),
+                "Should have at least one delta for the transaction"
+            );
         }
         _ => panic!("Expected simple response"),
     }
 
     match &state_service_chain_info_deltas {
         GetAddressDeltasResponse::WithChainInfo { deltas, start, end } => {
-            assert!(!deltas.is_empty(), "Should have at least one delta for the transaction");
-            assert!(start.height <= end.height, "Start height should be <= end height");
+            assert!(
+                !deltas.is_empty(),
+                "Should have at least one delta for the transaction"
+            );
+            assert!(
+                start.height <= end.height,
+                "Start height should be <= end height"
+            );
         }
         _ => panic!("Expected response with chain info"),
     }
@@ -1151,12 +1163,8 @@ async fn state_service_get_address_deltas_testnet() {
     let address = "tmAkxrvJCN75Ty9YkiHccqc1hJmGZpggo6i";
 
     // Test simple response
-    let simple_request = GetAddressDeltasRequest::new(
-        vec![address.to_string()],
-        2000000,
-        3000000,
-        false,
-    );
+    let simple_request =
+        GetAddressDeltasRequest::new(vec![address.to_string()], 2000000, 3000000, false);
 
     let fetch_service_simple_deltas = dbg!(
         fetch_service_subscriber
@@ -1175,12 +1183,8 @@ async fn state_service_get_address_deltas_testnet() {
     assert_eq!(fetch_service_simple_deltas, state_service_simple_deltas);
 
     // Test response with chain info
-    let chain_info_request = GetAddressDeltasRequest::new(
-        vec![address.to_string()],
-        2000000,
-        3000000,
-        true,
-    );
+    let chain_info_request =
+        GetAddressDeltasRequest::new(vec![address.to_string()], 2000000, 3000000, true);
 
     let fetch_service_chain_info_deltas = dbg!(
         fetch_service_subscriber
@@ -1196,7 +1200,10 @@ async fn state_service_get_address_deltas_testnet() {
     )
     .unwrap();
 
-    assert_eq!(fetch_service_chain_info_deltas, state_service_chain_info_deltas);
+    assert_eq!(
+        fetch_service_chain_info_deltas,
+        state_service_chain_info_deltas
+    );
 
     test_manager.close().await;
 }
