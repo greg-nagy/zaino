@@ -1,4 +1,5 @@
 use crate::error::{ChainIndexError, ChainIndexErrorKind, FinalisedStateError};
+use std::future::Future;
 use std::{borrow::Cow, collections::HashMap, sync::Arc, time::Duration};
 
 use super::non_finalised_state::NonfinalizedBlockCacheSnapshot;
@@ -85,32 +86,51 @@ impl NodeBackedChainIndex {
                 }
                 HashOrHeight::Height(height) => types::Height(height.0),
             };
-            (&self.finalized_state.to_reader())
+            (&self.finalized_state)
                 .get_chain_block(height)
                 .await
                 .map(|b| b.map(Cow::Owned))
         }
     }
 
-    fn blocks_containing_transaction<'snapshot, 'self_lt, 'iter>(
+    async fn blocks_containing_transaction<'snapshot, 'self_lt, 'iter>(
         &'self_lt self,
         snapshot: &'snapshot NonfinalizedBlockCacheSnapshot,
         txid: [u8; 32],
-    ) -> impl Iterator<Item = &'iter ChainBlock>
+    ) -> Result<impl Iterator<Item = ChainBlock> + use<'iter>, FinalisedStateError>
     where
         'snapshot: 'iter,
         'self_lt: 'iter,
     {
-        //TODO: finalized state, mempool
-        snapshot.blocks.values().filter_map(move |block| {
-            block.transactions().iter().find_map(|transaction| {
-                if *transaction.txid() == txid {
-                    Some(block)
-                } else {
-                    None
-                }
+        Ok(snapshot
+            .blocks
+            .values()
+            .filter_map(move |block| {
+                block.transactions().iter().find_map(|transaction| {
+                    if *transaction.txid() == txid {
+                        Some(block)
+                    } else {
+                        None
+                    }
+                })
             })
-        })
+            .cloned()
+            .chain(
+                match self
+                    .finalized_state
+                    .get_tx_location(&crate::Hash(txid))
+                    .await?
+                {
+                    Some(tx_location) => {
+                        self.finalized_state
+                            .get_chain_block(crate::Height(tx_location.block_height()))
+                            .await?
+                    }
+
+                    None => None,
+                }
+                .into_iter(),
+            ))
     }
 
     async fn get_range_boundary_hash(
@@ -171,7 +191,6 @@ impl ChainIndex for NodeBackedChainIndex {
                 futures::stream::iter((start.0)..=(end.0)).then(move |height| async move {
                     match self
                         .finalized_state
-                        .to_reader()
                         .get_block_hash(types::Height(height))
                         .await
                     {
@@ -236,7 +255,11 @@ impl ChainIndex for NodeBackedChainIndex {
         snapshot: &Self::Snapshot,
         txid: [u8; 32],
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        let Some(block) = self.blocks_containing_transaction(snapshot, txid).next() else {
+        let Some(block) = self
+            .blocks_containing_transaction(snapshot, txid)
+            .await?
+            .next()
+        else {
             return Ok(None);
         };
         let full_block = self
@@ -263,14 +286,19 @@ impl ChainIndex for NodeBackedChainIndex {
         &self,
         snapshot: &Self::Snapshot,
         txid: [u8; 32],
-    ) -> Result<
-        HashMap<super::types::Hash, std::option::Option<super::types::Height>>,
-        ChainIndexError,
+    ) -> impl Future<
+        Output = Result<
+            HashMap<super::types::Hash, std::option::Option<super::types::Height>>,
+            ChainIndexError,
+        >,
     > {
-        Ok(self
-            .blocks_containing_transaction(snapshot, txid)
-            .map(|block| (*block.hash(), block.height()))
-            .collect())
+        async move {
+            Ok(self
+                .blocks_containing_transaction(snapshot, txid)
+                .await?
+                .map(|block| (*block.hash(), block.height()))
+                .collect())
+        }
     }
 }
 

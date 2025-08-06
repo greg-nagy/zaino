@@ -339,6 +339,7 @@ mod chain_query_interface {
         }) {
             let transaction_status = chain_index
                 .get_transaction_status(&snapshot, *txid)
+                .await
                 .unwrap();
             assert_eq!(1, transaction_status.len());
             assert_eq!(transaction_status.keys().next().unwrap(), block_hash);

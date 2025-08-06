@@ -119,10 +119,8 @@ impl NonFinalizedState {
         // TODO: Consider arbitrary buffer length
         let (staging_sender, staging_receiver) = mpsc::channel(100);
         let staged = Mutex::new(staging_receiver);
-        // The comment on the Height type is somewhat unclear if genesis block is height 0 or height 1
-        // TODO: Confirm
         let genesis_block = (&source)
-            .get_block(HashOrHeight::Height(zebra_chain::block::Height(1)))
+            .get_block(HashOrHeight::Height(zebra_chain::block::Height(0)))
             .await
             .map_err(|e| InitError::InvalidNodeData(Box::new(e)))?
             .ok_or_else(|| InitError::InvalidNodeData(Box::new(MissingGenesisBlock)))?;
@@ -556,7 +554,7 @@ impl NonFinalizedState {
         self.update(if best_tip.0 .0 > 100 {
             best_tip.0 - 100
         } else {
-            Height(1)
+            Height(0)
         })
         .await?;
 
@@ -568,6 +566,10 @@ impl NonFinalizedState {
             match *e {
                 mpsc::error::TrySendError::Full(_) => {
                     // TODO: connect to finalized state to determine where to truncate
+                    // Sync is currently called by integration tests
+                    // and the finalized_state is not public
+                    // deferred until integration tests are of the
+                    // full ChainIndex, and/or are converted to unit tests
                     self.update(
                         block
                             .index
@@ -618,15 +620,12 @@ impl NonFinalizedState {
                 .iter()
                 .map(|(hash, block)| (*hash, block.clone())),
         );
-        // todo: incorperate with finalized state to synchronize removal of finalized blocks from nonfinalized state instead of discarding below a cetain height
         let (_newly_finalzed, blocks): (HashMap<_, _>, HashMap<Hash, _>) = new
             .into_iter()
             .partition(|(_hash, block)| match block.index().height() {
                 Some(height) => height < finalized_height,
                 None => false,
             });
-        // TODO: At this point, we need to ensure the newly-finalized blocks are known
-        // to be in the finalzed state
 
         let best_tip = blocks.iter().fold(snapshot.best_tip, |acc, (hash, block)| {
             match block.index().height() {

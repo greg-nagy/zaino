@@ -71,7 +71,9 @@ pub trait ChainIndex {
         &self,
         snapshot: &Self::Snapshot,
         txid: [u8; 32],
-    ) -> Result<std::collections::HashMap<types::Hash, Option<types::Height>>, Self::Error>;
+    ) -> impl std::future::Future<
+        Output = Result<std::collections::HashMap<types::Hash, Option<types::Height>>, Self::Error>,
+    >;
 }
 /// The combined index. Contains a view of the mempool, and the full
 /// chain state, both finalized and non-finalized, to allow queries over
@@ -79,12 +81,12 @@ pub trait ChainIndex {
 /// a zebra ReadStateService (direct read access to a running
 /// zebrad's database) or a jsonRPC connection to a validator.
 ///
-/// TODO: Currently only contains the non-finalized state.
+/// Currently does not support mempool operations
 pub struct NodeBackedChainIndex {
-    // TODO: finalized state
     // TODO: mempool
     non_finalized_state: std::sync::Arc<crate::NonFinalizedState>,
-    finalized_state: std::sync::Arc<finalised_state::ZainoDB>,
+    _finalized_db: std::sync::Arc<finalised_state::ZainoDB>,
+    finalized_state: finalised_state::reader::DbReader,
 }
 
 impl NodeBackedChainIndex {
@@ -99,14 +101,16 @@ impl NodeBackedChainIndex {
     {
         use futures::TryFutureExt as _;
 
-        let (non_finalized_state, finalized_state) = futures::try_join!(
+        let (non_finalized_state, finalized_db) = futures::try_join!(
             crate::NonFinalizedState::initialize((&source).into(), config.network.clone()),
             finalised_state::ZainoDB::spawn(config, (&source).into())
                 .map_err(crate::InitError::FinalisedStateInitialzationError)
         )?;
+        let finalized_db = std::sync::Arc::new(finalized_db);
         let chain_index = Self {
             non_finalized_state: std::sync::Arc::new(non_finalized_state),
-            finalized_state: std::sync::Arc::new(finalized_state),
+            finalized_state: finalized_db.to_reader(),
+            _finalized_db: finalized_db,
         };
         chain_index.start_sync_loop();
         Ok(chain_index)
