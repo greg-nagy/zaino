@@ -11,7 +11,7 @@ use super::{
 
 use crate::{error::FinalisedStateError, ChainBlock, Hash, Height, StatusType};
 
-use arc_swap::ArcSwap;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use async_trait::async_trait;
 use std::sync::{
     atomic::{AtomicU32, Ordering},
@@ -22,7 +22,7 @@ pub(crate) struct Router {
     /// Primary active database.
     primary: ArcSwap<DbBackend>,
     /// Shadow database, new version to be built during major migration.
-    shadow: ArcSwap<Option<Arc<DbBackend>>>,
+    shadow: ArcSwapOption<DbBackend>,
     /// Capability mask for primary database.
     primary_mask: AtomicU32,
     /// Capability mask dictating what database capalility (if any) should be served by the shadow.
@@ -42,7 +42,7 @@ impl Router {
         let cap = primary.capability();
         Self {
             primary: ArcSwap::from(primary),
-            shadow: ArcSwap::from(Arc::new(None)),
+            shadow: ArcSwapOption::empty(),
             primary_mask: AtomicU32::new(cap.bits()),
             shadow_mask: AtomicU32::new(0),
         }
@@ -98,22 +98,24 @@ impl Router {
     /// Promotes the shadow database to primary, resets shadow,
     /// and updates the primary capability mask from the new backend.
     ///
-    /// Used at the und of major migrations to move the active database to the new version.
-    pub(crate) fn promote_shadow(&self) -> Arc<DbBackend> {
-        let new_primary = self
+    /// Used at the end of major migrations to move the active database to the new version.
+    ///
+    /// Returns the initial primary value.
+    ///
+    /// # Error
+    ///
+    /// Returns a critical error if the shadow is not found.
+    pub(crate) fn promote_shadow(&self) -> Result<Arc<DbBackend>, FinalisedStateError> {
+        let Some(new_primary) = self
             .shadow
-            .swap(None.into())
-            .as_ref()
-            .clone()
-            .expect("shadow missing during promote()");
+            .swap(None) else {
+            return Err(FinalisedStateError::Critical("shadow not found!".to_string()));
+        };
 
-        let cap = new_primary.capability();
-
-        let old_primary = self.primary.swap(Arc::clone(&new_primary));
-        self.primary_mask.store(cap.bits(), Ordering::Release);
+        self.primary_mask.store(new_primary.capability().bits(), Ordering::Release);
         self.shadow_mask.store(0, Ordering::Release);
 
-        old_primary
+        Ok(self.primary.swap(new_primary))
     }
 
     // ***** Primary database capability control *****

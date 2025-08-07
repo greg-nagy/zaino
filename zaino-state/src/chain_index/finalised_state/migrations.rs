@@ -232,7 +232,7 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
         info!("promoting v1 database to primary.");
 
         // Promote V1 to primary
-        let db_v0 = router.promote_shadow();
+        let db_v0 = router.promote_shadow()?;
 
         // Delete V0
         tokio::spawn(async move {
