@@ -272,6 +272,7 @@ mod mockchain_tests {
         let source = build_mockchain_source(blocks.clone());
         let temp_dir: TempDir = tempfile::tempdir().unwrap();
         let db_path: PathBuf = temp_dir.path().to_path_buf();
+
         let config = BlockCacheConfig {
             map_capacity: None,
             map_shard_amount: None,
@@ -298,6 +299,7 @@ mod mockchain_tests {
         };
 
         let indexer = NodeBackedChainIndex::new(source, config).await.unwrap();
+
         let nonfinalized_snapshot = loop {
             let nonfinalized_snapshot = ChainIndex::snapshot_nonfinalized_state(&indexer);
             if nonfinalized_snapshot.blocks.len() != 1 {
@@ -306,6 +308,7 @@ mod mockchain_tests {
             println!("waiting for mockchain sync");
             tokio::time::sleep(Duration::from_secs(1)).await;
         };
+
         let start = crate::Height(0);
 
         let indexer_blocks =
@@ -313,12 +316,15 @@ mod mockchain_tests {
                 .unwrap()
                 .collect::<Vec<_>>()
                 .await;
+
         for (i, block) in indexer_blocks.into_iter().enumerate() {
             let zebra_block = block
                 .unwrap()
                 .zcash_deserialize_into::<zebra_chain::block::Block>()
                 .unwrap();
-            let expected_block = &blocks[zebra_block.coinbase_height().unwrap().0 as usize].3;
+
+            let expected_block = &blocks[i].3;
+
             if &zebra_block != expected_block {
                 panic!(
                     "block {i}, returned_block height {}, expected block height {}",

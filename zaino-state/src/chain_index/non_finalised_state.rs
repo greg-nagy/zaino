@@ -592,7 +592,7 @@ impl<Source: BlockchainSourceInterface> NonFinalizedState<Source> {
         self.staging_sender.try_send(block).map_err(Box::new)
     }
     /// Add all blocks from the staging area, and save a new cache snapshot
-    pub async fn update(&self, finalized_db: Arc<ZainoDB>) -> Result<(), UpdateError> {
+    pub(crate) async fn update(&self, finalized_db: Arc<ZainoDB>) -> Result<(), UpdateError> {
         let mut new = HashMap::<Hash, ChainBlock>::new();
         let mut staged = self.staged.lock().await;
         loop {
