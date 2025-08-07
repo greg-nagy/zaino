@@ -575,8 +575,8 @@ async fn get_faucet_txids() {
         .unwrap()
         .unwrap();
     let mut reader_faucet_txids = Vec::new();
-    for index in reader_faucet_tx_locations {
-        let txid = db_reader.get_txid(index).await.unwrap();
+    for tx_location in reader_faucet_tx_locations {
+        let txid = db_reader.get_txid(tx_location).await.unwrap();
         reader_faucet_txids.push(txid.to_string());
     }
 
@@ -679,8 +679,8 @@ async fn get_recipient_txids() {
         .unwrap();
 
     let mut reader_recipient_txids = Vec::new();
-    for index in reader_recipient_tx_locations {
-        let txid = db_reader.get_txid(index).await.unwrap();
+    for tx_location in reader_recipient_tx_locations {
+        let txid = db_reader.get_txid(tx_location).await.unwrap();
         reader_recipient_txids.push(txid.to_string());
     }
 
@@ -719,8 +719,8 @@ async fn get_faucet_utxos() {
 
     let mut reader_faucet_utxos = Vec::new();
 
-    for (index, vout, value) in reader_faucet_utxo_indexes {
-        let txid = db_reader.get_txid(index).await.unwrap().to_string();
+    for (tx_location, vout, value) in reader_faucet_utxo_indexes {
+        let txid = db_reader.get_txid(tx_location).await.unwrap().to_string();
         reader_faucet_utxos.push((txid, vout as u32, value));
     }
 
@@ -759,8 +759,8 @@ async fn get_recipient_utxos() {
 
     let mut reader_recipient_utxos = Vec::new();
 
-    for (index, vout, value) in reader_recipient_utxo_indexes {
-        let txid = db_reader.get_txid(index).await.unwrap().to_string();
+    for (tx_location, vout, value) in reader_recipient_utxo_indexes {
+        let txid = db_reader.get_txid(tx_location).await.unwrap().to_string();
         reader_recipient_utxos.push((txid, vout as u32, value));
     }
 

@@ -1,6 +1,6 @@
 //! Holds the Finalised portion of the chain index on disk.
 
-// TODO / FIX - ROMOVE THIS ONCE CHAININDEX LANDS!
+// TODO / FIX - REMOVE THIS ONCE CHAININDEX LANDS!
 #![allow(dead_code)]
 
 pub(crate) mod capability;
@@ -46,7 +46,7 @@ impl ZainoDB {
     where
         T: BlockchainSourceInterface,
     {
-        let version_opt = dbg!(Self::try_find_current_db_version(&cfg).await);
+        let version_opt = Self::try_find_current_db_version(&cfg).await;
 
         let target_db_version = match cfg.db_version {
             0 => DbVersion {
@@ -54,11 +54,16 @@ impl ZainoDB {
                 minor: 0,
                 patch: 0,
             },
-            _ => DbVersion {
+            1 => DbVersion {
                 major: 1,
                 minor: 0,
                 patch: 0,
             },
+            x => {
+                return Err(FinalisedStateError::Custom(format!(
+                    "unsupported database version: DbV{x}"
+                )))
+            }
         };
 
         let backend = match version_opt {
@@ -140,7 +145,7 @@ impl ZainoDB {
         }
     }
 
-    /// Look for kown dirs to find current db version.
+    /// Look for known dirs to find current db version.
     ///
     /// The oldest version is returned as the database may have been closed mid migration.
     ///
@@ -201,6 +206,10 @@ impl ZainoDB {
     where
         T: BlockchainSourceInterface,
     {
+        if height.0 == 0 {
+            return Err(FinalisedStateError::Critical("Sync height must be non-zero.".to_string()));
+        }
+        
         let network = self.cfg.network.clone();
         let db_height = self.db_height().await?.unwrap_or(Height(0));
 

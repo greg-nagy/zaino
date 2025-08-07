@@ -101,10 +101,6 @@ impl DbCore for DbV0 {
         }
         Ok(())
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
 }
 
 #[async_trait]
@@ -117,7 +113,7 @@ impl CompactBlockExt for DbV0 {
     }
 }
 
-/// Fanalised part of the chain, held in an LMDB database.
+/// Finalised part of the chain, held in an LMDB database.
 #[derive(Debug)]
 pub struct DbV0 {
     /// LMDB Database Environmant.

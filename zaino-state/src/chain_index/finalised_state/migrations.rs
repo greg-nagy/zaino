@@ -160,7 +160,7 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
                         break;
                     }
 
-                    if shadow_db_height.0 > 1 {
+                    if shadow_db_height.0 > 0 {
                         parent_chain_work = *shadow
                             .get_block_header(shadow_db_height)
                             .await?
@@ -233,12 +233,11 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
 
         // Promote V1 to primary
         let db_v0 = router.promote_shadow();
-        let old_weak = Arc::downgrade(&db_v0);
 
         // Delete V0
         tokio::spawn(async move {
             // Wait until all Arc<DbBackend> clones are dropped
-            while old_weak.strong_count() > 1 {
+            while Arc::strong_count(&db_v0) > 1 {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
 

@@ -649,7 +649,7 @@ pub struct BlockData {
     /// Compact difficulty target used for proof-of-work and difficulty calculation.
     pub(super) bits: u32,
     /// Equihash nonse.
-    pub(super) nonse: [u8; 32],
+    pub(super) nonce: [u8; 32],
     /// Equihash solution
     pub(super) solution: EquihashSolution,
 }
@@ -672,7 +672,7 @@ impl BlockData {
             merkle_root,
             block_commitments,
             bits,
-            nonse,
+            nonce: nonse,
             solution,
         }
     }
@@ -747,7 +747,7 @@ impl BlockData {
 
     /// Returns Equihash Nonse.
     pub fn nonse(&self) -> [u8; 32] {
-        self.nonse
+        self.nonce
     }
 
     /// Returns Equihash Nonse.
@@ -769,7 +769,7 @@ impl ZainoVersionedSerialise for BlockData {
         write_fixed_le::<32, _>(&mut w, &self.block_commitments)?;
 
         write_u32_le(&mut w, self.bits)?;
-        write_fixed_le::<32, _>(&mut w, &self.nonse)?;
+        write_fixed_le::<32, _>(&mut w, &self.nonce)?;
 
         self.solution.serialize(&mut w)
     }
@@ -1383,7 +1383,7 @@ impl
                 ) => chain_history_block_tx_auth_commitment_hash.bytes_in_serialized_order(),
             },
 
-            nonse: *block.header.nonce,
+            nonce: *block.header.nonce,
             solution: block.header.solution.into(),
         };
 
@@ -1504,7 +1504,6 @@ impl
             height: Some(height),
         };
 
-        //TODO: Is a default (zero) root correct?
         let commitment_tree_roots = CommitmentTreeRoots::new(
             <[u8; 32]>::from(sapling_root),
             <[u8; 32]>::from(orchard_root),

@@ -160,7 +160,7 @@ impl NonFinalizedState {
                 ) => chain_history_block_tx_auth_commitment_hash.bytes_in_serialized_order(),
             },
 
-            nonse: *genesis_block.header.nonce,
+            nonce: *genesis_block.header.nonce,
             solution: genesis_block.header.solution.into(),
         };
 
@@ -384,7 +384,7 @@ impl NonFinalizedState {
                         }
                     },
 
-                    nonse: *block.header.nonce,
+                    nonce: *block.header.nonce,
                     solution: block.header.solution.into(),
                 };
 

@@ -157,10 +157,6 @@ impl DbCore for Router {
         primary_shutdown_result?;
         shadow_shutdown_result
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self as &dyn std::any::Any
-    }
 }
 
 #[async_trait]
