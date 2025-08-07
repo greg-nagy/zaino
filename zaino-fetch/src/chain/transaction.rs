@@ -1164,16 +1164,16 @@ impl FullTransaction {
 pub enum ConsensusError {
     #[error("Invalid version: {version}, must be >= 1")]
     InvalidVersion { version: u32 },
-    
+
     #[error("Invalid version group ID: expected {expected:#x}, got {actual:#x}")]
     InvalidVersionGroupId { expected: u32, actual: u32 },
-    
+
     #[error("Overwintered flag not set for version {version}")]
     OverwinteredFlagNotSet { version: u32 },
-    
+
     #[error("No source of funds for version {version} transaction")]
     NoSourceOfFunds { version: u32 },
-    
+
     #[error("Transaction too large: {size} bytes, max {max_size}")]
     TransactionTooLarge { size: usize, max_size: usize },
 }
@@ -1186,12 +1186,12 @@ trait TransactionField {
 
     /// Core parsing logic - implement this
     fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError>;
-    
+
     /// Field-specific validation - implement this if needed
     fn validate_field(_value: &Self::Value) -> Result<(), ConsensusError> {
         Ok(()) // Default: no validation
     }
-    
+
     /// Complete read with order validation and counter management - DON'T override this
     fn read_and_validate(
         cursor: &mut Cursor<&[u8]>,
@@ -1205,13 +1205,13 @@ trait TransactionField {
                 actual_order: counter.current,
             });
         }
-        
+
         // Optional size validation (for debugging)
         let start_pos = cursor.position();
-        
+
         // Parse the field
         let value = Self::read_from_cursor(cursor)?;
-        
+
         // Validate expected size advancement (for fixed-size fields)
         if let Some(expected_size) = Self::SIZE {
             let actual_advancement = cursor.position() - start_pos;
@@ -1223,13 +1223,13 @@ trait TransactionField {
                 });
             }
         }
-        
+
         // Field-specific validation
         Self::validate_field(&value)?;
-        
+
         // Advance counter
         counter.advance();
-        
+
         Ok(value)
     }
 }
@@ -1238,16 +1238,16 @@ trait TransactionField {
 trait TransactionReader: Sized {
     type Transaction;
     type Error;
-    
+
     /// Read transaction from cursor
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Self::Error>;
-    
+
     /// Validate consensus rules
     fn validate(&self) -> Result<(), Self::Error>;
-    
+
     /// Transform to clean transaction struct
     fn to_transaction(self) -> Result<Self::Transaction, Self::Error>;
-    
+
     /// One-shot parse, validate, and convert
     fn parse_and_validate(cursor: &mut Cursor<&[u8]>) -> Result<Self::Transaction, Self::Error> {
         let reader = Self::read(cursor)?;
@@ -1265,7 +1265,7 @@ impl OrderCounter {
     fn new() -> Self {
         Self { current: 0 }
     }
-    
+
     fn advance(&mut self) {
         self.current += 1;
     }
@@ -1280,11 +1280,11 @@ impl TransactionField for Header {
     type Value = u32;
     const SIZE: Option<usize> = Some(4);
     const EXPECTED_ORDER: u8 = 0;
-    
+
     fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
         read_u32(cursor, "Error reading header")
     }
-    
+
     fn validate_field(value: &Self::Value) -> Result<(), ConsensusError> {
         let version = value & 0x7FFFFFFF;
         if version < 1 {
@@ -1301,7 +1301,7 @@ impl TransactionField for VersionGroupId {
     type Value = u32;
     const SIZE: Option<usize> = Some(4);
     const EXPECTED_ORDER: u8 = 1;
-    
+
     fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
         read_u32(cursor, "Error reading version group ID")
     }
@@ -1314,21 +1314,21 @@ impl TransactionField for TransparentInputs {
     type Value = Vec<TxIn>;
     const SIZE: Option<usize> = None; // Variable size
     const EXPECTED_ORDER: u8 = 2;
-    
+
     fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
         let count = CompactSize::read(&mut *cursor)?;
         let mut inputs = Vec::with_capacity(count as usize);
-        
+
         for _ in 0..count {
             let (remaining_data, tx_in) = TxIn::parse_from_slice(
-                &cursor.get_ref()[(cursor.position() as usize)..], 
-                None, 
-                None
+                &cursor.get_ref()[(cursor.position() as usize)..],
+                None,
+                None,
             )?;
             inputs.push(tx_in);
             cursor.set_position(cursor.get_ref().len() as u64 - remaining_data.len() as u64);
         }
-        
+
         Ok(inputs)
     }
 }
@@ -1340,21 +1340,21 @@ impl TransactionField for TransparentOutputs {
     type Value = Vec<TxOut>;
     const SIZE: Option<usize> = None; // Variable size
     const EXPECTED_ORDER: u8 = 3;
-    
+
     fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
         let count = CompactSize::read(&mut *cursor)?;
         let mut outputs = Vec::with_capacity(count as usize);
-        
+
         for _ in 0..count {
             let (remaining_data, tx_out) = TxOut::parse_from_slice(
-                &cursor.get_ref()[(cursor.position() as usize)..], 
-                None, 
-                None
+                &cursor.get_ref()[(cursor.position() as usize)..],
+                None,
+                None,
             )?;
             outputs.push(tx_out);
             cursor.set_position(cursor.get_ref().len() as u64 - remaining_data.len() as u64);
         }
-        
+
         Ok(outputs)
     }
 }
@@ -1366,7 +1366,7 @@ impl TransactionField for LockTime {
     type Value = u32;
     const SIZE: Option<usize> = Some(4);
     const EXPECTED_ORDER: u8 = 4;
-    
+
     fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
         read_u32(cursor, "Error reading lock time")
     }
@@ -1379,7 +1379,7 @@ impl TransactionField for ExpiryHeight {
     type Value = u32;
     const SIZE: Option<usize> = Some(4);
     const EXPECTED_ORDER: u8 = 5;
-    
+
     fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
         read_u32(cursor, "Error reading expiry height")
     }
@@ -1392,7 +1392,7 @@ impl TransactionField for ValueBalanceSapling {
     type Value = i64;
     const SIZE: Option<usize> = Some(8);
     const EXPECTED_ORDER: u8 = 6;
-    
+
     fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
         read_i64(cursor, "Error reading value balance sapling")
     }
@@ -1405,21 +1405,21 @@ impl TransactionField for ShieldedSpends {
     type Value = Vec<Spend>;
     const SIZE: Option<usize> = None; // Variable size
     const EXPECTED_ORDER: u8 = 7;
-    
+
     fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
         let count = CompactSize::read(&mut *cursor)?;
         let mut spends = Vec::with_capacity(count as usize);
-        
+
         for _ in 0..count {
             let (remaining_data, spend) = Spend::parse_from_slice(
-                &cursor.get_ref()[(cursor.position() as usize)..], 
-                None, 
-                Some(4) // V4 transaction
+                &cursor.get_ref()[(cursor.position() as usize)..],
+                None,
+                Some(4), // V4 transaction
             )?;
             spends.push(spend);
             cursor.set_position(cursor.get_ref().len() as u64 - remaining_data.len() as u64);
         }
-        
+
         Ok(spends)
     }
 }
@@ -1431,21 +1431,21 @@ impl TransactionField for ShieldedOutputs {
     type Value = Vec<Output>;
     const SIZE: Option<usize> = None; // Variable size
     const EXPECTED_ORDER: u8 = 8;
-    
+
     fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
         let count = CompactSize::read(&mut *cursor)?;
         let mut outputs = Vec::with_capacity(count as usize);
-        
+
         for _ in 0..count {
             let (remaining_data, output) = Output::parse_from_slice(
-                &cursor.get_ref()[(cursor.position() as usize)..], 
-                None, 
-                Some(4) // V4 transaction
+                &cursor.get_ref()[(cursor.position() as usize)..],
+                None,
+                Some(4), // V4 transaction
             )?;
             outputs.push(output);
             cursor.set_position(cursor.get_ref().len() as u64 - remaining_data.len() as u64);
         }
-        
+
         Ok(outputs)
     }
 }
@@ -1459,8 +1459,8 @@ pub struct TransactionV4Reader {
     version_group_id: u32,
     transparent_inputs: Vec<TxIn>,
     transparent_outputs: Vec<TxOut>,
-    lock_time: u32,           // Read but not used in final struct
-    expiry_height: u32,       // Read but not used in final struct
+    lock_time: u32,     // Read but not used in final struct
+    expiry_height: u32, // Read but not used in final struct
     value_balance_sapling: i64,
     shielded_spends: Vec<Spend>,
     shielded_outputs: Vec<Output>,
@@ -1468,34 +1468,34 @@ pub struct TransactionV4Reader {
 
 impl TransactionV4Reader {
     // ===== Useful helper methods =====
-    
+
     /// Get the transaction version from header
     pub fn get_version(&self) -> u32 {
         self.header & 0x7FFFFFFF
     }
-    
+
     /// Check if transaction is overwintered
     pub fn is_overwintered(&self) -> bool {
         (self.header >> 31) == 1
     }
-    
+
     /// Get effective version (TODO: implement consensus-based logic)
     pub fn get_effective_version(&self) -> u32 {
         // TODO: Implement effective version logic based on consensus rules
         // This might involve network upgrade logic, activation heights, etc.
         self.get_version()
     }
-    
+
     /// Check if transaction has transparent inputs
     pub fn has_transparent_inputs(&self) -> bool {
         !self.transparent_inputs.is_empty()
     }
-    
+
     /// Check if transaction has transparent outputs
     pub fn has_transparent_outputs(&self) -> bool {
         !self.transparent_outputs.is_empty()
     }
-    
+
     /// Check if transaction has any shielded elements
     pub fn has_shielded_elements(&self) -> bool {
         !self.shielded_spends.is_empty() || !self.shielded_outputs.is_empty()
@@ -1505,26 +1505,26 @@ impl TransactionV4Reader {
 impl TransactionReader for TransactionV4Reader {
     type Transaction = TransactionV4;
     type Error = ParseError;
-    
+
     fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Self::Error> {
         let mut counter = OrderCounter::new();
-        
+
         Ok(Self {
             header: Header::read_and_validate(cursor, &mut counter)?,
             version_group_id: VersionGroupId::read_and_validate(cursor, &mut counter)?,
             transparent_inputs: TransparentInputs::read_and_validate(cursor, &mut counter)?,
             transparent_outputs: TransparentOutputs::read_and_validate(cursor, &mut counter)?,
-            
+
             // Read these fields but we'll skip them in final struct
             lock_time: LockTime::read_and_validate(cursor, &mut counter)?,
             expiry_height: ExpiryHeight::read_and_validate(cursor, &mut counter)?,
-            
+
             value_balance_sapling: ValueBalanceSapling::read_and_validate(cursor, &mut counter)?,
             shielded_spends: ShieldedSpends::read_and_validate(cursor, &mut counter)?,
             shielded_outputs: ShieldedOutputs::read_and_validate(cursor, &mut counter)?,
         })
     }
-    
+
     fn validate(&self) -> Result<(), Self::Error> {
         // Transaction-level consensus validation using helper methods
         self.validate_version_group_id()?;
@@ -1533,7 +1533,7 @@ impl TransactionReader for TransactionV4Reader {
         self.validate_transaction_size()?;
         Ok(())
     }
-    
+
     fn to_transaction(self) -> Result<Self::Transaction, Self::Error> {
         // Skip lock_time and expiry_height - they're not in the final struct
         Ok(TransactionV4 {
@@ -1557,35 +1557,35 @@ impl TransactionV4Reader {
                 ConsensusError::InvalidVersionGroupId {
                     expected: 0x892F2085,
                     actual: self.version_group_id,
-                }
+                },
             ));
         }
         Ok(())
     }
-    
+
     fn validate_overwintered_flags(&self) -> Result<(), ParseError> {
         let version = self.get_version();
         let is_overwintered = self.is_overwintered();
-        
+
         if version >= 3 && !is_overwintered {
             return Err(ParseError::ConsensusError(
-                ConsensusError::OverwinteredFlagNotSet { version }
+                ConsensusError::OverwinteredFlagNotSet { version },
             ));
         }
-        
+
         Ok(())
     }
-    
+
     fn validate_input_output_rules(&self) -> Result<(), ParseError> {
         let version = self.get_version();
         if version == 1 && !self.has_transparent_inputs() {
             return Err(ParseError::ConsensusError(
-                ConsensusError::NoSourceOfFunds { version }
+                ConsensusError::NoSourceOfFunds { version },
             ));
         }
         Ok(())
     }
-    
+
     fn validate_transaction_size(&self) -> Result<(), ParseError> {
         // TODO: Calculate actual transaction size and validate against limits
         // For now, this is a placeholder
@@ -1610,17 +1610,17 @@ pub struct TransactionV4 {
 
 impl TransactionV4 {
     // ===== Business logic helper methods =====
-    
+
     /// Get the transaction version from header
     pub fn get_version(&self) -> u32 {
         self.header & 0x7FFFFFFF
     }
-    
+
     /// Check if transaction is overwintered
     pub fn is_overwintered(&self) -> bool {
         (self.header >> 31) == 1
     }
-    
+
     /// Get effective version (TODO: implement consensus-based logic)
     pub fn get_effective_version(&self) -> u32 {
         // TODO: Implement effective version logic based on consensus rules
@@ -1628,81 +1628,402 @@ impl TransactionV4 {
         // For now, return the basic version
         self.get_version()
     }
-    
+
     /// Get version group ID
     pub fn version_group_id(&self) -> u32 {
         self.version_group_id
     }
-    
+
     /// Get transparent inputs
     pub fn transparent_inputs(&self) -> &[TxIn] {
         &self.transparent_inputs
     }
-    
+
     /// Get transparent outputs
     pub fn transparent_outputs(&self) -> &[TxOut] {
         &self.transparent_outputs
     }
-    
+
     /// Get shielded spends
     pub fn shielded_spends(&self) -> &[Spend] {
         &self.shielded_spends
     }
-    
+
     /// Get shielded outputs
     pub fn shielded_outputs(&self) -> &[Output] {
         &self.shielded_outputs
     }
-    
+
     /// Get sapling value balance
     pub fn value_balance_sapling(&self) -> i64 {
         self.value_balance_sapling
     }
-    
+
     /// Check if transaction has transparent inputs
     pub fn has_transparent_inputs(&self) -> bool {
         !self.transparent_inputs.is_empty()
     }
-    
+
     /// Check if transaction has transparent outputs
     pub fn has_transparent_outputs(&self) -> bool {
         !self.transparent_outputs.is_empty()
     }
-    
+
     /// Check if transaction has any shielded elements
     pub fn has_shielded_elements(&self) -> bool {
         !self.shielded_spends.is_empty() || !self.shielded_outputs.is_empty()
     }
-    
+
     /// Check if transaction is purely transparent
     pub fn is_transparent_only(&self) -> bool {
         !self.has_shielded_elements()
     }
-    
+
     /// Check if transaction is purely shielded
     pub fn is_shielded_only(&self) -> bool {
-        self.has_shielded_elements() && 
-        !self.has_transparent_inputs() && 
-        !self.has_transparent_outputs()
+        self.has_shielded_elements()
+            && !self.has_transparent_inputs()
+            && !self.has_transparent_outputs()
     }
-    
+
     /// Get total number of transparent inputs
     pub fn transparent_input_count(&self) -> usize {
         self.transparent_inputs.len()
     }
-    
+
     /// Get total number of transparent outputs
     pub fn transparent_output_count(&self) -> usize {
         self.transparent_outputs.len()
     }
-    
+
     /// Get total number of shielded spends
     pub fn shielded_spend_count(&self) -> usize {
         self.shielded_spends.len()
     }
-    
+
     /// Get total number of shielded outputs
     pub fn shielded_output_count(&self) -> usize {
         self.shielded_outputs.len()
+    }
+}
+
+#[cfg(test)]
+mod transaction_v4_tests {
+    use super::*;
+    use std::io::Cursor;
+
+    /// Creates a minimal valid V4 transaction for testing
+    ///
+    /// Transaction structure:
+    /// - Header: 4 bytes (version + overwintered flag)
+    /// - Version Group ID: 4 bytes
+    /// - Transparent inputs: CompactSize(0) + 0 inputs = 1 byte
+    /// - Transparent outputs: CompactSize(0) + 0 outputs = 1 byte  
+    /// - Lock time: 4 bytes
+    /// - Expiry height: 4 bytes
+    /// - Value balance sapling: 8 bytes
+    /// - Shielded spends: CompactSize(0) + 0 spends = 1 byte
+    /// - Shielded outputs: CompactSize(0) + 0 outputs = 1 byte
+    ///
+    /// Total: 28 bytes
+    fn create_minimal_v4_transaction() -> Vec<u8> {
+        let mut tx_data = Vec::new();
+
+        // Header: version 4 with overwintered flag set (0x80000004)
+        tx_data.extend_from_slice(&0x80000004u32.to_le_bytes());
+
+        // Version Group ID for V4 (0x892F2085)
+        tx_data.extend_from_slice(&0x892F2085u32.to_le_bytes());
+
+        // Transparent inputs: count = 0
+        tx_data.push(0x00); // CompactSize(0)
+
+        // Transparent outputs: count = 0
+        tx_data.push(0x00); // CompactSize(0)
+
+        // Lock time: 4 bytes
+        tx_data.extend_from_slice(&500000u32.to_le_bytes());
+
+        // Expiry height: 4 bytes
+        tx_data.extend_from_slice(&500100u32.to_le_bytes());
+
+        // Value balance sapling: 8 bytes
+        tx_data.extend_from_slice(&0i64.to_le_bytes());
+
+        // Shielded spends: count = 0
+        tx_data.push(0x00); // CompactSize(0)
+
+        // Shielded outputs: count = 0
+        tx_data.push(0x00); // CompactSize(0)
+
+        tx_data
+    }
+
+    #[test]
+    fn test_transaction_field_order_validation() {
+        let tx_data = create_minimal_v4_transaction();
+        let mut cursor = Cursor::new(tx_data.as_slice());
+        let mut counter = OrderCounter::new();
+
+        // Test that fields must be read in the correct order
+        assert_eq!(counter.current, 0);
+
+        // Reading header (order 0) should work
+        let header = Header::read_and_validate(&mut cursor, &mut counter);
+        assert!(header.is_ok());
+        assert_eq!(counter.current, 1);
+
+        // Try to read another header (wrong order) should fail
+        let invalid_read = Header::read_and_validate(&mut cursor, &mut counter);
+        assert!(invalid_read.is_err());
+
+        // Reset cursor and counter to test proper sequence
+        cursor.set_position(0);
+        counter.current = 0;
+
+        // Test complete valid sequence
+        let _header = Header::read_and_validate(&mut cursor, &mut counter).unwrap();
+        let _version_group_id =
+            VersionGroupId::read_and_validate(&mut cursor, &mut counter).unwrap();
+        let _transparent_inputs =
+            TransparentInputs::read_and_validate(&mut cursor, &mut counter).unwrap();
+        let _transparent_outputs =
+            TransparentOutputs::read_and_validate(&mut cursor, &mut counter).unwrap();
+        let _lock_time = LockTime::read_and_validate(&mut cursor, &mut counter).unwrap();
+        let _expiry_height = ExpiryHeight::read_and_validate(&mut cursor, &mut counter).unwrap();
+        let _value_balance =
+            ValueBalanceSapling::read_and_validate(&mut cursor, &mut counter).unwrap();
+        let _shielded_spends =
+            ShieldedSpends::read_and_validate(&mut cursor, &mut counter).unwrap();
+        let _shielded_outputs =
+            ShieldedOutputs::read_and_validate(&mut cursor, &mut counter).unwrap();
+
+        assert_eq!(counter.current, 9); // All 9 fields read successfully
+    }
+
+    #[test]
+    fn test_transaction_v4_reader_basic_parsing() {
+        let tx_data = create_minimal_v4_transaction();
+        let mut cursor = Cursor::new(tx_data.as_slice());
+
+        // Test basic parsing
+        let reader = TransactionV4Reader::read(&mut cursor);
+        assert!(
+            reader.is_ok(),
+            "Failed to parse V4 transaction: {:?}",
+            reader.err()
+        );
+
+        let reader = reader.unwrap();
+
+        // Check header parsing
+        assert_eq!(reader.get_version(), 4);
+        assert!(reader.is_overwintered());
+        assert_eq!(reader.get_effective_version(), 4);
+
+        // Check empty counts
+        assert!(!reader.has_transparent_inputs());
+        assert!(!reader.has_transparent_outputs());
+        assert!(!reader.has_shielded_elements());
+    }
+
+    #[test]
+    fn test_transaction_v4_reader_validation() {
+        let tx_data = create_minimal_v4_transaction();
+        let mut cursor = Cursor::new(tx_data.as_slice());
+
+        let reader = TransactionV4Reader::read(&mut cursor).unwrap();
+
+        // Test consensus validation passes for minimal transaction
+        let validation_result = reader.validate();
+        assert!(
+            validation_result.is_ok(),
+            "Validation failed: {:?}",
+            validation_result.err()
+        );
+    }
+
+    #[test]
+    fn test_transaction_v4_reader_invalid_version_group_id() {
+        let mut tx_data = create_minimal_v4_transaction();
+
+        // Change version group ID to invalid value (bytes 4-7)
+        tx_data[4] = 0x00;
+        tx_data[5] = 0x00;
+        tx_data[6] = 0x00;
+        tx_data[7] = 0x00;
+
+        let mut cursor = Cursor::new(tx_data.as_slice());
+        let reader = TransactionV4Reader::read(&mut cursor).unwrap();
+
+        // Validation should fail for invalid version group ID
+        let validation_result = reader.validate();
+        assert!(validation_result.is_err());
+
+        if let Err(ParseError::ConsensusError(ConsensusError::InvalidVersionGroupId {
+            expected,
+            actual,
+        })) = validation_result
+        {
+            assert_eq!(expected, 0x892F2085);
+            assert_eq!(actual, 0x00000000);
+        } else {
+            panic!(
+                "Expected InvalidVersionGroupId error, got: {:?}",
+                validation_result
+            );
+        }
+    }
+
+    #[test]
+    fn test_transaction_v4_reader_to_clean_transaction() {
+        let tx_data = create_minimal_v4_transaction();
+        let mut cursor = Cursor::new(tx_data.as_slice());
+
+        let reader = TransactionV4Reader::read(&mut cursor).unwrap();
+        reader.validate().unwrap(); // Should pass validation
+
+        // Convert to clean transaction struct
+        let transaction = reader.to_transaction();
+        assert!(
+            transaction.is_ok(),
+            "Failed to convert to transaction: {:?}",
+            transaction.err()
+        );
+
+        let transaction = transaction.unwrap();
+
+        // Test business logic methods
+        assert_eq!(transaction.get_version(), 4);
+        assert!(transaction.is_overwintered());
+        assert_eq!(transaction.version_group_id(), 0x892F2085);
+        assert_eq!(transaction.transparent_input_count(), 0);
+        assert_eq!(transaction.transparent_output_count(), 0);
+        assert_eq!(transaction.shielded_spend_count(), 0);
+        assert_eq!(transaction.shielded_output_count(), 0);
+        assert!(transaction.is_transparent_only()); // No shielded elements
+        assert!(!transaction.is_shielded_only()); // Also no transparent elements
+        assert_eq!(transaction.value_balance_sapling(), 0);
+    }
+
+    #[test]
+    fn test_transaction_v4_reader_parse_and_validate_one_shot() {
+        let tx_data = create_minimal_v4_transaction();
+        let mut cursor = Cursor::new(tx_data.as_slice());
+
+        // Test one-shot parse and validate
+        let transaction = TransactionV4Reader::parse_and_validate(&mut cursor);
+        assert!(
+            transaction.is_ok(),
+            "One-shot parsing failed: {:?}",
+            transaction.err()
+        );
+
+        let transaction = transaction.unwrap();
+        assert_eq!(transaction.get_version(), 4);
+        assert!(transaction.is_overwintered());
+    }
+
+    #[test]
+    fn test_header_field_validation() {
+        // Test invalid version (version 0)
+        let mut tx_data = create_minimal_v4_transaction();
+        tx_data[0] = 0x00; // Set version to 0 (invalid)
+        tx_data[1] = 0x00;
+        tx_data[2] = 0x00;
+        tx_data[3] = 0x80; // Keep overwintered flag
+
+        let mut cursor = Cursor::new(tx_data.as_slice());
+        let mut counter = OrderCounter::new();
+
+        let header_result = Header::read_and_validate(&mut cursor, &mut counter);
+        assert!(header_result.is_err());
+
+        if let Err(ParseError::ConsensusError(ConsensusError::InvalidVersion { version })) =
+            header_result
+        {
+            assert_eq!(version, 0);
+        } else {
+            panic!("Expected InvalidVersion error, got: {:?}", header_result);
+        }
+    }
+
+    #[test]
+    fn test_overwintered_flag_validation() {
+        // Test version 3 without overwintered flag (should fail validation)
+        let mut tx_data = create_minimal_v4_transaction();
+        tx_data[0] = 0x03; // Version 3
+        tx_data[1] = 0x00;
+        tx_data[2] = 0x00;
+        tx_data[3] = 0x00; // No overwintered flag
+
+        let mut cursor = Cursor::new(tx_data.as_slice());
+        let reader = TransactionV4Reader::read(&mut cursor).unwrap();
+
+        let validation_result = reader.validate();
+        assert!(validation_result.is_err());
+
+        if let Err(ParseError::ConsensusError(ConsensusError::OverwinteredFlagNotSet { version })) =
+            validation_result
+        {
+            assert_eq!(version, 3);
+        } else {
+            panic!(
+                "Expected OverwinteredFlagNotSet error, got: {:?}",
+                validation_result
+            );
+        }
+    }
+
+    #[test]
+    fn test_transaction_v4_helper_methods() {
+        let tx_data = create_minimal_v4_transaction();
+        let mut cursor = Cursor::new(tx_data.as_slice());
+
+        let reader = TransactionV4Reader::read(&mut cursor).unwrap();
+
+        // Test reader helper methods
+        assert_eq!(reader.get_version(), 4);
+        assert!(reader.is_overwintered());
+        assert_eq!(reader.get_effective_version(), 4); // TODO will be enhanced later
+        assert!(!reader.has_transparent_inputs());
+        assert!(!reader.has_transparent_outputs());
+        assert!(!reader.has_shielded_elements());
+
+        // Convert to transaction and test its helper methods
+        let transaction = reader.to_transaction().unwrap();
+
+        assert_eq!(transaction.get_version(), 4);
+        assert!(transaction.is_overwintered());
+        assert_eq!(transaction.get_effective_version(), 4); // TODO will be enhanced later
+        assert_eq!(transaction.version_group_id(), 0x892F2085);
+        assert_eq!(transaction.transparent_inputs().len(), 0);
+        assert_eq!(transaction.transparent_outputs().len(), 0);
+        assert_eq!(transaction.shielded_spends().len(), 0);
+        assert_eq!(transaction.shielded_outputs().len(), 0);
+        assert_eq!(transaction.value_balance_sapling(), 0);
+        assert!(!transaction.has_transparent_inputs());
+        assert!(!transaction.has_transparent_outputs());
+        assert!(!transaction.has_shielded_elements());
+        assert!(transaction.is_transparent_only()); // No shielded elements
+        assert!(!transaction.is_shielded_only()); // No elements at all
+        assert_eq!(transaction.transparent_input_count(), 0);
+        assert_eq!(transaction.transparent_output_count(), 0);
+        assert_eq!(transaction.shielded_spend_count(), 0);
+        assert_eq!(transaction.shielded_output_count(), 0);
+    }
+
+    #[test]
+    fn test_field_size_validation() {
+        // Create transaction data with wrong header size (should be 4 bytes)
+        let mut short_tx_data = Vec::new();
+        short_tx_data.extend_from_slice(&[0x04, 0x00, 0x80]); // Only 3 bytes instead of 4
+
+        let mut cursor = Cursor::new(short_tx_data.as_slice());
+        let mut counter = OrderCounter::new();
+
+        // This should fail because Header expects exactly 4 bytes but cursor only has 3
+        let header_result = Header::read_and_validate(&mut cursor, &mut counter);
+        assert!(header_result.is_err());
     }
 }
