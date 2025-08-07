@@ -24,6 +24,9 @@ use tokio::time::{interval, MissedTickBehavior};
 
 use super::capability::Capability;
 
+/// New versions must be also be appended to this list and there must be no missing versions for correct functionality.
+pub(super) const VERSION_DIRS: [&str; 1] = ["v1"];
+
 /// All concrete database implementations.
 pub(crate) enum DbBackend {
     V0(DbV0),
@@ -162,7 +165,10 @@ impl DbWrite for DbBackend {
 
 #[async_trait]
 impl BlockCoreExt for DbBackend {
-    async fn get_block_header(&self, height: Height) -> Result<BlockHeaderData, FinalisedStateError> {
+    async fn get_block_header(
+        &self,
+        height: Height,
+    ) -> Result<BlockHeaderData, FinalisedStateError> {
         match self {
             Self::V1(db) => db.get_block_header(height).await,
             _ => Err(FinalisedStateError::FeatureUnavailable("block_core")),

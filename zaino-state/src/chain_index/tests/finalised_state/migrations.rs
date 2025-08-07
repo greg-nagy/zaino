@@ -72,46 +72,26 @@ async fn v0_to_v1_full() {
     };
 
     let source = build_mockchain_source(blocks.clone());
-    let source_clone = source.clone();
-    let blocks_clone = blocks.clone();
-    let v0_config_clone = v0_config.clone();
 
     // Build v0 database.
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async move {
-            let zaino_db = ZainoDB::spawn(v0_config_clone, source).await.unwrap();
-            for (_h, chain_block, _compact_block, _zebra_block, _block_roots) in blocks_clone {
-                zaino_db.write_block(chain_block).await.unwrap();
-            }
+    let zaino_db = ZainoDB::spawn(v0_config, source.clone()).await.unwrap();
+    for (_h, chain_block, _compact_block, _zebra_block, _block_roots) in blocks.clone() {
+        zaino_db.write_block(chain_block).await.unwrap();
+    }
+    zaino_db.wait_until_ready().await;
+    dbg!(zaino_db.status().await);
+    dbg!(zaino_db.db_height().await.unwrap());
+    dbg!(zaino_db.shutdown().await.unwrap());
 
-            zaino_db.wait_until_ready().await;
-            dbg!(zaino_db.status().await);
-            dbg!(zaino_db.db_height().await.unwrap());
-
-            dbg!(zaino_db.shutdown().await.unwrap());
-        });
-    })
-    .join()
-    .unwrap();
-
-    std::thread::sleep(std::time::Duration::from_millis(1000));
+    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
 
     // Open v1 database and check migration.
-    let migration_handle = tokio::spawn({
-        let source = source_clone.clone();
-        let v1_config = v1_config.clone();
-        async move {
-            let zaino_db_2 = ZainoDB::spawn(v1_config, source).await.unwrap();
-            zaino_db_2.wait_until_ready().await;
-            dbg!(zaino_db_2.status().await);
-            let db_height = dbg!(zaino_db_2.db_height().await.unwrap()).unwrap();
-            assert_eq!(db_height.0, 200);
-            dbg!(zaino_db_2.shutdown().await.unwrap());
-        }
-    });
-
-    migration_handle.await.unwrap();
+    let zaino_db_2 = ZainoDB::spawn(v1_config, source).await.unwrap();
+    zaino_db_2.wait_until_ready().await;
+    dbg!(zaino_db_2.status().await);
+    let db_height = dbg!(zaino_db_2.db_height().await.unwrap()).unwrap();
+    assert_eq!(db_height.0, 200);
+    dbg!(zaino_db_2.shutdown().await.unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -11,7 +11,7 @@ pub(crate) mod reader;
 pub(crate) mod router;
 
 use capability::*;
-use db::DbBackend;
+use db::{DbBackend, VERSION_DIRS};
 use migrations::MigrationManager;
 use reader::*;
 use router::Router;
@@ -48,7 +48,7 @@ impl ZainoDB {
     {
         let version_opt = Self::try_find_current_db_version(&cfg).await;
 
-        let target_db_version = match cfg.db_version {
+        let target_version = match cfg.db_version {
             0 => DbVersion {
                 major: 0,
                 minor: 0,
@@ -80,35 +80,35 @@ impl ZainoDB {
                 }
             }
             None => {
-                info!("Creating new ZainoDBv{}.", target_db_version);
-                match target_db_version.major() {
+                info!("Creating new ZainoDBv{}.", target_version);
+                match target_version.major() {
                     0 => DbBackend::spawn_v0(&cfg).await?,
                     1 => DbBackend::spawn_v1(&cfg).await?,
                     _ => {
                         return Err(FinalisedStateError::Custom(format!(
-                            "unsupported database version: DbV{target_db_version}"
+                            "unsupported database version: DbV{target_version}"
                         )))
                     }
                 }
             }
         };
-        let current_db_version = backend.get_metadata().await?.version();
+        let current_version = backend.get_metadata().await?.version();
 
         let router = Arc::new(Router::new(Arc::new(backend)));
 
-        if version_opt.is_some() && current_db_version < target_db_version {
+        if version_opt.is_some() && current_version < target_version {
             info!(
                 "Starting ZainoDB migration manager, migratiing database from v{} to v{}.",
-                current_db_version, target_db_version
+                current_version, target_version
             );
-            MigrationManager::migrate_to(
-                Arc::clone(&router),
-                &cfg,
-                current_db_version,
-                target_db_version,
+            let mut migration_manager = MigrationManager {
+                router: Arc::clone(&router),
+                cfg: cfg.clone(),
+                current_version,
+                target_version,
                 source,
-            )
-            .await?;
+            };
+            migration_manager.migrate().await?;
         }
 
         Ok(Self { db: router, cfg })
@@ -169,8 +169,7 @@ impl ZainoDB {
         };
         let net_path = cfg.db_path.join(net_dir);
         if net_path.exists() && net_path.is_dir() {
-            let version_dirs = ["v1"];
-            for (i, version_dir) in version_dirs.iter().enumerate() {
+            for (i, version_dir) in VERSION_DIRS.iter().enumerate() {
                 let db_path = net_path.join(version_dir);
                 let data_file = db_path.join("data.mdb");
                 let lock_file = db_path.join("lock.mdb");
@@ -207,9 +206,11 @@ impl ZainoDB {
         T: BlockchainSourceInterface,
     {
         if height.0 == 0 {
-            return Err(FinalisedStateError::Critical("Sync height must be non-zero.".to_string()));
+            return Err(FinalisedStateError::Critical(
+                "Sync height must be non-zero.".to_string(),
+            ));
         }
-        
+
         let network = self.cfg.network.clone();
         let db_height = self.db_height().await?.unwrap_or(Height(0));
 

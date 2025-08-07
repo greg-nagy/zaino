@@ -29,77 +29,64 @@ pub enum MigrationType {
 
 #[async_trait]
 pub trait MigrationStep<T: BlockchainSourceInterface> {
-    const FROM_VERSION: DbVersion;
+    const CURRENT_VERSION: DbVersion;
     const TO_VERSION: DbVersion;
     const MIGRATION_TYPE: MigrationType;
 
+    fn current_version(&self) -> DbVersion {
+        Self::CURRENT_VERSION
+    }
+
+    fn to_version(&self) -> DbVersion {
+        Self::TO_VERSION
+    }
+
+    fn migration_type(&self) -> MigrationType {
+        Self::MIGRATION_TYPE
+    }
+
     async fn migrate(
+        &self,
         router: Arc<Router>,
         cfg: BlockCacheConfig,
         source: T,
     ) -> Result<(), FinalisedStateError>;
 }
 
-#[allow(clippy::type_complexity)]
-struct Migration<T: BlockchainSourceInterface> {
-    from: DbVersion,
-    to: DbVersion,
-    migration_type: MigrationType,
-    migrate_fn: fn(
-        Arc<Router>,
-        &BlockCacheConfig,
-        T,
-    ) -> futures::future::BoxFuture<'static, Result<(), FinalisedStateError>>,
+pub(super) struct MigrationManager<T: BlockchainSourceInterface> {
+    pub(super) router: Arc<Router>,
+    pub(super) cfg: BlockCacheConfig,
+    pub(super) current_version: DbVersion,
+    pub(super) target_version: DbVersion,
+    pub(super) source: T,
 }
 
-fn get_migration_step<T: BlockchainSourceInterface>(version: DbVersion) -> Option<Migration<T>> {
-    let from = <Migration0_0_0To1_0_0 as MigrationStep<T>>::FROM_VERSION;
-    if version == from {
-        Some(Migration {
-            from,
-            to: <Migration0_0_0To1_0_0 as MigrationStep<T>>::TO_VERSION,
-            migration_type: <Migration0_0_0To1_0_0 as MigrationStep<T>>::MIGRATION_TYPE,
-            migrate_fn: |router, cfg, source| {
-                Box::pin(Migration0_0_0To1_0_0::migrate(router, cfg.clone(), source))
-            },
-        })
-    } else {
-        None
-    }
-}
-
-pub struct MigrationManager;
-
-impl MigrationManager {
-    pub async fn migrate_to<T>(
-        router: Arc<Router>,
-        cfg: &BlockCacheConfig,
-        mut current_version: DbVersion,
-        target_version: DbVersion,
-        source: T,
-    ) -> Result<(), FinalisedStateError>
-    where
-        T: BlockchainSourceInterface,
-    {
-        while current_version < target_version {
-            let step = get_migration_step(current_version).ok_or_else(|| {
-                FinalisedStateError::Custom(format!(
-                    "Missing migration from version {current_version}"
-                ))
-            })?;
-
-            (step.migrate_fn)(Arc::clone(&router), cfg, source.clone()).await?;
-
-            current_version = step.to;
-        }
-
-        if current_version != target_version {
-            return Err(FinalisedStateError::Custom(format!(
-                "Could not migrate fully: stopped at {current_version} but target is {target_version}"
-            )));
+impl<T: BlockchainSourceInterface> MigrationManager<T> {
+    /// Iteratively performs each migration step from current version to target version.
+    pub(super) async fn migrate(&mut self) -> Result<(), FinalisedStateError> {
+        while self.current_version < self.target_version {
+            let migration_step = self.get_migration_step()?;
+            migration_step.migrate(Arc::clone(&self.router), self.cfg.clone(), self.source.clone()).await?;
+            self.current_version = migration_step.to_version();
         }
 
         Ok(())
+    }
+
+    /// Return the next migration step for the current version.
+    fn get_migration_step(
+        &self
+    ) -> Result<impl MigrationStep<T>, FinalisedStateError> {
+        match (
+            self.current_version.major,
+            self.current_version.minor,
+            self.current_version.patch,
+        ) {
+            (0, 0, 0) => Ok(Migration0_0_0To1_0_0),
+            (_, _, _) => Err(FinalisedStateError::Custom(format!(
+                "Missing migration from version {}", self.current_version
+            ))),
+        }
     }
 }
 
@@ -109,7 +96,7 @@ struct Migration0_0_0To1_0_0;
 
 #[async_trait]
 impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
-    const FROM_VERSION: DbVersion = DbVersion {
+    const CURRENT_VERSION: DbVersion = DbVersion {
         major: 0,
         minor: 0,
         patch: 0,
@@ -119,7 +106,7 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
         minor: 0,
         patch: 0,
     };
-    const MIGRATION_TYPE: MigrationType = MigrationType::Minor;
+    const MIGRATION_TYPE: MigrationType = MigrationType::Major;
 
     /// The V0 database that we are migrating from was a lightwallet specific database
     /// that only built compact block data from sapling activation onwards.
@@ -127,6 +114,7 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
     /// For this reason we do not do any partial builds in the V0 to V1 migration.
     /// We just run V0 as primary until V1 is fully built in shadow, then switch primary, deleting V0.
     async fn migrate(
+        &self,
         router: Arc<Router>,
         cfg: BlockCacheConfig,
         source: T,
@@ -254,7 +242,7 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
             };
             let db_path = cfg.db_path.join(db_path_dir);
 
-            info!("Wiping v0 database fropm disk.");
+            info!("Wiping v0 database from disk.");
 
             match tokio::fs::remove_dir_all(&db_path).await {
                 Ok(_) => tracing::info!("Deleted old database at {}", db_path.display()),

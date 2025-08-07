@@ -106,13 +106,14 @@ impl Router {
     ///
     /// Returns a critical error if the shadow is not found.
     pub(crate) fn promote_shadow(&self) -> Result<Arc<DbBackend>, FinalisedStateError> {
-        let Some(new_primary) = self
-            .shadow
-            .swap(None) else {
-            return Err(FinalisedStateError::Critical("shadow not found!".to_string()));
+        let Some(new_primary) = self.shadow.swap(None) else {
+            return Err(FinalisedStateError::Critical(
+                "shadow not found!".to_string(),
+            ));
         };
 
-        self.primary_mask.store(new_primary.capability().bits(), Ordering::Release);
+        self.primary_mask
+            .store(new_primary.capability().bits(), Ordering::Release);
         self.shadow_mask.store(0, Ordering::Release);
 
         Ok(self.primary.swap(new_primary))
