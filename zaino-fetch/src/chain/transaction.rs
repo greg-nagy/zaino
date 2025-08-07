@@ -925,6 +925,7 @@ impl ParseFromSlice for FullTransaction {
                 "txid must be used for FullTransaction::parse_from_slice".to_string(),
             )
         })?;
+        // TODO: 🤯
         if tx_version.is_some() {
             return Err(ParseError::InvalidData(
                 "tx_version must be None for FullTransaction::parse_from_slice".to_string(),

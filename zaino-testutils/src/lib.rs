@@ -3,6 +3,8 @@
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
 
+pub mod test_vectors;
+
 use once_cell::sync::Lazy;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
