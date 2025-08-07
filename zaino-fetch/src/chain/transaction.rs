@@ -1158,3 +1158,551 @@ impl FullTransaction {
             || !self.raw_transaction.orchard_actions.is_empty()
     }
 }
+
+/// Consensus validation error types
+#[derive(Debug, thiserror::Error)]
+pub enum ConsensusError {
+    #[error("Invalid version: {version}, must be >= 1")]
+    InvalidVersion { version: u32 },
+    
+    #[error("Invalid version group ID: expected {expected:#x}, got {actual:#x}")]
+    InvalidVersionGroupId { expected: u32, actual: u32 },
+    
+    #[error("Overwintered flag not set for version {version}")]
+    OverwinteredFlagNotSet { version: u32 },
+    
+    #[error("No source of funds for version {version} transaction")]
+    NoSourceOfFunds { version: u32 },
+    
+    #[error("Transaction too large: {size} bytes, max {max_size}")]
+    TransactionTooLarge { size: usize, max_size: usize },
+}
+
+/// Enhanced TransactionField trait with default order validation and counter management
+trait TransactionField {
+    type Value;
+    const SIZE: Option<usize>;
+    const EXPECTED_ORDER: u8;
+
+    /// Core parsing logic - implement this
+    fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError>;
+    
+    /// Field-specific validation - implement this if needed
+    fn validate_field(_value: &Self::Value) -> Result<(), ConsensusError> {
+        Ok(()) // Default: no validation
+    }
+    
+    /// Complete read with order validation and counter management - DON'T override this
+    fn read_and_validate(
+        cursor: &mut Cursor<&[u8]>,
+        counter: &mut OrderCounter,
+    ) -> Result<Self::Value, ParseError> {
+        // Order validation
+        if counter.current != Self::EXPECTED_ORDER {
+            return Err(ParseError::InvalidParseOrder {
+                field: std::any::type_name::<Self>(),
+                expected_order: Self::EXPECTED_ORDER,
+                actual_order: counter.current,
+            });
+        }
+        
+        // Optional size validation (for debugging)
+        let start_pos = cursor.position();
+        
+        // Parse the field
+        let value = Self::read_from_cursor(cursor)?;
+        
+        // Validate expected size advancement (for fixed-size fields)
+        if let Some(expected_size) = Self::SIZE {
+            let actual_advancement = cursor.position() - start_pos;
+            if actual_advancement != expected_size as u64 {
+                return Err(ParseError::UnexpectedFieldSize {
+                    field: std::any::type_name::<Self>(),
+                    expected: expected_size,
+                    actual: actual_advancement as usize,
+                });
+            }
+        }
+        
+        // Field-specific validation
+        Self::validate_field(&value)?;
+        
+        // Advance counter
+        counter.advance();
+        
+        Ok(value)
+    }
+}
+
+/// TransactionReader trait for parsing, validating, and converting transactions
+trait TransactionReader: Sized {
+    type Transaction;
+    type Error;
+    
+    /// Read transaction from cursor
+    fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Self::Error>;
+    
+    /// Validate consensus rules
+    fn validate(&self) -> Result<(), Self::Error>;
+    
+    /// Transform to clean transaction struct
+    fn to_transaction(self) -> Result<Self::Transaction, Self::Error>;
+    
+    /// One-shot parse, validate, and convert
+    fn parse_and_validate(cursor: &mut Cursor<&[u8]>) -> Result<Self::Transaction, Self::Error> {
+        let reader = Self::read(cursor)?;
+        reader.validate()?;
+        reader.to_transaction()
+    }
+}
+
+/// Helper struct for order management
+struct OrderCounter {
+    current: u8,
+}
+
+impl OrderCounter {
+    fn new() -> Self {
+        Self { current: 0 }
+    }
+    
+    fn advance(&mut self) {
+        self.current += 1;
+    }
+}
+
+// ===== Field Type Implementations =====
+
+/// Transaction header field (4 bytes: f_overwintered + version)
+struct Header;
+
+impl TransactionField for Header {
+    type Value = u32;
+    const SIZE: Option<usize> = Some(4);
+    const EXPECTED_ORDER: u8 = 0;
+    
+    fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
+        read_u32(cursor, "Error reading header")
+    }
+    
+    fn validate_field(value: &Self::Value) -> Result<(), ConsensusError> {
+        let version = value & 0x7FFFFFFF;
+        if version < 1 {
+            return Err(ConsensusError::InvalidVersion { version });
+        }
+        Ok(())
+    }
+}
+
+/// Version group ID field (4 bytes)
+struct VersionGroupId;
+
+impl TransactionField for VersionGroupId {
+    type Value = u32;
+    const SIZE: Option<usize> = Some(4);
+    const EXPECTED_ORDER: u8 = 1;
+    
+    fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
+        read_u32(cursor, "Error reading version group ID")
+    }
+}
+
+/// Transparent inputs field (CompactSize count + variable data)
+struct TransparentInputs;
+
+impl TransactionField for TransparentInputs {
+    type Value = Vec<TxIn>;
+    const SIZE: Option<usize> = None; // Variable size
+    const EXPECTED_ORDER: u8 = 2;
+    
+    fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
+        let count = CompactSize::read(&mut *cursor)?;
+        let mut inputs = Vec::with_capacity(count as usize);
+        
+        for _ in 0..count {
+            let (remaining_data, tx_in) = TxIn::parse_from_slice(
+                &cursor.get_ref()[(cursor.position() as usize)..], 
+                None, 
+                None
+            )?;
+            inputs.push(tx_in);
+            cursor.set_position(cursor.get_ref().len() as u64 - remaining_data.len() as u64);
+        }
+        
+        Ok(inputs)
+    }
+}
+
+/// Transparent outputs field (CompactSize count + variable data)
+struct TransparentOutputs;
+
+impl TransactionField for TransparentOutputs {
+    type Value = Vec<TxOut>;
+    const SIZE: Option<usize> = None; // Variable size
+    const EXPECTED_ORDER: u8 = 3;
+    
+    fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
+        let count = CompactSize::read(&mut *cursor)?;
+        let mut outputs = Vec::with_capacity(count as usize);
+        
+        for _ in 0..count {
+            let (remaining_data, tx_out) = TxOut::parse_from_slice(
+                &cursor.get_ref()[(cursor.position() as usize)..], 
+                None, 
+                None
+            )?;
+            outputs.push(tx_out);
+            cursor.set_position(cursor.get_ref().len() as u64 - remaining_data.len() as u64);
+        }
+        
+        Ok(outputs)
+    }
+}
+
+/// Lock time field (4 bytes) - read but not used in final struct
+struct LockTime;
+
+impl TransactionField for LockTime {
+    type Value = u32;
+    const SIZE: Option<usize> = Some(4);
+    const EXPECTED_ORDER: u8 = 4;
+    
+    fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
+        read_u32(cursor, "Error reading lock time")
+    }
+}
+
+/// Expiry height field (4 bytes) - read but not used in final struct
+struct ExpiryHeight;
+
+impl TransactionField for ExpiryHeight {
+    type Value = u32;
+    const SIZE: Option<usize> = Some(4);
+    const EXPECTED_ORDER: u8 = 5;
+    
+    fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
+        read_u32(cursor, "Error reading expiry height")
+    }
+}
+
+/// Value balance sapling field (8 bytes)
+struct ValueBalanceSapling;
+
+impl TransactionField for ValueBalanceSapling {
+    type Value = i64;
+    const SIZE: Option<usize> = Some(8);
+    const EXPECTED_ORDER: u8 = 6;
+    
+    fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
+        read_i64(cursor, "Error reading value balance sapling")
+    }
+}
+
+/// Shielded spends field (CompactSize count + variable data)
+struct ShieldedSpends;
+
+impl TransactionField for ShieldedSpends {
+    type Value = Vec<Spend>;
+    const SIZE: Option<usize> = None; // Variable size
+    const EXPECTED_ORDER: u8 = 7;
+    
+    fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
+        let count = CompactSize::read(&mut *cursor)?;
+        let mut spends = Vec::with_capacity(count as usize);
+        
+        for _ in 0..count {
+            let (remaining_data, spend) = Spend::parse_from_slice(
+                &cursor.get_ref()[(cursor.position() as usize)..], 
+                None, 
+                Some(4) // V4 transaction
+            )?;
+            spends.push(spend);
+            cursor.set_position(cursor.get_ref().len() as u64 - remaining_data.len() as u64);
+        }
+        
+        Ok(spends)
+    }
+}
+
+/// Shielded outputs field (CompactSize count + variable data)
+struct ShieldedOutputs;
+
+impl TransactionField for ShieldedOutputs {
+    type Value = Vec<Output>;
+    const SIZE: Option<usize> = None; // Variable size
+    const EXPECTED_ORDER: u8 = 8;
+    
+    fn read_from_cursor(cursor: &mut Cursor<&[u8]>) -> Result<Self::Value, ParseError> {
+        let count = CompactSize::read(&mut *cursor)?;
+        let mut outputs = Vec::with_capacity(count as usize);
+        
+        for _ in 0..count {
+            let (remaining_data, output) = Output::parse_from_slice(
+                &cursor.get_ref()[(cursor.position() as usize)..], 
+                None, 
+                Some(4) // V4 transaction
+            )?;
+            outputs.push(output);
+            cursor.set_position(cursor.get_ref().len() as u64 - remaining_data.len() as u64);
+        }
+        
+        Ok(outputs)
+    }
+}
+
+// ===== TransactionV4Reader Implementation =====
+
+/// Transaction V4 Reader - contains all parsed fields including "skip" fields
+pub struct TransactionV4Reader {
+    // All fields - including the ones we'll "skip" in final struct
+    header: u32,
+    version_group_id: u32,
+    transparent_inputs: Vec<TxIn>,
+    transparent_outputs: Vec<TxOut>,
+    lock_time: u32,           // Read but not used in final struct
+    expiry_height: u32,       // Read but not used in final struct
+    value_balance_sapling: i64,
+    shielded_spends: Vec<Spend>,
+    shielded_outputs: Vec<Output>,
+}
+
+impl TransactionV4Reader {
+    // ===== Useful helper methods =====
+    
+    /// Get the transaction version from header
+    pub fn get_version(&self) -> u32 {
+        self.header & 0x7FFFFFFF
+    }
+    
+    /// Check if transaction is overwintered
+    pub fn is_overwintered(&self) -> bool {
+        (self.header >> 31) == 1
+    }
+    
+    /// Get effective version (TODO: implement consensus-based logic)
+    pub fn get_effective_version(&self) -> u32 {
+        // TODO: Implement effective version logic based on consensus rules
+        // This might involve network upgrade logic, activation heights, etc.
+        self.get_version()
+    }
+    
+    /// Check if transaction has transparent inputs
+    pub fn has_transparent_inputs(&self) -> bool {
+        !self.transparent_inputs.is_empty()
+    }
+    
+    /// Check if transaction has transparent outputs
+    pub fn has_transparent_outputs(&self) -> bool {
+        !self.transparent_outputs.is_empty()
+    }
+    
+    /// Check if transaction has any shielded elements
+    pub fn has_shielded_elements(&self) -> bool {
+        !self.shielded_spends.is_empty() || !self.shielded_outputs.is_empty()
+    }
+}
+
+impl TransactionReader for TransactionV4Reader {
+    type Transaction = TransactionV4;
+    type Error = ParseError;
+    
+    fn read(cursor: &mut Cursor<&[u8]>) -> Result<Self, Self::Error> {
+        let mut counter = OrderCounter::new();
+        
+        Ok(Self {
+            header: Header::read_and_validate(cursor, &mut counter)?,
+            version_group_id: VersionGroupId::read_and_validate(cursor, &mut counter)?,
+            transparent_inputs: TransparentInputs::read_and_validate(cursor, &mut counter)?,
+            transparent_outputs: TransparentOutputs::read_and_validate(cursor, &mut counter)?,
+            
+            // Read these fields but we'll skip them in final struct
+            lock_time: LockTime::read_and_validate(cursor, &mut counter)?,
+            expiry_height: ExpiryHeight::read_and_validate(cursor, &mut counter)?,
+            
+            value_balance_sapling: ValueBalanceSapling::read_and_validate(cursor, &mut counter)?,
+            shielded_spends: ShieldedSpends::read_and_validate(cursor, &mut counter)?,
+            shielded_outputs: ShieldedOutputs::read_and_validate(cursor, &mut counter)?,
+        })
+    }
+    
+    fn validate(&self) -> Result<(), Self::Error> {
+        // Transaction-level consensus validation using helper methods
+        self.validate_version_group_id()?;
+        self.validate_overwintered_flags()?;
+        self.validate_input_output_rules()?;
+        self.validate_transaction_size()?;
+        Ok(())
+    }
+    
+    fn to_transaction(self) -> Result<Self::Transaction, Self::Error> {
+        // Skip lock_time and expiry_height - they're not in the final struct
+        Ok(TransactionV4 {
+            header: self.header,
+            version_group_id: self.version_group_id,
+            transparent_inputs: self.transparent_inputs,
+            transparent_outputs: self.transparent_outputs,
+            // lock_time and expiry_height intentionally omitted
+            value_balance_sapling: self.value_balance_sapling,
+            shielded_spends: self.shielded_spends,
+            shielded_outputs: self.shielded_outputs,
+        })
+    }
+}
+
+// ===== Transaction-level consensus validation methods =====
+impl TransactionV4Reader {
+    fn validate_version_group_id(&self) -> Result<(), ParseError> {
+        if self.version_group_id != 0x892F2085 {
+            return Err(ParseError::ConsensusError(
+                ConsensusError::InvalidVersionGroupId {
+                    expected: 0x892F2085,
+                    actual: self.version_group_id,
+                }
+            ));
+        }
+        Ok(())
+    }
+    
+    fn validate_overwintered_flags(&self) -> Result<(), ParseError> {
+        let version = self.get_version();
+        let is_overwintered = self.is_overwintered();
+        
+        if version >= 3 && !is_overwintered {
+            return Err(ParseError::ConsensusError(
+                ConsensusError::OverwinteredFlagNotSet { version }
+            ));
+        }
+        
+        Ok(())
+    }
+    
+    fn validate_input_output_rules(&self) -> Result<(), ParseError> {
+        let version = self.get_version();
+        if version == 1 && !self.has_transparent_inputs() {
+            return Err(ParseError::ConsensusError(
+                ConsensusError::NoSourceOfFunds { version }
+            ));
+        }
+        Ok(())
+    }
+    
+    fn validate_transaction_size(&self) -> Result<(), ParseError> {
+        // TODO: Calculate actual transaction size and validate against limits
+        // For now, this is a placeholder
+        Ok(())
+    }
+}
+
+// ===== Final Clean Transaction Structs =====
+
+/// Clean V4 Transaction struct with business logic helper methods
+/// (excludes "skip" fields like lock_time, expiry_height that were read during parsing)
+#[derive(Debug, Clone)]
+pub struct TransactionV4 {
+    header: u32,
+    version_group_id: u32,
+    transparent_inputs: Vec<TxIn>,
+    transparent_outputs: Vec<TxOut>,
+    value_balance_sapling: i64,
+    shielded_spends: Vec<Spend>,
+    shielded_outputs: Vec<Output>,
+}
+
+impl TransactionV4 {
+    // ===== Business logic helper methods =====
+    
+    /// Get the transaction version from header
+    pub fn get_version(&self) -> u32 {
+        self.header & 0x7FFFFFFF
+    }
+    
+    /// Check if transaction is overwintered
+    pub fn is_overwintered(&self) -> bool {
+        (self.header >> 31) == 1
+    }
+    
+    /// Get effective version (TODO: implement consensus-based logic)
+    pub fn get_effective_version(&self) -> u32 {
+        // TODO: Implement effective version logic based on consensus rules
+        // This might involve network upgrade logic, activation heights, etc.
+        // For now, return the basic version
+        self.get_version()
+    }
+    
+    /// Get version group ID
+    pub fn version_group_id(&self) -> u32 {
+        self.version_group_id
+    }
+    
+    /// Get transparent inputs
+    pub fn transparent_inputs(&self) -> &[TxIn] {
+        &self.transparent_inputs
+    }
+    
+    /// Get transparent outputs
+    pub fn transparent_outputs(&self) -> &[TxOut] {
+        &self.transparent_outputs
+    }
+    
+    /// Get shielded spends
+    pub fn shielded_spends(&self) -> &[Spend] {
+        &self.shielded_spends
+    }
+    
+    /// Get shielded outputs
+    pub fn shielded_outputs(&self) -> &[Output] {
+        &self.shielded_outputs
+    }
+    
+    /// Get sapling value balance
+    pub fn value_balance_sapling(&self) -> i64 {
+        self.value_balance_sapling
+    }
+    
+    /// Check if transaction has transparent inputs
+    pub fn has_transparent_inputs(&self) -> bool {
+        !self.transparent_inputs.is_empty()
+    }
+    
+    /// Check if transaction has transparent outputs
+    pub fn has_transparent_outputs(&self) -> bool {
+        !self.transparent_outputs.is_empty()
+    }
+    
+    /// Check if transaction has any shielded elements
+    pub fn has_shielded_elements(&self) -> bool {
+        !self.shielded_spends.is_empty() || !self.shielded_outputs.is_empty()
+    }
+    
+    /// Check if transaction is purely transparent
+    pub fn is_transparent_only(&self) -> bool {
+        !self.has_shielded_elements()
+    }
+    
+    /// Check if transaction is purely shielded
+    pub fn is_shielded_only(&self) -> bool {
+        self.has_shielded_elements() && 
+        !self.has_transparent_inputs() && 
+        !self.has_transparent_outputs()
+    }
+    
+    /// Get total number of transparent inputs
+    pub fn transparent_input_count(&self) -> usize {
+        self.transparent_inputs.len()
+    }
+    
+    /// Get total number of transparent outputs
+    pub fn transparent_output_count(&self) -> usize {
+        self.transparent_outputs.len()
+    }
+    
+    /// Get total number of shielded spends
+    pub fn shielded_spend_count(&self) -> usize {
+        self.shielded_spends.len()
+    }
+    
+    /// Get total number of shielded outputs
+    pub fn shielded_output_count(&self) -> usize {
+        self.shielded_outputs.len()
+    }
+}
