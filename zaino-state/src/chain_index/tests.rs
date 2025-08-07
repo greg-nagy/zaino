@@ -1,7 +1,7 @@
 //! Zaino-State ChainIndex unit tests.
 
-mod finalised_state;
-mod vectors;
+pub(crate) mod finalised_state;
+pub(crate) mod vectors;
 
 pub(crate) fn init_tracing() {
     let _ = tracing_subscriber::fmt()

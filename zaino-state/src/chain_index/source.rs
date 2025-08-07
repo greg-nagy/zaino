@@ -214,49 +214,6 @@ impl BlockchainSource {
             }
         }
     }
-
-    pub(super) async fn hash_or_height_to_hash(
-        &self,
-        id: HashOrHeight,
-    ) -> BlockchainSourceResult<Option<Hash>> {
-        if let HashOrHeight::Hash(hash) = id {
-            return Ok(Some(Hash::from(hash.0)));
-        };
-        match self {
-            BlockchainSource::State(read_state_service) => {
-                let response = read_state_service
-                    .clone()
-                    .call(zebra_state::ReadRequest::BlockHeader(id))
-                    .await
-                    .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?;
-                match response {
-                    ReadResponse::BlockHeader { hash, .. } => Ok(Some(hash.into())),
-                    _otherwise => unreachable!(),
-                }
-            }
-            BlockchainSource::Fetch(json_rp_see_connector) => {
-                let block_response = json_rp_see_connector
-                    .get_block(id.to_string(), Some(1))
-                    .await
-                    .map_err(|e| match e {
-                        RpcRequestError::ServerWorkQueueFull => {
-                            BlockchainSourceError::Unrecoverable(
-                                "Not yet implemented: handle backing \
-                                    validator full queue"
-                                    .to_string(),
-                            )
-                        }
-                        _ => BlockchainSourceError::Unrecoverable(e.to_string()),
-                    })?;
-                match block_response {
-                    GetBlockResponse::Raw(_serialized_block) => unreachable!(),
-                    GetBlockResponse::Object(block_object) => {
-                        Ok(Some(Hash::from(block_object.hash.0)))
-                    }
-                }
-            }
-        }
-    }
 }
 
 #[async_trait]
@@ -317,36 +274,18 @@ pub(crate) mod test {
             }
         }
 
-        fn height_to_index(&self, height: u32) -> Result<usize, BlockchainSourceError> {
-            if height == 0 {
-                return Err(BlockchainSourceError::Unrecoverable(
-                    "Block height must be >= 1".to_string(),
-                ));
-            }
-
-            // Block height indexing starts at 1, vec indexing starts at 0..
-            let index = (height - 1) as usize;
+        fn height_to_index(&self, height: u32) -> Option<usize> {
+            let index = (height) as usize;
 
             if index >= self.blocks.len() {
-                return Err(BlockchainSourceError::Unrecoverable(format!(
-                    "Height {height} is out of range (max height = {})",
-                    self.blocks.len()
-                )));
+                return None;
             }
 
-            Ok(index)
+            Some(index)
         }
 
-        fn hash_to_index(
-            &self,
-            hash: &zebra_chain::block::Hash,
-        ) -> Result<usize, BlockchainSourceError> {
-            self.hashes
-                .iter()
-                .position(|h| h.0 == hash.0)
-                .ok_or_else(|| {
-                    BlockchainSourceError::Unrecoverable("Block hash not found".to_string())
-                })
+        fn hash_to_index(&self, hash: &zebra_chain::block::Hash) -> Option<usize> {
+            self.hashes.iter().position(|h| h.0 == hash.0)
         }
     }
 
@@ -355,11 +294,16 @@ pub(crate) mod test {
         async fn get_block(&self, id: HashOrHeight) -> BlockchainSourceResult<Option<Arc<Block>>> {
             match id {
                 HashOrHeight::Height(h) => {
-                    let i = self.height_to_index(h.0)?;
+                    let Some(i) = self.height_to_index(h.0) else {
+                        return Ok(None);
+                    };
                     Ok(Some(Arc::clone(&self.blocks[i])))
                 }
                 HashOrHeight::Hash(hash) => {
-                    let i = self.hash_to_index(&hash)?;
+                    let Some(i) = self.hash_to_index(&hash) else {
+                        return Ok(None);
+                    };
+
                     Ok(Some(Arc::clone(&self.blocks[i])))
                 }
             }

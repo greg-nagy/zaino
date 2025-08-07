@@ -11,6 +11,8 @@
 //!     - b. Build trasparent tx indexes efficiently
 //!   - NOTE: Full transaction and block data is served from the backend finalizer.
 
+use source::{BlockchainSource, BlockchainSourceInterface};
+
 pub mod encoding;
 /// All state at least 100 blocks old
 pub mod finalised_state;
@@ -82,35 +84,33 @@ pub trait ChainIndex {
 /// zebrad's database) or a jsonRPC connection to a validator.
 ///
 /// Currently does not support mempool operations
-pub struct NodeBackedChainIndex {
+pub struct NodeBackedChainIndex<Source: BlockchainSourceInterface = BlockchainSource> {
     // TODO: mempool
-    non_finalized_state: std::sync::Arc<crate::NonFinalizedState>,
-    _finalized_db: std::sync::Arc<finalised_state::ZainoDB>,
+    non_finalized_state: std::sync::Arc<crate::NonFinalizedState<Source>>,
+    finalized_db: std::sync::Arc<finalised_state::ZainoDB>,
     finalized_state: finalised_state::reader::DbReader,
 }
 
-impl NodeBackedChainIndex {
+impl<Source: BlockchainSourceInterface> NodeBackedChainIndex<Source> {
     /// Creates a new chainindex from a connection to a validator
     /// Currently this is a ReadStateService or JsonRpSeeConnector
-    pub async fn new<T>(
-        source: T,
+    pub async fn new(
+        source: Source,
         config: crate::config::BlockCacheConfig,
     ) -> Result<Self, crate::InitError>
-    where
-        for<'a> &'a T: Into<source::BlockchainSource> + Send,
-    {
+where {
         use futures::TryFutureExt as _;
 
         let (non_finalized_state, finalized_db) = futures::try_join!(
-            crate::NonFinalizedState::initialize((&source).into(), config.network.clone()),
-            finalised_state::ZainoDB::spawn(config, (&source).into())
+            crate::NonFinalizedState::initialize(source.clone(), config.network.clone()),
+            finalised_state::ZainoDB::spawn(config, source)
                 .map_err(crate::InitError::FinalisedStateInitialzationError)
         )?;
         let finalized_db = std::sync::Arc::new(finalized_db);
         let chain_index = Self {
             non_finalized_state: std::sync::Arc::new(non_finalized_state),
             finalized_state: finalized_db.to_reader(),
-            _finalized_db: finalized_db,
+            finalized_db,
         };
         chain_index.start_sync_loop();
         Ok(chain_index)

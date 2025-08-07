@@ -16,13 +16,13 @@ use zebra_state::HashOrHeight;
 
 use crate::ChainBlock;
 
-use super::source::{BlockchainSource, BlockchainSourceInterface};
+use super::{finalised_state::ZainoDB, source::BlockchainSourceInterface};
 
 /// Holds the block cache
-pub struct NonFinalizedState {
+pub struct NonFinalizedState<Source: BlockchainSourceInterface> {
     /// We need access to the validator's best block hash, as well
     /// as a source of blocks
-    pub(super) source: BlockchainSource,
+    pub(super) source: Source,
     staged: Mutex<mpsc::Receiver<ChainBlock>>,
     staging_sender: mpsc::Sender<ChainBlock>,
     /// This lock should not be exposed to consumers. Rather,
@@ -109,13 +109,13 @@ pub enum InitError {
 }
 
 /// This is the core of the concurrent block cache.
-impl NonFinalizedState {
+impl<Source: BlockchainSourceInterface> NonFinalizedState<Source> {
     /// Create a nonfinalized state, in a coherent initial state
     ///
     /// TODO: Currently, we can't initate without an snapshot, we need to create a cache
     /// of at least one block. Should this be tied to the instantiation of the data structure
     /// itself?
-    pub async fn initialize(source: BlockchainSource, network: Network) -> Result<Self, InitError> {
+    pub async fn initialize(source: Source, network: Network) -> Result<Self, InitError> {
         // TODO: Consider arbitrary buffer length
         let (staging_sender, staging_receiver) = mpsc::channel(100);
         let staged = Mutex::new(staging_receiver);
@@ -236,7 +236,7 @@ impl NonFinalizedState {
             transactions.push(txdata);
         }
 
-        let height = Some(Height(1));
+        let height = Some(Height(0));
         let hash = Hash::from(genesis_block.hash());
         let parent_hash = Hash::from(genesis_block.header.previous_block_hash);
         let chainwork = ChainWork::from(U256::from(
@@ -277,13 +277,13 @@ impl NonFinalizedState {
             transactions,
             commitment_tree_data,
         };
-        let best_tip = (Height(1), chainblock.index().hash);
+        let best_tip = (Height(0), chainblock.index().hash);
 
         let mut blocks = HashMap::new();
         let mut heights_to_hashes = HashMap::new();
         let hash = chainblock.index().hash;
         blocks.insert(hash, chainblock);
-        heights_to_hashes.insert(Height(1), hash);
+        heights_to_hashes.insert(Height(0), hash);
 
         let current = ArcSwap::new(Arc::new(NonfinalizedBlockCacheSnapshot {
             blocks,
@@ -300,7 +300,8 @@ impl NonFinalizedState {
     }
 
     /// sync to the top of the chain
-    pub async fn sync(&self) -> Result<(), SyncError> {
+    pub(crate) async fn sync(&self, finalzed_db: Arc<ZainoDB>) -> Result<(), SyncError> {
+        dbg!("syncing");
         let initial_state = self.get_snapshot();
         let mut new_blocks = Vec::new();
         let mut sidechain_blocks = Vec::new();
@@ -324,6 +325,7 @@ impl NonFinalizedState {
                 )))
             })?
         {
+            dbg!("syncing block", best_tip.0 + 1);
             // If this block is next in the chain, we sync it as normal
             if Hash::from(block.header.previous_block_hash) == best_tip.1 {
                 let prev_block = match new_blocks.last() {
@@ -546,22 +548,24 @@ impl NonFinalizedState {
 
         // todo! handle sidechain blocks
         for block in new_blocks {
-            if let Err(e) = self.sync_stage_update_loop(block).await {
+            if let Err(e) = self
+                .sync_stage_update_loop(block, finalzed_db.clone())
+                .await
+            {
                 return Err(e.into());
             }
         }
-        // TODO: connect to finalized state to determine where to truncate
-        self.update(if best_tip.0 .0 > 100 {
-            best_tip.0 - 100
-        } else {
-            Height(0)
-        })
-        .await?;
+        self.update(finalzed_db).await?;
 
+        dbg!("synced");
         Ok(())
     }
 
-    async fn sync_stage_update_loop(&self, block: ChainBlock) -> Result<(), UpdateError> {
+    async fn sync_stage_update_loop(
+        &self,
+        block: ChainBlock,
+        finalzed_db: Arc<ZainoDB>,
+    ) -> Result<(), UpdateError> {
         if let Err(e) = self.stage(block.clone()) {
             match *e {
                 mpsc::error::TrySendError::Full(_) => {
@@ -570,16 +574,8 @@ impl NonFinalizedState {
                     // and the finalized_state is not public
                     // deferred until integration tests are of the
                     // full ChainIndex, and/or are converted to unit tests
-                    self.update(
-                        block
-                            .index
-                            .height
-                            // we'll just truncate at the end
-                            .unwrap_or(Height(101))
-                            - 100,
-                    )
-                    .await?;
-                    Box::pin(self.sync_stage_update_loop(block)).await?;
+                    self.update(finalzed_db.clone()).await?;
+                    Box::pin(self.sync_stage_update_loop(block, finalzed_db)).await?;
                 }
                 mpsc::error::TrySendError::Closed(_block) => {
                     return Err(UpdateError::ReceiverDisconnected)
@@ -596,7 +592,7 @@ impl NonFinalizedState {
         self.staging_sender.try_send(block).map_err(Box::new)
     }
     /// Add all blocks from the staging area, and save a new cache snapshot
-    pub async fn update(&self, finalized_height: Height) -> Result<(), UpdateError> {
+    pub async fn update(&self, finalized_db: Arc<ZainoDB>) -> Result<(), UpdateError> {
         let mut new = HashMap::<Hash, ChainBlock>::new();
         let mut staged = self.staged.lock().await;
         loop {
@@ -620,12 +616,32 @@ impl NonFinalizedState {
                 .iter()
                 .map(|(hash, block)| (*hash, block.clone())),
         );
-        let (_newly_finalzed, blocks): (HashMap<_, _>, HashMap<Hash, _>) = new
+        let mut finalized_height = finalized_db
+            .to_reader()
+            .db_height()
+            .await
+            .map_err(|e| todo!())?
+            .unwrap_or(Height(0));
+        let (newly_finalized, blocks): (HashMap<_, _>, HashMap<Hash, _>) = new
             .into_iter()
             .partition(|(_hash, block)| match block.index().height() {
                 Some(height) => height < finalized_height,
                 None => false,
             });
+
+        let mut newly_finalized = newly_finalized.into_values().collect::<Vec<_>>();
+        newly_finalized.sort_by_key(|chain_block| {
+            chain_block
+                .height()
+                .expect("partitioned out only blocks with Some heights")
+        });
+        for block in newly_finalized {
+            finalized_height = finalized_height + 1;
+            if Some(finalized_height) != block.height() {
+                todo!("clean shutdown with critical error")
+            }
+            finalized_db.write_block(block).await.expect("TODO");
+        }
 
         let best_tip = blocks.iter().fold(snapshot.best_tip, |acc, (hash, block)| {
             match block.index().height() {

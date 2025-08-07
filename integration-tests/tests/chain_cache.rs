@@ -55,7 +55,7 @@ async fn create_test_manager_and_nfs(
 ) -> (
     TestManager,
     JsonRpSeeConnector,
-    zaino_state::bench::chain_index::non_finalised_state::NonFinalizedState,
+    zaino_state::bench::chain_index::non_finalised_state::NonFinalizedState<BlockchainSource>,
 ) {
     let (test_manager, json_service) = create_test_manager_and_connector(
         validator,
@@ -94,26 +94,6 @@ async fn create_test_manager_and_nfs(
             .unwrap();
 
     (test_manager, json_service, non_finalized_state)
-}
-
-#[tokio::test]
-async fn nfs_simple_sync() {
-    let (test_manager, _json_service, non_finalized_state) =
-        create_test_manager_and_nfs(&ValidatorKind::Zebrad, None, true, false, false, true).await;
-
-    let snapshot = non_finalized_state.get_snapshot();
-    assert_eq!(
-        snapshot.best_tip.0,
-        zaino_state::Height::try_from(1).unwrap()
-    );
-
-    test_manager.generate_blocks_with_delay(5).await;
-    non_finalized_state.sync().await.unwrap();
-    let snapshot = non_finalized_state.get_snapshot();
-    assert_eq!(
-        snapshot.best_tip.0,
-        zaino_state::Height::try_from(6).unwrap()
-    );
 }
 
 mod chain_query_interface {

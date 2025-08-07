@@ -1,6 +1,6 @@
 use crate::error::{ChainIndexError, ChainIndexErrorKind, FinalisedStateError};
 use std::future::Future;
-use std::{borrow::Cow, collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use super::non_finalised_state::NonfinalizedBlockCacheSnapshot;
 use super::source::BlockchainSourceInterface;
@@ -12,16 +12,17 @@ pub use zebra_chain::parameters::Network as ZebraNetwork;
 use zebra_chain::serialization::ZcashSerialize;
 use zebra_state::HashOrHeight;
 
-impl NodeBackedChainIndex {
+impl<Source: BlockchainSourceInterface> NodeBackedChainIndex<Source> {
     pub(super) fn start_sync_loop(
         &self,
     ) -> tokio::task::JoinHandle<
         Result<std::convert::Infallible, super::non_finalised_state::SyncError>,
     > {
         let nfs = self.non_finalized_state.clone();
+        let fs = self.finalized_db.clone();
         tokio::task::spawn(async move {
             loop {
-                nfs.sync().await?;
+                nfs.sync(fs.clone()).await?;
                 //TODO: configure
                 tokio::time::sleep(Duration::from_millis(500)).await
             }
@@ -42,62 +43,12 @@ impl NodeBackedChainIndex {
             })
             .transpose()
     }
-    async fn hash_to_height(
-        &self,
-        non_finalized_snapshot: NonfinalizedBlockCacheSnapshot,
-        hash: types::Hash,
-    ) -> Result<Option<types::Height>, FinalisedStateError> {
-        match non_finalized_snapshot
-            .blocks
-            .iter()
-            .find_map(|(block_hash, block)| {
-                if *block_hash == hash {
-                    Some(block.height())
-                } else {
-                    None
-                }
-            }) {
-            Some(height) => Ok(height),
-            None => self.finalized_state.get_block_height(hash).await,
-        }
-    }
-    async fn get_chainblock_by_hashorheight<'snapshot, 'self_lt, 'output>(
-        &'self_lt self,
-        non_finalized_snapshot: &'snapshot NonfinalizedBlockCacheSnapshot,
-        hashorheight: &HashOrHeight,
-    ) -> Result<Option<Cow<'output, ChainBlock>>, FinalisedStateError>
-    where
-        'snapshot: 'output,
-        'self_lt: 'output,
-    {
-        if let Some(block) = non_finalized_snapshot.get_chainblock_by_hashorheight(hashorheight) {
-            Ok(Some(Cow::Borrowed(block)))
-        } else {
-            let height = match hashorheight {
-                HashOrHeight::Hash(hash) => {
-                    match self
-                        .finalized_state
-                        .get_block_height(types::Hash::from(hash.0))
-                        .await?
-                    {
-                        Some(h) => h,
-                        None => return Ok(None),
-                    }
-                }
-                HashOrHeight::Height(height) => types::Height(height.0),
-            };
-            (&self.finalized_state)
-                .get_chain_block(height)
-                .await
-                .map(|b| b.map(Cow::Owned))
-        }
-    }
 
     async fn blocks_containing_transaction<'snapshot, 'self_lt, 'iter>(
         &'self_lt self,
         snapshot: &'snapshot NonfinalizedBlockCacheSnapshot,
         txid: [u8; 32],
-    ) -> Result<impl Iterator<Item = ChainBlock> + use<'iter>, FinalisedStateError>
+    ) -> Result<impl Iterator<Item = ChainBlock> + use<'iter, Source>, FinalisedStateError>
     where
         'snapshot: 'iter,
         'self_lt: 'iter,
@@ -132,39 +83,9 @@ impl NodeBackedChainIndex {
                 .into_iter(),
             ))
     }
-
-    async fn get_range_boundary_hash(
-        &self,
-        boundary: types::Height,
-        non_finalized_snapshot: &NonfinalizedBlockCacheSnapshot,
-    ) -> Result<Option<types::Hash>, ChainIndexError> {
-        match self
-            .get_chainblock_by_hashorheight(
-                non_finalized_snapshot,
-                &HashOrHeight::Height(boundary.into()),
-            )
-            .await
-            .map(|chain_block| chain_block.map(|cb| *cb.hash()))
-        {
-            Ok(hash) => Ok(hash),
-            Err(FinalisedStateError::FeatureUnavailable(_)) => self
-                .non_finalized_state
-                .source
-                .hash_or_height_to_hash(HashOrHeight::Height(boundary.into()))
-                .await
-                .map_err(|_e| ChainIndexError {
-                    kind: ChainIndexErrorKind::InternalServerError,
-                    message: "zaino still syncing, fallback to \
-                            fetch from backing node failed"
-                        .to_string(),
-                    source: None,
-                }),
-            Err(e) => Err(e.into()),
-        }
-    }
 }
 
-impl ChainIndex for NodeBackedChainIndex {
+impl<Source: BlockchainSourceInterface> ChainIndex for NodeBackedChainIndex<Source> {
     type Snapshot = Arc<NonfinalizedBlockCacheSnapshot>;
     type Error = ChainIndexError;
 
@@ -310,17 +231,6 @@ pub trait NonFinalizedSnapshot {
     fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&ChainBlock>;
 }
 
-trait NonFinalizedSnapshotGetHashOrHeight: NonFinalizedSnapshot {
-    fn get_chainblock_by_hashorheight(&self, target: &HashOrHeight) -> Option<&ChainBlock> {
-        match target {
-            HashOrHeight::Hash(hash) => self.get_chainblock_by_hash(&types::Hash::from(*hash)),
-            HashOrHeight::Height(height) => self.get_chainblock_by_height(&types::Height(height.0)),
-        }
-    }
-}
-
-impl<T: NonFinalizedSnapshot> NonFinalizedSnapshotGetHashOrHeight for T {}
-
 impl NonFinalizedSnapshot for NonfinalizedBlockCacheSnapshot {
     fn get_chainblock_by_hash(&self, target_hash: &types::Hash) -> Option<&ChainBlock> {
         self.blocks.iter().find_map(|(hash, chainblock)| {
@@ -339,5 +249,83 @@ impl NonFinalizedSnapshot for NonfinalizedBlockCacheSnapshot {
                 None
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod mockchain_tests {
+    use std::path::PathBuf;
+
+    use tempfile::TempDir;
+    use zebra_chain::serialization::ZcashDeserializeInto;
+
+    use crate::{
+        bench::BlockCacheConfig,
+        chain_index::tests::vectors::{build_mockchain_source, load_test_vectors},
+    };
+
+    use super::*;
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn get_mock_range() {
+        let (blocks, _faucet, _recipient) = load_test_vectors().unwrap();
+
+        let source = build_mockchain_source(blocks.clone());
+        let temp_dir: TempDir = tempfile::tempdir().unwrap();
+        let db_path: PathBuf = temp_dir.path().to_path_buf();
+        let config = BlockCacheConfig {
+            map_capacity: None,
+            map_shard_amount: None,
+            db_version: 1,
+            db_path,
+            db_size: None,
+            network: zebra_chain::parameters::Network::new_regtest(
+                zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                    before_overwinter: Some(1),
+                    overwinter: Some(1),
+                    sapling: Some(1),
+                    blossom: Some(1),
+                    heartwood: Some(1),
+                    canopy: Some(1),
+                    nu5: Some(1),
+                    nu6: Some(1),
+                    // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
+                    nu6_1: None,
+                    nu7: None,
+                },
+            ),
+            no_sync: false,
+            no_db: false,
+        };
+
+        let indexer = NodeBackedChainIndex::new(source, config).await.unwrap();
+        let nonfinalized_snapshot = loop {
+            let nonfinalized_snapshot = ChainIndex::snapshot_nonfinalized_state(&indexer);
+            if nonfinalized_snapshot.blocks.len() != 1 {
+                break nonfinalized_snapshot;
+            }
+            println!("waiting for mockchain sync");
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        };
+        let start = crate::Height(0);
+
+        let indexer_blocks =
+            ChainIndex::get_block_range(&indexer, &nonfinalized_snapshot, start, None)
+                .unwrap()
+                .collect::<Vec<_>>()
+                .await;
+        for (i, block) in indexer_blocks.into_iter().enumerate() {
+            let zebra_block = block
+                .unwrap()
+                .zcash_deserialize_into::<zebra_chain::block::Block>()
+                .unwrap();
+            let expected_block = &blocks[zebra_block.coinbase_height().unwrap().0 as usize].3;
+            if &zebra_block != expected_block {
+                panic!(
+                    "block {i}, returned_block height {}, expected block height {}",
+                    zebra_block.coinbase_height().unwrap().0,
+                    expected_block.coinbase_height().unwrap().0
+                )
+            };
+        }
     }
 }
