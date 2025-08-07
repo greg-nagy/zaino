@@ -19,13 +19,12 @@ async fn v0_to_v1_full() {
 
     let temp_dir: TempDir = tempfile::tempdir().unwrap();
     let db_path: PathBuf = temp_dir.path().to_path_buf();
-    let db_path_clone = db_path.clone();
 
     let v0_config = BlockCacheConfig {
         map_capacity: None,
         map_shard_amount: None,
         db_version: 0,
-        db_path,
+        db_path: db_path.clone(),
         db_size: None,
         network: zebra_chain::parameters::Network::new_regtest(
             zebra_chain::parameters::testnet::ConfiguredActivationHeights {
@@ -50,7 +49,7 @@ async fn v0_to_v1_full() {
         map_capacity: None,
         map_shard_amount: None,
         db_version: 1,
-        db_path: db_path_clone,
+        db_path: db_path.clone(),
         db_size: None,
         network: zebra_chain::parameters::Network::new_regtest(
             zebra_chain::parameters::testnet::ConfiguredActivationHeights {
@@ -102,13 +101,12 @@ async fn v0_to_v1_interrupted() {
 
     let temp_dir: TempDir = tempfile::tempdir().unwrap();
     let db_path: PathBuf = temp_dir.path().to_path_buf();
-    let db_path_clone = db_path.clone();
 
     let v0_config = BlockCacheConfig {
         map_capacity: None,
         map_shard_amount: None,
         db_version: 0,
-        db_path,
+        db_path: db_path.clone(),
         db_size: None,
         network: zebra_chain::parameters::Network::new_regtest(
             zebra_chain::parameters::testnet::ConfiguredActivationHeights {
@@ -133,7 +131,7 @@ async fn v0_to_v1_interrupted() {
         map_capacity: None,
         map_shard_amount: None,
         db_version: 1,
-        db_path: db_path_clone,
+        db_path: db_path.clone(),
         db_size: None,
         network: zebra_chain::parameters::Network::new_regtest(
             zebra_chain::parameters::testnet::ConfiguredActivationHeights {
@@ -155,106 +153,74 @@ async fn v0_to_v1_interrupted() {
     };
 
     let source = build_mockchain_source(blocks.clone());
-    let source_clone = source.clone();
-    let blocks_clone = blocks.clone();
-    let blocks_clone_2 = blocks.clone();
-    let v0_config_clone = v0_config.clone();
-    let v1_config_clone = v1_config.clone();
 
     // Build v0 database.
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async move {
-            let zaino_db = ZainoDB::spawn(v0_config_clone, source).await.unwrap();
-            for (_h, chain_block, _compact_block, _zebra_block, _block_roots) in blocks_clone {
-                zaino_db.write_block(chain_block).await.unwrap();
-            }
+    let zaino_db = ZainoDB::spawn(v0_config, source.clone()).await.unwrap();
+    for (_h, chain_block, _compact_block, _zebra_block, _block_roots) in blocks.clone() {
+        zaino_db.write_block(chain_block).await.unwrap();
+    }
+    zaino_db.wait_until_ready().await;
+    dbg!(zaino_db.status().await);
+    dbg!(zaino_db.db_height().await.unwrap());
+    dbg!(zaino_db.shutdown().await.unwrap());
 
-            zaino_db.wait_until_ready().await;
-            dbg!(zaino_db.status().await);
-            dbg!(zaino_db.db_height().await.unwrap());
-
-            dbg!(zaino_db.shutdown().await.unwrap());
-        });
-    })
-    .join()
-    .unwrap();
-
-    std::thread::sleep(std::time::Duration::from_millis(1000));
+    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
 
     // Partial build v1 database.
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async move {
-            let zaino_db = DbBackend::spawn_v1(&v1_config_clone).await.unwrap();
+    let zaino_db = DbBackend::spawn_v1(&v1_config).await.unwrap();
+    let mut parent_chain_work = ChainWork::from_u256(0.into());
+    for (
+        h,
+        _chain_block,
+        _compact_block,
+        zebra_block,
+        (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+    ) in blocks.clone()
+    {
+        if h > 50 {
+            break;
+        }
 
-            let mut parent_chain_work = ChainWork::from_u256(0.into());
+        let chain_block = ChainBlock::try_from((
+            zebra_block,
+            sapling_root,
+            sapling_root_size as u32,
+            orchard_root,
+            orchard_root_size as u32,
+            parent_chain_work,
+            zebra_chain::parameters::Network::new_regtest(
+                zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                    before_overwinter: Some(1),
+                    overwinter: Some(1),
+                    sapling: Some(1),
+                    blossom: Some(1),
+                    heartwood: Some(1),
+                    canopy: Some(1),
+                    nu5: Some(1),
+                    nu6: Some(1),
+                    // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
+                    nu6_1: None,
+                    nu7: None,
+                },
+            ),
+        ))
+        .unwrap();
 
-            for (
-                h,
-                _chain_block,
-                _compact_block,
-                zebra_block,
-                (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
-            ) in blocks_clone_2
-            {
-                if h > 50 {
-                    break;
-                }
+        parent_chain_work = *chain_block.index().chainwork();
 
-                let chain_block = ChainBlock::try_from((
-                    zebra_block,
-                    sapling_root,
-                    sapling_root_size as u32,
-                    orchard_root,
-                    orchard_root_size as u32,
-                    parent_chain_work,
-                    zebra_chain::parameters::Network::new_regtest(
-                        zebra_chain::parameters::testnet::ConfiguredActivationHeights {
-                            before_overwinter: Some(1),
-                            overwinter: Some(1),
-                            sapling: Some(1),
-                            blossom: Some(1),
-                            heartwood: Some(1),
-                            canopy: Some(1),
-                            nu5: Some(1),
-                            nu6: Some(1),
-                            // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
-                            nu6_1: None,
-                            nu7: None,
-                        },
-                    ),
-                ))
-                .unwrap();
+        zaino_db.write_block(chain_block).await.unwrap();
+    }
+    dbg!(zaino_db.shutdown().await.unwrap());
 
-                parent_chain_work = *chain_block.index().chainwork();
-
-                zaino_db.write_block(chain_block).await.unwrap();
-            }
-
-            dbg!(zaino_db.shutdown().await.unwrap());
-        });
-    })
-    .join()
-    .unwrap();
-
-    std::thread::sleep(std::time::Duration::from_millis(1000));
+    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
 
     // Open v1 database and check migration.
-    let migration_handle = tokio::spawn({
-        let source = source_clone.clone();
-        let v1_config = v1_config.clone();
-        async move {
-            let zaino_db_2 = ZainoDB::spawn(v1_config, source).await.unwrap();
-            zaino_db_2.wait_until_ready().await;
-            dbg!(zaino_db_2.status().await);
-            let db_height = dbg!(zaino_db_2.db_height().await.unwrap()).unwrap();
-            assert_eq!(db_height.0, 200);
-            dbg!(zaino_db_2.shutdown().await.unwrap());
-        }
-    });
-
-    migration_handle.await.unwrap();
+    let zaino_db_2 = ZainoDB::spawn(v1_config, source).await.unwrap();
+    zaino_db_2.wait_until_ready().await;
+    dbg!(zaino_db_2.status().await);
+    let db_height = dbg!(zaino_db_2.db_height().await.unwrap()).unwrap();
+    assert_eq!(db_height.0, 200);
+    dbg!(zaino_db_2.shutdown().await.unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -265,13 +231,12 @@ async fn v0_to_v1_partial() {
 
     let temp_dir: TempDir = tempfile::tempdir().unwrap();
     let db_path: PathBuf = temp_dir.path().to_path_buf();
-    let db_path_clone = db_path.clone();
 
     let v0_config = BlockCacheConfig {
         map_capacity: None,
         map_shard_amount: None,
         db_version: 0,
-        db_path,
+        db_path: db_path.clone(),
         db_size: None,
         network: zebra_chain::parameters::Network::new_regtest(
             zebra_chain::parameters::testnet::ConfiguredActivationHeights {
@@ -296,7 +261,7 @@ async fn v0_to_v1_partial() {
         map_capacity: None,
         map_shard_amount: None,
         db_version: 1,
-        db_path: db_path_clone,
+        db_path: db_path.clone(),
         db_size: None,
         network: zebra_chain::parameters::Network::new_regtest(
             zebra_chain::parameters::testnet::ConfiguredActivationHeights {
@@ -318,100 +283,71 @@ async fn v0_to_v1_partial() {
     };
 
     let source = build_mockchain_source(blocks.clone());
-    let source_clone = source.clone();
-    let blocks_clone = blocks.clone();
-    let blocks_clone_2 = blocks.clone();
-    let v0_config_clone = v0_config.clone();
-    let v1_config_clone = v1_config.clone();
 
     // Build v0 database.
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async move {
-            let zaino_db = ZainoDB::spawn(v0_config_clone, source).await.unwrap();
-            for (_h, chain_block, _compact_block, _zebra_block, _block_roots) in blocks_clone {
-                zaino_db.write_block(chain_block).await.unwrap();
-            }
+    let zaino_db = ZainoDB::spawn(v0_config, source.clone()).await.unwrap();
+    for (_h, chain_block, _compact_block, _zebra_block, _block_roots) in blocks.clone() {
+        zaino_db.write_block(chain_block).await.unwrap();
+    }
+    zaino_db.wait_until_ready().await;
+    dbg!(zaino_db.status().await);
+    dbg!(zaino_db.db_height().await.unwrap());
+    dbg!(zaino_db.shutdown().await.unwrap());
 
-            zaino_db.wait_until_ready().await;
-            dbg!(zaino_db.status().await);
-            dbg!(zaino_db.db_height().await.unwrap());
-
-            dbg!(zaino_db.shutdown().await.unwrap());
-        });
-    })
-    .join()
-    .unwrap();
-
-    std::thread::sleep(std::time::Duration::from_millis(1000));
+    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
 
     // Partial build v1 database.
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async move {
-            let zaino_db = DbBackend::spawn_v1(&v1_config_clone).await.unwrap();
+    let zaino_db = DbBackend::spawn_v1(&v1_config).await.unwrap();
 
-            let mut parent_chain_work = ChainWork::from_u256(0.into());
+    let mut parent_chain_work = ChainWork::from_u256(0.into());
 
-            for (
-                _h,
-                _chain_block,
-                _compact_block,
-                zebra_block,
-                (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
-            ) in blocks_clone_2
-            {
-                let chain_block = ChainBlock::try_from((
-                    zebra_block,
-                    sapling_root,
-                    sapling_root_size as u32,
-                    orchard_root,
-                    orchard_root_size as u32,
-                    parent_chain_work,
-                    zebra_chain::parameters::Network::new_regtest(
-                        zebra_chain::parameters::testnet::ConfiguredActivationHeights {
-                            before_overwinter: Some(1),
-                            overwinter: Some(1),
-                            sapling: Some(1),
-                            blossom: Some(1),
-                            heartwood: Some(1),
-                            canopy: Some(1),
-                            nu5: Some(1),
-                            nu6: Some(1),
-                            // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
-                            nu6_1: None,
-                            nu7: None,
-                        },
-                    ),
-                ))
-                .unwrap();
+    for (
+        _h,
+        _chain_block,
+        _compact_block,
+        zebra_block,
+        (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+    ) in blocks.clone()
+    {
+        let chain_block = ChainBlock::try_from((
+            zebra_block,
+            sapling_root,
+            sapling_root_size as u32,
+            orchard_root,
+            orchard_root_size as u32,
+            parent_chain_work,
+            zebra_chain::parameters::Network::new_regtest(
+                zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                    before_overwinter: Some(1),
+                    overwinter: Some(1),
+                    sapling: Some(1),
+                    blossom: Some(1),
+                    heartwood: Some(1),
+                    canopy: Some(1),
+                    nu5: Some(1),
+                    nu6: Some(1),
+                    // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
+                    nu6_1: None,
+                    nu7: None,
+                },
+            ),
+        ))
+        .unwrap();
 
-                parent_chain_work = *chain_block.index().chainwork();
+        parent_chain_work = *chain_block.index().chainwork();
 
-                zaino_db.write_block(chain_block).await.unwrap();
-            }
+        zaino_db.write_block(chain_block).await.unwrap();
+    }
 
-            dbg!(zaino_db.shutdown().await.unwrap());
-        });
-    })
-    .join()
-    .unwrap();
+    dbg!(zaino_db.shutdown().await.unwrap());
 
-    std::thread::sleep(std::time::Duration::from_millis(1000));
+    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
 
     // Open v1 database and check migration.
-    let migration_handle = tokio::spawn({
-        let source = source_clone.clone();
-        let v1_config = v1_config.clone();
-        async move {
-            let zaino_db_2 = ZainoDB::spawn(v1_config, source).await.unwrap();
-            zaino_db_2.wait_until_ready().await;
-            dbg!(zaino_db_2.status().await);
-            let db_height = dbg!(zaino_db_2.db_height().await.unwrap()).unwrap();
-            assert_eq!(db_height.0, 200);
-            dbg!(zaino_db_2.shutdown().await.unwrap());
-        }
-    });
-
-    migration_handle.await.unwrap();
+    let zaino_db_2 = ZainoDB::spawn(v1_config, source).await.unwrap();
+    zaino_db_2.wait_until_ready().await;
+    dbg!(zaino_db_2.status().await);
+    let db_height = dbg!(zaino_db_2.db_height().await.unwrap()).unwrap();
+    assert_eq!(db_height.0, 200);
+    dbg!(zaino_db_2.shutdown().await.unwrap());
 }

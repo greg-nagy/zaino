@@ -86,7 +86,7 @@ impl Router {
 
     /// Sets the shadow to the given database.
     pub(crate) fn set_shadow(&self, shadow: Arc<DbBackend>, caps: Capability) {
-        self.shadow.store(Some(shadow).into());
+        self.shadow.store(Some(shadow));
         self.shadow_mask.store(caps.bits(), Ordering::Release);
     }
 
