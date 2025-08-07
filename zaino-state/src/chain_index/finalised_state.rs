@@ -26,7 +26,7 @@ use crate::{
 use std::{sync::Arc, time::Duration};
 use tokio::time::{interval, MissedTickBehavior};
 
-use super::source::BlockchainSourceInterface;
+use super::source::BlockchainSource;
 
 pub(crate) struct ZainoDB {
     db: Arc<Router>,
@@ -44,7 +44,7 @@ impl ZainoDB {
         source: T,
     ) -> Result<Self, FinalisedStateError>
     where
-        T: BlockchainSourceInterface,
+        T: BlockchainSource,
     {
         let version_opt = Self::try_find_current_db_version(&cfg).await;
 
@@ -203,7 +203,7 @@ impl ZainoDB {
         source: T,
     ) -> Result<(), FinalisedStateError>
     where
-        T: BlockchainSourceInterface,
+        T: BlockchainSource,
     {
         if height.0 == 0 {
             return Err(FinalisedStateError::Critical(

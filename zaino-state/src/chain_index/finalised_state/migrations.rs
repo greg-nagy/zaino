@@ -1,6 +1,4 @@
-//! This mod will hold the migration manager and migration implementations.
-//!
-//! This will be added in a subsequest pr.
+//! Migration management and implementations.
 
 use super::{
     capability::{
@@ -11,7 +9,7 @@ use super::{
 };
 
 use crate::{
-    chain_index::source::BlockchainSourceInterface, config::BlockCacheConfig,
+    chain_index::source::BlockchainSource, config::BlockCacheConfig,
     error::FinalisedStateError, ChainBlock, ChainWork, Hash, Height,
 };
 
@@ -28,10 +26,9 @@ pub enum MigrationType {
 }
 
 #[async_trait]
-pub trait MigrationStep<T: BlockchainSourceInterface> {
+pub trait Migration<T: BlockchainSource> {
     const CURRENT_VERSION: DbVersion;
     const TO_VERSION: DbVersion;
-    const MIGRATION_TYPE: MigrationType;
 
     fn current_version(&self) -> DbVersion {
         Self::CURRENT_VERSION
@@ -39,10 +36,6 @@ pub trait MigrationStep<T: BlockchainSourceInterface> {
 
     fn to_version(&self) -> DbVersion {
         Self::TO_VERSION
-    }
-
-    fn migration_type(&self) -> MigrationType {
-        Self::MIGRATION_TYPE
     }
 
     async fn migrate(
@@ -53,7 +46,7 @@ pub trait MigrationStep<T: BlockchainSourceInterface> {
     ) -> Result<(), FinalisedStateError>;
 }
 
-pub(super) struct MigrationManager<T: BlockchainSourceInterface> {
+pub(super) struct MigrationManager<T: BlockchainSource> {
     pub(super) router: Arc<Router>,
     pub(super) cfg: BlockCacheConfig,
     pub(super) current_version: DbVersion,
@@ -61,22 +54,22 @@ pub(super) struct MigrationManager<T: BlockchainSourceInterface> {
     pub(super) source: T,
 }
 
-impl<T: BlockchainSourceInterface> MigrationManager<T> {
+impl<T: BlockchainSource> MigrationManager<T> {
     /// Iteratively performs each migration step from current version to target version.
     pub(super) async fn migrate(&mut self) -> Result<(), FinalisedStateError> {
         while self.current_version < self.target_version {
-            let migration_step = self.get_migration_step()?;
-            migration_step.migrate(Arc::clone(&self.router), self.cfg.clone(), self.source.clone()).await?;
-            self.current_version = migration_step.to_version();
+            let migration = self.get_migration()?;
+            migration.migrate(Arc::clone(&self.router), self.cfg.clone(), self.source.clone()).await?;
+            self.current_version = migration.to_version();
         }
 
         Ok(())
     }
 
-    /// Return the next migration step for the current version.
-    fn get_migration_step(
+    /// Return the next migration for the current version.
+    fn get_migration(
         &self
-    ) -> Result<impl MigrationStep<T>, FinalisedStateError> {
+    ) -> Result<impl Migration<T>, FinalisedStateError> {
         match (
             self.current_version.major,
             self.current_version.minor,
@@ -95,7 +88,7 @@ impl<T: BlockchainSourceInterface> MigrationManager<T> {
 struct Migration0_0_0To1_0_0;
 
 #[async_trait]
-impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
+impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
     const CURRENT_VERSION: DbVersion = DbVersion {
         major: 0,
         minor: 0,
@@ -106,7 +99,6 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
         minor: 0,
         patch: 0,
     };
-    const MIGRATION_TYPE: MigrationType = MigrationType::Major;
 
     /// The V0 database that we are migrating from was a lightwallet specific database
     /// that only built compact block data from sapling activation onwards.
@@ -132,7 +124,7 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
             | MigrationStatus::PartialBuildComplete
             | MigrationStatus::FinalBuildInProgress => {
                 // build shadow to primary_db_height,
-                // start from shadow_db_height in case database what shutdown mid-migration.
+                // start from shadow_db_height in case database was shutdown mid-migration.
                 let mut parent_chain_work = ChainWork::from_u256(0.into());
 
                 let mut shadow_db_height = shadow.db_height().await?.unwrap_or(Height(0));

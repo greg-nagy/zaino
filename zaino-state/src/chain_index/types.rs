@@ -253,9 +253,9 @@ impl FixedEncodedLen for Height {
 /// for keys in Lexicographically sorted B-Tree.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub struct Index(pub u32);
+pub struct ShardIndex(pub u32);
 
-impl ZainoVersionedSerialise for Index {
+impl ZainoVersionedSerialise for ShardIndex {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
@@ -269,12 +269,12 @@ impl ZainoVersionedSerialise for Index {
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let raw = read_u32_be(r)?;
-        Ok(Index(raw))
+        Ok(ShardIndex(raw))
     }
 }
 
 /// Index = 4-byte big-endian body.
-impl FixedEncodedLen for Index {
+impl FixedEncodedLen for ShardIndex {
     /// 4 bytes (BE u32)
     const ENCODED_LEN: usize = 4;
 }

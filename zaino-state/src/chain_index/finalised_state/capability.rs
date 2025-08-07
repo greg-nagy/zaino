@@ -3,11 +3,7 @@
 use core::fmt;
 
 use crate::{
-    chain_index::types::AddrEventBytes, error::FinalisedStateError, read_fixed_le, read_u32_le,
-    read_u8_le, version, write_fixed_le, write_u32_le, write_u8_le, AddrScript, BlockHeaderData,
-    ChainBlock, CommitmentTreeData, FixedEncodedLen, Hash, Height, OrchardCompactTx, OrchardTxList,
-    Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
-    TxLocation, TxidList, ZainoVersionedSerialise,
+    chain_index::types::AddrEventBytes, error::FinalisedStateError, read_fixed_le, read_u32_le, read_u8, version, write_fixed_le, write_u32_le, write_u8, AddrScript, BlockHeaderData, ChainBlock, CommitmentTreeData, FixedEncodedLen, Hash, Height, OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList, TxLocation, TxidList, ZainoVersionedSerialise
 };
 
 use async_trait::async_trait;
@@ -302,7 +298,7 @@ impl ZainoVersionedSerialise for MigrationStatus {
             MigrationStatus::FinalBuildInProgress => 3,
             MigrationStatus::Complete => 4,
         };
-        write_u8_le(w, tag)
+        write_u8(w, tag)
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
@@ -310,7 +306,7 @@ impl ZainoVersionedSerialise for MigrationStatus {
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        match read_u8_le(r)? {
+        match read_u8(r)? {
             0 => Ok(MigrationStatus::Empty),
             1 => Ok(MigrationStatus::PartialBuidInProgress),
             2 => Ok(MigrationStatus::PartialBuildComplete),

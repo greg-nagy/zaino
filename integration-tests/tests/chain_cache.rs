@@ -1,7 +1,6 @@
 use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
 use zaino_state::{
-    bench::chain_index::non_finalised_state::{BlockchainSource, NonFinalizedState},
-    BackendType,
+    bench::chain_index::non_finalised_state::NonFinalizedState, chain_index::source::ValidatorConnector, BackendType
 };
 use zaino_testutils::{TestManager, Validator as _, ValidatorKind};
 
@@ -89,7 +88,7 @@ async fn create_test_manager_and_nfs(
     };
 
     let non_finalized_state =
-        NonFinalizedState::initialize(BlockchainSource::Fetch(json_service.clone()), network)
+        NonFinalizedState::initialize(ValidatorConnector::Fetch(json_service.clone()), network)
             .await
             .unwrap();
 
@@ -204,7 +203,7 @@ mod chain_query_interface {
         .await
         .unwrap();
         let chain_index = NodeBackedChainIndex::new(
-            BlockchainSource::State(state_service.read_state_service().clone()),
+            ValidatorConnector::State(state_service.read_state_service().clone()),
             network,
         )
         .await
