@@ -348,7 +348,7 @@ async fn create_200_block_regtest_chain_vectors() {
         let mut parent_block_sapling_tree_size: u32 = 0;
         let mut parent_block_orchard_tree_size: u32 = 0;
 
-        for height in 1..=chain_height.0 {
+        for height in 0..chain_height.0 {
             let (chain_block, compact_block, zebra_block, block_roots) = {
                 // Fetch block data
                 let (_hash, tx, trees) = state_service_subscriber

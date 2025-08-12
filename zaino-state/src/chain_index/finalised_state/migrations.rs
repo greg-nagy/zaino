@@ -11,8 +11,10 @@ use super::{
 };
 
 use crate::{
-    chain_index::source::BlockchainSourceInterface, config::BlockCacheConfig,
-    error::FinalisedStateError, ChainBlock, ChainWork, Hash, Height,
+    chain_index::{source::BlockchainSourceInterface, types::GENESIS_HEIGHT},
+    config::BlockCacheConfig,
+    error::FinalisedStateError,
+    ChainBlock, ChainWork, Hash, Height,
 };
 
 use async_trait::async_trait;
@@ -160,7 +162,7 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
                         break;
                     }
 
-                    if shadow_db_height.0 > 1 {
+                    if shadow_db_height > GENESIS_HEIGHT {
                         parent_chain_work = *shadow
                             .get_block_header(shadow_db_height)
                             .await?
@@ -168,7 +170,7 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
                             .chainwork();
                     }
 
-                    for height in (shadow_db_height.0 + 1)..=primary_db_height.0 {
+                    for height in (shadow_db_height.0)..=primary_db_height.0 {
                         let block = source
                             .get_block(zebra_state::HashOrHeight::Height(
                                 zebra_chain::block::Height(height),

@@ -257,16 +257,32 @@ mod mockchain_tests {
     use std::path::PathBuf;
 
     use tempfile::TempDir;
+    use zaino_proto::proto::compact_formats::CompactBlock;
     use zebra_chain::serialization::ZcashDeserializeInto;
 
     use crate::{
         bench::BlockCacheConfig,
-        chain_index::tests::vectors::{build_mockchain_source, load_test_vectors},
+        chain_index::{
+            source::test::MockchainSource,
+            tests::vectors::{build_mockchain_source, load_test_vectors},
+        },
     };
 
-    use super::*;
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn get_mock_range() {
+    async fn load_test_vectors_and_sync_chain_index() -> (
+        Vec<(
+            u32,
+            ChainBlock,
+            CompactBlock,
+            zebra_chain::block::Block,
+            (
+                zebra_chain::sapling::tree::Root,
+                u64,
+                zebra_chain::orchard::tree::Root,
+                u64,
+            ),
+        )>,
+        NodeBackedChainIndex<MockchainSource>,
+    ) {
         let (blocks, _faucet, _recipient) = load_test_vectors().unwrap();
 
         let source = build_mockchain_source(blocks.clone());
@@ -299,15 +315,21 @@ mod mockchain_tests {
         };
 
         let indexer = NodeBackedChainIndex::new(source, config).await.unwrap();
-
-        let nonfinalized_snapshot = loop {
+        loop {
             let nonfinalized_snapshot = ChainIndex::snapshot_nonfinalized_state(&indexer);
             if nonfinalized_snapshot.blocks.len() != 1 {
-                break nonfinalized_snapshot;
+                break;
             }
-            println!("waiting for mockchain sync");
             tokio::time::sleep(Duration::from_secs(1)).await;
-        };
+        }
+        (blocks, indexer)
+    }
+
+    use super::*;
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn get_mock_range() {
+        let (blocks, indexer) = load_test_vectors_and_sync_chain_index().await;
+        let nonfinalized_snapshot = indexer.snapshot_nonfinalized_state();
 
         let start = crate::Height(0);
 
@@ -318,20 +340,32 @@ mod mockchain_tests {
                 .await;
 
         for (i, block) in indexer_blocks.into_iter().enumerate() {
-            let zebra_block = block
+            let parsed_block = block
                 .unwrap()
                 .zcash_deserialize_into::<zebra_chain::block::Block>()
                 .unwrap();
 
             let expected_block = &blocks[i].3;
+            assert_eq!(&parsed_block, expected_block);
+        }
+    }
 
-            if &zebra_block != expected_block {
-                panic!(
-                    "block {i}, returned_block height {}, expected block height {}",
-                    zebra_block.coinbase_height().unwrap().0,
-                    expected_block.coinbase_height().unwrap().0
-                )
-            };
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn get_raw_transaction() {
+        let (blocks, indexer) = load_test_vectors_and_sync_chain_index().await;
+        let nonfinalized_snapshot = indexer.snapshot_nonfinalized_state();
+        for expected_transaction in blocks
+            .into_iter()
+            .flat_map(|block| block.3.transactions.into_iter())
+        {
+            let zaino_transaction = indexer
+                .get_raw_transaction(&nonfinalized_snapshot, expected_transaction.hash().0)
+                .await
+                .unwrap()
+                .unwrap()
+                .zcash_deserialize_into::<zebra_chain::transaction::Transaction>()
+                .unwrap();
+            assert_eq!(expected_transaction.as_ref(), &zaino_transaction)
         }
     }
 }

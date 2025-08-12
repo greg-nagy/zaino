@@ -145,6 +145,9 @@ impl FixedEncodedLen for Hash {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct Height(pub(crate) u32);
 
+/// The first block
+pub const GENESIS_HEIGHT: Height = Height(0);
+
 impl TryFrom<u32> for Height {
     type Error = &'static str;
 

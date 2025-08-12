@@ -82,6 +82,7 @@ async fn v0_to_v1_full() {
         rt.block_on(async move {
             let zaino_db = ZainoDB::spawn(v0_config_clone, source).await.unwrap();
             for (_h, chain_block, _compact_block, _zebra_block, _block_roots) in blocks_clone {
+                dbg!(_h);
                 zaino_db.write_block(chain_block).await.unwrap();
             }
 
