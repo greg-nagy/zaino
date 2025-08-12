@@ -6933,7 +6933,7 @@ dependencies = [
 [[package]]
 name = "zingo-infra-services"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?rev=269feb5f76e231c5bdfc0317f35c23df390a3f4c#269feb5f76e231c5bdfc0317f35c23df390a3f4c"
+source = "git+https://github.com/idky137/infrastructure.git?branch=zebra_update_fixes#336e6f5fe5c019ace2dce57dbbbc8d69d6a6d2e0"
 dependencies = [
  "getset",
  "hex",
@@ -6957,7 +6957,7 @@ dependencies = [
 [[package]]
 name = "zingo-infra-testutils"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?rev=269feb5f76e231c5bdfc0317f35c23df390a3f4c#269feb5f76e231c5bdfc0317f35c23df390a3f4c"
+source = "git+https://github.com/idky137/infrastructure.git?branch=zebra_update_fixes#336e6f5fe5c019ace2dce57dbbbc8d69d6a6d2e0"
 dependencies = [
  "http",
  "portpicker",
