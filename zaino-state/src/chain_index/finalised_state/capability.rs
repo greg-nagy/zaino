@@ -3,7 +3,11 @@
 use core::fmt;
 
 use crate::{
-    chain_index::types::AddrEventBytes, error::FinalisedStateError, read_fixed_le, read_u32_le, read_u8, version, write_fixed_le, write_u32_le, write_u8, AddrScript, BlockHeaderData, ChainBlock, CommitmentTreeData, FixedEncodedLen, Hash, Height, OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList, TxLocation, TxidList, ZainoVersionedSerialise
+    chain_index::types::AddrEventBytes, error::FinalisedStateError, read_fixed_le, read_u32_le,
+    read_u8, version, write_fixed_le, write_u32_le, write_u8, AddrScript, BlockHeaderData,
+    ChainBlock, CommitmentTreeData, FixedEncodedLen, Hash, Height, OrchardCompactTx, OrchardTxList,
+    Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
+    TxLocation, TxidList, ZainoVersionedSerialise,
 };
 
 use async_trait::async_trait;
@@ -80,14 +84,14 @@ impl CapabilityRequest {
     #[inline]
     pub(crate) const fn as_capability(self) -> Capability {
         match self {
-            CapabilityRequest::ReadCore             => Capability::READ_CORE,
-            CapabilityRequest::WriteCore            => Capability::WRITE_CORE,
-            CapabilityRequest::BlockCoreExt         => Capability::BLOCK_CORE_EXT,
-            CapabilityRequest::BlockTransparentExt  => Capability::BLOCK_TRANSPARENT_EXT,
-            CapabilityRequest::BlockShieldedExt     => Capability::BLOCK_SHIELDED_EXT,
-            CapabilityRequest::CompactBlockExt      => Capability::COMPACT_BLOCK_EXT,
-            CapabilityRequest::ChainBlockExt        => Capability::CHAIN_BLOCK_EXT,
-            CapabilityRequest::TransparentHistExt   => Capability::TRANSPARENT_HIST_EXT,
+            CapabilityRequest::ReadCore => Capability::READ_CORE,
+            CapabilityRequest::WriteCore => Capability::WRITE_CORE,
+            CapabilityRequest::BlockCoreExt => Capability::BLOCK_CORE_EXT,
+            CapabilityRequest::BlockTransparentExt => Capability::BLOCK_TRANSPARENT_EXT,
+            CapabilityRequest::BlockShieldedExt => Capability::BLOCK_SHIELDED_EXT,
+            CapabilityRequest::CompactBlockExt => Capability::COMPACT_BLOCK_EXT,
+            CapabilityRequest::ChainBlockExt => Capability::CHAIN_BLOCK_EXT,
+            CapabilityRequest::TransparentHistExt => Capability::TRANSPARENT_HIST_EXT,
         }
     }
 
@@ -95,14 +99,14 @@ impl CapabilityRequest {
     #[inline]
     pub(crate) const fn name(self) -> &'static str {
         match self {
-            CapabilityRequest::ReadCore             => "READ_CORE",
-            CapabilityRequest::WriteCore            => "WRITE_CORE",
-            CapabilityRequest::BlockCoreExt         => "BLOCK_CORE_EXT",
-            CapabilityRequest::BlockTransparentExt  => "BLOCK_TRANSPARENT_EXT",
-            CapabilityRequest::BlockShieldedExt     => "BLOCK_SHIELDED_EXT",
-            CapabilityRequest::CompactBlockExt      => "COMPACT_BLOCK_EXT",
-            CapabilityRequest::ChainBlockExt        => "CHAIN_BLOCK_EXT",
-            CapabilityRequest::TransparentHistExt   => "TRANSPARENT_HIST_EXT",
+            CapabilityRequest::ReadCore => "READ_CORE",
+            CapabilityRequest::WriteCore => "WRITE_CORE",
+            CapabilityRequest::BlockCoreExt => "BLOCK_CORE_EXT",
+            CapabilityRequest::BlockTransparentExt => "BLOCK_TRANSPARENT_EXT",
+            CapabilityRequest::BlockShieldedExt => "BLOCK_SHIELDED_EXT",
+            CapabilityRequest::CompactBlockExt => "COMPACT_BLOCK_EXT",
+            CapabilityRequest::ChainBlockExt => "CHAIN_BLOCK_EXT",
+            CapabilityRequest::TransparentHistExt => "TRANSPARENT_HIST_EXT",
         }
     }
 }
@@ -110,7 +114,9 @@ impl CapabilityRequest {
 // Optional convenience conversions.
 impl From<CapabilityRequest> for Capability {
     #[inline]
-    fn from(req: CapabilityRequest) -> Self { req.as_capability() }
+    fn from(req: CapabilityRequest) -> Self {
+        req.as_capability()
+    }
 }
 
 /// Top-level database metadata entry, storing the current schema version.

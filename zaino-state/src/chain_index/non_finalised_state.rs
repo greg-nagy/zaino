@@ -8,10 +8,14 @@ use zebra_chain::parameters::Network;
 use zebra_state::HashOrHeight;
 
 use crate::{
-    chain_index::{types::{Hash, Height}, source::ValidatorConnector},
-    BlockData, BlockIndex, ChainBlock, ChainWork, CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes,
-    CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactTxData,
-    OrchardCompactTx, SaplingCompactTx, TransparentCompactTx, TxInCompact, TxOutCompact,
+    chain_index::{
+        source::ValidatorConnector,
+        types::{Hash, Height},
+    },
+    BlockData, BlockIndex, ChainBlock, ChainWork, CommitmentTreeData, CommitmentTreeRoots,
+    CommitmentTreeSizes, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
+    CompactTxData, OrchardCompactTx, SaplingCompactTx, TransparentCompactTx, TxInCompact,
+    TxOutCompact,
 };
 
 /// Holds the block cache
@@ -108,7 +112,10 @@ impl NonFinalizedState {
     /// TODO: Currently, we can't initate without an snapshot, we need to create a cache
     /// of at least one block. Should this be tied to the instantiation of the data structure
     /// itself?
-    pub async fn initialize(source: ValidatorConnector, network: Network) -> Result<Self, InitError> {
+    pub async fn initialize(
+        source: ValidatorConnector,
+        network: Network,
+    ) -> Result<Self, InitError> {
         // TODO: Consider arbitrary buffer length
         let (staging_sender, staging_receiver) = mpsc::channel(100);
         let staged = Mutex::new(staging_receiver);

@@ -9,7 +9,10 @@ use super::{
     db::DbBackend,
 };
 
-use crate::{chain_index::finalised_state::capability::CapabilityRequest, error::FinalisedStateError, ChainBlock, Hash, Height, StatusType};
+use crate::{
+    chain_index::finalised_state::capability::CapabilityRequest, error::FinalisedStateError,
+    ChainBlock, Hash, Height, StatusType,
+};
 
 use arc_swap::{ArcSwap, ArcSwapOption};
 use async_trait::async_trait;
@@ -52,7 +55,10 @@ impl Router {
 
     /// Return the database backend for a given capability, or an error if none is available.
     #[inline]
-    pub(crate) fn backend(&self, cap: CapabilityRequest) -> Result<Arc<DbBackend>, FinalisedStateError> {
+    pub(crate) fn backend(
+        &self,
+        cap: CapabilityRequest,
+    ) -> Result<Arc<DbBackend>, FinalisedStateError> {
         let bit = cap.as_capability().bits();
 
         if self.shadow_mask.load(Ordering::Acquire) & bit != 0 {
@@ -152,7 +158,9 @@ impl DbCore for Router {
 #[async_trait]
 impl DbWrite for Router {
     async fn write_block(&self, blk: ChainBlock) -> Result<(), FinalisedStateError> {
-        self.backend(CapabilityRequest::WriteCore)?.write_block(blk).await
+        self.backend(CapabilityRequest::WriteCore)?
+            .write_block(blk)
+            .await
     }
 
     async fn delete_block_at_height(&self, h: Height) -> Result<(), FinalisedStateError> {
@@ -187,10 +195,14 @@ impl DbRead for Router {
     }
 
     async fn get_block_hash(&self, h: Height) -> Result<Hash, FinalisedStateError> {
-        self.backend(CapabilityRequest::ReadCore)?.get_block_hash(h).await
+        self.backend(CapabilityRequest::ReadCore)?
+            .get_block_hash(h)
+            .await
     }
 
     async fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
-        self.backend(CapabilityRequest::ReadCore)?.get_metadata().await
+        self.backend(CapabilityRequest::ReadCore)?
+            .get_metadata()
+            .await
     }
 }

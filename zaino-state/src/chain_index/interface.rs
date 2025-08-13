@@ -6,12 +6,10 @@ pub use zebra_chain::parameters::Network as ZebraNetwork;
 use zebra_chain::serialization::ZcashSerialize;
 use zebra_state::HashOrHeight;
 
-use crate::error::{ChainIndexError, ChainIndexErrorKind};
-use super::non_finalised_state::{
-    InitError, NonFinalizedState, NonfinalizedBlockCacheSnapshot,
-};
+use super::non_finalised_state::{InitError, NonFinalizedState, NonfinalizedBlockCacheSnapshot};
 use super::source::ValidatorConnector;
 use super::types::{self, ChainBlock};
+use crate::error::{ChainIndexError, ChainIndexErrorKind};
 
 /// The combined index. Contains a view of the mempool, and the full
 /// chain state, both finalized and non-finalized, to allow queries over

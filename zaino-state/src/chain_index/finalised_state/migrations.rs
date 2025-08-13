@@ -9,8 +9,8 @@ use super::{
 };
 
 use crate::{
-    chain_index::source::BlockchainSource, config::BlockCacheConfig,
-    error::FinalisedStateError, ChainBlock, ChainWork, Hash, Height,
+    chain_index::source::BlockchainSource, config::BlockCacheConfig, error::FinalisedStateError,
+    ChainBlock, ChainWork, Hash, Height,
 };
 
 use async_trait::async_trait;
@@ -59,7 +59,13 @@ impl<T: BlockchainSource> MigrationManager<T> {
     pub(super) async fn migrate(&mut self) -> Result<(), FinalisedStateError> {
         while self.current_version < self.target_version {
             let migration = self.get_migration()?;
-            migration.migrate(Arc::clone(&self.router), self.cfg.clone(), self.source.clone()).await?;
+            migration
+                .migrate(
+                    Arc::clone(&self.router),
+                    self.cfg.clone(),
+                    self.source.clone(),
+                )
+                .await?;
             self.current_version = migration.to_version();
         }
 
@@ -67,9 +73,7 @@ impl<T: BlockchainSource> MigrationManager<T> {
     }
 
     /// Return the next migration for the current version.
-    fn get_migration(
-        &self
-    ) -> Result<impl Migration<T>, FinalisedStateError> {
+    fn get_migration(&self) -> Result<impl Migration<T>, FinalisedStateError> {
         match (
             self.current_version.major,
             self.current_version.minor,
@@ -77,7 +81,8 @@ impl<T: BlockchainSource> MigrationManager<T> {
         ) {
             (0, 0, 0) => Ok(Migration0_0_0To1_0_0),
             (_, _, _) => Err(FinalisedStateError::Custom(format!(
-                "Missing migration from version {}", self.current_version
+                "Missing migration from version {}",
+                self.current_version
             ))),
         }
     }

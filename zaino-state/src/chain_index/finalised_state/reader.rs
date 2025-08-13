@@ -3,16 +3,17 @@
 //! This should be used to fetch chain data in *all* cases.
 
 use crate::{
-    chain_index::{finalised_state::capability::CapabilityRequest, types::AddrEventBytes}, error::FinalisedStateError, AddrScript, BlockHeaderData,
-    ChainBlock, CommitmentTreeData, Hash, Height, OrchardCompactTx, OrchardTxList, Outpoint,
-    SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
-    TxLocation, TxidList,
+    chain_index::{finalised_state::capability::CapabilityRequest, types::AddrEventBytes},
+    error::FinalisedStateError,
+    AddrScript, BlockHeaderData, ChainBlock, CommitmentTreeData, Hash, Height, OrchardCompactTx,
+    OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx,
+    TransparentTxList, TxLocation, TxidList,
 };
 
 use super::{
     capability::{
-        BlockCoreExt, BlockShieldedExt, BlockTransparentExt, ChainBlockExt,
-        CompactBlockExt, DbMetadata, TransparentHistExt,
+        BlockCoreExt, BlockShieldedExt, BlockTransparentExt, ChainBlockExt, CompactBlockExt,
+        DbMetadata, TransparentHistExt,
     },
     db::DbBackend,
     ZainoDB,
