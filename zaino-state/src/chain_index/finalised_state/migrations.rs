@@ -1,6 +1,4 @@
-//! This mod will hold the migration manager and migration implementations.
-//!
-//! This will be added in a subsequest pr.
+//! Migration management and implementations.
 
 use super::{
     capability::{
@@ -11,7 +9,7 @@ use super::{
 };
 
 use crate::{
-    chain_index::{source::BlockchainSourceInterface, types::GENESIS_HEIGHT},
+    chain_index::{source::BlockchainSource, types::GENESIS_HEIGHT},
     config::BlockCacheConfig,
     error::FinalisedStateError,
     ChainBlock, ChainWork, Hash, Height,
@@ -30,78 +28,65 @@ pub enum MigrationType {
 }
 
 #[async_trait]
-pub trait MigrationStep<T: BlockchainSourceInterface> {
-    const FROM_VERSION: DbVersion;
+pub trait Migration<T: BlockchainSource> {
+    const CURRENT_VERSION: DbVersion;
     const TO_VERSION: DbVersion;
-    const MIGRATION_TYPE: MigrationType;
+
+    fn current_version(&self) -> DbVersion {
+        Self::CURRENT_VERSION
+    }
+
+    fn to_version(&self) -> DbVersion {
+        Self::TO_VERSION
+    }
 
     async fn migrate(
+        &self,
         router: Arc<Router>,
         cfg: BlockCacheConfig,
         source: T,
     ) -> Result<(), FinalisedStateError>;
 }
 
-#[allow(clippy::type_complexity)]
-struct Migration<T: BlockchainSourceInterface> {
-    from: DbVersion,
-    to: DbVersion,
-    migration_type: MigrationType,
-    migrate_fn: fn(
-        Arc<Router>,
-        &BlockCacheConfig,
-        T,
-    ) -> futures::future::BoxFuture<'static, Result<(), FinalisedStateError>>,
+pub(super) struct MigrationManager<T: BlockchainSource> {
+    pub(super) router: Arc<Router>,
+    pub(super) cfg: BlockCacheConfig,
+    pub(super) current_version: DbVersion,
+    pub(super) target_version: DbVersion,
+    pub(super) source: T,
 }
 
-fn get_migration_step<T: BlockchainSourceInterface>(version: DbVersion) -> Option<Migration<T>> {
-    let from = <Migration0_0_0To1_0_0 as MigrationStep<T>>::FROM_VERSION;
-    if version == from {
-        Some(Migration {
-            from,
-            to: <Migration0_0_0To1_0_0 as MigrationStep<T>>::TO_VERSION,
-            migration_type: <Migration0_0_0To1_0_0 as MigrationStep<T>>::MIGRATION_TYPE,
-            migrate_fn: |router, cfg, source| {
-                Box::pin(Migration0_0_0To1_0_0::migrate(router, cfg.clone(), source))
-            },
-        })
-    } else {
-        None
-    }
-}
-
-pub struct MigrationManager;
-
-impl MigrationManager {
-    pub async fn migrate_to<T>(
-        router: Arc<Router>,
-        cfg: &BlockCacheConfig,
-        mut current_version: DbVersion,
-        target_version: DbVersion,
-        source: T,
-    ) -> Result<(), FinalisedStateError>
-    where
-        T: BlockchainSourceInterface,
-    {
-        while current_version < target_version {
-            let step = get_migration_step(current_version).ok_or_else(|| {
-                FinalisedStateError::Custom(format!(
-                    "Missing migration from version {current_version}"
-                ))
-            })?;
-
-            (step.migrate_fn)(Arc::clone(&router), cfg, source.clone()).await?;
-
-            current_version = step.to;
-        }
-
-        if current_version != target_version {
-            return Err(FinalisedStateError::Custom(format!(
-                "Could not migrate fully: stopped at {current_version} but target is {target_version}"
-            )));
+impl<T: BlockchainSource> MigrationManager<T> {
+    /// Iteratively performs each migration step from current version to target version.
+    pub(super) async fn migrate(&mut self) -> Result<(), FinalisedStateError> {
+        while self.current_version < self.target_version {
+            let migration = self.get_migration()?;
+            migration
+                .migrate(
+                    Arc::clone(&self.router),
+                    self.cfg.clone(),
+                    self.source.clone(),
+                )
+                .await?;
+            self.current_version = migration.to_version();
         }
 
         Ok(())
+    }
+
+    /// Return the next migration for the current version.
+    fn get_migration(&self) -> Result<impl Migration<T>, FinalisedStateError> {
+        match (
+            self.current_version.major,
+            self.current_version.minor,
+            self.current_version.patch,
+        ) {
+            (0, 0, 0) => Ok(Migration0_0_0To1_0_0),
+            (_, _, _) => Err(FinalisedStateError::Custom(format!(
+                "Missing migration from version {}",
+                self.current_version
+            ))),
+        }
     }
 }
 
@@ -110,8 +95,8 @@ impl MigrationManager {
 struct Migration0_0_0To1_0_0;
 
 #[async_trait]
-impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
-    const FROM_VERSION: DbVersion = DbVersion {
+impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
+    const CURRENT_VERSION: DbVersion = DbVersion {
         major: 0,
         minor: 0,
         patch: 0,
@@ -121,7 +106,6 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
         minor: 0,
         patch: 0,
     };
-    const MIGRATION_TYPE: MigrationType = MigrationType::Minor;
 
     /// The V0 database that we are migrating from was a lightwallet specific database
     /// that only built compact block data from sapling activation onwards.
@@ -129,6 +113,7 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
     /// For this reason we do not do any partial builds in the V0 to V1 migration.
     /// We just run V0 as primary until V1 is fully built in shadow, then switch primary, deleting V0.
     async fn migrate(
+        &self,
         router: Arc<Router>,
         cfg: BlockCacheConfig,
         source: T,
@@ -146,7 +131,7 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
             | MigrationStatus::PartialBuildComplete
             | MigrationStatus::FinalBuildInProgress => {
                 // build shadow to primary_db_height,
-                // start from shadow_db_height in case database what shutdown mid-migration.
+                // start from shadow_db_height in case database was shutdown mid-migration.
                 let mut parent_chain_work = ChainWork::from_u256(0.into());
 
                 let mut shadow_db_height = shadow.db_height().await?.unwrap_or(Height(0));
@@ -234,13 +219,12 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
         info!("promoting v1 database to primary.");
 
         // Promote V1 to primary
-        let db_v0 = router.promote_shadow();
-        let old_weak = Arc::downgrade(&db_v0);
+        let db_v0 = router.promote_shadow()?;
 
         // Delete V0
         tokio::spawn(async move {
             // Wait until all Arc<DbBackend> clones are dropped
-            while old_weak.strong_count() > 1 {
+            while Arc::strong_count(&db_v0) > 1 {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
 
@@ -257,7 +241,7 @@ impl<T: BlockchainSourceInterface> MigrationStep<T> for Migration0_0_0To1_0_0 {
             };
             let db_path = cfg.db_path.join(db_path_dir);
 
-            info!("Wiping v0 database fropm disk.");
+            info!("Wiping v0 database from disk.");
 
             match tokio::fs::remove_dir_all(&db_path).await {
                 Ok(_) => tracing::info!("Deleted old database at {}", db_path.display()),

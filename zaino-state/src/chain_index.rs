@@ -18,7 +18,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use futures::Stream;
 use non_finalised_state::NonfinalizedBlockCacheSnapshot;
-use source::{BlockchainSource, BlockchainSourceInterface};
+use source::{BlockchainSource, ValidatorConnector};
 use tokio_stream::StreamExt;
 use types::ChainBlock;
 pub use zebra_chain::parameters::Network as ZebraNetwork;
@@ -28,8 +28,6 @@ use zebra_state::HashOrHeight;
 pub mod encoding;
 /// All state at least 100 blocks old
 pub mod finalised_state;
-/// The public interface to the chain index
-pub mod interface;
 /// State in the mempool, not yet on-chain
 pub mod mempool;
 /// State less than 100 blocks old, stored separately as it may be reorged
@@ -96,14 +94,14 @@ pub trait ChainIndex {
 /// zebrad's database) or a jsonRPC connection to a validator.
 ///
 /// Currently does not support mempool operations
-pub struct NodeBackedChainIndex<Source: BlockchainSourceInterface = BlockchainSource> {
+pub struct NodeBackedChainIndex<Source: BlockchainSource = ValidatorConnector> {
     // TODO: mempool
     non_finalized_state: std::sync::Arc<crate::NonFinalizedState<Source>>,
     finalized_db: std::sync::Arc<finalised_state::ZainoDB>,
     finalized_state: finalised_state::reader::DbReader,
 }
 
-impl<Source: BlockchainSourceInterface> NodeBackedChainIndex<Source> {
+impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
     /// Creates a new chainindex from a connection to a validator
     /// Currently this is a ReadStateService or JsonRpSeeConnector
     pub async fn new(
@@ -129,7 +127,7 @@ where {
     }
 }
 
-impl<Source: BlockchainSourceInterface> NodeBackedChainIndex<Source> {
+impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
     pub(super) fn start_sync_loop(
         &self,
     ) -> tokio::task::JoinHandle<Result<std::convert::Infallible, SyncError>> {
@@ -200,7 +198,7 @@ impl<Source: BlockchainSourceInterface> NodeBackedChainIndex<Source> {
     }
 }
 
-impl<Source: BlockchainSourceInterface> ChainIndex for NodeBackedChainIndex<Source> {
+impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
     type Snapshot = Arc<NonfinalizedBlockCacheSnapshot>;
     type Error = ChainIndexError;
 

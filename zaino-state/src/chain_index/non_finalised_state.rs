@@ -3,9 +3,10 @@ use std::{collections::HashMap, mem, sync::Arc};
 use crate::{
     chain_index::types::{Hash, Height},
     error::FinalisedStateError,
-    BlockData, BlockIndex, ChainWork, CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes,
-    CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactTxData,
-    OrchardCompactTx, SaplingCompactTx, TransparentCompactTx, TxInCompact, TxOutCompact,
+    BlockData, BlockIndex, ChainBlock, ChainWork, CommitmentTreeData, CommitmentTreeRoots,
+    CommitmentTreeSizes, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
+    CompactTxData, OrchardCompactTx, SaplingCompactTx, TransparentCompactTx, TxInCompact,
+    TxOutCompact,
 };
 use arc_swap::ArcSwap;
 use futures::lock::Mutex;
@@ -14,12 +15,10 @@ use tokio::sync::mpsc;
 use zebra_chain::parameters::Network;
 use zebra_state::HashOrHeight;
 
-use crate::ChainBlock;
-
-use super::{finalised_state::ZainoDB, source::BlockchainSourceInterface};
+use super::{finalised_state::ZainoDB, source::BlockchainSource};
 
 /// Holds the block cache
-pub struct NonFinalizedState<Source: BlockchainSourceInterface> {
+pub struct NonFinalizedState<Source: BlockchainSource> {
     /// We need access to the validator's best block hash, as well
     /// as a source of blocks
     pub(super) source: Source,
@@ -112,7 +111,7 @@ pub enum InitError {
 }
 
 /// This is the core of the concurrent block cache.
-impl<Source: BlockchainSourceInterface> NonFinalizedState<Source> {
+impl<Source: BlockchainSource> NonFinalizedState<Source> {
     /// Create a nonfinalized state, in a coherent initial state
     ///
     /// TODO: Currently, we can't initate without an snapshot, we need to create a cache
@@ -161,7 +160,7 @@ impl<Source: BlockchainSourceInterface> NonFinalizedState<Source> {
                 ) => chain_history_block_tx_auth_commitment_hash.bytes_in_serialized_order(),
             },
 
-            nonse: *genesis_block.header.nonce,
+            nonce: *genesis_block.header.nonce,
             solution: genesis_block.header.solution.into(),
         };
 
@@ -387,7 +386,7 @@ impl<Source: BlockchainSourceInterface> NonFinalizedState<Source> {
                         }
                     },
 
-                    nonse: *block.header.nonce,
+                    nonce: *block.header.nonce,
                     solution: block.header.solution.into(),
                 };
 

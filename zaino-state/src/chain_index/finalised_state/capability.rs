@@ -4,7 +4,7 @@ use core::fmt;
 
 use crate::{
     chain_index::types::AddrEventBytes, error::FinalisedStateError, read_fixed_le, read_u32_le,
-    read_u8_le, version, write_fixed_le, write_u32_le, write_u8_le, AddrScript, BlockHeaderData,
+    read_u8, version, write_fixed_le, write_u32_le, write_u8, AddrScript, BlockHeaderData,
     ChainBlock, CommitmentTreeData, FixedEncodedLen, Hash, Height, OrchardCompactTx, OrchardTxList,
     Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
     TxLocation, TxidList, ZainoVersionedSerialise,
@@ -66,6 +66,59 @@ impl Capability {
     }
 }
 
+// A single-feature request type (cannot be composite).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum CapabilityRequest {
+    ReadCore,
+    WriteCore,
+    BlockCoreExt,
+    BlockTransparentExt,
+    BlockShieldedExt,
+    CompactBlockExt,
+    ChainBlockExt,
+    TransparentHistExt,
+}
+
+impl CapabilityRequest {
+    /// Map to the corresponding single-bit `Capability`.
+    #[inline]
+    pub(crate) const fn as_capability(self) -> Capability {
+        match self {
+            CapabilityRequest::ReadCore => Capability::READ_CORE,
+            CapabilityRequest::WriteCore => Capability::WRITE_CORE,
+            CapabilityRequest::BlockCoreExt => Capability::BLOCK_CORE_EXT,
+            CapabilityRequest::BlockTransparentExt => Capability::BLOCK_TRANSPARENT_EXT,
+            CapabilityRequest::BlockShieldedExt => Capability::BLOCK_SHIELDED_EXT,
+            CapabilityRequest::CompactBlockExt => Capability::COMPACT_BLOCK_EXT,
+            CapabilityRequest::ChainBlockExt => Capability::CHAIN_BLOCK_EXT,
+            CapabilityRequest::TransparentHistExt => Capability::TRANSPARENT_HIST_EXT,
+        }
+    }
+
+    /// Human-friendly feature name for errors and logs.
+    #[inline]
+    pub(crate) const fn name(self) -> &'static str {
+        match self {
+            CapabilityRequest::ReadCore => "READ_CORE",
+            CapabilityRequest::WriteCore => "WRITE_CORE",
+            CapabilityRequest::BlockCoreExt => "BLOCK_CORE_EXT",
+            CapabilityRequest::BlockTransparentExt => "BLOCK_TRANSPARENT_EXT",
+            CapabilityRequest::BlockShieldedExt => "BLOCK_SHIELDED_EXT",
+            CapabilityRequest::CompactBlockExt => "COMPACT_BLOCK_EXT",
+            CapabilityRequest::ChainBlockExt => "CHAIN_BLOCK_EXT",
+            CapabilityRequest::TransparentHistExt => "TRANSPARENT_HIST_EXT",
+        }
+    }
+}
+
+// Optional convenience conversions.
+impl From<CapabilityRequest> for Capability {
+    #[inline]
+    fn from(req: CapabilityRequest) -> Self {
+        req.as_capability()
+    }
+}
+
 /// Top-level database metadata entry, storing the current schema version.
 ///
 /// Stored under the fixed key `"metadata"` in the LMDB metadata database.
@@ -76,7 +129,7 @@ pub(crate) struct DbMetadata {
     pub(crate) version: DbVersion,
     /// BLAKE2b-256 hash of the schema definition (includes struct layout, types, etc.)
     pub(crate) schema_hash: [u8; 32],
-    /// Migration status of the database, None outside of migrations.
+    /// Migration status of the database, `Empty` outside of migrations.
     pub(crate) migration_status: MigrationStatus,
 }
 
@@ -264,7 +317,7 @@ impl core::fmt::Display for DbVersion {
 /// This is used when the database is shutdown mid-migration to ensure migration correctness.
 ///
 /// NOTE: Some migrations run a partial database rebuild before the final build process.
-///       This is done to minimise disk requirements ruring migrations,
+///       This is done to minimise disk requirements during migrations,
 ///       enabling the deletion of the old database before the the database is rebuilt in full.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
@@ -302,7 +355,7 @@ impl ZainoVersionedSerialise for MigrationStatus {
             MigrationStatus::FinalBuildInProgress => 3,
             MigrationStatus::Complete => 4,
         };
-        write_u8_le(w, tag)
+        write_u8(w, tag)
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
@@ -310,7 +363,7 @@ impl ZainoVersionedSerialise for MigrationStatus {
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        match read_u8_le(r)? {
+        match read_u8(r)? {
             0 => Ok(MigrationStatus::Empty),
             1 => Ok(MigrationStatus::PartialBuidInProgress),
             2 => Ok(MigrationStatus::PartialBuildComplete),
@@ -374,9 +427,6 @@ pub trait DbCore: DbRead + DbWrite + Send + Sync {
 
     /// Stops background tasks, syncs, etc.
     async fn shutdown(&self) -> Result<(), FinalisedStateError>;
-
-    /// Return `std::any::Any`
-    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 // ***** Database Extension traits *****

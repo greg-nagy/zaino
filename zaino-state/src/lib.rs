@@ -39,10 +39,9 @@ pub use chain_index::non_finalised_state::{
 pub use chain_index::types::{
     AddrHistRecord, AddrScript, BlockData, BlockHeaderData, BlockIndex, ChainBlock, ChainWork,
     CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes, CompactOrchardAction,
-    CompactSaplingOutput, CompactSaplingSpend, CompactTxData, Hash, Height, Index,
-    OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, ScriptType,
-    ShardRoot, TransparentCompactTx, TransparentTxList, TxInCompact, TxLocation, TxOutCompact,
-    TxidList,
+    CompactSaplingOutput, CompactSaplingSpend, CompactTxData, Hash, Height, OrchardCompactTx,
+    OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, ScriptType, ShardIndex, ShardRoot,
+    TransparentCompactTx, TransparentTxList, TxInCompact, TxLocation, TxOutCompact, TxidList,
 };
 
 pub(crate) mod local_cache;

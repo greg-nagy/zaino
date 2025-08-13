@@ -1,5 +1,5 @@
 use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
-use zaino_state::{chain_index::source::BlockchainSource, BackendType};
+use zaino_state::BackendType;
 use zaino_testutils::{TestManager, Validator as _, ValidatorKind};
 
 async fn create_test_manager_and_connector(
@@ -53,7 +53,7 @@ mod chain_query_interface {
             chain_index::{self, ChainIndex},
             BlockCacheConfig,
         },
-        chain_index::NodeBackedChainIndex,
+        chain_index::{source::ValidatorConnector, NodeBackedChainIndex},
         Height, StateService, StateServiceConfig, ZcashService as _,
     };
     use zebra_chain::serialization::{ZcashDeserialize, ZcashDeserializeInto};
@@ -160,7 +160,7 @@ mod chain_query_interface {
             no_db: false,
         };
         let chain_index = NodeBackedChainIndex::new(
-            BlockchainSource::State(state_service.read_state_service().clone()),
+            ValidatorConnector::State(state_service.read_state_service().clone()),
             config,
         )
         .await

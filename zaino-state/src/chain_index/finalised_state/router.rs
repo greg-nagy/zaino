@@ -9,9 +9,12 @@ use super::{
     db::DbBackend,
 };
 
-use crate::{error::FinalisedStateError, ChainBlock, Hash, Height, StatusType};
+use crate::{
+    chain_index::finalised_state::capability::CapabilityRequest, error::FinalisedStateError,
+    ChainBlock, Hash, Height, StatusType,
+};
 
-use arc_swap::ArcSwap;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use async_trait::async_trait;
 use std::sync::{
     atomic::{AtomicU32, Ordering},
@@ -22,7 +25,7 @@ pub(crate) struct Router {
     /// Primary active database.
     primary: ArcSwap<DbBackend>,
     /// Shadow database, new version to be built during major migration.
-    shadow: ArcSwap<Option<Arc<DbBackend>>>,
+    shadow: ArcSwapOption<DbBackend>,
     /// Capability mask for primary database.
     primary_mask: AtomicU32,
     /// Capability mask dictating what database capalility (if any) should be served by the shadow.
@@ -42,7 +45,7 @@ impl Router {
         let cap = primary.capability();
         Self {
             primary: ArcSwap::from(primary),
-            shadow: ArcSwap::from(Arc::new(None)),
+            shadow: ArcSwapOption::empty(),
             primary_mask: AtomicU32::new(cap.bits()),
             shadow_mask: AtomicU32::new(0),
         }
@@ -52,32 +55,22 @@ impl Router {
 
     /// Return the database backend for a given capability, or an error if none is available.
     #[inline]
-    pub(crate) fn backend(&self, cap: Capability) -> Result<Arc<DbBackend>, FinalisedStateError> {
-        let bit = cap.bits();
+    pub(crate) fn backend(
+        &self,
+        cap: CapabilityRequest,
+    ) -> Result<Arc<DbBackend>, FinalisedStateError> {
+        let bit = cap.as_capability().bits();
 
         if self.shadow_mask.load(Ordering::Acquire) & bit != 0 {
             if let Some(shadow_db) = self.shadow.load().as_ref() {
                 return Ok(Arc::clone(shadow_db));
             }
         }
-
         if self.primary_mask.load(Ordering::Acquire) & bit != 0 {
             return Ok(self.primary.load_full());
         }
 
-        let feature_name = match cap {
-            Capability::READ_CORE => "READ_CORE",
-            Capability::WRITE_CORE => "WRITE_CORE",
-            Capability::BLOCK_CORE_EXT => "BLOCK_CORE_EXT",
-            Capability::BLOCK_TRANSPARENT_EXT => "BLOCK_TRANSPARENT_EXT",
-            Capability::BLOCK_SHIELDED_EXT => "BLOCK_SHIELDED_EXT",
-            Capability::COMPACT_BLOCK_EXT => "COMPACT_BLOCK_EXT",
-            Capability::CHAIN_BLOCK_EXT => "CHAIN_BLOCK_EXT",
-            Capability::TRANSPARENT_HIST_EXT => "TRANSPARENT_HIST_EXT",
-            _ => "UNKNOWN_CAPABILITY",
-        };
-
-        Err(FinalisedStateError::FeatureUnavailable(feature_name))
+        Err(FinalisedStateError::FeatureUnavailable(cap.name()))
     }
 
     // ***** Shadow database control *****
@@ -86,7 +79,7 @@ impl Router {
 
     /// Sets the shadow to the given database.
     pub(crate) fn set_shadow(&self, shadow: Arc<DbBackend>, caps: Capability) {
-        self.shadow.store(Some(shadow).into());
+        self.shadow.store(Some(shadow));
         self.shadow_mask.store(caps.bits(), Ordering::Release);
     }
 
@@ -98,22 +91,25 @@ impl Router {
     /// Promotes the shadow database to primary, resets shadow,
     /// and updates the primary capability mask from the new backend.
     ///
-    /// Used at the und of major migrations to move the active database to the new version.
-    pub(crate) fn promote_shadow(&self) -> Arc<DbBackend> {
-        let new_primary = self
-            .shadow
-            .swap(None.into())
-            .as_ref()
-            .clone()
-            .expect("shadow missing during promote()");
+    /// Used at the end of major migrations to move the active database to the new version.
+    ///
+    /// Returns the initial primary value.
+    ///
+    /// # Error
+    ///
+    /// Returns a critical error if the shadow is not found.
+    pub(crate) fn promote_shadow(&self) -> Result<Arc<DbBackend>, FinalisedStateError> {
+        let Some(new_primary) = self.shadow.swap(None) else {
+            return Err(FinalisedStateError::Critical(
+                "shadow not found!".to_string(),
+            ));
+        };
 
-        let cap = new_primary.capability();
-
-        let old_primary = self.primary.swap(Arc::clone(&new_primary));
-        self.primary_mask.store(cap.bits(), Ordering::Release);
+        self.primary_mask
+            .store(new_primary.capability().bits(), Ordering::Release);
         self.shadow_mask.store(0, Ordering::Release);
 
-        old_primary
+        Ok(self.primary.swap(new_primary))
     }
 
     // ***** Primary database capability control *****
@@ -139,7 +135,7 @@ impl Router {
 #[async_trait]
 impl DbCore for Router {
     async fn status(&self) -> StatusType {
-        match self.backend(Capability::READ_CORE) {
+        match self.backend(CapabilityRequest::ReadCore) {
             Ok(backend) => backend.status().await,
             Err(_) => StatusType::Busy,
         }
@@ -157,32 +153,30 @@ impl DbCore for Router {
         primary_shutdown_result?;
         shadow_shutdown_result
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self as &dyn std::any::Any
-    }
 }
 
 #[async_trait]
 impl DbWrite for Router {
     async fn write_block(&self, blk: ChainBlock) -> Result<(), FinalisedStateError> {
-        self.backend(Capability::WRITE_CORE)?.write_block(blk).await
+        self.backend(CapabilityRequest::WriteCore)?
+            .write_block(blk)
+            .await
     }
 
     async fn delete_block_at_height(&self, h: Height) -> Result<(), FinalisedStateError> {
-        self.backend(Capability::WRITE_CORE)?
+        self.backend(CapabilityRequest::WriteCore)?
             .delete_block_at_height(h)
             .await
     }
 
     async fn delete_block(&self, blk: &ChainBlock) -> Result<(), FinalisedStateError> {
-        self.backend(Capability::WRITE_CORE)?
+        self.backend(CapabilityRequest::WriteCore)?
             .delete_block(blk)
             .await
     }
 
     async fn update_metadata(&self, metadata: DbMetadata) -> Result<(), FinalisedStateError> {
-        self.backend(Capability::WRITE_CORE)?
+        self.backend(CapabilityRequest::WriteCore)?
             .update_metadata(metadata)
             .await
     }
@@ -191,20 +185,24 @@ impl DbWrite for Router {
 #[async_trait]
 impl DbRead for Router {
     async fn db_height(&self) -> Result<Option<Height>, FinalisedStateError> {
-        self.backend(Capability::READ_CORE)?.db_height().await
+        self.backend(CapabilityRequest::ReadCore)?.db_height().await
     }
 
     async fn get_block_height(&self, hash: Hash) -> Result<Option<Height>, FinalisedStateError> {
-        self.backend(Capability::READ_CORE)?
+        self.backend(CapabilityRequest::ReadCore)?
             .get_block_height(hash)
             .await
     }
 
     async fn get_block_hash(&self, h: Height) -> Result<Option<Hash>, FinalisedStateError> {
-        self.backend(Capability::READ_CORE)?.get_block_hash(h).await
+        self.backend(CapabilityRequest::ReadCore)?
+            .get_block_hash(h)
+            .await
     }
 
     async fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
-        self.backend(Capability::READ_CORE)?.get_metadata().await
+        self.backend(CapabilityRequest::ReadCore)?
+            .get_metadata()
+            .await
     }
 }

@@ -1,4 +1,4 @@
-//! BlockchainSource is the connection zaino holds the the serving validator / finaliser.
+//! Traits and types for the blockchain source thats serves zaino, commonly a validator connection.
 
 use std::sync::Arc;
 
@@ -16,7 +16,7 @@ use zebra_state::{HashOrHeight, ReadResponse, ReadStateService};
 
 /// A trait for accessing blockchain data from different backends.
 #[async_trait]
-pub trait BlockchainSourceInterface: Clone + Send + Sync + 'static {
+pub trait BlockchainSource: Clone + Send + Sync + 'static {
     /// Returns the block by hash or height
     async fn get_block(
         &self,
@@ -33,20 +33,12 @@ pub trait BlockchainSourceInterface: Clone + Send + Sync + 'static {
     )>;
 }
 
-/// A connection to a validator.
-#[derive(Clone)]
-pub enum BlockchainSource {
-    /// The connection is via direct read access to a zebrad's data file
-    State(ReadStateService),
-    /// We are connected to a zebrad, zcashd, or other zainod via JsonRpSee
-    Fetch(JsonRpSeeConnector),
-}
-
 /// An error originating from a blockchain source.
 #[derive(Debug, thiserror::Error)]
 pub enum BlockchainSourceError {
-    /// TODO: Add logic for handling recoverable errors if any are identified
-    /// one candidate may be ephemerable network hiccoughs
+    /// Unrecoverable error.
+    // TODO: Add logic for handling recoverable errors if any are identified
+    // one candidate may be ephemerable network hiccoughs
     #[error("critical error in backing block source: {0}")]
     Unrecoverable(String),
 }
@@ -58,14 +50,23 @@ pub struct InvalidData(String);
 
 type BlockchainSourceResult<T> = Result<T, BlockchainSourceError>;
 
+/// A connection to a validator.
+#[derive(Clone)]
+pub enum ValidatorConnector {
+    /// The connection is via direct read access to a zebrad's data file
+    State(ReadStateService),
+    /// We are connected to a zebrad, zcashd, or other zainod via JsonRpSee
+    Fetch(JsonRpSeeConnector),
+}
+
 /// Methods that will dispatch to a ReadStateService or JsonRpSeeConnector
-impl BlockchainSource {
-    async fn get_block(
+impl ValidatorConnector {
+    pub(super) async fn get_block(
         &self,
         id: HashOrHeight,
     ) -> BlockchainSourceResult<Option<Arc<zebra_chain::block::Block>>> {
         match self {
-            BlockchainSource::State(read_state_service) => match read_state_service
+            ValidatorConnector::State(read_state_service) => match read_state_service
                 .clone()
                 .call(zebra_state::ReadRequest::Block(id))
                 .await
@@ -77,7 +78,7 @@ impl BlockchainSource {
                 ),
                 Err(e) => Err(BlockchainSourceError::Unrecoverable(e.to_string())),
             },
-            BlockchainSource::Fetch(json_rp_see_connector) => {
+            ValidatorConnector::Fetch(json_rp_see_connector) => {
                 match json_rp_see_connector
                     .get_block(id.to_string(), Some(0))
                     .await
@@ -97,7 +98,7 @@ impl BlockchainSource {
         }
     }
 
-    async fn get_commitment_tree_roots(
+    pub(super) async fn get_commitment_tree_roots(
         &self,
         id: Hash,
     ) -> BlockchainSourceResult<(
@@ -105,7 +106,7 @@ impl BlockchainSource {
         Option<(zebra_chain::orchard::tree::Root, u64)>,
     )> {
         match self {
-            BlockchainSource::State(read_state_service) => {
+            ValidatorConnector::State(read_state_service) => {
                 let (sapling_tree_response, orchard_tree_response) = join(
                     read_state_service
                         .clone()
@@ -141,7 +142,7 @@ impl BlockchainSource {
                         .map(|tree| (tree.root(), tree.count())),
                 ))
             }
-            BlockchainSource::Fetch(json_rp_see_connector) => {
+            ValidatorConnector::Fetch(json_rp_see_connector) => {
                 let tree_responses = json_rp_see_connector
                     .get_treestate(id.to_string())
                     .await
@@ -217,7 +218,7 @@ impl BlockchainSource {
 }
 
 #[async_trait]
-impl BlockchainSourceInterface for BlockchainSource {
+impl BlockchainSource for ValidatorConnector {
     async fn get_block(
         &self,
         id: HashOrHeight,
@@ -290,7 +291,7 @@ pub(crate) mod test {
     }
 
     #[async_trait]
-    impl BlockchainSourceInterface for MockchainSource {
+    impl BlockchainSource for MockchainSource {
         async fn get_block(&self, id: HashOrHeight) -> BlockchainSourceResult<Option<Arc<Block>>> {
             match id {
                 HashOrHeight::Height(h) => {
