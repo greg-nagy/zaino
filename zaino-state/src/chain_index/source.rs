@@ -65,6 +65,8 @@ pub struct State {
 #[derive(Clone)]
 pub enum ValidatorConnector {
     /// The connection is via direct read access to a zebrad's data file
+    ///
+    /// NOTE: See docs for State struct.
     State(State),
     /// We are connected to a zebrad, zcashd, or other zainod via JsonRpSee
     Fetch(JsonRpSeeConnector),
@@ -77,7 +79,8 @@ impl ValidatorConnector {
         id: HashOrHeight,
     ) -> BlockchainSourceResult<Option<Arc<zebra_chain::block::Block>>> {
         match self {
-            ValidatorConnector::State(state) => match state.read_state_service
+            ValidatorConnector::State(state) => match state
+                .read_state_service
                 .clone()
                 .call(zebra_state::ReadRequest::Block(id))
                 .await
@@ -118,19 +121,16 @@ impl ValidatorConnector {
     )> {
         match self {
             ValidatorConnector::State(state) => {
-                let (sapling_tree_response, orchard_tree_response) = join(
-                    state.read_state_service
-                        .clone()
-                        .call(zebra_state::ReadRequest::SaplingTree(HashOrHeight::Hash(
-                            id.into(),
-                        ))),
-                    state.read_state_service
-                        .clone()
-                        .call(zebra_state::ReadRequest::OrchardTree(HashOrHeight::Hash(
-                            id.into(),
-                        ))),
-                )
-                .await;
+                let (sapling_tree_response, orchard_tree_response) =
+                    join(
+                        state.read_state_service.clone().call(
+                            zebra_state::ReadRequest::SaplingTree(HashOrHeight::Hash(id.into())),
+                        ),
+                        state.read_state_service.clone().call(
+                            zebra_state::ReadRequest::OrchardTree(HashOrHeight::Hash(id.into())),
+                        ),
+                    )
+                    .await;
                 let (sapling_tree, orchard_tree) = match (
                     //TODO: Better readstateservice error handling
                     sapling_tree_response
@@ -227,28 +227,31 @@ impl ValidatorConnector {
         }
     }
 
-
-    pub(super) async fn get_mempool_txids(&self) -> BlockchainSourceResult<
-        Option<Vec<zebra_chain::transaction::Hash>>,
-    > {
+    pub(super) async fn get_mempool_txids(
+        &self,
+    ) -> BlockchainSourceResult<Option<Vec<zebra_chain::transaction::Hash>>> {
         let mempool_fetcher = match self {
             ValidatorConnector::State(state) => &state.mempool_fetcher,
             ValidatorConnector::Fetch(json_rp_see_connector) => json_rp_see_connector,
         };
 
-        let txid_strings = mempool_fetcher.get_raw_mempool().await.map_err(|e| {
-                        BlockchainSourceError::Unrecoverable(format!("could not fetch mempool data: {e}"))
-                    })?.transactions;
+        let txid_strings = mempool_fetcher
+            .get_raw_mempool()
+            .await
+            .map_err(|e| {
+                BlockchainSourceError::Unrecoverable(format!("could not fetch mempool data: {e}"))
+            })?
+            .transactions;
 
         let txids: Vec<zebra_chain::transaction::Hash> = txid_strings
             .into_iter()
-                .map(|txid_str| {
-                    zebra_chain::transaction::Hash::from_str(&txid_str).map_err(|e| {
-                        BlockchainSourceError::Unrecoverable(format!(
-                            "invalid transaction id '{txid_str}': {e}"
-                        ))
-                    })
+            .map(|txid_str| {
+                zebra_chain::transaction::Hash::from_str(&txid_str).map_err(|e| {
+                    BlockchainSourceError::Unrecoverable(format!(
+                        "invalid transaction id '{txid_str}': {e}"
+                    ))
                 })
+            })
             .collect::<Result<_, _>>()?;
 
         Ok(Some(txids))
@@ -257,23 +260,26 @@ impl ValidatorConnector {
     pub(super) async fn get_transaction(
         &self,
         txid: Hash,
-    ) -> BlockchainSourceResult<Option<Arc<zebra_chain::transaction::Transaction>>,> {
+    ) -> BlockchainSourceResult<Option<Arc<zebra_chain::transaction::Transaction>>> {
         match self {
-            ValidatorConnector::State( State { read_state_service, mempool_fetcher } ) => {
+            ValidatorConnector::State(State {
+                read_state_service,
+                mempool_fetcher,
+            }) => {
                 // Check state for transaction
                 let mut read_state_service = read_state_service.clone();
                 let mempool_fetcher = mempool_fetcher.clone();
-                
+
                 let txid_tr: zebra_chain::transaction::Hash =
-                zebra_chain::transaction::Hash::from(txid.0);
+                    zebra_chain::transaction::Hash::from(txid.0);
 
                 let resp = read_state_service
                     .ready()
                     .and_then(|svc| svc.call(zebra_state::ReadRequest::Transaction(txid_tr)))
                     .await
-                    .map_err(|e| BlockchainSourceError::Unrecoverable(format!(
-                        "state read failed: {e}"
-                    )))?;
+                    .map_err(|e| {
+                        BlockchainSourceError::Unrecoverable(format!("state read failed: {e}"))
+                    })?;
 
                 if let zebra_state::ReadResponse::Transaction(opt) = resp {
                     if let Some(found) = opt {
@@ -282,46 +288,56 @@ impl ValidatorConnector {
                 } else {
                     unreachable!("unmatched response to a `Transaction` read request");
                 }
-                
+
                 // Else heck mempool for transaction.
-                let mempool_txids = self.get_mempool_txids().await?
-                    .ok_or_else(|| BlockchainSourceError::Unrecoverable(
-                        "could not fetch mempool transaction ids: none returned".to_string()
-                    ))?;
+                let mempool_txids = self.get_mempool_txids().await?.ok_or_else(|| {
+                    BlockchainSourceError::Unrecoverable(
+                        "could not fetch mempool transaction ids: none returned".to_string(),
+                    )
+                })?;
 
                 if mempool_txids.contains(&txid_tr) {
-                    let serialized_transaction = if let GetTransactionResponse::Raw(serialized_transaction) =
-                        mempool_fetcher
-                            .get_raw_transaction(txid.to_string(), Some(1))
-                            .await
-                            .map_err(|e| BlockchainSourceError::Unrecoverable(format!(
+                    let serialized_transaction = if let GetTransactionResponse::Raw(
+                        serialized_transaction,
+                    ) = mempool_fetcher
+                        .get_raw_transaction(txid_tr.to_string(), Some(1))
+                        .await
+                        .map_err(|e| {
+                            BlockchainSourceError::Unrecoverable(format!(
                                 "could not fetch transaction data: {e}"
-                            )))?
-                        {
-                            serialized_transaction
-                        } else {
-                            return Err(BlockchainSourceError::Unrecoverable(
-                                "could not fetch transaction data: non-raw response".to_string(),
-                            ));
-                        };
-                    let transaction: zebra_chain::transaction::Transaction = zebra_chain::transaction::Transaction::zcash_deserialize(
-                        std::io::Cursor::new(serialized_transaction.as_ref()),
-                        ).map_err(|e| BlockchainSourceError::Unrecoverable(
-                            format!("could not deserialize transaction data: {e}")
-                        ))?;
+                            ))
+                        })? {
+                        serialized_transaction
+                    } else {
+                        return Err(BlockchainSourceError::Unrecoverable(
+                            "could not fetch transaction data: non-raw response".to_string(),
+                        ));
+                    };
+                    let transaction: zebra_chain::transaction::Transaction =
+                        zebra_chain::transaction::Transaction::zcash_deserialize(
+                            std::io::Cursor::new(serialized_transaction.as_ref()),
+                        )
+                        .map_err(|e| {
+                            BlockchainSourceError::Unrecoverable(format!(
+                                "could not deserialize transaction data: {e}"
+                            ))
+                        })?;
                     Ok(Some(transaction.into()))
                 } else {
                     Ok(None)
                 }
-            },
+            }
             ValidatorConnector::Fetch(json_rp_see_connector) => {
-                let serialized_transaction = if let GetTransactionResponse::Raw(serialized_transaction) =
-                    json_rp_see_connector
-                        .get_raw_transaction(txid.to_string(), Some(1))
-                        .await
-                        .map_err(|e| BlockchainSourceError::Unrecoverable(format!(
-                            "could not fetch transaction data: {e}"
-                        )))?
+                let serialized_transaction =
+                    if let GetTransactionResponse::Raw(serialized_transaction) =
+                        json_rp_see_connector
+                            .get_raw_transaction(txid.to_string(), Some(1))
+                            .await
+                            .map_err(|e| {
+                                BlockchainSourceError::Unrecoverable(format!(
+                                    "could not fetch transaction data: {e}"
+                                ))
+                            })?
                     {
                         serialized_transaction
                     } else {
@@ -329,16 +345,19 @@ impl ValidatorConnector {
                             "could not fetch transaction data: non-raw response".to_string(),
                         ));
                     };
-                let transaction: zebra_chain::transaction::Transaction = zebra_chain::transaction::Transaction::zcash_deserialize(
-                        std::io::Cursor::new(serialized_transaction.as_ref()),
-                    ).map_err(|e| BlockchainSourceError::Unrecoverable(
-                        format!("could not deserialize transaction data: {e}")
-                    ))?;
+                let transaction: zebra_chain::transaction::Transaction =
+                    zebra_chain::transaction::Transaction::zcash_deserialize(std::io::Cursor::new(
+                        serialized_transaction.as_ref(),
+                    ))
+                    .map_err(|e| {
+                        BlockchainSourceError::Unrecoverable(format!(
+                            "could not deserialize transaction data: {e}"
+                        ))
+                    })?;
                 Ok(Some(transaction.into()))
             }
         }
     }
-
 }
 
 #[async_trait]
@@ -365,7 +384,10 @@ impl BlockchainSource for ValidatorConnector {
 pub(crate) mod test {
     use super::*;
     use async_trait::async_trait;
-    use std::sync::Arc;
+    use std::sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    };
     use zebra_chain::{block::Block, orchard::tree as orchard, sapling::tree as sapling};
     use zebra_state::HashOrHeight;
 
@@ -376,11 +398,12 @@ pub(crate) mod test {
         blocks: Vec<Arc<Block>>,
         roots: Vec<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>,
         hashes: Vec<Hash>,
+        active_chain_height: Arc<AtomicU32>,
     }
 
     impl MockchainSource {
         /// Creates a new MockchainSource.
-        /// All inputs must be the same length, and ordered by ascending height starting from `height_offset`.
+        /// All inputs must be the same length, and ordered by ascending height starting from 0.
         #[allow(clippy::type_complexity)]
         pub(crate) fn new(
             blocks: Vec<Arc<Block>>,
@@ -392,27 +415,73 @@ pub(crate) mod test {
                 "All input vectors must be the same length"
             );
 
+            let tip_index = blocks.len().saturating_sub(1) as u32;
             Self {
                 blocks,
                 roots,
                 hashes,
+                active_chain_height: Arc::new(AtomicU32::new(tip_index)),
             }
         }
 
-        fn height_to_index(&self, height: u32) -> Result<usize, BlockchainSourceError> {
-            if height == 0 {
-                return Err(BlockchainSourceError::Unrecoverable(
-                    "Block height must be >= 1".to_string(),
-                ));
-            }
+        /// Creates a new MockchainSource, *with* an active chain height.
+        ///
+        /// Block will only be served up to the active chain height, with mempool data coming from
+        /// the *next block in the chain.
+        ///
+        /// Blocks must be "mined" to extend the active chain height.
+        ///
+        /// All inputs must be the same length, and ordered by ascending height starting from 0.
+        #[allow(clippy::type_complexity)]
+        pub(crate) fn new_with_active_height(
+            blocks: Vec<Arc<Block>>,
+            roots: Vec<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>,
+            hashes: Vec<Hash>,
+            active_chain_height: u32,
+        ) -> Self {
+            assert!(blocks.len() == roots.len() && roots.len() == hashes.len());
 
-            // Block height indexing starts at 1, vec indexing starts at 0..
-            let index = (height - 1) as usize;
+            let max_tip = blocks.len().saturating_sub(1) as u32;
+            assert!(
+                active_chain_height <= max_tip,
+                "active_chain_height must be in 0..=len-1"
+            );
+
+            Self {
+                blocks,
+                roots,
+                hashes,
+                active_chain_height: Arc::new(AtomicU32::new(active_chain_height)),
+            }
+        }
+
+        pub(crate) fn mine_mocks(&self, blocks: u32) {
+            let max_tip = self.blocks.len().saturating_sub(1) as u32;
+            let _ = self.active_chain_height.fetch_update(
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+                |current| {
+                    let target = current.saturating_add(blocks).min(max_tip);
+                    if target == current {
+                        None
+                    } else {
+                        Some(target)
+                    }
+                },
+            );
+        }
+
+        fn active_height(&self) -> u32 {
+            self.active_chain_height.load(Ordering::SeqCst)
+        }
+
+        fn height_to_index(&self, height: u32) -> Result<usize, BlockchainSourceError> {
+            let index = height as usize;
 
             if index >= self.blocks.len() {
                 return Err(BlockchainSourceError::Unrecoverable(format!(
                     "Height {height} is out of range (max height = {})",
-                    self.blocks.len()
+                    self.blocks.len().saturating_sub(1)
                 )));
             }
 
@@ -429,6 +498,101 @@ pub(crate) mod test {
                 .ok_or_else(|| {
                     BlockchainSourceError::Unrecoverable("Block hash not found".to_string())
                 })
+        }
+
+        async fn get_block(&self, id: HashOrHeight) -> BlockchainSourceResult<Option<Arc<Block>>> {
+            let active_tip = self.active_height() as usize;
+
+            match id {
+                HashOrHeight::Height(height) => {
+                    let index = self.height_to_index(height.0)?;
+                    if index <= active_tip {
+                        Ok(Some(Arc::clone(&self.blocks[index])))
+                    } else {
+                        Ok(None)
+                    }
+                }
+                HashOrHeight::Hash(hash) => {
+                    let index = self.hash_to_index(&hash)?;
+                    if index <= active_tip {
+                        Ok(Some(Arc::clone(&self.blocks[index])))
+                    } else {
+                        Ok(None)
+                    }
+                }
+            }
+        }
+
+        async fn get_commitment_tree_roots(
+            &self,
+            id: Hash,
+        ) -> BlockchainSourceResult<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>
+        {
+            let active_tip = self.active_height() as usize; // serve up to active tip
+
+            if let Some(index) = self.hashes.iter().position(|h| h == &id) {
+                if index <= active_tip {
+                    Ok(self.roots[index])
+                } else {
+                    Ok((None, None))
+                }
+            } else {
+                Ok((None, None))
+            }
+        }
+
+        async fn get_mempool_txids(
+            &self,
+        ) -> BlockchainSourceResult<Option<Vec<zebra_chain::transaction::Hash>>> {
+            let mempool_index = self.active_height() as usize + 1;
+
+            let txids = if mempool_index < self.blocks.len() {
+                self.blocks[mempool_index]
+                    .transactions
+                    .iter()
+                    .map(|transaction| transaction.hash())
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            };
+
+            Ok(Some(txids))
+        }
+
+        async fn get_transaction(
+            &self,
+            txid: Hash,
+        ) -> BlockchainSourceResult<Option<Arc<zebra_chain::transaction::Transaction>>> {
+            let txid_tr: zebra_chain::transaction::Hash =
+                zebra_chain::transaction::Hash::from(txid.0);
+
+            let active_height = self.active_height() as usize;
+            let mempool_index = active_height + 1;
+
+            for index in 0..=active_height {
+                if index >= self.blocks.len() {
+                    break;
+                }
+                if let Some(found) = self.blocks[index]
+                    .transactions
+                    .iter()
+                    .find(|transaction| transaction.hash() == txid_tr)
+                {
+                    return Ok(Some(Arc::clone(found)));
+                }
+            }
+
+            if mempool_index < self.blocks.len() {
+                if let Some(found) = self.blocks[mempool_index]
+                    .transactions
+                    .iter()
+                    .find(|transaction| transaction.hash() == txid_tr)
+                {
+                    return Ok(Some(Arc::clone(found)));
+                }
+            }
+
+            Ok(None)
         }
     }
 
