@@ -78,6 +78,8 @@ pub enum SyncError {
     /// only happens when we attempt to reorg below the start of the chain,
     /// indicating an entirely separate regtest/testnet chain to what we expected
     ReorgFailure(String),
+    /// UnrecoverableFinalizedStateError
+    CannotReadFinalizedState,
 }
 
 impl From<UpdateError> for SyncError {
@@ -85,6 +87,7 @@ impl From<UpdateError> for SyncError {
         match value {
             UpdateError::ReceiverDisconnected => SyncError::StagingChannelClosed,
             UpdateError::StaleSnapshot => SyncError::CompetingSyncProcess,
+            UpdateError::FinalizedStateCorruption => SyncError::CannotReadFinalizedState,
         }
     }
 }
@@ -620,7 +623,7 @@ impl<Source: BlockchainSourceInterface> NonFinalizedState<Source> {
             .to_reader()
             .db_height()
             .await
-            .map_err(|e| todo!())?
+            .map_err(|_e| UpdateError::FinalizedStateCorruption)?
             .unwrap_or(Height(0));
         let (newly_finalized, blocks): (HashMap<_, _>, HashMap<Hash, _>) = new
             .into_iter()
@@ -638,7 +641,7 @@ impl<Source: BlockchainSourceInterface> NonFinalizedState<Source> {
         for block in newly_finalized {
             finalized_height = finalized_height + 1;
             if Some(finalized_height) != block.height() {
-                todo!("clean shutdown with critical error")
+                return Err(UpdateError::FinalizedStateCorruption);
             }
             finalized_db.write_block(block).await.expect("TODO");
         }
@@ -684,4 +687,8 @@ pub enum UpdateError {
     /// The snapshot was already updated by a different process, between when this update started
     /// and when it completed.
     StaleSnapshot,
+
+    /// Something has gone unrecoverably wrong in the finalized
+    /// state. A full rebuild is likely needed
+    FinalizedStateCorruption,
 }

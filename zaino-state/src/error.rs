@@ -525,22 +525,32 @@ impl ChainIndexError {
 }
 impl From<FinalisedStateError> for ChainIndexError {
     fn from(value: FinalisedStateError) -> Self {
-        match value {
-            FinalisedStateError::Custom(_) => todo!(),
-            FinalisedStateError::DataUnavailable(_) => todo!(),
+        let message = match &value {
+            FinalisedStateError::DataUnavailable(err) => format!("unhandled missing data: {err}"),
+            FinalisedStateError::FeatureUnavailable(err) => {
+                format!("unhandled missing feature: {err}")
+            }
             FinalisedStateError::InvalidBlock {
                 height,
-                hash,
+                hash: _,
                 reason,
-            } => todo!(),
-            FinalisedStateError::FeatureUnavailable(_) => todo!(),
-            FinalisedStateError::Critical(_) => todo!(),
-            FinalisedStateError::LmdbError(error) => todo!(),
-            FinalisedStateError::SerdeJsonError(error) => todo!(),
-            FinalisedStateError::StatusError(status_error) => todo!(),
-            FinalisedStateError::JsonRpcConnectorError(transport_error) => todo!(),
-            FinalisedStateError::IoError(error) => todo!(),
-            FinalisedStateError::BlockchainSourceError(blockchain_source_error) => todo!(),
+            } => format!("invalid block at height {height}: {reason}"),
+            FinalisedStateError::Custom(err) | FinalisedStateError::Critical(err) => err.clone(),
+            FinalisedStateError::LmdbError(error) => error.to_string(),
+            FinalisedStateError::SerdeJsonError(error) => error.to_string(),
+            FinalisedStateError::StatusError(status_error) => status_error.to_string(),
+            FinalisedStateError::JsonRpcConnectorError(transport_error) => {
+                transport_error.to_string()
+            }
+            FinalisedStateError::IoError(error) => error.to_string(),
+            FinalisedStateError::BlockchainSourceError(blockchain_source_error) => {
+                blockchain_source_error.to_string()
+            }
+        };
+        ChainIndexError {
+            kind: ChainIndexErrorKind::InternalServerError,
+            message,
+            source: Some(Box::new(value)),
         }
     }
 }
