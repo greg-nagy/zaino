@@ -56,7 +56,7 @@ struct BlockHeaderData {
     /// block.
     ///
     /// Size \[bytes\]: 32
-    hash_final_sapling_root: Vec<u8>,
+    hash_final_sapling_root: Option<Vec<u8>>,
 
     /// The block timestamp is a Unix epoch time (UTC) when the miner
     /// started hashing the header (according to the miner).
@@ -118,11 +118,18 @@ impl ParseFromSlice for BlockHeaderData {
             32,
             "Error reading BlockHeaderData::hash_merkle_root",
         )?;
-        let hash_final_sapling_root = read_bytes(
-            &mut cursor,
-            32,
-            "Error reading BlockHeaderData::hash_final_sapling_root",
-        )?;
+
+        // Read 32 bytes to keep the layout identical.
+        let raw_reserved_or_root =
+            read_bytes(&mut cursor, 32, "Error reading reserved/sapling_root")?;
+
+        // Only expose if Sapling is active (version >= 4)
+        let hash_final_sapling_root = if version >= 4 {
+            Some(raw_reserved_or_root)
+        } else {
+            None
+        };
+
         let time = read_u32(&mut cursor, "Error reading BlockHeaderData::time")?;
         let n_bits_bytes = read_bytes(
             &mut cursor,
@@ -164,7 +171,14 @@ impl BlockHeaderData {
         buffer.extend(&self.version.to_le_bytes());
         buffer.extend(&self.hash_prev_block);
         buffer.extend(&self.hash_merkle_root);
-        buffer.extend(&self.hash_final_sapling_root);
+
+        match &self.hash_final_sapling_root {
+            Some(root) => {
+                // debug_assert_eq!(root.len(), 32);
+                buffer.extend(root);
+            }
+            None => buffer.extend([0u8; 32]), // pre‑Sapling = “reserved”
+        }
         buffer.extend(&self.time.to_le_bytes());
         buffer.extend(&self.n_bits_bytes);
         buffer.extend(&self.nonce);
@@ -217,7 +231,7 @@ impl FullBlockHeader {
     }
 
     /// Returns the final sapling root of the block.
-    pub fn final_sapling_root(&self) -> Vec<u8> {
+    pub fn final_sapling_root(&self) -> Option<Vec<u8>> {
         self.raw_block_header.hash_final_sapling_root.clone()
     }
 

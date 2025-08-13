@@ -13,6 +13,8 @@ use zaino_state::read_u64_le;
 use zaino_state::write_u32_le;
 use zaino_state::write_u64_le;
 use zaino_state::CompactSize;
+use zaino_state::FetchService;
+use zaino_state::FetchServiceConfig;
 use zaino_state::ZainoVersionedSerialise;
 use zaino_state::{BackendType, ChainBlock, ChainWork};
 use zaino_state::{
@@ -20,6 +22,7 @@ use zaino_state::{
 };
 use zaino_testutils::from_inputs;
 use zaino_testutils::services;
+use zaino_testutils::services::network::ActivationHeights;
 use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind};
 use zebra_chain::parameters::Network;
@@ -758,4 +761,191 @@ pub fn read_vectors_from_file<P: AsRef<Path>>(
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
     Ok((full_data, faucet, recipient))
+}
+
+/// TODO: This tests needs to create a regtest network with custom activation heights
+#[tokio::test]
+async fn varying_block_and_transaction_deserialization() {
+    let mut test_manager = TestManager::launch_with_activation_heights(
+        &ValidatorKind::Zcashd,
+        &BackendType::Fetch,
+        Some(zaino_testutils::Network::Regtest),
+        Some(ActivationHeights {
+            overwinter: 1.into(),
+            sapling: 1.into(),
+            blossom: 1.into(),
+            heartwood: 1.into(),
+            canopy: 1.into(),
+            nu5: 103.into(),
+            nu6: 103.into(),
+        }),
+        None,
+        true,
+        false,
+        false,
+        true,
+        true,
+        true,
+    )
+    .await
+    .unwrap();
+
+    test_manager.local_net.print_stdout();
+
+    let fetch_service = FetchService::spawn(FetchServiceConfig::new(
+        test_manager.zebrad_rpc_listen_address,
+        false,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        test_manager
+            .local_net
+            .data_dir()
+            .path()
+            .to_path_buf()
+            .join("zaino"),
+        None,
+        Network::new_regtest(
+            zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                before_overwinter: Some(1),
+                overwinter: Some(1),
+                sapling: Some(1),
+                blossom: Some(1),
+                heartwood: Some(1),
+                canopy: Some(1),
+                nu5: Some(103),
+                nu6: Some(103),
+                nu6_1: None,
+                nu7: None,
+            },
+        ),
+        true,
+        true,
+    ))
+    .await
+    .unwrap();
+    let fetch_service_subscriber = fetch_service.get_subscriber().inner();
+
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    let mut clients = test_manager
+        .clients
+        .take()
+        .expect("Clients are not initialized");
+    let recipient_address = clients.get_recipient_address("transparent").await;
+
+    clients.faucet.sync_and_await().await.unwrap();
+
+    // // This is necessary when running Zebrad
+    // test_manager.local_net.generate_blocks(100).await.unwrap();
+    // tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    // clients.faucet.sync_and_await().await.unwrap();
+
+    // // Currently failing on first send.
+    // // Seems like zingolib generates the transaction with the wrong transaction version
+    // clients.faucet.quick_shield().await.unwrap();
+    // test_manager.local_net.generate_blocks(1).await.unwrap();
+    // tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    // clients.faucet.sync_and_await().await.unwrap();
+
+    dbg!(zaino_testutils::from_inputs::quick_send(
+        &mut clients.faucet,
+        vec![(recipient_address.as_str(), 250_000, None)],
+    )
+    .await
+    .unwrap()); // Also failing for zcashd. May be related to transaction version.
+    test_manager.local_net.generate_blocks(1).await.unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+    clients.recipient.sync_and_await().await.unwrap();
+    let recipient_balance = clients.recipient.do_balance().await;
+
+    let fetch_service_balance = fetch_service_subscriber
+        .z_get_address_balance(AddressStrings::new(vec![recipient_address]))
+        .await
+        .unwrap();
+
+    let latest_block = fetch_service_subscriber.get_block_count().await.unwrap();
+
+    dbg!(latest_block.0);
+
+    assert_eq!(
+        recipient_balance.confirmed_transparent_balance.unwrap(),
+        250_000,
+    );
+    assert_eq!(
+        recipient_balance.confirmed_transparent_balance.unwrap(),
+        fetch_service_balance.balance(),
+    );
+
+    // let chain_height = fetch_service_subscriber.get_block_count().await.unwrap();
+
+    // for i in 1..chain_height.0 {
+    //     let tx = fetch_service_subscriber
+    //         .z_get_block(i.to_string(), Some(1))
+    //         .await
+    //         .and_then(|response| match response {
+    //             zebra_rpc::methods::GetBlock::Raw(_) => {
+    //                 Err(zaino_state::FetchServiceError::Critical(
+    //                     "Found transaction of `Raw` type, expected only `Hash` types.".to_string(),
+    //                 ))
+    //             }
+    //             zebra_rpc::methods::GetBlock::Object(block) => Ok(block
+    //                 .tx()
+    //                 .into_iter()
+    //                 .map(|item| match item {
+    //                     GetBlockTransaction::Hash(h) => Ok(h.0.to_vec()),
+    //                     GetBlockTransaction::Object(_) => {
+    //                         Err(zaino_state::StateServiceError::Custom(
+    //                             "Found transaction of `Object` type, expected only `Hash` types."
+    //                                 .to_string(),
+    //                         ))
+    //                     }
+    //                 })
+    //                 .collect::<Result<Vec<_>, _>>()
+    //                 .unwrap()),
+    //         })
+    //         .unwrap();
+
+    //     let block_data = fetch_service_subscriber
+    //         .z_get_block(i.to_string(), Some(0))
+    //         .await
+    //         .and_then(|response| match response {
+    //             zebra_rpc::methods::GetBlock::Object { .. } => {
+    //                 Err(zaino_state::FetchServiceError::Critical(
+    //                     "Found transaction of `Raw` type, expected only `Hash` types.".to_string(),
+    //                 ))
+    //             }
+    //             zebra_rpc::methods::GetBlock::Raw(block_hex) => Ok(block_hex),
+    //         })
+    //         .unwrap();
+
+    //     // Build block data
+    //     let full_block = zaino_fetch::chain::block::FullBlock::parse_from_hex(
+    //         block_data.as_ref(),
+    //         Some(display_txids_to_server(tx.clone())),
+    //     )
+    //     .unwrap();
+
+    //     let height = full_block.height();
+
+    //     let transactions = full_block.transactions();
+    //     for tx in transactions {
+    //         dbg!(height);
+    //         dbg!(tx.version());
+    //         if height < 300 {
+    //             assert!(
+    //                 tx.version() < 4,
+    //                 "{}",
+    //                 format!("Version should be < 4. Found: {}", tx.version())
+    //             );
+    //         }
+    //     }
+    // }
+
+    test_manager.close().await;
 }

@@ -1258,6 +1258,7 @@ impl
 
         let block_commitments: [u8; 32] = header
             .final_sapling_root()
+            .unwrap_or(vec![0; 32])
             .try_into()
             .map_err(|v: Vec<u8>| format!("block commitment must be 32 bytes, got {}", v.len()))?;
 
