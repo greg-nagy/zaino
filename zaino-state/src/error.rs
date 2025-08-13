@@ -405,7 +405,8 @@ impl<T: ToString> From<RpcRequestError<T>> for FinalisedStateError {
 // TODO: Update name to DbError when ZainoDB replaces legacy finalised state.
 #[derive(Debug, thiserror::Error)]
 pub enum FinalisedStateError {
-    /// Custom Errors. *Remove before production*.
+    /// Custom Errors.
+    // TODO: Remove before production
     #[error("Custom error: {0}")]
     Custom(String),
 

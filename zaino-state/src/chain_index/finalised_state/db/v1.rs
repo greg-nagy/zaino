@@ -146,10 +146,6 @@ impl DbCore for DbV1 {
         }
         Ok(())
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
 }
 
 #[async_trait]

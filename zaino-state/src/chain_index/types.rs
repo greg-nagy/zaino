@@ -253,9 +253,9 @@ impl FixedEncodedLen for Height {
 /// for keys in Lexicographically sorted B-Tree.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub struct Index(pub u32);
+pub struct ShardIndex(pub u32);
 
-impl ZainoVersionedSerialise for Index {
+impl ZainoVersionedSerialise for ShardIndex {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
@@ -269,12 +269,12 @@ impl ZainoVersionedSerialise for Index {
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let raw = read_u32_be(r)?;
-        Ok(Index(raw))
+        Ok(ShardIndex(raw))
     }
 }
 
 /// Index = 4-byte big-endian body.
-impl FixedEncodedLen for Index {
+impl FixedEncodedLen for ShardIndex {
     /// 4 bytes (BE u32)
     const ENCODED_LEN: usize = 4;
 }
@@ -649,7 +649,7 @@ pub struct BlockData {
     /// Compact difficulty target used for proof-of-work and difficulty calculation.
     pub(super) bits: u32,
     /// Equihash nonse.
-    pub(super) nonse: [u8; 32],
+    pub(super) nonce: [u8; 32],
     /// Equihash solution
     pub(super) solution: EquihashSolution,
 }
@@ -672,7 +672,7 @@ impl BlockData {
             merkle_root,
             block_commitments,
             bits,
-            nonse,
+            nonce: nonse,
             solution,
         }
     }
@@ -747,7 +747,7 @@ impl BlockData {
 
     /// Returns Equihash Nonse.
     pub fn nonse(&self) -> [u8; 32] {
-        self.nonse
+        self.nonce
     }
 
     /// Returns Equihash Nonse.
@@ -769,7 +769,7 @@ impl ZainoVersionedSerialise for BlockData {
         write_fixed_le::<32, _>(&mut w, &self.block_commitments)?;
 
         write_u32_le(&mut w, self.bits)?;
-        write_fixed_le::<32, _>(&mut w, &self.nonse)?;
+        write_fixed_le::<32, _>(&mut w, &self.nonce)?;
 
         self.solution.serialize(&mut w)
     }
@@ -1383,7 +1383,7 @@ impl
                 ) => chain_history_block_tx_auth_commitment_hash.bytes_in_serialized_order(),
             },
 
-            nonse: *block.header.nonce,
+            nonce: *block.header.nonce,
             solution: block.header.solution.into(),
         };
 
@@ -1504,7 +1504,6 @@ impl
             height: Some(height),
         };
 
-        //TODO: Is a default (zero) root correct?
         let commitment_tree_roots = CommitmentTreeRoots::new(
             <[u8; 32]>::from(sapling_root),
             <[u8; 32]>::from(orchard_root),

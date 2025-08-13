@@ -264,31 +264,17 @@ impl CompactSize {
 
 /* ───────────────────────────── integer helpers ───────────────────────────── */
 
-/// Reads a u8 in LE format.
+/// Reads a u8.
 #[inline]
-pub fn read_u8_le<R: Read>(mut r: R) -> io::Result<u8> {
+pub fn read_u8<R: Read>(mut r: R) -> io::Result<u8> {
     let mut buf = [0u8; 1];
     r.read_exact(&mut buf)?;
     Ok(buf[0])
 }
 
-/// Reads a u8 in BE format.
+/// Writes a u8.
 #[inline]
-pub fn read_u8_be<R: Read>(mut r: R) -> io::Result<u8> {
-    let mut buf = [0u8; 1];
-    r.read_exact(&mut buf)?;
-    Ok(buf[0])
-}
-
-/// Writes a u8 in LE format.
-#[inline]
-pub fn write_u8_le<W: Write>(mut w: W, v: u8) -> io::Result<()> {
-    w.write_all(&[v])
-}
-
-/// Writes a u8 in BE format.
-#[inline]
-pub fn write_u8_be<W: Write>(mut w: W, v: u8) -> io::Result<()> {
+pub fn write_u8<W: Write>(mut w: W, v: u8) -> io::Result<()> {
     w.write_all(&[v])
 }
 

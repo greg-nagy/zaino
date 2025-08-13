@@ -3,11 +3,7 @@
 use core::fmt;
 
 use crate::{
-    chain_index::types::AddrEventBytes, error::FinalisedStateError, read_fixed_le, read_u32_le,
-    read_u8_le, version, write_fixed_le, write_u32_le, write_u8_le, AddrScript, BlockHeaderData,
-    ChainBlock, CommitmentTreeData, FixedEncodedLen, Hash, Height, OrchardCompactTx, OrchardTxList,
-    Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
-    TxLocation, TxidList, ZainoVersionedSerialise,
+    chain_index::types::AddrEventBytes, error::FinalisedStateError, read_fixed_le, read_u32_le, read_u8, version, write_fixed_le, write_u32_le, write_u8, AddrScript, BlockHeaderData, ChainBlock, CommitmentTreeData, FixedEncodedLen, Hash, Height, OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList, TxLocation, TxidList, ZainoVersionedSerialise
 };
 
 use async_trait::async_trait;
@@ -76,7 +72,7 @@ pub(crate) struct DbMetadata {
     pub(crate) version: DbVersion,
     /// BLAKE2b-256 hash of the schema definition (includes struct layout, types, etc.)
     pub(crate) schema_hash: [u8; 32],
-    /// Migration status of the database, None outside of migrations.
+    /// Migration status of the database, `Empty` outside of migrations.
     pub(crate) migration_status: MigrationStatus,
 }
 
@@ -264,7 +260,7 @@ impl core::fmt::Display for DbVersion {
 /// This is used when the database is shutdown mid-migration to ensure migration correctness.
 ///
 /// NOTE: Some migrations run a partial database rebuild before the final build process.
-///       This is done to minimise disk requirements ruring migrations,
+///       This is done to minimise disk requirements during migrations,
 ///       enabling the deletion of the old database before the the database is rebuilt in full.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
@@ -302,7 +298,7 @@ impl ZainoVersionedSerialise for MigrationStatus {
             MigrationStatus::FinalBuildInProgress => 3,
             MigrationStatus::Complete => 4,
         };
-        write_u8_le(w, tag)
+        write_u8(w, tag)
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
@@ -310,7 +306,7 @@ impl ZainoVersionedSerialise for MigrationStatus {
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        match read_u8_le(r)? {
+        match read_u8(r)? {
             0 => Ok(MigrationStatus::Empty),
             1 => Ok(MigrationStatus::PartialBuidInProgress),
             2 => Ok(MigrationStatus::PartialBuildComplete),
@@ -374,9 +370,6 @@ pub trait DbCore: DbRead + DbWrite + Send + Sync {
 
     /// Stops background tasks, syncs, etc.
     async fn shutdown(&self) -> Result<(), FinalisedStateError>;
-
-    /// Return `std::any::Any`
-    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 // ***** Database Extension traits *****

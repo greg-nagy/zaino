@@ -1,16 +1,17 @@
 use std::{collections::HashMap, future::Future, sync::Arc, time::Duration};
 
-use crate::error::{ChainIndexError, ChainIndexErrorKind};
-
-use super::non_finalised_state::{
-    BlockchainSource, InitError, NonFinalizedState, NonfinalizedBlockCacheSnapshot,
-};
-use super::types::{self, ChainBlock};
 use futures::Stream;
 use tokio_stream::StreamExt;
 pub use zebra_chain::parameters::Network as ZebraNetwork;
 use zebra_chain::serialization::ZcashSerialize;
 use zebra_state::HashOrHeight;
+
+use crate::error::{ChainIndexError, ChainIndexErrorKind};
+use super::non_finalised_state::{
+    InitError, NonFinalizedState, NonfinalizedBlockCacheSnapshot,
+};
+use super::source::ValidatorConnector;
+use super::types::{self, ChainBlock};
 
 /// The combined index. Contains a view of the mempool, and the full
 /// chain state, both finalized and non-finalized, to allow queries over
@@ -30,7 +31,7 @@ impl NodeBackedChainIndex {
     /// Currently this is a ReadStateService or JsonRpSeeConnector
     pub async fn new<T>(source: T, network: ZebraNetwork) -> Result<Self, InitError>
     where
-        T: Into<BlockchainSource> + Send + Sync + 'static,
+        T: Into<ValidatorConnector> + Send + Sync + 'static,
     {
         let chain_index = Self {
             non_finalized_state: Arc::new(
