@@ -204,8 +204,47 @@ impl Mempool {
     }
 
     /// Returns information about the mempool. Used by the `getmempool` rpc.
+    /// // Return mempool info computed from local Broadcast state.
     pub async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, MempoolError> {
-        Ok(self.fetcher.get_mempool_info().await?)
+        let map = self.state.get_state();
+
+        let size = map.len() as u64;
+
+        let mut bytes: u64 = 0;
+        let mut key_heap_bytes: u64 = 0;
+
+        for entry in map.iter() {
+            // account for the tx payload bytes
+            bytes = bytes.saturating_add(Self::tx_serialized_len_bytes(&entry.value().0));
+
+            // account for heap used by the key String (txid)
+            key_heap_bytes = key_heap_bytes.saturating_add(entry.key().0.capacity() as u64);
+        }
+
+        // A conservative, deterministic lower bound for RAM usage:
+        // payload bytes + key string heap.
+        //
+        // This could be further updated to mre acurately reflect the actual usage including struct and state overheads.
+        let usage = bytes.saturating_add(key_heap_bytes);
+
+        Ok(GetMempoolInfoResponse { size, bytes, usage })
+    }
+
+    fn tx_serialized_len_bytes(tx: &GetRawTransaction) -> u64 {
+        match tx {
+            // Raw hex bytes are stored as zebra_chain::SerializedTransaction -> AsRef<[u8]>
+            GetRawTransaction::Raw(serialized) => serialized.as_ref().len() as u64,
+
+            // Object form: prefer the explicit size() if present, else fall back to hex().len()
+            GetRawTransaction::Object(obj) => {
+                if let Some(sz) = obj.size() {
+                    // size() is documented as "The size of the transaction in bytes."
+                    sz.max(0) as u64
+                } else {
+                    obj.hex().as_ref().len() as u64
+                }
+            }
+        }
     }
 
     /// Returns the status of the mempool.
