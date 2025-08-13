@@ -1,6 +1,6 @@
 //! Holds the Finalised portion of the chain index on disk.
 
-// TODO / FIX - ROMOVE THIS ONCE CHAININDEX LANDS!
+// TODO / FIX - REMOVE THIS ONCE CHAININDEX LANDS!
 #![allow(dead_code)]
 
 pub(crate) mod capability;
@@ -8,60 +8,110 @@ pub(crate) mod db;
 pub(crate) mod entry;
 pub(crate) mod migrations;
 pub(crate) mod reader;
+pub(crate) mod router;
 
 use capability::*;
-use db::v1::*;
-use entry::*;
+use db::{DbBackend, VERSION_DIRS};
+use migrations::MigrationManager;
 use reader::*;
-use tokio::time::{interval, MissedTickBehavior};
+use router::Router;
+use tracing::info;
+use zebra_chain::parameters::NetworkKind;
 
 use crate::{
-    config::BlockCacheConfig, error::FinalisedStateError, ChainBlock, Hash, Height, StatusType,
-    ZainoVersionedSerialise as _,
+    chain_index::source::BlockchainSourceError, config::BlockCacheConfig,
+    error::FinalisedStateError, ChainBlock, ChainWork, Hash, Height, StatusType,
 };
 
-use lmdb::{Environment, EnvironmentFlags, Transaction};
-use std::{path::Path, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
+use tokio::time::{interval, MissedTickBehavior};
 
-/// ZainoDB: Versioned database holding the finalised portion of the blockchain.
+use super::source::BlockchainSource;
+
 pub(crate) struct ZainoDB {
-    db: Arc<dyn DbCore + Send + Sync>,
-    caps: Capability,
+    db: Arc<Router>,
     cfg: BlockCacheConfig,
 }
 
 impl ZainoDB {
-    // ***** Db Control *****
+    // ***** DB control *****
 
-    /// Spawns a ZainoDB, opens a database if a path is given in the config else  creates a new db.
-    pub(crate) async fn spawn(cfg: BlockCacheConfig) -> Result<Self, FinalisedStateError> {
-        let meta_opt = Self::peek_metadata(&cfg.db_path).await?;
+    /// Spawns a ZainoDB, opens an existing database if a path is given in the config else creates a new db.
+    ///
+    /// Peeks at the db metadata store to load correct database version.
+    pub(crate) async fn spawn<T>(
+        cfg: BlockCacheConfig,
+        source: T,
+    ) -> Result<Self, FinalisedStateError>
+    where
+        T: BlockchainSource,
+    {
+        let version_opt = Self::try_find_current_db_version(&cfg).await;
 
-        let (backend, caps): (Arc<dyn DbCore + Send + Sync>, Capability) = match meta_opt {
-            Some(meta) => {
-                let caps = meta.version.capability();
-                let db: Arc<dyn DbCore + Send + Sync> = match meta.version.major() {
-                    1 => Arc::new(DbV1::spawn(&cfg).await?) as _,
-                    _ => {
-                        return Err(FinalisedStateError::Custom(format!(
-                            "unsupported version {}",
-                            meta.version
-                        )))
-                    }
-                };
-                (db, caps)
-            }
-            None => {
-                let db = Arc::new(DbV1::spawn(&cfg).await?) as _;
-                (db, Capability::LATEST)
+        let target_version = match cfg.db_version {
+            0 => DbVersion {
+                major: 0,
+                minor: 0,
+                patch: 0,
+            },
+            1 => DbVersion {
+                major: 1,
+                minor: 0,
+                patch: 0,
+            },
+            x => {
+                return Err(FinalisedStateError::Custom(format!(
+                    "unsupported database version: DbV{x}"
+                )))
             }
         };
 
-        Ok(Self {
-            db: backend,
-            caps,
-            cfg,
-        })
+        let backend = match version_opt {
+            Some(version) => {
+                info!("Opening ZainoDBv{} from file.", version);
+                match version {
+                    0 => DbBackend::spawn_v0(&cfg).await?,
+                    1 => DbBackend::spawn_v1(&cfg).await?,
+                    _ => {
+                        return Err(FinalisedStateError::Custom(format!(
+                            "unsupported database version: DbV{version}"
+                        )))
+                    }
+                }
+            }
+            None => {
+                info!("Creating new ZainoDBv{}.", target_version);
+                match target_version.major() {
+                    0 => DbBackend::spawn_v0(&cfg).await?,
+                    1 => DbBackend::spawn_v1(&cfg).await?,
+                    _ => {
+                        return Err(FinalisedStateError::Custom(format!(
+                            "unsupported database version: DbV{target_version}"
+                        )))
+                    }
+                }
+            }
+        };
+        let current_version = backend.get_metadata().await?.version();
+
+        let router = Arc::new(Router::new(Arc::new(backend)));
+
+        if version_opt.is_some() && current_version < target_version {
+            info!(
+                "Starting ZainoDB migration manager, migratiing database from v{} to v{}.",
+                current_version, target_version
+            );
+            let mut migration_manager = MigrationManager {
+                router: Arc::clone(&router),
+                cfg: cfg.clone(),
+                current_version,
+                target_version,
+                source,
+            };
+            migration_manager.migrate().await?;
+        }
+
+        Ok(Self { db: router, cfg })
     }
 
     /// Gracefully shuts down the running ZainoDB, closing all child processes.
@@ -78,7 +128,6 @@ impl ZainoDB {
     pub(crate) async fn wait_until_ready(&self) {
         let mut ticker = interval(Duration::from_millis(100));
         ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
-
         loop {
             ticker.tick().await;
             if self.db.status().await == StatusType::Ready {
@@ -96,49 +145,166 @@ impl ZainoDB {
         }
     }
 
-    /// Try to read the metadata entry.
+    /// Look for known dirs to find current db version.
     ///
-    /// * `Ok(Some(meta))` – DB exists, metadata decoded.
-    /// * `Ok(None)`      – directory or key is missing ⇒ fresh DB.
-    /// * `Err(e)`        – any other LMDB / decode failure.
-    async fn peek_metadata(path: &Path) -> Result<Option<DbMetadata>, FinalisedStateError> {
-        if !path.exists() {
-            return Ok(None); // brand-new DB
+    /// The oldest version is returned as the database may have been closed mid migration.
+    ///
+    /// * `Some(version)` – DB exists, version returned.
+    /// * `None`      – directory or key is missing -> fresh DB.
+    async fn try_find_current_db_version(cfg: &BlockCacheConfig) -> Option<u32> {
+        let legacy_dir = match cfg.network.kind() {
+            NetworkKind::Mainnet => "live",
+            NetworkKind::Testnet => "test",
+            NetworkKind::Regtest => "local",
+        };
+        let legacy_path = cfg.db_path.join(legacy_dir);
+        if legacy_path.join("data.mdb").exists() && legacy_path.join("lock.mdb").exists() {
+            return Some(0);
         }
 
-        let env = match Environment::new()
-            .set_max_dbs(4)
-            .set_flags(EnvironmentFlags::READ_ONLY)
-            .open(path)
-        {
-            Ok(env) => env,
-            Err(lmdb::Error::Other(2)) => return Ok(None),
-            Err(e) => return Err(FinalisedStateError::LmdbError(e)),
+        let net_dir = match cfg.network.kind() {
+            NetworkKind::Mainnet => "mainnet",
+            NetworkKind::Testnet => "testnet",
+            NetworkKind::Regtest => "regtest",
         };
-
-        tokio::task::block_in_place(|| {
-            let meta_dbi = env.open_db(Some("metadata"))?; // if DBI missing, lmdb::NotFound
-            let txn = env.begin_ro_txn()?;
-            match txn.get(meta_dbi, b"metadata") {
-                Ok(raw) => {
-                    let entry = StoredEntryFixed::<DbMetadata>::from_bytes(raw).map_err(|e| {
-                        FinalisedStateError::Custom(format!("metadata decode error: {e}"))
-                    })?;
-                    Ok(Some(entry.item))
+        let net_path = cfg.db_path.join(net_dir);
+        if net_path.exists() && net_path.is_dir() {
+            for (i, version_dir) in VERSION_DIRS.iter().enumerate() {
+                let db_path = net_path.join(version_dir);
+                let data_file = db_path.join("data.mdb");
+                let lock_file = db_path.join("lock.mdb");
+                if data_file.exists() && lock_file.exists() {
+                    let version = (i + 1) as u32;
+                    return Some(version);
                 }
-                Err(lmdb::Error::NotFound) => Ok(None), // key missing
-                Err(e) => Err(FinalisedStateError::LmdbError(e)),
             }
-        })
+        }
+
+        None
+    }
+
+    /// Returns the internal db backend for the given db capability.
+    ///
+    /// Used by DbReader to route calls to the correct database during major migrations.
+    #[inline]
+    pub(crate) fn backend_for_cap(
+        &self,
+        cap: CapabilityRequest,
+    ) -> Result<Arc<DbBackend>, FinalisedStateError> {
+        self.db.backend(cap)
     }
 
     // ***** Db Core Write *****
 
+    /// Sync the database to the given height using the given ChainBlockSourceInterface.
+    pub(crate) async fn sync_to_height<T>(
+        &self,
+        height: Height,
+        source: T,
+    ) -> Result<(), FinalisedStateError>
+    where
+        T: BlockchainSource,
+    {
+        if height.0 == 0 {
+            return Err(FinalisedStateError::Critical(
+                "Sync height must be non-zero.".to_string(),
+            ));
+        }
+
+        let network = self.cfg.network.clone();
+        let db_height = self.db_height().await?.unwrap_or(Height(0));
+
+        let mut parent_chainwork = if db_height.0 == 0 {
+            ChainWork::from_u256(0.into())
+        } else {
+            match self
+                .db
+                .backend(CapabilityRequest::BlockCoreExt)?
+                .get_block_header(height)
+                .await
+            {
+                Ok(header) => *header.index().chainwork(),
+                // V0 does not hold or use chainwork, and does not serve header data,
+                // can we handle this better?
+                //
+                // can we get this data from zebra blocks?
+                Err(_) => ChainWork::from_u256(0.into()),
+            }
+        };
+
+        for height_int in (db_height.0 + 1)..=height.0 {
+            let block = match source
+                .get_block(zebra_state::HashOrHeight::Height(
+                    zebra_chain::block::Height(height_int),
+                ))
+                .await?
+            {
+                Some(block) => block,
+                None => {
+                    return Err(FinalisedStateError::BlockchainSourceError(
+                        BlockchainSourceError::Unrecoverable(format!(
+                            "error fetching block at height {} from validator",
+                            height.0
+                        )),
+                    ));
+                }
+            };
+
+            let block_hash = Hash::from(block.hash().0);
+
+            let (sapling_root, sapling_size, orchard_root, orchard_size) =
+                match source.get_commitment_tree_roots(block_hash).await? {
+                    (Some((sapling_root, sapling_size)), Some((orchard_root, orchard_size))) => {
+                        (sapling_root, sapling_size, orchard_root, orchard_size)
+                    }
+                    (None, _) => {
+                        return Err(FinalisedStateError::BlockchainSourceError(
+                            BlockchainSourceError::Unrecoverable(format!(
+                                "missing Sapling commitment tree root for block {block_hash}"
+                            )),
+                        ));
+                    }
+                    (_, None) => {
+                        return Err(FinalisedStateError::BlockchainSourceError(
+                            BlockchainSourceError::Unrecoverable(format!(
+                                "missing Orchard commitment tree root for block {block_hash}"
+                            )),
+                        ));
+                    }
+                };
+
+            let chain_block = match ChainBlock::try_from((
+                (*block).clone(),
+                sapling_root,
+                sapling_size as u32,
+                orchard_root,
+                orchard_size as u32,
+                parent_chainwork,
+                network.clone(),
+            )) {
+                Ok(block) => block,
+                Err(_) => {
+                    return Err(FinalisedStateError::BlockchainSourceError(
+                        BlockchainSourceError::Unrecoverable(format!(
+                            "error building block data at height {}",
+                            height.0
+                        )),
+                    ));
+                }
+            };
+            parent_chainwork = *chain_block.index().chainwork();
+
+            self.write_block(chain_block).await?;
+        }
+
+        Ok(())
+    }
+
     /// Writes a block to the database.
     ///
     /// This **MUST** be the *next* block in the chain (db_tip_height + 1).
-    pub(crate) async fn write_block(&self, block: ChainBlock) -> Result<(), FinalisedStateError> {
-        self.db.write_block(block).await
+    pub(crate) async fn write_block(&self, b: ChainBlock) -> Result<(), FinalisedStateError> {
+        self.db.write_block(b).await
     }
 
     /// Deletes a block from the database by height.
@@ -150,16 +316,16 @@ impl ZainoDB {
     /// to ensure the block has been completely wiped from the database.
     pub(crate) async fn delete_block_at_height(
         &self,
-        height: Height,
+        h: Height,
     ) -> Result<(), FinalisedStateError> {
-        self.db.delete_block_at_height(height).await
+        self.db.delete_block_at_height(h).await
     }
 
     /// Deletes a given block from the database.
     ///
     /// This **MUST** be the *top* block in the db.
-    pub(crate) async fn delete_block(&self, block: &ChainBlock) -> Result<(), FinalisedStateError> {
-        self.db.delete_block(block).await
+    pub(crate) async fn delete_block(&self, b: &ChainBlock) -> Result<(), FinalisedStateError> {
+        self.db.delete_block(b).await
     }
 
     // ***** DB Core Read *****
@@ -177,79 +343,12 @@ impl ZainoDB {
     }
 
     /// Returns the block block hash for the given block height *if* present in the finlaised state.
-    pub(crate) async fn get_block_hash(&self, height: Height) -> Result<Hash, FinalisedStateError> {
-        self.db.get_block_hash(height).await
+    pub(crate) async fn get_block_hash(&self, h: Height) -> Result<Hash, FinalisedStateError> {
+        self.db.get_block_hash(h).await
     }
 
     /// Returns metadata for the running ZainoDB.
     pub(crate) async fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
         self.db.get_metadata().await
-    }
-
-    // ***** DB Extension methods *****
-
-    #[inline]
-    fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.db.as_any().downcast_ref::<T>()
-    }
-
-    /// Returns the block core extension if present.
-    pub(crate) fn block_core(&self) -> Option<&dyn BlockCoreExt> {
-        if self.caps.has(Capability::BLOCK_CORE_EXT) {
-            let backend = self.downcast::<DbV1>().unwrap();
-            Some(backend as &dyn BlockCoreExt)
-        } else {
-            None
-        }
-    }
-
-    /// Returns the block transparent extension if present.
-    pub(crate) fn block_transparent(&self) -> Option<&dyn BlockTransparentExt> {
-        if self.caps.has(Capability::BLOCK_TRANSPARENT_EXT) {
-            let backend = self.downcast::<DbV1>().unwrap();
-            Some(backend as &dyn BlockTransparentExt)
-        } else {
-            None
-        }
-    }
-
-    /// Returns the block shielded extension if present.
-    pub(crate) fn block_shielded(&self) -> Option<&dyn BlockShieldedExt> {
-        if self.caps.has(Capability::BLOCK_SHIELDED_EXT) {
-            let backend = self.downcast::<DbV1>().unwrap();
-            Some(backend as &dyn BlockShieldedExt)
-        } else {
-            None
-        }
-    }
-
-    /// Returns the compact block extension if present.
-    pub(crate) fn compact_block(&self) -> Option<&dyn CompactBlockExt> {
-        if self.caps.has(Capability::COMPACT_BLOCK_EXT) {
-            let backend = self.downcast::<DbV1>().unwrap();
-            Some(backend as &dyn CompactBlockExt)
-        } else {
-            None
-        }
-    }
-
-    /// Returns the chain block extension if present.
-    pub(crate) fn chain_block(&self) -> Option<&dyn ChainBlockExt> {
-        if self.caps.has(Capability::CHAIN_BLOCK_EXT) {
-            let backend = self.downcast::<DbV1>().unwrap();
-            Some(backend as &dyn ChainBlockExt)
-        } else {
-            None
-        }
-    }
-
-    /// Returns the transparent transaction history extension if present.
-    pub(crate) fn transparent_hist(&self) -> Option<&dyn TransparentHistExt> {
-        if self.caps.has(Capability::TRANSPARENT_HIST_EXT) {
-            let backend = self.downcast::<DbV1>().unwrap();
-            Some(backend as &dyn TransparentHistExt)
-        } else {
-            None
-        }
     }
 }

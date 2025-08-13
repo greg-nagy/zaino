@@ -253,9 +253,9 @@ impl FixedEncodedLen for Height {
 /// for keys in Lexicographically sorted B-Tree.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub struct Index(pub u32);
+pub struct ShardIndex(pub u32);
 
-impl ZainoVersionedSerialise for Index {
+impl ZainoVersionedSerialise for ShardIndex {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
@@ -269,12 +269,12 @@ impl ZainoVersionedSerialise for Index {
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let raw = read_u32_be(r)?;
-        Ok(Index(raw))
+        Ok(ShardIndex(raw))
     }
 }
 
 /// Index = 4-byte big-endian body.
-impl FixedEncodedLen for Index {
+impl FixedEncodedLen for ShardIndex {
     /// 4 bytes (BE u32)
     const ENCODED_LEN: usize = 4;
 }
@@ -649,7 +649,7 @@ pub struct BlockData {
     /// Compact difficulty target used for proof-of-work and difficulty calculation.
     pub(super) bits: u32,
     /// Equihash nonse.
-    pub(super) nonse: [u8; 32],
+    pub(super) nonce: [u8; 32],
     /// Equihash solution
     pub(super) solution: EquihashSolution,
 }
@@ -672,7 +672,7 @@ impl BlockData {
             merkle_root,
             block_commitments,
             bits,
-            nonse,
+            nonce: nonse,
             solution,
         }
     }
@@ -747,7 +747,7 @@ impl BlockData {
 
     /// Returns Equihash Nonse.
     pub fn nonse(&self) -> [u8; 32] {
-        self.nonse
+        self.nonce
     }
 
     /// Returns Equihash Nonse.
@@ -769,7 +769,7 @@ impl ZainoVersionedSerialise for BlockData {
         write_fixed_le::<32, _>(&mut w, &self.block_commitments)?;
 
         write_u32_le(&mut w, self.bits)?;
-        write_fixed_le::<32, _>(&mut w, &self.nonse)?;
+        write_fixed_le::<32, _>(&mut w, &self.nonce)?;
 
         self.solution.serialize(&mut w)
     }
@@ -1160,7 +1160,17 @@ impl ChainBlock {
         let vtx: Vec<zaino_proto::proto::compact_formats::CompactTx> = self
             .transactions()
             .iter()
-            .map(|tx| tx.to_compact_tx(None))
+            .filter_map(|tx| {
+                let has_shielded = !tx.sapling().spends().is_empty()
+                    || !tx.sapling().outputs().is_empty()
+                    || !tx.orchard().actions().is_empty();
+
+                if !has_shielded {
+                    return None;
+                }
+
+                Some(tx.to_compact_tx(None))
+            })
             .collect();
 
         let sapling_commitment_tree_size = self.commitment_tree_data().sizes().sapling();
@@ -1172,7 +1182,6 @@ impl ChainBlock {
             hash,
             prev_hash,
             time: self.data().time() as u32,
-            // Header not currently used by CompactBlocks.
             header: vec![],
             vtx,
             chain_metadata: Some(zaino_proto::proto::compact_formats::ChainMetadata {
@@ -1318,6 +1327,201 @@ impl
         );
 
         Ok(ChainBlock::new(index, block_data, tx, commitment_tree_data))
+    }
+}
+
+impl
+    TryFrom<(
+        zebra_chain::block::Block,
+        zebra_chain::sapling::tree::Root,
+        u32,
+        zebra_chain::orchard::tree::Root,
+        u32,
+        ChainWork,
+        zebra_chain::parameters::Network,
+    )> for ChainBlock
+{
+    // TODO: update error type.
+    type Error = String;
+
+    fn try_from(
+        (
+            block,
+            sapling_root,
+            sapling_root_size,
+            orchard_root,
+            orchard_root_size,
+            parent_chain_work,
+            network,
+        ): (
+            zebra_chain::block::Block,
+            zebra_chain::sapling::tree::Root,
+            u32,
+            zebra_chain::orchard::tree::Root,
+            u32,
+            ChainWork,
+            zebra_chain::parameters::Network,
+        ),
+    ) -> Result<Self, Self::Error> {
+        let data = BlockData {
+            version: block.header.version,
+            time: block.header.time.timestamp(),
+            merkle_root: block.header.merkle_root.0,
+            bits: u32::from_be_bytes(block.header.difficulty_threshold.bytes_in_display_order()),
+            block_commitments: match block
+                .commitment(&network)
+                .map_err(|_| "Block commitment could not be computed".to_string())?
+            {
+                zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
+                zebra_chain::block::Commitment::FinalSaplingRoot(root) => root.into(),
+                zebra_chain::block::Commitment::ChainHistoryActivationReserved => [0; 32],
+                zebra_chain::block::Commitment::ChainHistoryRoot(chain_history_mmr_root_hash) => {
+                    chain_history_mmr_root_hash.bytes_in_serialized_order()
+                }
+                zebra_chain::block::Commitment::ChainHistoryBlockTxAuthCommitment(
+                    chain_history_block_tx_auth_commitment_hash,
+                ) => chain_history_block_tx_auth_commitment_hash.bytes_in_serialized_order(),
+            },
+
+            nonce: *block.header.nonce,
+            solution: block.header.solution.into(),
+        };
+
+        let mut transactions = Vec::new();
+        for (i, txn) in block.transactions.iter().enumerate() {
+            let inputs: Vec<TxInCompact> = txn
+                .inputs()
+                .iter()
+                .map(|input| match input.outpoint() {
+                    Some(outpoint) => TxInCompact::new(outpoint.hash.0, outpoint.index),
+                    None => TxInCompact::null_prevout(),
+                })
+                .collect();
+
+            let outputs = txn
+                .outputs()
+                .iter()
+                .map(|output| {
+                    let value = u64::from(output.value);
+                    let script_bytes = output.lock_script.as_raw_bytes();
+
+                    let addr = AddrScript::from_script(script_bytes).unwrap_or_else(|| {
+                        let mut fallback = [0u8; 20];
+                        let usable = script_bytes.len().min(20);
+                        fallback[..usable].copy_from_slice(&script_bytes[..usable]);
+                        AddrScript::new(fallback, ScriptType::NonStandard as u8)
+                    });
+
+                    TxOutCompact::new(value, *addr.hash(), addr.script_type())
+                        .ok_or_else(|| "TxOutCompact conversion failed".to_string())
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let transparent = TransparentCompactTx::new(inputs, outputs);
+
+            let sapling_value = {
+                let val = txn.sapling_value_balance().sapling_amount();
+                if val == 0 {
+                    None
+                } else {
+                    Some(i64::from(val))
+                }
+            };
+            let sapling = SaplingCompactTx::new(
+                sapling_value,
+                txn.sapling_nullifiers()
+                    .map(|nf| CompactSaplingSpend::new(*nf.0))
+                    .collect(),
+                txn.sapling_outputs()
+                    .map(|output| {
+                        let cipher: [u8; 52] = <[u8; 580]>::from(output.enc_ciphertext)[..52]
+                            .try_into()
+                            .map_err(|_| "Ciphertext slice conversion failed")?;
+                        Ok::<CompactSaplingOutput, String>(CompactSaplingOutput::new(
+                            output.cm_u.to_bytes(),
+                            <[u8; 32]>::from(output.ephemeral_key),
+                            cipher,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            );
+
+            let orchard_value = {
+                let val = txn.orchard_value_balance().orchard_amount();
+                if val == 0 {
+                    None
+                } else {
+                    Some(i64::from(val))
+                }
+            };
+            let orchard = OrchardCompactTx::new(
+                orchard_value,
+                txn.orchard_actions()
+                    .map(|action| {
+                        let cipher: [u8; 52] = <[u8; 580]>::from(action.enc_ciphertext)[..52]
+                            .try_into()
+                            .map_err(|_| "Ciphertext slice conversion failed")?;
+                        Ok::<CompactOrchardAction, String>(CompactOrchardAction::new(
+                            <[u8; 32]>::from(action.nullifier),
+                            <[u8; 32]>::from(action.cm_x),
+                            <[u8; 32]>::from(action.ephemeral_key),
+                            cipher,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            );
+
+            let txdata = CompactTxData::new(
+                i as u64,
+                // Convert txids to server order (reverse bytes),
+                // required for internal block validation logic (merkle root check).
+                txn.hash().bytes_in_display_order(),
+                transparent,
+                sapling,
+                orchard,
+            );
+            transactions.push(txdata);
+        }
+
+        let hash = Hash::from(block.hash());
+        let parent_hash = Hash::from(block.header.previous_block_hash);
+
+        let coinbase_tx_height = block
+            .coinbase_height()
+            .ok_or_else(|| "Missing coinbase height".to_string())?;
+        let height = Height::try_from(coinbase_tx_height.0)
+            .map_err(|e| format!("Invalid block height: {e}"))?;
+
+        let block_work = block.header.difficulty_threshold.to_work().ok_or_else(|| {
+            "Failed to calculate block work from difficulty threshold".to_string()
+        })?;
+        let chainwork = parent_chain_work.add(&ChainWork::from(U256::from(block_work.as_u128())));
+
+        let index = BlockIndex {
+            hash,
+            parent_hash,
+            chainwork,
+            height: Some(height),
+        };
+
+        let commitment_tree_roots = CommitmentTreeRoots::new(
+            <[u8; 32]>::from(sapling_root),
+            <[u8; 32]>::from(orchard_root),
+        );
+
+        let commitment_tree_size = CommitmentTreeSizes::new(sapling_root_size, orchard_root_size);
+
+        let commitment_tree_data =
+            CommitmentTreeData::new(commitment_tree_roots, commitment_tree_size);
+
+        let chainblock = ChainBlock {
+            index,
+            data,
+            transactions,
+            commitment_tree_data,
+        };
+
+        Ok(chainblock)
     }
 }
 
@@ -1686,6 +1890,14 @@ impl TxInCompact {
         }
     }
 
+    /// Constructs a canonical "null prevout" (coinbase marker).
+    pub fn null_prevout() -> Self {
+        Self {
+            prevout_txid: [0u8; 32],
+            prevout_index: u32::MAX,
+        }
+    }
+
     /// Returns txid of the transaction that holds the output being sent.
     pub fn prevout_txid(&self) -> &[u8; 32] {
         &self.prevout_txid
@@ -1897,17 +2109,21 @@ impl TxOutCompact {
 impl<T: AsRef<[u8]>> TryFrom<(u64, T)> for TxOutCompact {
     type Error = ();
 
-    fn try_from((value, script_hash): (u64, T)) -> Result<Self, Self::Error> {
-        let script_hash_ref = script_hash.as_ref();
-        if script_hash_ref.len() == 21 {
-            let script_type = script_hash_ref[0];
+    fn try_from((value, script): (u64, T)) -> Result<Self, Self::Error> {
+        let script_bytes = script.as_ref();
+
+        if let Some(addr) = AddrScript::from_script(script_bytes) {
+            TxOutCompact::new(value, *addr.hash(), addr.script_type()).ok_or(())
+        } else if script_bytes.len() == 21 {
+            let script_type = script_bytes[0];
             let mut hash_bytes = [0u8; 20];
-            hash_bytes.copy_from_slice(&script_hash_ref[1..]);
+            hash_bytes.copy_from_slice(&script_bytes[1..]);
             TxOutCompact::new(value, hash_bytes, script_type).ok_or(())
         } else {
+            // fallback for nonstandard scripts
             let mut fallback = [0u8; 20];
-            let usable_len = script_hash_ref.len().min(20);
-            fallback[..usable_len].copy_from_slice(&script_hash_ref[..usable_len]);
+            let usable_len = script_bytes.len().min(20);
+            fallback[..usable_len].copy_from_slice(&script_bytes[..usable_len]);
             TxOutCompact::new(value, fallback, ScriptType::NonStandard as u8).ok_or(())
         }
     }
