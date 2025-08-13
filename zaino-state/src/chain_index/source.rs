@@ -31,6 +31,21 @@ pub trait BlockchainSource: Clone + Send + Sync + 'static {
         Option<(zebra_chain::sapling::tree::Root, u64)>,
         Option<(zebra_chain::orchard::tree::Root, u64)>,
     )>;
+
+    /// Returns the complete list of txids currently in the mempool.
+    async fn get_mempool_txids(
+        &self,
+    ) -> BlockchainSourceResult<Option<Vec<zebra_chain::transaction::Hash>>>;
+
+    /// Returns the transaction by txid
+    async fn get_transaction(
+        &self,
+        txid: Hash,
+    ) -> BlockchainSourceResult<Option<Arc<zebra_chain::transaction::Transaction>>>;
+
+    /// Returns the hash of the block at the tip of the best chain.
+    async fn get_best_block_hash(&self)
+        -> BlockchainSourceResult<Option<zebra_chain::block::Hash>>;
 }
 
 /// An error originating from a blockchain source.
@@ -358,6 +373,46 @@ impl ValidatorConnector {
             }
         }
     }
+
+    pub(super) async fn get_best_block_hash(
+        &self,
+    ) -> BlockchainSourceResult<Option<zebra_chain::block::Hash>> {
+        match self {
+            ValidatorConnector::State(State {
+                read_state_service,
+                mempool_fetcher,
+            }) => {
+                match read_state_service.best_tip() {
+                    Some((_height, hash)) => Ok(Some(hash)),
+                    None => {
+                        // try RPC if state read fails:
+                        Ok(Some(
+                            mempool_fetcher
+                                .get_best_blockhash()
+                                .await
+                                .map_err(|e| {
+                                    BlockchainSourceError::Unrecoverable(format!(
+                                        "could not fetch best block hash from validator: {e}"
+                                    ))
+                                })?
+                                .0,
+                        ))
+                    }
+                }
+            }
+            ValidatorConnector::Fetch(json_rp_see_connector) => Ok(Some(
+                json_rp_see_connector
+                    .get_best_blockhash()
+                    .await
+                    .map_err(|e| {
+                        BlockchainSourceError::Unrecoverable(format!(
+                            "could not fetch best block hash from validator: {e}"
+                        ))
+                    })?
+                    .0,
+            )),
+        }
+    }
 }
 
 #[async_trait]
@@ -377,6 +432,25 @@ impl BlockchainSource for ValidatorConnector {
         Option<(zebra_chain::orchard::tree::Root, u64)>,
     )> {
         self.get_commitment_tree_roots(id).await
+    }
+
+    async fn get_mempool_txids(
+        &self,
+    ) -> BlockchainSourceResult<Option<Vec<zebra_chain::transaction::Hash>>> {
+        self.get_mempool_txids().await
+    }
+
+    async fn get_transaction(
+        &self,
+        txid: Hash,
+    ) -> BlockchainSourceResult<Option<Arc<zebra_chain::transaction::Transaction>>> {
+        self.get_transaction(txid).await
+    }
+
+    async fn get_best_block_hash(
+        &self,
+    ) -> BlockchainSourceResult<Option<zebra_chain::block::Hash>> {
+        self.get_best_block_hash().await
     }
 }
 
@@ -455,7 +529,7 @@ pub(crate) mod test {
             }
         }
 
-        pub(crate) fn mine_mocks(&self, blocks: u32) {
+        pub(crate) fn mine_blocks(&self, blocks: u32) {
             let max_tip = self.blocks.len().saturating_sub(1) as u32;
             let _ = self.active_chain_height.fetch_update(
                 Ordering::SeqCst,
@@ -594,30 +668,56 @@ pub(crate) mod test {
 
             Ok(None)
         }
+
+        async fn get_best_block_hash(
+            &self,
+        ) -> BlockchainSourceResult<Option<zebra_chain::block::Hash>> {
+            let active_tip = self.active_height() as usize;
+
+            if self.blocks.is_empty() || active_tip >= self.blocks.len() {
+                return Ok(None);
+            }
+
+            Ok(Some(self.blocks[active_tip].hash()))
+        }
     }
 
     #[async_trait]
     impl BlockchainSource for MockchainSource {
-        async fn get_block(&self, id: HashOrHeight) -> BlockchainSourceResult<Option<Arc<Block>>> {
-            match id {
-                HashOrHeight::Height(h) => {
-                    let i = self.height_to_index(h.0)?;
-                    Ok(Some(Arc::clone(&self.blocks[i])))
-                }
-                HashOrHeight::Hash(hash) => {
-                    let i = self.hash_to_index(&hash)?;
-                    Ok(Some(Arc::clone(&self.blocks[i])))
-                }
-            }
+        async fn get_block(
+            &self,
+            id: HashOrHeight,
+        ) -> BlockchainSourceResult<Option<Arc<zebra_chain::block::Block>>> {
+            self.get_block(id).await
         }
 
         async fn get_commitment_tree_roots(
             &self,
             id: Hash,
-        ) -> BlockchainSourceResult<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>
-        {
-            let index = self.hashes.iter().position(|h| h == &id);
-            Ok(index.map(|i| self.roots[i]).unwrap_or((None, None)))
+        ) -> BlockchainSourceResult<(
+            Option<(zebra_chain::sapling::tree::Root, u64)>,
+            Option<(zebra_chain::orchard::tree::Root, u64)>,
+        )> {
+            self.get_commitment_tree_roots(id).await
+        }
+
+        async fn get_mempool_txids(
+            &self,
+        ) -> BlockchainSourceResult<Option<Vec<zebra_chain::transaction::Hash>>> {
+            self.get_mempool_txids().await
+        }
+
+        async fn get_transaction(
+            &self,
+            txid: Hash,
+        ) -> BlockchainSourceResult<Option<Arc<zebra_chain::transaction::Transaction>>> {
+            self.get_transaction(txid).await
+        }
+
+        async fn get_best_block_hash(
+            &self,
+        ) -> BlockchainSourceResult<Option<zebra_chain::block::Hash>> {
+            self.get_best_block_hash().await
         }
     }
 }
