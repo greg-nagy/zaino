@@ -189,7 +189,7 @@ impl ZainoDB {
     #[inline]
     pub(crate) fn backend_for_cap(
         &self,
-        cap: Capability,
+        cap: CapabilityRequest,
     ) -> Result<Arc<DbBackend>, FinalisedStateError> {
         self.db.backend(cap)
     }
@@ -219,7 +219,7 @@ impl ZainoDB {
         } else {
             match self
                 .db
-                .backend(Capability::BLOCK_CORE_EXT)?
+                .backend(CapabilityRequest::BlockCoreExt)?
                 .get_block_header(height)
                 .await
             {

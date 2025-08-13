@@ -62,6 +62,57 @@ impl Capability {
     }
 }
 
+// A single-feature request type (cannot be composite).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum CapabilityRequest {
+    ReadCore,
+    WriteCore,
+    BlockCoreExt,
+    BlockTransparentExt,
+    BlockShieldedExt,
+    CompactBlockExt,
+    ChainBlockExt,
+    TransparentHistExt,
+}
+
+impl CapabilityRequest {
+    /// Map to the corresponding single-bit `Capability`.
+    #[inline]
+    pub(crate) const fn as_capability(self) -> Capability {
+        match self {
+            CapabilityRequest::ReadCore             => Capability::READ_CORE,
+            CapabilityRequest::WriteCore            => Capability::WRITE_CORE,
+            CapabilityRequest::BlockCoreExt         => Capability::BLOCK_CORE_EXT,
+            CapabilityRequest::BlockTransparentExt  => Capability::BLOCK_TRANSPARENT_EXT,
+            CapabilityRequest::BlockShieldedExt     => Capability::BLOCK_SHIELDED_EXT,
+            CapabilityRequest::CompactBlockExt      => Capability::COMPACT_BLOCK_EXT,
+            CapabilityRequest::ChainBlockExt        => Capability::CHAIN_BLOCK_EXT,
+            CapabilityRequest::TransparentHistExt   => Capability::TRANSPARENT_HIST_EXT,
+        }
+    }
+
+    /// Human-friendly feature name for errors and logs.
+    #[inline]
+    pub(crate) const fn name(self) -> &'static str {
+        match self {
+            CapabilityRequest::ReadCore             => "READ_CORE",
+            CapabilityRequest::WriteCore            => "WRITE_CORE",
+            CapabilityRequest::BlockCoreExt         => "BLOCK_CORE_EXT",
+            CapabilityRequest::BlockTransparentExt  => "BLOCK_TRANSPARENT_EXT",
+            CapabilityRequest::BlockShieldedExt     => "BLOCK_SHIELDED_EXT",
+            CapabilityRequest::CompactBlockExt      => "COMPACT_BLOCK_EXT",
+            CapabilityRequest::ChainBlockExt        => "CHAIN_BLOCK_EXT",
+            CapabilityRequest::TransparentHistExt   => "TRANSPARENT_HIST_EXT",
+        }
+    }
+}
+
+// Optional convenience conversions.
+impl From<CapabilityRequest> for Capability {
+    #[inline]
+    fn from(req: CapabilityRequest) -> Self { req.as_capability() }
+}
+
 /// Top-level database metadata entry, storing the current schema version.
 ///
 /// Stored under the fixed key `"metadata"` in the LMDB metadata database.
