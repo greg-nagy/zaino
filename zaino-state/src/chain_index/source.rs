@@ -1,14 +1,14 @@
 //! Traits and types for the blockchain source thats serves zaino, commonly a validator connection.
 
-use std::sync::Arc;
+use std::{str::FromStr as _, sync::Arc};
 
 use crate::chain_index::types::Hash;
 use async_trait::async_trait;
-use futures::future::join;
-use tower::Service;
+use futures::{future::join, TryFutureExt as _};
+use tower::{Service, ServiceExt as _};
 use zaino_fetch::jsonrpsee::{
     connector::{JsonRpSeeConnector, RpcRequestError},
-    response::{GetBlockError, GetBlockResponse, GetTreestateResponse},
+    response::{GetBlockError, GetBlockResponse, GetTransactionResponse, GetTreestateResponse},
 };
 use zcash_primitives::merkle_tree::read_commitment_tree;
 use zebra_chain::serialization::ZcashDeserialize;
@@ -50,11 +50,22 @@ pub struct InvalidData(String);
 
 type BlockchainSourceResult<T> = Result<T, BlockchainSourceError>;
 
+/// Currently the Mempool cannot utilise the mempool change endpoint in the ReadStateService,
+/// for this reason the lagacy jsonrpc inteface is used until the Mempool updates required can be implemented.
+///
+/// Due to the difference if the mempool inteface provided by the ReadStateService and the Json RPC service
+/// two seperate Mempool implementation will likely be required.
+#[derive(Clone)]
+pub struct State {
+    read_state_service: ReadStateService,
+    mempool_fetcher: JsonRpSeeConnector,
+}
+
 /// A connection to a validator.
 #[derive(Clone)]
 pub enum ValidatorConnector {
     /// The connection is via direct read access to a zebrad's data file
-    State(ReadStateService),
+    State(State),
     /// We are connected to a zebrad, zcashd, or other zainod via JsonRpSee
     Fetch(JsonRpSeeConnector),
 }
@@ -66,7 +77,7 @@ impl ValidatorConnector {
         id: HashOrHeight,
     ) -> BlockchainSourceResult<Option<Arc<zebra_chain::block::Block>>> {
         match self {
-            ValidatorConnector::State(read_state_service) => match read_state_service
+            ValidatorConnector::State(state) => match state.read_state_service
                 .clone()
                 .call(zebra_state::ReadRequest::Block(id))
                 .await
@@ -106,14 +117,14 @@ impl ValidatorConnector {
         Option<(zebra_chain::orchard::tree::Root, u64)>,
     )> {
         match self {
-            ValidatorConnector::State(read_state_service) => {
+            ValidatorConnector::State(state) => {
                 let (sapling_tree_response, orchard_tree_response) = join(
-                    read_state_service
+                    state.read_state_service
                         .clone()
                         .call(zebra_state::ReadRequest::SaplingTree(HashOrHeight::Hash(
                             id.into(),
                         ))),
-                    read_state_service
+                    state.read_state_service
                         .clone()
                         .call(zebra_state::ReadRequest::OrchardTree(HashOrHeight::Hash(
                             id.into(),
@@ -215,6 +226,119 @@ impl ValidatorConnector {
             }
         }
     }
+
+
+    pub(super) async fn get_mempool_txids(&self) -> BlockchainSourceResult<
+        Option<Vec<zebra_chain::transaction::Hash>>,
+    > {
+        let mempool_fetcher = match self {
+            ValidatorConnector::State(state) => &state.mempool_fetcher,
+            ValidatorConnector::Fetch(json_rp_see_connector) => json_rp_see_connector,
+        };
+
+        let txid_strings = mempool_fetcher.get_raw_mempool().await.map_err(|e| {
+                        BlockchainSourceError::Unrecoverable(format!("could not fetch mempool data: {e}"))
+                    })?.transactions;
+
+        let txids: Vec<zebra_chain::transaction::Hash> = txid_strings
+            .into_iter()
+                .map(|txid_str| {
+                    zebra_chain::transaction::Hash::from_str(&txid_str).map_err(|e| {
+                        BlockchainSourceError::Unrecoverable(format!(
+                            "invalid transaction id '{txid_str}': {e}"
+                        ))
+                    })
+                })
+            .collect::<Result<_, _>>()?;
+
+        Ok(Some(txids))
+    }
+
+    pub(super) async fn get_transaction(
+        &self,
+        txid: Hash,
+    ) -> BlockchainSourceResult<Option<Arc<zebra_chain::transaction::Transaction>>,> {
+        match self {
+            ValidatorConnector::State( State { read_state_service, mempool_fetcher } ) => {
+                // Check state for transaction
+                let mut read_state_service = read_state_service.clone();
+                let mempool_fetcher = mempool_fetcher.clone();
+                
+                let txid_tr: zebra_chain::transaction::Hash =
+                zebra_chain::transaction::Hash::from(txid.0);
+
+                let resp = read_state_service
+                    .ready()
+                    .and_then(|svc| svc.call(zebra_state::ReadRequest::Transaction(txid_tr)))
+                    .await
+                    .map_err(|e| BlockchainSourceError::Unrecoverable(format!(
+                        "state read failed: {e}"
+                    )))?;
+
+                if let zebra_state::ReadResponse::Transaction(opt) = resp {
+                    if let Some(found) = opt {
+                        return Ok(Some((found).tx.clone()));
+                    }
+                } else {
+                    unreachable!("unmatched response to a `Transaction` read request");
+                }
+                
+                // Else heck mempool for transaction.
+                let mempool_txids = self.get_mempool_txids().await?
+                    .ok_or_else(|| BlockchainSourceError::Unrecoverable(
+                        "could not fetch mempool transaction ids: none returned".to_string()
+                    ))?;
+
+                if mempool_txids.contains(&txid_tr) {
+                    let serialized_transaction = if let GetTransactionResponse::Raw(serialized_transaction) =
+                        mempool_fetcher
+                            .get_raw_transaction(txid.to_string(), Some(1))
+                            .await
+                            .map_err(|e| BlockchainSourceError::Unrecoverable(format!(
+                                "could not fetch transaction data: {e}"
+                            )))?
+                        {
+                            serialized_transaction
+                        } else {
+                            return Err(BlockchainSourceError::Unrecoverable(
+                                "could not fetch transaction data: non-raw response".to_string(),
+                            ));
+                        };
+                    let transaction: zebra_chain::transaction::Transaction = zebra_chain::transaction::Transaction::zcash_deserialize(
+                        std::io::Cursor::new(serialized_transaction.as_ref()),
+                        ).map_err(|e| BlockchainSourceError::Unrecoverable(
+                            format!("could not deserialize transaction data: {e}")
+                        ))?;
+                    Ok(Some(transaction.into()))
+                } else {
+                    Ok(None)
+                }
+            },
+            ValidatorConnector::Fetch(json_rp_see_connector) => {
+                let serialized_transaction = if let GetTransactionResponse::Raw(serialized_transaction) =
+                    json_rp_see_connector
+                        .get_raw_transaction(txid.to_string(), Some(1))
+                        .await
+                        .map_err(|e| BlockchainSourceError::Unrecoverable(format!(
+                            "could not fetch transaction data: {e}"
+                        )))?
+                    {
+                        serialized_transaction
+                    } else {
+                        return Err(BlockchainSourceError::Unrecoverable(
+                            "could not fetch transaction data: non-raw response".to_string(),
+                        ));
+                    };
+                let transaction: zebra_chain::transaction::Transaction = zebra_chain::transaction::Transaction::zcash_deserialize(
+                        std::io::Cursor::new(serialized_transaction.as_ref()),
+                    ).map_err(|e| BlockchainSourceError::Unrecoverable(
+                        format!("could not deserialize transaction data: {e}")
+                    ))?;
+                Ok(Some(transaction.into()))
+            }
+        }
+    }
+
 }
 
 #[async_trait]
