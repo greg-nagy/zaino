@@ -329,7 +329,8 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         {
             dbg!("syncing block", best_tip.0 + 1);
             // If this block is next in the chain, we sync it as normal
-            if Hash::from(block.header.previous_block_hash) == best_tip.1 {
+            let parent_hash = Hash::from(block.header.previous_block_hash);
+            if parent_hash == best_tip.1 {
                 let prev_block = match new_blocks.last() {
                     Some(block) => block,
                     None => initial_state.blocks.get(&best_tip.1).ok_or_else(|| {
@@ -471,9 +472,8 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
 
                 best_tip = (best_tip.0 + 1, block.hash().into());
 
-                let height = Some(best_tip.0);
+                let height = dbg!(Some(best_tip.0));
                 let hash = Hash::from(block.hash());
-                let parent_hash = Hash::from(block.header.previous_block_hash);
                 let chainwork = prev_block.chainwork().add(&ChainWork::from(U256::from(
                     block
                         .header
