@@ -128,3 +128,6 @@ zcash_address = "0.7.1"
 [profile.test]
 opt-level = 3
 debug = true
+
+# Patch for vulnerable dependency
+slab = "0.4.11"
