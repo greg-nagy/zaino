@@ -1,7 +1,7 @@
 //! Zaino-State ChainIndex Mempool unit tests.
 
-use std::{io::Cursor, str::FromStr as _};
-
+use std::{collections::HashMap, io::Cursor, str::FromStr as _};
+use tokio::time::{timeout, Duration};
 use zebra_chain::serialization::ZcashDeserialize as _;
 
 use crate::{
@@ -91,7 +91,6 @@ async fn get_mempool() {
     }
 }
 
-// get_filtered_mempool
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_filtered_mempool() {
     let (_mempool, subscriber, mockchain, block_data) = spawn_mempool_and_mockchain().await;
@@ -170,8 +169,154 @@ async fn get_filtered_mempool() {
     }
 }
 
-// get_mempool_stream
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_mempool_transaction() {
+    let (_mempool, subscriber, mockchain, block_data) = spawn_mempool_and_mockchain().await;
 
-// get_mempool_transaction
+    mockchain.mine_blocks(150);
+    let active_chain_height = dbg!(mockchain.active_height());
 
-// get_mempool_info
+    std::thread::sleep(std::time::Duration::from_millis(2000));
+
+    let mempool_index = (active_chain_height as usize) + 1;
+    let mempool_transactions = block_data
+        .get(mempool_index)
+        .map(|b| b.transactions.clone())
+        .unwrap_or_default();
+    for transaction in mempool_transactions.clone().into_iter() {
+        dbg!(&transaction.hash());
+    }
+
+    let target_hash = mempool_transactions[0].hash();
+
+    let subscriber_tx = subscriber
+        .get_transaction(&MempoolKey(target_hash.to_string()))
+        .await
+        .unwrap()
+        .0
+        .clone();
+
+    let subscriber_transaction = zebra_chain::transaction::Transaction::zcash_deserialize(
+        Cursor::new(subscriber_tx.as_ref()),
+    )
+    .unwrap();
+
+    assert_eq!(*mempool_transactions[0], subscriber_transaction);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_mempool_info() {
+    let (_mempool, subscriber, mockchain, block_data) = spawn_mempool_and_mockchain().await;
+
+    mockchain.mine_blocks(150);
+    let active_chain_height = dbg!(mockchain.active_height());
+
+    std::thread::sleep(std::time::Duration::from_millis(2000));
+
+    let mempool_index = (active_chain_height as usize) + 1;
+    let mempool_transactions = block_data
+        .get(mempool_index)
+        .map(|b| b.transactions.clone())
+        .unwrap_or_default();
+    for transaction in mempool_transactions.clone().into_iter() {
+        dbg!(&transaction.hash());
+    }
+
+    let subscriber_mempool_info = subscriber.get_mempool_info().await.unwrap();
+
+    let expected_size: u64 = mempool_transactions.len() as u64;
+
+    let expected_bytes: u64 = mempool_transactions
+        .iter()
+        .map(|tx| {
+            // Mempool stores SerializedTransaction, so mirror that here.
+            let st: zebra_chain::transaction::SerializedTransaction = tx.as_ref().into();
+            st.as_ref().len() as u64
+        })
+        .sum();
+
+    let expected_key_heap_bytes: u64 = mempool_transactions
+        .iter()
+        .map(|tx| {
+            // Keys are hex txid strings; measure heap capacity like the implementation.
+            tx.hash().to_string().capacity() as u64
+        })
+        .sum();
+
+    let expected_usage: u64 = expected_bytes + expected_key_heap_bytes;
+
+    assert_eq!(subscriber_mempool_info.size, expected_size, "size mismatch");
+    assert_eq!(
+        subscriber_mempool_info.bytes, expected_bytes,
+        "bytes mismatch"
+    );
+    assert_eq!(
+        subscriber_mempool_info.usage, expected_usage,
+        "usage mismatch"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_mempool_stream() {
+    let (_mempool, subscriber, mockchain, block_data) = spawn_mempool_and_mockchain().await;
+    let mut subscriber = subscriber; // get_mempool_stream takes &mut self
+
+    mockchain.mine_blocks(150);
+    let active_chain_height = dbg!(mockchain.active_height());
+
+    std::thread::sleep(std::time::Duration::from_millis(2000));
+
+    let mempool_index = (active_chain_height as usize) + 1;
+    let mempool_transactions = block_data
+        .get(mempool_index)
+        .map(|b| b.transactions.clone())
+        .unwrap_or_default();
+
+    let (mut rx, handle) = subscriber.get_mempool_stream().await.unwrap();
+
+    let expected_count = mempool_transactions.len();
+    let mut received: HashMap<String, Vec<u8>> = HashMap::new();
+
+    let collect_deadline = Duration::from_secs(2);
+
+    timeout(collect_deadline, async {
+        while received.len() < expected_count {
+            match rx.recv().await {
+                Some(Ok((MempoolKey(k), MempoolValue(v)))) => {
+                    received.insert(k, v.as_ref().to_vec());
+                }
+                Some(Err(e)) => panic!("stream yielded error: {:?}", e),
+                None => break,
+            }
+        }
+    })
+    .await
+    .expect("timed out waiting for initial mempool stream items");
+
+    let expected: HashMap<String, Vec<u8>> = mempool_transactions
+        .iter()
+        .map(|tx| {
+            let key = tx.hash().to_string();
+            let st: zebra_chain::transaction::SerializedTransaction = tx.as_ref().into();
+            (key, st.as_ref().to_vec())
+        })
+        .collect();
+
+    assert_eq!(received.len(), expected.len(), "entry count mismatch");
+    for (k, bytes) in expected.iter() {
+        let got = received
+            .get(k)
+            .unwrap_or_else(|| panic!("missing tx {} in stream", k));
+        assert_eq!(got, bytes, "bytes mismatch for {}", k);
+    }
+
+    mockchain.mine_blocks(1);
+
+    timeout(Duration::from_secs(5), async {
+        while let Some(_msg) = rx.recv().await {}
+    })
+    .await
+    .expect("mempool stream did not close after mining a new block");
+
+    handle.await.unwrap();
+}
