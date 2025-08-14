@@ -4,31 +4,33 @@ use std::{collections::HashSet, sync::Arc};
 
 use crate::{
     broadcast::{Broadcast, BroadcastSubscriber},
+    chain_index::source::{BlockchainSource, BlockchainSourceError},
     error::{MempoolError, StatusError},
     status::{AtomicStatus, StatusType},
 };
 use tracing::{info, warn};
-use zaino_fetch::jsonrpsee::{connector::JsonRpSeeConnector, response::GetMempoolInfoResponse};
-use zebra_chain::block::Hash;
-use zebra_rpc::methods::GetRawTransaction;
+use zaino_fetch::jsonrpsee::response::GetMempoolInfoResponse;
+use zebra_chain::{block::Hash, transaction::SerializedTransaction};
 
 /// Mempool key
 ///
 /// Holds txid.
+///
+/// TODO: Update to hold zebra_chain::Transaction::Hash ( or internal version )
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub struct MempoolKey(pub String);
 
 /// Mempool value.
 ///
-/// Holds GetRawTransaction::TransactionObject.
+/// Holds zebra_chain::transaction::SerializedTransaction.
 #[derive(Debug, Clone, PartialEq)]
-pub struct MempoolValue(pub GetRawTransaction);
+pub struct MempoolValue(pub SerializedTransaction);
 
 /// Zcash mempool, uses dashmap for efficient serving of mempool tx.
 #[derive(Debug)]
-pub struct Mempool {
+pub struct Mempool<T: BlockchainSource> {
     /// Zcash chain fetch service.
-    fetcher: JsonRpSeeConnector,
+    fetcher: T,
     /// Wrapper for a dashmap of mempool transactions.
     state: Broadcast<MempoolKey, MempoolValue>,
     /// Mempool sync handle.
@@ -37,15 +39,15 @@ pub struct Mempool {
     status: AtomicStatus,
 }
 
-impl Mempool {
+impl<T: BlockchainSource> Mempool<T> {
     /// Spawns a new [`Mempool`].
     pub async fn spawn(
-        fetcher: &JsonRpSeeConnector,
+        fetcher: T,
         capacity_and_shard_amount: Option<(usize, usize)>,
     ) -> Result<Self, MempoolError> {
         // Wait for mempool in validator to come online.
         loop {
-            match fetcher.get_raw_mempool().await {
+            match fetcher.get_mempool_txids().await {
                 Ok(_) => {
                     break;
                 }
@@ -109,11 +111,19 @@ impl Mempool {
             let mut check_block_hash: Hash;
 
             loop {
-                match mempool.fetcher.get_blockchain_info().await {
-                    Ok(chain_info) => {
-                        best_block_hash = chain_info.best_block_hash;
-                        break;
-                    }
+                match mempool.fetcher.get_best_block_hash().await {
+                    Ok(block_hash_opt) => match block_hash_opt {
+                        Some(hash) => {
+                            best_block_hash = hash;
+                            break;
+                        }
+                        None => {
+                            state.notify(status.clone().into());
+                            warn!("error fetching best_block_hash from validator");
+                            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                            continue;
+                        }
+                    },
                     Err(e) => {
                         state.notify(status.clone().into());
                         warn!("{e}");
@@ -124,12 +134,19 @@ impl Mempool {
             }
 
             loop {
-                match mempool.fetcher.get_blockchain_info().await {
-                    Ok(chain_info) => {
-                        check_block_hash = chain_info.best_block_hash;
-                    }
+                match mempool.fetcher.get_best_block_hash().await {
+                    Ok(block_hash_opt) => match block_hash_opt {
+                        Some(hash) => {
+                            check_block_hash = hash;
+                        }
+                        None => {
+                            state.notify(status.clone().into());
+                            warn!("error fetching best_block_hash from validator");
+                            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                            continue;
+                        }
+                    },
                     Err(e) => {
-                        status.store(StatusType::RecoverableError.into());
                         state.notify(status.clone().into());
                         warn!("{e}");
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -178,12 +195,29 @@ impl Mempool {
     ) -> Result<Vec<(MempoolKey, MempoolValue)>, MempoolError> {
         let mut transactions = Vec::new();
 
-        for txid in self.fetcher.get_raw_mempool().await?.transactions {
+        let txids = self.fetcher.get_mempool_txids().await?.ok_or_else(|| {
+            MempoolError::BlockchainSourceError(BlockchainSourceError::Unrecoverable(
+                "could not fetch mempool data: mempool txid list was None".to_string(),
+            ))
+        })?;
+
+        for txid in txids {
             let transaction = self
                 .fetcher
-                .get_raw_transaction(txid.clone(), Some(1))
-                .await?;
-            transactions.push((MempoolKey(txid), MempoolValue(transaction.into())));
+                .get_transaction(txid.0.into())
+                .await?
+                .ok_or_else(|| {
+                    MempoolError::BlockchainSourceError(
+                        crate::chain_index::source::BlockchainSourceError::Unrecoverable(format!(
+                            "could not fetch mempool data: transaction not found for txid {txid}"
+                        )),
+                    )
+                })?;
+
+            transactions.push((
+                MempoolKey(txid.to_string()),
+                MempoolValue(transaction.into()),
+            ));
         }
 
         Ok(transactions)
@@ -200,11 +234,15 @@ impl Mempool {
 
     /// Returns the current tx count
     pub async fn size(&self) -> Result<usize, MempoolError> {
-        Ok(self.fetcher.get_raw_mempool().await?.transactions.len())
+        Ok(self
+            .fetcher
+            .get_mempool_txids()
+            .await?
+            .map_or(0, |v| v.len()))
     }
 
-    /// Returns information about the mempool. Used by the `getmempool` rpc.
-    /// // Return mempool info computed from local Broadcast state.
+    /// Returns information about the mempool. Used by the `getmempoolinfo` RPC.
+    /// Computed from local Broadcast state.
     pub async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, MempoolError> {
         let map = self.state.get_state();
 
@@ -214,37 +252,21 @@ impl Mempool {
         let mut key_heap_bytes: u64 = 0;
 
         for entry in map.iter() {
-            // account for the tx payload bytes
+            // payload bytes are exact (we store SerializedTransaction)
             bytes = bytes.saturating_add(Self::tx_serialized_len_bytes(&entry.value().0));
 
-            // account for heap used by the key String (txid)
+            // heap used by the key String (txid)
             key_heap_bytes = key_heap_bytes.saturating_add(entry.key().0.capacity() as u64);
         }
 
-        // A conservative, deterministic lower bound for RAM usage:
-        // payload bytes + key string heap.
-        //
-        // This could be further updated to mre acurately reflect the actual usage including struct and state overheads.
         let usage = bytes.saturating_add(key_heap_bytes);
 
         Ok(GetMempoolInfoResponse { size, bytes, usage })
     }
 
-    fn tx_serialized_len_bytes(tx: &GetRawTransaction) -> u64 {
-        match tx {
-            // Raw hex bytes are stored as zebra_chain::SerializedTransaction -> AsRef<[u8]>
-            GetRawTransaction::Raw(serialized) => serialized.as_ref().len() as u64,
-
-            // Object form: prefer the explicit size() if present, else fall back to hex().len()
-            GetRawTransaction::Object(obj) => {
-                if let Some(sz) = obj.size() {
-                    // size() is documented as "The size of the transaction in bytes."
-                    sz.max(0) as u64
-                } else {
-                    obj.hex().as_ref().len() as u64
-                }
-            }
-        }
+    #[inline]
+    fn tx_serialized_len_bytes(tx: &SerializedTransaction) -> u64 {
+        tx.as_ref().len() as u64
     }
 
     /// Returns the status of the mempool.
@@ -262,7 +284,7 @@ impl Mempool {
     }
 }
 
-impl Drop for Mempool {
+impl<T: BlockchainSource> Drop for Mempool<T> {
     fn drop(&mut self) {
         self.status.store(StatusType::Closing.into());
         self.state.notify(StatusType::Closing);
