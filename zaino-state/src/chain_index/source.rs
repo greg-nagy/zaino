@@ -70,14 +70,16 @@ type BlockchainSourceResult<T> = Result<T, BlockchainSourceError>;
 ///
 /// Due to the difference if the mempool inteface provided by the ReadStateService and the Json RPC service
 /// two seperate Mempool implementation will likely be required.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct State {
-    read_state_service: ReadStateService,
-    mempool_fetcher: JsonRpSeeConnector,
+    /// Used to fetch chain data.
+    pub read_state_service: ReadStateService,
+    /// Temporarily used to fetch mempool data.
+    pub mempool_fetcher: JsonRpSeeConnector,
 }
 
 /// A connection to a validator.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ValidatorConnector {
     /// The connection is via direct read access to a zebrad's data file
     ///

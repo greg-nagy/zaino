@@ -138,7 +138,7 @@ mod chain_query_interface {
         zaino_no_db: bool,
         enable_clients: bool,
     ) -> (TestManager, StateService, NodeBackedChainIndex) {
-        let (test_manager, _json_service) = create_test_manager_and_connector(
+        let (test_manager, json_service) = create_test_manager_and_connector(
             validator,
             chain_cache.clone(),
             enable_zaino,
@@ -204,7 +204,10 @@ mod chain_query_interface {
         .await
         .unwrap();
         let chain_index = NodeBackedChainIndex::new(
-            ValidatorConnector::State(state_service.read_state_service().clone()),
+            ValidatorConnector::State(chain_index::source::State {
+                read_state_service: state_service.read_state_service().clone(),
+                mempool_fetcher: json_service,
+            }),
             network,
         )
         .await

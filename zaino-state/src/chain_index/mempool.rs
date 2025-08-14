@@ -442,6 +442,30 @@ impl MempoolSubscriber {
         self.subscriber.get(txid)
     }
 
+    /// Returns information about the mempool. Used by the `getmempoolinfo` RPC.
+    /// Computed from local Broadcast state.
+    pub async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, MempoolError> {
+        let mempool_transactions: Vec<(MempoolKey, MempoolValue)> =
+            self.subscriber.get_filtered_state(&HashSet::new());
+
+        let size: u64 = mempool_transactions.len() as u64;
+
+        let mut bytes: u64 = 0;
+        let mut key_heap_bytes: u64 = 0;
+
+        for (mempool_key, mempool_value) in mempool_transactions.iter() {
+            // payload bytes are exact (we store SerializedTransaction)
+            bytes = bytes.saturating_add(mempool_value.0.as_ref().len() as u64);
+
+            // heap used by the key String (txid)
+            key_heap_bytes = key_heap_bytes.saturating_add(mempool_key.0.capacity() as u64);
+        }
+
+        let usage: u64 = bytes.saturating_add(key_heap_bytes);
+
+        Ok(GetMempoolInfoResponse { size, bytes, usage })
+    }
+
     /// Returns the status of the mempool.
     pub fn status(&self) -> StatusType {
         self.status.load().into()
