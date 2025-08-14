@@ -317,7 +317,7 @@ impl ValidatorConnector {
                     let serialized_transaction = if let GetTransactionResponse::Raw(
                         serialized_transaction,
                     ) = mempool_fetcher
-                        .get_raw_transaction(txid_tr.to_string(), Some(1))
+                        .get_raw_transaction(txid_tr.to_string(), Some(0))
                         .await
                         .map_err(|e| {
                             BlockchainSourceError::Unrecoverable(format!(
@@ -348,7 +348,7 @@ impl ValidatorConnector {
                 let serialized_transaction =
                     if let GetTransactionResponse::Raw(serialized_transaction) =
                         json_rp_see_connector
-                            .get_raw_transaction(txid.to_string(), Some(1))
+                            .get_raw_transaction(txid.to_string(), Some(0))
                             .await
                             .map_err(|e| {
                                 BlockchainSourceError::Unrecoverable(format!(
