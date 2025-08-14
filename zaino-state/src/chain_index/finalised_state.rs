@@ -205,12 +205,6 @@ impl ZainoDB {
     where
         T: BlockchainSource,
     {
-        if height.0 == 0 {
-            return Err(FinalisedStateError::Critical(
-                "Sync height must be non-zero.".to_string(),
-            ));
-        }
-
         let network = self.cfg.network.clone();
         let db_height = self.db_height().await?.unwrap_or(Height(0));
 
@@ -232,7 +226,9 @@ impl ZainoDB {
             }
         };
 
-        for height_int in (db_height.0 + 1)..=height.0 {
+        let start_height = if db_height.0 == 0 { 0 } else { db_height.0 + 1 };
+
+        for height_int in (start_height)..=height.0 {
             let block = match source
                 .get_block(zebra_state::HashOrHeight::Height(
                     zebra_chain::block::Height(height_int),

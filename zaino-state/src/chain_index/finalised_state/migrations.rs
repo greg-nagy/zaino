@@ -132,7 +132,8 @@ impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
                 // start from shadow_db_height in case database was shutdown mid-migration.
                 let mut parent_chain_work = ChainWork::from_u256(0.into());
 
-                let mut shadow_db_height = shadow.db_height().await?.unwrap_or(Height(0));
+                let shadow_db_height_opt = shadow.db_height().await?;
+                let mut shadow_db_height = shadow_db_height_opt.unwrap_or(Height(0));
                 let mut primary_db_height = router.db_height().await?.unwrap_or(Height(0));
 
                 info!(
@@ -145,7 +146,7 @@ impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
                         break;
                     }
 
-                    if shadow_db_height.0 > 0 {
+                    if shadow_db_height_opt.is_some() {
                         parent_chain_work = *shadow
                             .get_block_header(shadow_db_height)
                             .await?
@@ -153,7 +154,11 @@ impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
                             .chainwork();
                     }
 
-                    for height in (shadow_db_height.0 + 1)..=primary_db_height.0 {
+                    if shadow_db_height.0 != 0 {
+                        shadow_db_height.0 += 1;
+                    }
+
+                    for height in (shadow_db_height.0)..=primary_db_height.0 {
                         let block = source
                             .get_block(zebra_state::HashOrHeight::Height(
                                 zebra_chain::block::Height(height),
