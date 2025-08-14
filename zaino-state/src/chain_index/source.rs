@@ -547,7 +547,11 @@ pub(crate) mod test {
             );
         }
 
-        fn active_height(&self) -> u32 {
+        pub(crate) fn max_chain_height(&self) -> u32 {
+            self.blocks.len().saturating_sub(1) as u32
+        }
+
+        pub(crate) fn active_height(&self) -> u32 {
             self.active_chain_height.load(Ordering::SeqCst)
         }
 

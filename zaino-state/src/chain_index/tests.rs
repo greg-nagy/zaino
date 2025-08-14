@@ -1,6 +1,7 @@
 //! Zaino-State ChainIndex unit tests.
 
 mod finalised_state;
+mod mempool;
 mod vectors;
 
 pub(crate) fn init_tracing() {
