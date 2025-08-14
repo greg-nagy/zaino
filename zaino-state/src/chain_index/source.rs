@@ -1,6 +1,6 @@
 //! Traits and types for the blockchain source thats serves zaino, commonly a validator connection.
 
-use std::sync::Arc;
+use std::{error::Error, sync::Arc};
 
 use crate::chain_index::types::Hash;
 use async_trait::async_trait;
@@ -31,6 +31,16 @@ pub trait BlockchainSource: Clone + Send + Sync + 'static {
         Option<(zebra_chain::sapling::tree::Root, u64)>,
         Option<(zebra_chain::orchard::tree::Root, u64)>,
     )>;
+    /// Get a listener for new nonfinalized blocks,
+    /// if supported
+    async fn nonfinalized_listener(
+        &self,
+    ) -> Result<
+        Option<
+            tokio::sync::mpsc::Receiver<(zebra_chain::block::Hash, Arc<zebra_chain::block::Block>)>,
+        >,
+        Box<dyn Error + Send + Sync>,
+    >;
 }
 
 /// An error originating from a blockchain source.
@@ -235,6 +245,31 @@ impl BlockchainSource for ValidatorConnector {
     )> {
         self.get_commitment_tree_roots(id).await
     }
+    async fn nonfinalized_listener(
+        &self,
+    ) -> Result<
+        Option<
+            tokio::sync::mpsc::Receiver<(zebra_chain::block::Hash, Arc<zebra_chain::block::Block>)>,
+        >,
+        Box<dyn Error + Send + Sync>,
+    > {
+        match self {
+            ValidatorConnector::State(read_state_service) => {
+                match read_state_service
+                    .clone()
+                    .call(zebra_state::ReadRequest::NonFinalizedBlocksListener)
+                    .await
+                {
+                    Ok(ReadResponse::NonFinalizedBlocksListener(listener)) => {
+                        Ok(Some(listener.unwrap()))
+                    }
+                    Ok(_) => unreachable!(),
+                    Err(e) => Err(e),
+                }
+            }
+            ValidatorConnector::Fetch(_json_rp_see_connector) => Ok(None),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -317,6 +352,19 @@ pub(crate) mod test {
         {
             let index = self.hashes.iter().position(|h| h == &id);
             Ok(index.map(|i| self.roots[i]).unwrap_or((None, None)))
+        }
+        async fn nonfinalized_listener(
+            &self,
+        ) -> Result<
+            Option<
+                tokio::sync::mpsc::Receiver<(
+                    zebra_chain::block::Hash,
+                    Arc<zebra_chain::block::Block>,
+                )>,
+            >,
+            Box<dyn Error + Send + Sync>,
+        > {
+            Ok(None)
         }
     }
 }
