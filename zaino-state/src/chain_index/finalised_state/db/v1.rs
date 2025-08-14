@@ -863,9 +863,9 @@ impl DbV1 {
                 }
                 // no block in db, this must be genesis block.
                 Err(lmdb::Error::NotFound) => {
-                    if block_height.0 != 1 {
+                    if block_height.0 != 0 {
                         return Err(FinalisedStateError::Custom(format!(
-                            "first block must be height 1, got {block_height:?}"
+                            "first block must be height 0, got {block_height:?}"
                         )));
                     }
                 }

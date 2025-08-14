@@ -158,10 +158,7 @@ mod mockchain_tests {
             assert_eq!(tx_status.len(), 1);
             let (hash, height) = tx_status.iter().next().unwrap();
             assert_eq!(hash.0, block_hash.0);
-            // TODO: genesis height is wrong.
-            // Remove this -1 once the
-            // test vectors are updated
-            assert_eq!(height.unwrap().0, block_height.unwrap().0 - 1);
+            assert_eq!(height.unwrap().0, block_height.unwrap().0);
         }
     }
 }
