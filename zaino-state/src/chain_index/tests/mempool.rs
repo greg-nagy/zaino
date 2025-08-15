@@ -306,8 +306,8 @@ async fn get_mempool_stream() {
     for (k, bytes) in expected.iter() {
         let got = received
             .get(k)
-            .unwrap_or_else(|| panic!("missing tx {K} in stream"));
-        assert_eq!(got, bytes, "bytes mismatch for {L}");
+            .unwrap_or_else(|| panic!("missing tx {k} in stream"));
+        assert_eq!(got, bytes, "bytes mismatch for {k}");
     }
 
     mockchain.mine_blocks(1);
