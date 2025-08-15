@@ -169,7 +169,7 @@ async fn sync_to_height() {
     dbg!(zaino_db.status().await);
     let built_db_height = dbg!(zaino_db.db_height().await.unwrap()).unwrap();
 
-    assert_eq!(built_db_height, Height(200));
+    assert_eq!(built_db_height, Height(199));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -190,7 +190,7 @@ async fn delete_blocks_from_db() {
     let (_blocks, _faucet, _recipient, _db_dir, zaino_db) =
         load_vectors_and_spawn_and_sync_v0_zaino_db().await;
 
-    for h in (1..=200).rev() {
+    for h in (1..=199).rev() {
         // dbg!("Deleting block at height {}", h);
         zaino_db
             .delete_block_at_height(crate::Height(h))

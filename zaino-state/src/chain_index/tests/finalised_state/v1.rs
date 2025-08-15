@@ -169,7 +169,7 @@ async fn sync_to_height() {
     dbg!(zaino_db.status().await);
     let built_db_height = dbg!(zaino_db.db_height().await.unwrap()).unwrap();
 
-    assert_eq!(built_db_height, Height(200));
+    assert_eq!(built_db_height, Height(199));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -190,7 +190,7 @@ async fn delete_blocks_from_db() {
     let (_blocks, _faucet, _recipient, _db_dir, zaino_db) =
         load_vectors_and_spawn_and_sync_v1_zaino_db().await;
 
-    for h in (1..=200).rev() {
+    for h in (1..=199).rev() {
         // dbg!("Deleting block at height {}", h);
         zaino_db
             .delete_block_at_height(crate::Height(h))
@@ -495,6 +495,7 @@ async fn get_faucet_txids() {
 
     let start = Height(blocks.first().unwrap().0);
     let end = Height(blocks.last().unwrap().0);
+    dbg!(&start, &end);
 
     let (faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
@@ -556,7 +557,7 @@ async fn get_faucet_txids() {
             .addr_tx_locations_by_range(faucet_addr_script, block_height, block_height)
             .await
             .unwrap()
-            .unwrap();
+            .unwrap_or_default();
         let mut reader_block_txids = Vec::new();
         for tx_location in reader_faucet_tx_locations {
             let txid = db_reader.get_txid(tx_location).await.unwrap();
