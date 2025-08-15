@@ -13,7 +13,6 @@
 
 use crate::error::{ChainIndexError, ChainIndexErrorKind, FinalisedStateError};
 use crate::SyncError;
-use std::future::Future;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use futures::Stream;
@@ -235,7 +234,7 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
                                 .ok_or(ChainIndexError::database_hole(hash))
                         }
                         Err(e) => {
-                            return Err(ChainIndexError {
+                            Err(ChainIndexError {
                                 kind: ChainIndexErrorKind::InternalServerError,
                                 message: "".to_string(),
                                 source: Some(Box::new(e)),
@@ -253,7 +252,7 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
                                         .await?
                                         .ok_or(ChainIndexError::database_hole(block.hash()))
                                 }
-                                None => return Err(ChainIndexError::database_hole(height)),
+                                None => Err(ChainIndexError::database_hole(height)),
                             }
                         }
                     }
@@ -316,20 +315,16 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
     /// Given a transaction ID, returns all known blocks containing this transaction
     /// At most one of these blocks will be on the best chain
     ///
-    fn get_transaction_status(
+    async fn get_transaction_status(
         &self,
         snapshot: &Self::Snapshot,
         txid: [u8; 32],
-    ) -> impl Future<
-        Output = Result<HashMap<types::Hash, std::option::Option<types::Height>>, ChainIndexError>,
-    > {
-        async move {
-            Ok(self
-                .blocks_containing_transaction(snapshot, txid)
-                .await?
-                .map(|block| (*block.hash(), block.height()))
-                .collect())
-        }
+    ) -> Result<HashMap<types::Hash, std::option::Option<types::Height>>, ChainIndexError> {
+        Ok(self
+            .blocks_containing_transaction(snapshot, txid)
+            .await?
+            .map(|block| (*block.hash(), block.height()))
+            .collect())
     }
 }
 

@@ -1161,6 +1161,7 @@ impl FullTransaction {
 
 /// Consensus validation error types
 #[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
 pub enum ConsensusError {
     #[error("Invalid version: {version}, must be >= 1")]
     InvalidVersion { version: u32 },
@@ -1868,10 +1869,7 @@ mod transaction_v4_tests {
             assert_eq!(expected, 0x892F2085);
             assert_eq!(actual, 0x00000000);
         } else {
-            panic!(
-                "Expected InvalidVersionGroupId error, got: {:?}",
-                validation_result
-            );
+            panic!("Expected InvalidVersionGroupId error, got: {validation_result:?}");
         }
     }
 
@@ -1944,7 +1942,7 @@ mod transaction_v4_tests {
         {
             assert_eq!(version, 0);
         } else {
-            panic!("Expected InvalidVersion error, got: {:?}", header_result);
+            panic!("Expected InvalidVersion error, got: {header_result:?}");
         }
     }
 
@@ -1968,10 +1966,7 @@ mod transaction_v4_tests {
         {
             assert_eq!(version, 3);
         } else {
-            panic!(
-                "Expected OverwinteredFlagNotSet error, got: {:?}",
-                validation_result
-            );
+            panic!("Expected OverwinteredFlagNotSet error, got: {validation_result:?}");
         }
     }
 

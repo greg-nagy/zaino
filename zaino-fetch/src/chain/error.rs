@@ -34,6 +34,7 @@ pub enum ParseError {
     /// Unecpected read order for sequential binary data
     #[error("Sequential binary data read: field {field} expected on position {expected_order} of transaction, read on {actual_order}")]
     InvalidParseOrder {
+        /// the noncomplient field
         field: &'static str,
         expected_order: u8,
         actual_order: u8,
@@ -42,8 +43,11 @@ pub enum ParseError {
     /// Unexpected field size during parsing
     #[error("Field {field} expected size {expected} bytes, but advanced {actual} bytes")]
     UnexpectedFieldSize {
+        /// the noncomplient field
         field: &'static str,
+        /// size (in bytes) the field should have been
         expected: usize,
+        /// size (in bytes) the field actually was
         actual: usize,
     },
 

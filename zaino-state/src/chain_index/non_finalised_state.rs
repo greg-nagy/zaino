@@ -127,7 +127,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         // TODO: Consider arbitrary buffer length
         let (staging_sender, staging_receiver) = mpsc::channel(100);
         let staged = Mutex::new(staging_receiver);
-        let genesis_block = (&source)
+        let genesis_block = source
             .get_block(HashOrHeight::Height(zebra_chain::block::Height(0)))
             .await
             .map_err(|e| InitError::InvalidNodeData(Box::new(e)))?
@@ -448,7 +448,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                     )
                 })
                 .partition(|(_hash, _block, prev_block)| prev_block.is_some());
-            if next_up.len() == 0 {
+            if next_up.is_empty() {
                 // Only store non-best chain blocks
                 // if we have a path from them
                 // to the chain

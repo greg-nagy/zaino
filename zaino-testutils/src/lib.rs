@@ -562,7 +562,7 @@ impl TestManager {
                     zcashd_bin: ZCASHD_BIN.clone(),
                     zcash_cli_bin: ZCASH_CLI_BIN.clone(),
                     rpc_listen_port: Some(zebrad_rpc_listen_port),
-                    activation_heights: activation_heights.unwrap_or(ActivationHeights::default()),
+                    activation_heights: activation_heights.unwrap_or_default(),
                     miner_address: Some(REG_O_ADDR_FROM_ABANDONART),
                     chain_cache: chain_cache.clone(),
                 };
@@ -574,7 +574,7 @@ impl TestManager {
                     network_listen_port: None,
                     rpc_listen_port: Some(zebrad_rpc_listen_port),
                     indexer_listen_port: Some(zebrad_grpc_listen_port),
-                    activation_heights: activation_heights.unwrap_or(ActivationHeights::default()),
+                    activation_heights: activation_heights.unwrap_or_default(),
                     miner_address: zingo_infra_services::validator::ZEBRAD_DEFAULT_MINER,
                     chain_cache: chain_cache.clone(),
                     network,
