@@ -6046,6 +6046,7 @@ version = "0.1.2"
 dependencies = [
  "ctrlc",
  "http",
+ "lazy_static",
  "once_cell",
  "portpicker",
  "proptest",
