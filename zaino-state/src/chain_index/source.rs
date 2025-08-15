@@ -647,7 +647,7 @@ pub(crate) mod test {
                 zebra_chain::transaction::Hash::from(txid.0);
 
             let active_height = self.active_height() as usize;
-            let mempool_index = active_height + 1;
+            let mempool_height = active_height + 1;
 
             for index in 0..=active_height {
                 if index >= self.blocks.len() {
