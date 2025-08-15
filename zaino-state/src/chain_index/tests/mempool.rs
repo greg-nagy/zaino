@@ -285,7 +285,7 @@ async fn get_mempool_stream() {
                 Some(Ok((MempoolKey(k), MempoolValue(v)))) => {
                     received.insert(k, v.as_ref().to_vec());
                 }
-                Some(Err(e)) => panic!("stream yielded error: {:?}", e),
+                Some(Err(e)) => panic!("stream yielded error: {e:?}"),
                 None => break,
             }
         }
@@ -306,8 +306,8 @@ async fn get_mempool_stream() {
     for (k, bytes) in expected.iter() {
         let got = received
             .get(k)
-            .unwrap_or_else(|| panic!("missing tx {} in stream", k));
-        assert_eq!(got, bytes, "bytes mismatch for {}", k);
+            .unwrap_or_else(|| panic!("missing tx {K} in stream"));
+        assert_eq!(got, bytes, "bytes mismatch for {L}");
     }
 
     mockchain.mine_blocks(1);
