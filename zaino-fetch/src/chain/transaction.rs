@@ -11,7 +11,7 @@ use zaino_proto::proto::compact_formats::{
 
 /// Txin format as described in <https://en.bitcoin.it/wiki/Transaction>
 #[derive(Debug, Clone)]
-struct TxIn {
+pub struct TxIn {
     // PrevTxHash - Size\[bytes\]: 32
     prev_txid: Vec<u8>,
     // PrevTxOutIndex - Size\[bytes\]: 4
@@ -72,7 +72,7 @@ impl ParseFromSlice for TxIn {
 
 /// Txout format as described in <https://en.bitcoin.it/wiki/Transaction>
 #[derive(Debug, Clone)]
-struct TxOut {
+pub struct TxOut {
     /// Non-negative int giving the number of zatoshis to be transferred
     ///
     /// Size\[bytes\]: 8
@@ -149,7 +149,7 @@ fn parse_transparent(data: &[u8]) -> Result<(&[u8], Vec<TxIn>, Vec<TxOut>), Pars
 /// Spend is a Sapling Spend Description as described in 7.3 of the Zcash
 /// protocol specification.
 #[derive(Debug, Clone)]
-struct Spend {
+pub struct Spend {
     // Cv \[IGNORED\] - Size\[bytes\]: 32
     // Anchor \[IGNORED\] - Size\[bytes\]: 32
     /// A nullifier to a sapling note.
@@ -203,7 +203,7 @@ impl ParseFromSlice for Spend {
 /// output is a Sapling Output Description as described in section 7.4 of the
 /// Zcash protocol spec.
 #[derive(Debug, Clone)]
-struct Output {
+pub struct Output {
     // Cv \[IGNORED\] - Size\[bytes\]: 32
     /// U-coordinate of the note commitment, derived from the note's value, recipient, and a
     /// random value.
@@ -1179,6 +1179,8 @@ pub enum ConsensusError {
     TransactionTooLarge { size: usize, max_size: usize },
 }
 
+// This trait is used, there's a false positive dead code detection for some reason
+#[allow(dead_code)]
 /// Enhanced TransactionField trait with default order validation and counter management
 trait TransactionField {
     type Value;
@@ -1235,6 +1237,8 @@ trait TransactionField {
     }
 }
 
+// This trait is used, there's a false positive dead code detection for some reason
+#[allow(dead_code)]
 /// TransactionReader trait for parsing, validating, and converting transactions
 trait TransactionReader: Sized {
     type Transaction;
@@ -1460,8 +1464,8 @@ pub struct TransactionV4Reader {
     version_group_id: u32,
     transparent_inputs: Vec<TxIn>,
     transparent_outputs: Vec<TxOut>,
-    lock_time: u32,     // Read but not used in final struct
-    expiry_height: u32, // Read but not used in final struct
+    _lock_time: u32,     // Read but not used in final struct
+    _expiry_height: u32, // Read but not used in final struct
     value_balance_sapling: i64,
     shielded_spends: Vec<Spend>,
     shielded_outputs: Vec<Output>,
@@ -1517,8 +1521,8 @@ impl TransactionReader for TransactionV4Reader {
             transparent_outputs: TransparentOutputs::read_and_validate(cursor, &mut counter)?,
 
             // Read these fields but we'll skip them in final struct
-            lock_time: LockTime::read_and_validate(cursor, &mut counter)?,
-            expiry_height: ExpiryHeight::read_and_validate(cursor, &mut counter)?,
+            _lock_time: LockTime::read_and_validate(cursor, &mut counter)?,
+            _expiry_height: ExpiryHeight::read_and_validate(cursor, &mut counter)?,
 
             value_balance_sapling: ValueBalanceSapling::read_and_validate(cursor, &mut counter)?,
             shielded_spends: ShieldedSpends::read_and_validate(cursor, &mut counter)?,

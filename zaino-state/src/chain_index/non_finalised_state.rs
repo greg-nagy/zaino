@@ -31,6 +31,7 @@ pub struct NonFinalizedState<Source: BlockchainSource> {
     /// Used mostly to determine activation heights
     network: Network,
     /// Listener used to detect non-best-chain blocks, if available
+    #[allow(clippy::type_complexity)]
     nfs_change_listener: Option<
         Mutex<
             tokio::sync::mpsc::Receiver<(zebra_chain::block::Hash, Arc<zebra_chain::block::Block>)>,
