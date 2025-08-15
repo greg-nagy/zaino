@@ -68,8 +68,8 @@ type BlockchainSourceResult<T> = Result<T, BlockchainSourceError>;
 /// Currently the Mempool cannot utilise the mempool change endpoint in the ReadStateService,
 /// for this reason the legacy jsonrpc interface is used until the Mempool updates required can be implemented.
 ///
-/// Due to the difference between the mempool interface provided by the ReadStateService and the Json RPC service,
-/// two seperate Mempool implementations will likely be required.
+/// Due to the difference if the mempool inteface provided by the ReadStateService and the Json RPC service
+/// two seperate Mempool implementation will likely be required.
 #[derive(Clone, Debug)]
 pub struct State {
     /// Used to fetch chain data.
