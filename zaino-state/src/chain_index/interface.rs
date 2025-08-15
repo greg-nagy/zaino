@@ -9,6 +9,7 @@ use zebra_state::HashOrHeight;
 use super::non_finalised_state::{InitError, NonFinalizedState, NonfinalizedBlockCacheSnapshot};
 use super::source::ValidatorConnector;
 use super::types::{self, ChainBlock};
+use crate::chain_index::source::BlockchainSource as _;
 use crate::error::{ChainIndexError, ChainIndexErrorKind};
 
 /// The combined index. Contains a view of the mempool, and the full

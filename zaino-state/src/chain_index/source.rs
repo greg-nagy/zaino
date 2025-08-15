@@ -89,9 +89,9 @@ pub enum ValidatorConnector {
     Fetch(JsonRpSeeConnector),
 }
 
-/// Methods that will dispatch to a ReadStateService or JsonRpSeeConnector
-impl ValidatorConnector {
-    pub(super) async fn get_block(
+#[async_trait]
+impl BlockchainSource for ValidatorConnector {
+    async fn get_block(
         &self,
         id: HashOrHeight,
     ) -> BlockchainSourceResult<Option<Arc<zebra_chain::block::Block>>> {
@@ -129,7 +129,7 @@ impl ValidatorConnector {
         }
     }
 
-    pub(super) async fn get_commitment_tree_roots(
+    async fn get_commitment_tree_roots(
         &self,
         id: Hash,
     ) -> BlockchainSourceResult<(
@@ -244,7 +244,7 @@ impl ValidatorConnector {
         }
     }
 
-    pub(super) async fn get_mempool_txids(
+    async fn get_mempool_txids(
         &self,
     ) -> BlockchainSourceResult<Option<Vec<zebra_chain::transaction::Hash>>> {
         let mempool_fetcher = match self {
@@ -274,7 +274,7 @@ impl ValidatorConnector {
         Ok(Some(txids))
     }
 
-    pub(super) async fn get_transaction(
+    async fn get_transaction(
         &self,
         txid: Hash,
     ) -> BlockchainSourceResult<Option<Arc<zebra_chain::transaction::Transaction>>> {
@@ -376,7 +376,7 @@ impl ValidatorConnector {
         }
     }
 
-    pub(super) async fn get_best_block_hash(
+    async fn get_best_block_hash(
         &self,
     ) -> BlockchainSourceResult<Option<zebra_chain::block::Hash>> {
         match self {
@@ -417,45 +417,6 @@ impl ValidatorConnector {
     }
 }
 
-#[async_trait]
-impl BlockchainSource for ValidatorConnector {
-    async fn get_block(
-        &self,
-        id: HashOrHeight,
-    ) -> BlockchainSourceResult<Option<Arc<zebra_chain::block::Block>>> {
-        self.get_block(id).await
-    }
-
-    async fn get_commitment_tree_roots(
-        &self,
-        id: Hash,
-    ) -> BlockchainSourceResult<(
-        Option<(zebra_chain::sapling::tree::Root, u64)>,
-        Option<(zebra_chain::orchard::tree::Root, u64)>,
-    )> {
-        self.get_commitment_tree_roots(id).await
-    }
-
-    async fn get_mempool_txids(
-        &self,
-    ) -> BlockchainSourceResult<Option<Vec<zebra_chain::transaction::Hash>>> {
-        self.get_mempool_txids().await
-    }
-
-    async fn get_transaction(
-        &self,
-        txid: Hash,
-    ) -> BlockchainSourceResult<Option<Arc<zebra_chain::transaction::Transaction>>> {
-        self.get_transaction(txid).await
-    }
-
-    async fn get_best_block_hash(
-        &self,
-    ) -> BlockchainSourceResult<Option<zebra_chain::block::Hash>> {
-        self.get_best_block_hash().await
-    }
-}
-
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
@@ -491,12 +452,13 @@ pub(crate) mod test {
                 "All input vectors must be the same length"
             );
 
-            let tip_index = blocks.len().saturating_sub(1) as u32;
+            // len() returns one-indexed length, height is zero-indexed.
+            let tip_height = blocks.len().saturating_sub(1) as u32;
             Self {
                 blocks,
                 roots,
                 hashes,
-                active_chain_height: Arc::new(AtomicU32::new(tip_index)),
+                active_chain_height: Arc::new(AtomicU32::new(tip_height)),
             }
         }
 
@@ -517,9 +479,10 @@ pub(crate) mod test {
         ) -> Self {
             assert!(blocks.len() == roots.len() && roots.len() == hashes.len());
 
-            let max_tip = blocks.len().saturating_sub(1) as u32;
+            // len() returns one-indexed length, height is zero-indexed.
+            let max_height = blocks.len().saturating_sub(1) as u32;
             assert!(
-                active_chain_height <= max_tip,
+                active_chain_height <= max_height,
                 "active_chain_height must be in 0..=len-1"
             );
 
@@ -532,12 +495,13 @@ pub(crate) mod test {
         }
 
         pub(crate) fn mine_blocks(&self, blocks: u32) {
-            let max_tip = self.blocks.len().saturating_sub(1) as u32;
+            // len() returns one-indexed length, height is zero-indexed.
+            let max_height = self.blocks.len().saturating_sub(1) as u32;
             let _ = self.active_chain_height.fetch_update(
                 Ordering::SeqCst,
                 Ordering::SeqCst,
                 |current| {
-                    let target = current.saturating_add(blocks).min(max_tip);
+                    let target = current.saturating_add(blocks).min(max_height);
                     if target == current {
                         None
                     } else {
@@ -548,6 +512,7 @@ pub(crate) mod test {
         }
 
         pub(crate) fn max_chain_height(&self) -> u32 {
+            // len() returns one-indexed length, height is zero-indexed.
             self.blocks.len().saturating_sub(1) as u32
         }
 
@@ -555,20 +520,20 @@ pub(crate) mod test {
             self.active_chain_height.load(Ordering::SeqCst)
         }
 
-        fn height_to_index(&self, height: u32) -> Result<usize, BlockchainSourceError> {
-            let index = height as usize;
+        fn valid_height(&self, height: u32) -> Result<usize, BlockchainSourceError> {
+            let valid_height = height as usize;
 
-            if index >= self.blocks.len() {
+            if valid_height >= self.blocks.len() {
                 return Err(BlockchainSourceError::Unrecoverable(format!(
                     "Height {height} is out of range (max height = {})",
                     self.blocks.len().saturating_sub(1)
                 )));
             }
 
-            Ok(index)
+            Ok(valid_height)
         }
 
-        fn hash_to_index(
+        fn valid_hash(
             &self,
             hash: &zebra_chain::block::Hash,
         ) -> Result<usize, BlockchainSourceError> {
@@ -579,23 +544,29 @@ pub(crate) mod test {
                     BlockchainSourceError::Unrecoverable("Block hash not found".to_string())
                 })
         }
+    }
 
-        async fn get_block(&self, id: HashOrHeight) -> BlockchainSourceResult<Option<Arc<Block>>> {
-            let active_tip = self.active_height() as usize;
+    #[async_trait]
+    impl BlockchainSource for MockchainSource {
+        async fn get_block(
+            &self,
+            id: HashOrHeight,
+        ) -> BlockchainSourceResult<Option<Arc<zebra_chain::block::Block>>> {
+            let active_chain_height = self.active_height() as usize;
 
             match id {
                 HashOrHeight::Height(height) => {
-                    let index = self.height_to_index(height.0)?;
-                    if index <= active_tip {
-                        Ok(Some(Arc::clone(&self.blocks[index])))
+                    let height = self.valid_height(height.0)?;
+                    if height <= active_chain_height {
+                        Ok(Some(Arc::clone(&self.blocks[height])))
                     } else {
                         Ok(None)
                     }
                 }
                 HashOrHeight::Hash(hash) => {
-                    let index = self.hash_to_index(&hash)?;
-                    if index <= active_tip {
-                        Ok(Some(Arc::clone(&self.blocks[index])))
+                    let height = self.valid_hash(&hash)?;
+                    if height <= active_chain_height {
+                        Ok(Some(Arc::clone(&self.blocks[height])))
                     } else {
                         Ok(None)
                     }
@@ -606,13 +577,15 @@ pub(crate) mod test {
         async fn get_commitment_tree_roots(
             &self,
             id: Hash,
-        ) -> BlockchainSourceResult<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>
-        {
-            let active_tip = self.active_height() as usize; // serve up to active tip
+        ) -> BlockchainSourceResult<(
+            Option<(zebra_chain::sapling::tree::Root, u64)>,
+            Option<(zebra_chain::orchard::tree::Root, u64)>,
+        )> {
+            let active_chain_height = self.active_height() as usize; // serve up to active tip
 
-            if let Some(index) = self.hashes.iter().position(|h| h == &id) {
-                if index <= active_tip {
-                    Ok(self.roots[index])
+            if let Some(height) = self.hashes.iter().position(|h| h == &id) {
+                if height <= active_chain_height {
+                    Ok(self.roots[height])
                 } else {
                     Ok((None, None))
                 }
@@ -624,10 +597,10 @@ pub(crate) mod test {
         async fn get_mempool_txids(
             &self,
         ) -> BlockchainSourceResult<Option<Vec<zebra_chain::transaction::Hash>>> {
-            let mempool_index = self.active_height() as usize + 1;
+            let mempool_height = self.active_height() as usize + 1;
 
-            let txids = if mempool_index < self.blocks.len() {
-                self.blocks[mempool_index]
+            let txids = if mempool_height < self.blocks.len() {
+                self.blocks[mempool_height]
                     .transactions
                     .iter()
                     .map(|transaction| transaction.hash())
@@ -643,30 +616,30 @@ pub(crate) mod test {
             &self,
             txid: Hash,
         ) -> BlockchainSourceResult<Option<Arc<zebra_chain::transaction::Transaction>>> {
-            let txid_tr: zebra_chain::transaction::Hash =
+            let zebra_txid: zebra_chain::transaction::Hash =
                 zebra_chain::transaction::Hash::from(txid.0);
 
-            let active_height = self.active_height() as usize;
-            let mempool_index = active_height + 1;
+            let active_chain_height = self.active_height() as usize;
+            let mempool_height = active_chain_height + 1;
 
-            for index in 0..=active_height {
-                if index >= self.blocks.len() {
+            for height in 0..=active_chain_height {
+                if height >= self.blocks.len() {
                     break;
                 }
-                if let Some(found) = self.blocks[index]
+                if let Some(found) = self.blocks[height]
                     .transactions
                     .iter()
-                    .find(|transaction| transaction.hash() == txid_tr)
+                    .find(|transaction| transaction.hash() == zebra_txid)
                 {
                     return Ok(Some(Arc::clone(found)));
                 }
             }
 
-            if mempool_index < self.blocks.len() {
-                if let Some(found) = self.blocks[mempool_index]
+            if mempool_height < self.blocks.len() {
+                if let Some(found) = self.blocks[mempool_height]
                     .transactions
                     .iter()
-                    .find(|transaction| transaction.hash() == txid_tr)
+                    .find(|transaction| transaction.hash() == zebra_txid)
                 {
                     return Ok(Some(Arc::clone(found)));
                 }
@@ -678,52 +651,13 @@ pub(crate) mod test {
         async fn get_best_block_hash(
             &self,
         ) -> BlockchainSourceResult<Option<zebra_chain::block::Hash>> {
-            let active_tip = self.active_height() as usize;
+            let active_chain_height = self.active_height() as usize;
 
-            if self.blocks.is_empty() || active_tip >= self.blocks.len() {
+            if self.blocks.is_empty() || active_chain_height >= self.blocks.len() {
                 return Ok(None);
             }
 
-            Ok(Some(self.blocks[active_tip].hash()))
-        }
-    }
-
-    #[async_trait]
-    impl BlockchainSource for MockchainSource {
-        async fn get_block(
-            &self,
-            id: HashOrHeight,
-        ) -> BlockchainSourceResult<Option<Arc<zebra_chain::block::Block>>> {
-            self.get_block(id).await
-        }
-
-        async fn get_commitment_tree_roots(
-            &self,
-            id: Hash,
-        ) -> BlockchainSourceResult<(
-            Option<(zebra_chain::sapling::tree::Root, u64)>,
-            Option<(zebra_chain::orchard::tree::Root, u64)>,
-        )> {
-            self.get_commitment_tree_roots(id).await
-        }
-
-        async fn get_mempool_txids(
-            &self,
-        ) -> BlockchainSourceResult<Option<Vec<zebra_chain::transaction::Hash>>> {
-            self.get_mempool_txids().await
-        }
-
-        async fn get_transaction(
-            &self,
-            txid: Hash,
-        ) -> BlockchainSourceResult<Option<Arc<zebra_chain::transaction::Transaction>>> {
-            self.get_transaction(txid).await
-        }
-
-        async fn get_best_block_hash(
-            &self,
-        ) -> BlockchainSourceResult<Option<zebra_chain::block::Hash>> {
-            self.get_best_block_hash().await
+            Ok(Some(self.blocks[active_chain_height].hash()))
         }
     }
 }

@@ -9,7 +9,7 @@ use zebra_state::HashOrHeight;
 
 use crate::{
     chain_index::{
-        source::ValidatorConnector,
+        source::{BlockchainSource as _, ValidatorConnector},
         types::{Hash, Height},
     },
     BlockData, BlockIndex, ChainBlock, ChainWork, CommitmentTreeData, CommitmentTreeRoots,
