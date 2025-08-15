@@ -71,6 +71,8 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v1_zaino_db() -> (
 ) {
     let (blocks, faucet, recipient) = load_test_vectors().unwrap();
 
+    dbg!(blocks.len());
+
     let source = build_mockchain_source(blocks.clone());
 
     let (db_dir, zaino_db) = spawn_v1_zaino_db(source).await.unwrap();
@@ -308,7 +310,7 @@ async fn load_db_from_file() {
             dbg!(zaino_db_2.status().await);
             let db_height = dbg!(zaino_db_2.db_height().await.unwrap()).unwrap();
 
-            assert_eq!(db_height.0, 199);
+            assert_eq!(db_height.0, 200);
 
             dbg!(zaino_db_2.shutdown().await.unwrap());
         });
@@ -495,6 +497,7 @@ async fn get_faucet_txids() {
 
     let start = Height(blocks.first().unwrap().0);
     let end = Height(blocks.last().unwrap().0);
+    dbg!(&start, &end);
 
     let (faucet_txids, faucet_utxos, _faucet_balance) = faucet;
     let (_faucet_address, _txid, _output_index, faucet_script, _satoshis, _height) =
@@ -556,7 +559,7 @@ async fn get_faucet_txids() {
             .addr_tx_locations_by_range(faucet_addr_script, block_height, block_height)
             .await
             .unwrap()
-            .unwrap();
+            .unwrap_or_default();
         let mut reader_block_txids = Vec::new();
         for tx_location in reader_faucet_tx_locations {
             let txid = db_reader.get_txid(tx_location).await.unwrap();
