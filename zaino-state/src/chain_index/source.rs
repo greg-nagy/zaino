@@ -624,7 +624,7 @@ pub(crate) mod test {
         async fn get_mempool_txids(
             &self,
         ) -> BlockchainSourceResult<Option<Vec<zebra_chain::transaction::Hash>>> {
-            let mempool_height = self.active_height() as usize + 1;
+            let mempool_index = self.active_height() as usize + 1;
 
             let txids = if mempool_index < self.blocks.len() {
                 self.blocks[mempool_index]
