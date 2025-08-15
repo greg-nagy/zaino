@@ -306,7 +306,7 @@ impl ValidatorConnector {
                     unreachable!("unmatched response to a `Transaction` read request");
                 }
 
-                // Else check mempool for transaction.
+                // Else heck mempool for transaction.
                 let mempool_txids = self.get_mempool_txids().await?.ok_or_else(|| {
                     BlockchainSourceError::Unrecoverable(
                         "could not fetch mempool transaction ids: none returned".to_string(),
