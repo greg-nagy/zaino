@@ -586,7 +586,7 @@ pub(crate) mod test {
             match id {
                 HashOrHeight::Height(height) => {
                     let index = self.height_to_index(height.0)?;
-                    if index <= active_tip {
+                    if index <= active_height - 1 {
                         Ok(Some(Arc::clone(&self.blocks[index])))
                     } else {
                         Ok(None)
