@@ -89,7 +89,7 @@ async fn v0_to_v1_full() {
     zaino_db_2.wait_until_ready().await;
     dbg!(zaino_db_2.status().await);
     let db_height = dbg!(zaino_db_2.db_height().await.unwrap()).unwrap();
-    assert_eq!(db_height.0, 199);
+    assert_eq!(db_height.0, 200);
     dbg!(zaino_db_2.shutdown().await.unwrap());
 }
 
@@ -219,7 +219,7 @@ async fn v0_to_v1_interrupted() {
     zaino_db_2.wait_until_ready().await;
     dbg!(zaino_db_2.status().await);
     let db_height = dbg!(zaino_db_2.db_height().await.unwrap()).unwrap();
-    assert_eq!(db_height.0, 199);
+    assert_eq!(db_height.0, 200);
     dbg!(zaino_db_2.shutdown().await.unwrap());
 }
 
