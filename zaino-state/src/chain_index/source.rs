@@ -608,7 +608,7 @@ pub(crate) mod test {
             id: Hash,
         ) -> BlockchainSourceResult<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>
         {
-            let active_tip = self.active_height() as usize; // serve up to active tip
+            let active_height = self.active_height() as usize; // serve up to active tip
 
             if let Some(index) = self.hashes.iter().position(|h| h == &id) {
                 if index <= active_tip {
