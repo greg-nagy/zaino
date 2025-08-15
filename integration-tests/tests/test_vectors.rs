@@ -351,7 +351,7 @@ async fn create_200_block_regtest_chain_vectors() {
         let mut parent_block_sapling_tree_size: u32 = 0;
         let mut parent_block_orchard_tree_size: u32 = 0;
 
-        for height in 0..chain_height.0 {
+        for height in 0..=chain_height.0 {
             let (chain_block, compact_block, zebra_block, block_roots) = {
                 // Fetch block data
                 let (_hash, tx, trees) = state_service_subscriber
@@ -451,7 +451,7 @@ async fn create_200_block_regtest_chain_vectors() {
         let faucet_txids = state_service_subscriber
             .get_address_tx_ids(GetAddressTxIdsRequest::new(
                 vec![faucet_taddr.clone()],
-                Some(1),
+                Some(0),
                 Some(chain_height.0),
             ))
             .await
@@ -476,7 +476,7 @@ async fn create_200_block_regtest_chain_vectors() {
         let recipient_txids = state_service_subscriber
             .get_address_tx_ids(GetAddressTxIdsRequest::new(
                 vec![recipient_taddr.clone()],
-                Some(1),
+                Some(0),
                 Some(chain_height.0),
             ))
             .await

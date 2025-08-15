@@ -19,8 +19,10 @@ use tracing::info;
 use zebra_chain::parameters::NetworkKind;
 
 use crate::{
-    chain_index::source::BlockchainSourceError, config::BlockCacheConfig,
-    error::FinalisedStateError, ChainBlock, ChainWork, Hash, Height, StatusType,
+    chain_index::{source::BlockchainSourceError, types::GENESIS_HEIGHT},
+    config::BlockCacheConfig,
+    error::FinalisedStateError,
+    ChainBlock, ChainWork, Hash, Height, StatusType,
 };
 
 use std::{sync::Arc, time::Duration};
@@ -205,18 +207,14 @@ impl ZainoDB {
     where
         T: BlockchainSource,
     {
-        if height.0 == 0 {
-            return Err(FinalisedStateError::Critical(
-                "Sync height must be non-zero.".to_string(),
-            ));
-        }
-
         let network = self.cfg.network.clone();
-        let db_height = self.db_height().await?.unwrap_or(Height(0));
+        let db_height_opt = self.db_height().await?;
+        let mut db_height = db_height_opt.unwrap_or(GENESIS_HEIGHT);
 
-        let mut parent_chainwork = if db_height.0 == 0 {
+        let mut parent_chainwork = if db_height_opt.is_none() {
             ChainWork::from_u256(0.into())
         } else {
+            db_height.0 += 1;
             match self
                 .db
                 .backend(CapabilityRequest::BlockCoreExt)?
@@ -232,7 +230,7 @@ impl ZainoDB {
             }
         };
 
-        for height_int in (db_height.0 + 1)..=height.0 {
+        for height_int in (db_height.0)..=height.0 {
             let block = match source
                 .get_block(zebra_state::HashOrHeight::Height(
                     zebra_chain::block::Height(height_int),

@@ -308,7 +308,7 @@ async fn load_db_from_file() {
             dbg!(zaino_db_2.status().await);
             let db_height = dbg!(zaino_db_2.db_height().await.unwrap()).unwrap();
 
-            assert_eq!(db_height.0, 199);
+            assert_eq!(db_height.0, 200);
 
             dbg!(zaino_db_2.shutdown().await.unwrap());
         });

@@ -6,8 +6,11 @@
 //! for this reason ZainoDB-V0 does not use the standard serialisation schema used elswhere in Zaino.
 
 use crate::{
-    chain_index::finalised_state::capability::{
-        CompactBlockExt, DbCore, DbMetadata, DbRead, DbVersion, DbWrite,
+    chain_index::{
+        finalised_state::capability::{
+            CompactBlockExt, DbCore, DbMetadata, DbRead, DbVersion, DbWrite,
+        },
+        types::GENESIS_HEIGHT,
     },
     config::BlockCacheConfig,
     error::FinalisedStateError,
@@ -393,9 +396,9 @@ impl DbV0 {
                 }
                 // no block in db, this must be genesis block.
                 Err(lmdb::Error::NotFound) => {
-                    if block_height != 1 {
+                    if block_height != GENESIS_HEIGHT.0 {
                         return Err(FinalisedStateError::Custom(format!(
-                            "first block must be height 1, got {block_height:?}"
+                            "first block must be height 0, got {block_height:?}"
                         )));
                     }
                 }

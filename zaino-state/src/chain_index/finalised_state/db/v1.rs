@@ -10,7 +10,7 @@ use crate::{
             },
             entry::{StoredEntryFixed, StoredEntryVar},
         },
-        types::AddrEventBytes,
+        types::{AddrEventBytes, GENESIS_HEIGHT},
     },
     config::BlockCacheConfig,
     error::FinalisedStateError,
@@ -863,7 +863,7 @@ impl DbV1 {
                 }
                 // no block in db, this must be genesis block.
                 Err(lmdb::Error::NotFound) => {
-                    if block_height.0 != 0 {
+                    if block_height.0 != GENESIS_HEIGHT.0 {
                         return Err(FinalisedStateError::Custom(format!(
                             "first block must be height 0, got {block_height:?}"
                         )));
