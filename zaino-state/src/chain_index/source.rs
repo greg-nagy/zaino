@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::chain_index::types::Hash;
+use crate::chain_index::types::BlockHash;
 use async_trait::async_trait;
 use futures::future::join;
 use tower::Service;
@@ -26,7 +26,7 @@ pub trait BlockchainSource: Clone + Send + Sync + 'static {
     /// Returns the block commitment tree data by hash or height
     async fn get_commitment_tree_roots(
         &self,
-        id: Hash,
+        id: BlockHash,
     ) -> BlockchainSourceResult<(
         Option<(zebra_chain::sapling::tree::Root, u64)>,
         Option<(zebra_chain::orchard::tree::Root, u64)>,
@@ -100,7 +100,7 @@ impl ValidatorConnector {
 
     pub(super) async fn get_commitment_tree_roots(
         &self,
-        id: Hash,
+        id: BlockHash,
     ) -> BlockchainSourceResult<(
         Option<(zebra_chain::sapling::tree::Root, u64)>,
         Option<(zebra_chain::orchard::tree::Root, u64)>,
@@ -228,7 +228,7 @@ impl BlockchainSource for ValidatorConnector {
 
     async fn get_commitment_tree_roots(
         &self,
-        id: Hash,
+        id: BlockHash,
     ) -> BlockchainSourceResult<(
         Option<(zebra_chain::sapling::tree::Root, u64)>,
         Option<(zebra_chain::orchard::tree::Root, u64)>,
@@ -251,7 +251,7 @@ pub(crate) mod test {
     pub(crate) struct MockchainSource {
         blocks: Vec<Arc<Block>>,
         roots: Vec<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>,
-        hashes: Vec<Hash>,
+        hashes: Vec<BlockHash>,
     }
 
     impl MockchainSource {
@@ -261,7 +261,7 @@ pub(crate) mod test {
         pub(crate) fn new(
             blocks: Vec<Arc<Block>>,
             roots: Vec<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>,
-            hashes: Vec<Hash>,
+            hashes: Vec<BlockHash>,
         ) -> Self {
             assert!(
                 blocks.len() == roots.len() && roots.len() == hashes.len(),
@@ -325,7 +325,7 @@ pub(crate) mod test {
 
         async fn get_commitment_tree_roots(
             &self,
-            id: Hash,
+            id: BlockHash,
         ) -> BlockchainSourceResult<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>
         {
             let index = self.hashes.iter().position(|h| h == &id);

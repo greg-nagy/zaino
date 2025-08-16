@@ -10,7 +10,7 @@ use zebra_state::HashOrHeight;
 use crate::{
     chain_index::{
         source::ValidatorConnector,
-        types::{Hash, Height},
+        types::{BlockHash, Height},
     },
     BlockData, BlockIndex, ChainBlock, ChainWork, CommitmentTreeData, CommitmentTreeRoots,
     CommitmentTreeSizes, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
@@ -40,12 +40,12 @@ pub struct NonfinalizedBlockCacheSnapshot {
     /// this includes all blocks on-chain, as well as
     /// all blocks known to have been on-chain before being
     /// removed by a reorg. Blocks reorged away have no height.
-    pub blocks: HashMap<Hash, ChainBlock>,
+    pub blocks: HashMap<BlockHash, ChainBlock>,
     /// hashes indexed by height
-    pub heights_to_hashes: HashMap<Height, Hash>,
+    pub heights_to_hashes: HashMap<Height, BlockHash>,
     // Do we need height here?
     /// The highest known block
-    pub best_tip: (Height, Hash),
+    pub best_tip: (Height, BlockHash),
 }
 
 #[derive(Debug)]
@@ -239,8 +239,8 @@ impl NonFinalizedState {
         }
 
         let height = Some(Height(1));
-        let hash = Hash::from(genesis_block.hash());
-        let parent_hash = Hash::from(genesis_block.header.previous_block_hash);
+        let hash = BlockHash::from(genesis_block.hash());
+        let parent_hash = BlockHash::from(genesis_block.header.previous_block_hash);
         let chainwork = ChainWork::from(U256::from(
             genesis_block
                 .header
@@ -327,7 +327,7 @@ impl NonFinalizedState {
             })?
         {
             // If this block is next in the chain, we sync it as normal
-            if Hash::from(block.header.previous_block_hash) == best_tip.1 {
+            if BlockHash::from(block.header.previous_block_hash) == best_tip.1 {
                 let prev_block = match new_blocks.last() {
                     Some(block) => block,
                     None => initial_state.blocks.get(&best_tip.1).ok_or_else(|| {
@@ -470,8 +470,8 @@ impl NonFinalizedState {
                 best_tip = (best_tip.0 + 1, block.hash().into());
 
                 let height = Some(best_tip.0);
-                let hash = Hash::from(block.hash());
-                let parent_hash = Hash::from(block.header.previous_block_hash);
+                let hash = BlockHash::from(block.hash());
+                let parent_hash = BlockHash::from(block.header.previous_block_hash);
                 let chainwork = prev_block.chainwork().add(&ChainWork::from(U256::from(
                     block
                         .header
@@ -595,7 +595,7 @@ impl NonFinalizedState {
     }
     /// Add all blocks from the staging area, and save a new cache snapshot
     pub async fn update(&self, finalized_height: Height) -> Result<(), UpdateError> {
-        let mut new = HashMap::<Hash, ChainBlock>::new();
+        let mut new = HashMap::<BlockHash, ChainBlock>::new();
         let mut staged = self.staged.lock().await;
         loop {
             match staged.try_recv() {
@@ -619,7 +619,7 @@ impl NonFinalizedState {
                 .map(|(hash, block)| (*hash, block.clone())),
         );
         // todo: incorperate with finalized state to synchronize removal of finalized blocks from nonfinalized state instead of discarding below a cetain height
-        let (_newly_finalzed, blocks): (HashMap<_, _>, HashMap<Hash, _>) = new
+        let (_newly_finalzed, blocks): (HashMap<_, _>, HashMap<BlockHash, _>) = new
             .into_iter()
             .partition(|(_hash, block)| match block.index().height() {
                 Some(height) => height < finalized_height,

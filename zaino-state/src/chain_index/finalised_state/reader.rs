@@ -5,7 +5,7 @@
 use crate::{
     chain_index::{finalised_state::capability::CapabilityRequest, types::AddrEventBytes},
     error::FinalisedStateError,
-    AddrScript, BlockHeaderData, ChainBlock, CommitmentTreeData, Hash, Height, OrchardCompactTx,
+    AddrScript, BlockHeaderData, ChainBlock, CommitmentTreeData, BlockHash, Height, OrchardCompactTx,
     OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx,
     TransparentTxList, TxLocation, TxidList,
 };
@@ -59,12 +59,12 @@ impl DbReader {
     }
 
     /// Fetch the block height in the main chain for a given block hash.
-    pub(crate) async fn get_block_height(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
+    pub(crate) async fn get_block_height(&self, hash: BlockHash) -> Result<Height, FinalisedStateError> {
         self.inner.get_block_height(hash).await
     }
 
     /// Fetch the block hash in the main chain for a given block height.
-    pub(crate) async fn get_block_hash(&self, height: Height) -> Result<Hash, FinalisedStateError> {
+    pub(crate) async fn get_block_hash(&self, height: Height) -> Result<BlockHash, FinalisedStateError> {
         self.inner.get_block_hash(height).await
     }
 
@@ -73,7 +73,7 @@ impl DbReader {
     /// Fetch the TxLocation for the given txid, transaction data is indexed by TxLocation internally.
     pub(crate) async fn get_tx_location(
         &self,
-        txid: &Hash,
+        txid: &BlockHash,
     ) -> Result<Option<TxLocation>, FinalisedStateError> {
         self.db(CapabilityRequest::BlockCoreExt)?
             .get_tx_location(txid)
@@ -105,7 +105,7 @@ impl DbReader {
     pub(crate) async fn get_txid(
         &self,
         tx_location: TxLocation,
-    ) -> Result<Hash, FinalisedStateError> {
+    ) -> Result<BlockHash, FinalisedStateError> {
         self.db(CapabilityRequest::BlockCoreExt)?
             .get_txid(tx_location)
             .await

@@ -10,7 +10,7 @@ use super::{
 
 use crate::{
     chain_index::source::BlockchainSource, config::BlockCacheConfig, error::FinalisedStateError,
-    ChainBlock, ChainWork, Hash, Height,
+    ChainBlock, ChainWork, BlockHash, Height,
 };
 
 use async_trait::async_trait;
@@ -164,7 +164,7 @@ impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
                                     "block not found at height {height}"
                                 ))
                             })?;
-                        let hash = Hash::from(block.hash().0);
+                        let hash = BlockHash::from(block.hash().0);
 
                         let (sapling_root_data, orchard_root_data) =
                             source.get_commitment_tree_roots(hash).await?;

@@ -13,7 +13,7 @@ use crate::{
     },
     config::BlockCacheConfig,
     error::FinalisedStateError,
-    AddrScript, BlockHeaderData, ChainBlock, CommitmentTreeData, Hash, Height, OrchardCompactTx,
+    AddrScript, BlockHeaderData, ChainBlock, CommitmentTreeData, BlockHash, Height, OrchardCompactTx,
     OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx,
     TransparentTxList, TxLocation, TxidList,
 };
@@ -108,14 +108,14 @@ impl DbRead for DbBackend {
         }
     }
 
-    async fn get_block_height(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
+    async fn get_block_height(&self, hash: BlockHash) -> Result<Height, FinalisedStateError> {
         match self {
             Self::V0(db) => db.get_block_height(hash).await,
             Self::V1(db) => db.get_block_height(hash).await,
         }
     }
 
-    async fn get_block_hash(&self, height: Height) -> Result<Hash, FinalisedStateError> {
+    async fn get_block_hash(&self, height: Height) -> Result<BlockHash, FinalisedStateError> {
         match self {
             Self::V0(db) => db.get_block_hash(height).await,
             Self::V1(db) => db.get_block_hash(height).await,
@@ -204,7 +204,7 @@ impl BlockCoreExt for DbBackend {
         }
     }
 
-    async fn get_txid(&self, tx_location: TxLocation) -> Result<Hash, FinalisedStateError> {
+    async fn get_txid(&self, tx_location: TxLocation) -> Result<BlockHash, FinalisedStateError> {
         match self {
             Self::V1(db) => db.get_txid(tx_location).await,
             _ => Err(FinalisedStateError::FeatureUnavailable("block_core")),
@@ -213,7 +213,7 @@ impl BlockCoreExt for DbBackend {
 
     async fn get_tx_location(
         &self,
-        txid: &Hash,
+        txid: &BlockHash,
     ) -> Result<Option<TxLocation>, FinalisedStateError> {
         match self {
             Self::V1(db) => db.get_tx_location(txid).await,

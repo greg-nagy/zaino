@@ -899,7 +899,7 @@ async fn check_faucet_spent_map() {
         .zip(faucet_ouptpoints_spent_status.iter())
     {
         let outpoint_tuple = (
-            crate::Hash::from(*outpoint.prev_txid()).to_string(),
+            crate::BlockHash::from(*outpoint.prev_txid()).to_string(),
             outpoint.prev_index(),
         );
         match spender_option {
@@ -1035,7 +1035,7 @@ async fn check_recipient_spent_map() {
         .zip(recipient_ouptpoints_spent_status.iter())
     {
         let outpoint_tuple = (
-            crate::Hash::from(*outpoint.prev_txid()).to_string(),
+            crate::BlockHash::from(*outpoint.prev_txid()).to_string(),
             outpoint.prev_index(),
         );
         match spender_option {

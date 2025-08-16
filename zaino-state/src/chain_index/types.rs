@@ -22,9 +22,9 @@ use super::encoding::{
 /// Block hash (SHA256d hash of the block header).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub struct Hash(pub [u8; 32]);
+pub struct BlockHash(pub [u8; 32]);
 
-impl Hash {
+impl BlockHash {
     /// Return the hash bytes in big-endian byte-order suitable for printing out byte by byte.
     pub fn bytes_in_display_order(&self) -> [u8; 32] {
         let mut reversed_bytes = self.0;
@@ -32,22 +32,22 @@ impl Hash {
         reversed_bytes
     }
 
-    /// Convert bytes in big-endian byte-order into a [`block::Hash`](crate::Hash).
-    pub fn from_bytes_in_display_order(bytes_in_display_order: &[u8; 32]) -> Hash {
+    /// Convert bytes in big-endian byte-order into a [`self::BlockHash`].
+    pub fn from_bytes_in_display_order(bytes_in_display_order: &[u8; 32]) -> BlockHash {
         let mut internal_byte_order = *bytes_in_display_order;
         internal_byte_order.reverse();
 
-        Hash(internal_byte_order)
+        BlockHash(internal_byte_order)
     }
 }
 
-impl fmt::Display for Hash {
+impl fmt::Display for BlockHash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(&self.encode_hex::<String>())
     }
 }
 
-impl ToHex for &Hash {
+impl ToHex for &BlockHash {
     fn encode_hex<T: FromIterator<char>>(&self) -> T {
         self.bytes_in_display_order().encode_hex()
     }
@@ -57,7 +57,7 @@ impl ToHex for &Hash {
     }
 }
 
-impl ToHex for Hash {
+impl ToHex for BlockHash {
     fn encode_hex<T: FromIterator<char>>(&self) -> T {
         (&self).encode_hex()
     }
@@ -67,7 +67,7 @@ impl ToHex for Hash {
     }
 }
 
-impl FromHex for Hash {
+impl FromHex for BlockHash {
     type Error = <[u8; 32] as FromHex>::Error;
 
     fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, Self::Error> {
@@ -77,44 +77,43 @@ impl FromHex for Hash {
     }
 }
 
-impl From<[u8; 32]> for Hash {
+impl From<[u8; 32]> for BlockHash {
     fn from(bytes: [u8; 32]) -> Self {
-        Hash(bytes)
+        BlockHash(bytes)
     }
 }
 
-impl From<Hash> for [u8; 32] {
-    fn from(hash: Hash) -> Self {
+impl From<BlockHash> for [u8; 32] {
+    fn from(hash: BlockHash) -> Self {
         hash.0
     }
 }
 
-impl From<Hash> for zebra_chain::block::Hash {
-    fn from(h: Hash) -> Self {
-        zebra_chain::block::Hash(h.0)
+impl From<BlockHash> for zebra_chain::block::Hash {
+    fn from(hash: BlockHash) -> Self {
+        zebra_chain::block::Hash(hash.0)
     }
 }
 
-impl From<zebra_chain::block::Hash> for Hash {
-    fn from(h: zebra_chain::block::Hash) -> Self {
-        Hash(h.0)
+impl From<zebra_chain::block::Hash> for BlockHash {
+    fn from(hash: zebra_chain::block::Hash) -> Self {
+        BlockHash(hash.0)
     }
 }
 
-impl From<Hash> for zcash_primitives::block::BlockHash {
-    fn from(h: Hash) -> Self {
-        // Convert to display order (big-endian)
-        zcash_primitives::block::BlockHash(h.bytes_in_display_order())
+impl From<BlockHash> for zcash_primitives::block::BlockHash {
+    fn from(hash: BlockHash) -> Self {
+        zcash_primitives::block::BlockHash(hash.0)
     }
 }
 
-impl From<zcash_primitives::block::BlockHash> for Hash {
-    fn from(h: zcash_primitives::block::BlockHash) -> Self {
-        Hash::from_bytes_in_display_order(&h.0)
+impl From<zcash_primitives::block::BlockHash> for BlockHash {
+    fn from(hash: zcash_primitives::block::BlockHash) -> Self {
+        BlockHash(hash.0)
     }
 }
 
-impl ZainoVersionedSerialise for Hash {
+impl ZainoVersionedSerialise for BlockHash {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
@@ -127,12 +126,129 @@ impl ZainoVersionedSerialise for Hash {
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let bytes = read_fixed_le::<32, _>(r)?;
-        Ok(Hash(bytes))
+        Ok(BlockHash(bytes))
     }
 }
 
 /// Hash = 32-byte body.
-impl FixedEncodedLen for Hash {
+impl FixedEncodedLen for BlockHash {
+    /// 32 bytes, LE
+    const ENCODED_LEN: usize = 32;
+}
+
+/// Transaction hash.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
+pub struct TransactionHash(pub [u8; 32]);
+
+impl TransactionHash {
+    /// Return the hash bytes in big-endian byte-order suitable for printing out byte by byte.
+    pub fn bytes_in_display_order(&self) -> [u8; 32] {
+        let mut reversed_bytes = self.0;
+        reversed_bytes.reverse();
+        reversed_bytes
+    }
+
+    /// Convert bytes in big-endian byte-order into a [`self::TransactionHash`].
+    pub fn from_bytes_in_display_order(bytes_in_display_order: &[u8; 32]) -> TransactionHash {
+        let mut internal_byte_order = *bytes_in_display_order;
+        internal_byte_order.reverse();
+
+        TransactionHash(internal_byte_order)
+    }
+}
+
+impl fmt::Display for TransactionHash {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(&self.encode_hex::<String>())
+    }
+}
+
+impl ToHex for &TransactionHash {
+    fn encode_hex<T: FromIterator<char>>(&self) -> T {
+        self.bytes_in_display_order().encode_hex()
+    }
+
+    fn encode_hex_upper<T: FromIterator<char>>(&self) -> T {
+        self.bytes_in_display_order().encode_hex_upper()
+    }
+}
+
+impl ToHex for TransactionHash {
+    fn encode_hex<T: FromIterator<char>>(&self) -> T {
+        (&self).encode_hex()
+    }
+
+    fn encode_hex_upper<T: FromIterator<char>>(&self) -> T {
+        (&self).encode_hex_upper()
+    }
+}
+
+impl FromHex for TransactionHash {
+    type Error = <[u8; 32] as FromHex>::Error;
+
+    fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, Self::Error> {
+        let hash = <[u8; 32]>::from_hex(hex)?;
+
+        Ok(Self::from_bytes_in_display_order(&hash))
+    }
+}
+
+impl From<[u8; 32]> for TransactionHash {
+    fn from(bytes: [u8; 32]) -> Self {
+        TransactionHash(bytes)
+    }
+}
+
+impl From<TransactionHash> for [u8; 32] {
+    fn from(hash: TransactionHash) -> Self {
+        hash.0
+    }
+}
+
+impl From<TransactionHash> for zebra_chain::transaction::Hash {
+    fn from(hash: TransactionHash) -> Self {
+        zebra_chain::transaction::Hash(hash.0)
+    }
+}
+
+impl From<zebra_chain::transaction::Hash> for TransactionHash {
+    fn from(hash: zebra_chain::transaction::Hash) -> Self {
+        TransactionHash(hash.0)
+    }
+}
+
+impl From<TransactionHash> for zcash_primitives::transaction::TxId {
+    fn from(hash: TransactionHash) -> Self {
+        zcash_primitives::transaction::TxId::from_bytes(hash.0)
+    }
+}
+
+impl From<zcash_primitives::transaction::TxId> for TransactionHash {
+    fn from(hash: zcash_primitives::transaction::TxId) -> Self {
+        TransactionHash(hash.into())
+    }
+}
+
+impl ZainoVersionedSerialise for TransactionHash {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        write_fixed_le::<32, _>(w, &self.0)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        let bytes = read_fixed_le::<32, _>(r)?;
+        Ok(TransactionHash(bytes))
+    }
+}
+
+/// Hash = 32-byte body.
+impl FixedEncodedLen for TransactionHash {
     /// 32 bytes, LE
     const ENCODED_LEN: usize = 32;
 }
@@ -425,7 +541,7 @@ impl Outpoint {
 
     /// Build from a *display-order* txid.
     pub fn new_from_be(txid_be: &[u8; 32], index: u32) -> Self {
-        let le = Hash::from_bytes_in_display_order(txid_be).0;
+        let le = BlockHash::from_bytes_in_display_order(txid_be).0;
         Self::new(le, index)
     }
 
@@ -474,9 +590,9 @@ impl FixedEncodedLen for Outpoint {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct BlockIndex {
     /// The hash identifying this block uniquely.
-    pub(super) hash: Hash,
+    pub(super) hash: BlockHash,
     /// The hash of this block's parent block (previous block in chain).
-    pub(super) parent_hash: Hash,
+    pub(super) parent_hash: BlockHash,
     /// The cumulative proof-of-work of the blockchain up to this block, used for chain selection.
     pub(super) chainwork: ChainWork,
     /// The height of this block if it's in the current best chain. None if it's part of a fork.
@@ -486,8 +602,8 @@ pub struct BlockIndex {
 impl BlockIndex {
     /// Constructs a new `BlockIndex`.
     pub fn new(
-        hash: Hash,
-        parent_hash: Hash,
+        hash: BlockHash,
+        parent_hash: BlockHash,
         chainwork: ChainWork,
         height: Option<Height>,
     ) -> Self {
@@ -500,12 +616,12 @@ impl BlockIndex {
     }
 
     /// Returns the hash of this block.
-    pub fn hash(&self) -> &Hash {
+    pub fn hash(&self) -> &BlockHash {
         &self.hash
     }
 
     /// Returns the hash of the parent block.
-    pub fn parent_hash(&self) -> &Hash {
+    pub fn parent_hash(&self) -> &BlockHash {
         &self.parent_hash
     }
 
@@ -544,8 +660,8 @@ impl ZainoVersionedSerialise for BlockIndex {
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
-        let hash = Hash::deserialize(&mut r)?;
-        let parent_hash = Hash::deserialize(&mut r)?;
+        let hash = BlockHash::deserialize(&mut r)?;
+        let parent_hash = BlockHash::deserialize(&mut r)?;
         let chainwork = ChainWork::deserialize(&mut r)?;
         let height = read_option(&mut r, |r| Height::deserialize(r))?;
 
@@ -1125,7 +1241,7 @@ impl ChainBlock {
     }
 
     /// Returns the block hash.
-    pub fn hash(&self) -> &Hash {
+    pub fn hash(&self) -> &BlockHash {
         self.index.hash()
     }
 
@@ -1320,8 +1436,8 @@ impl
 
         // --- Final index and block data ---
         let index = BlockIndex::new(
-            Hash::from(hash),
-            Hash::from(parent_hash),
+            BlockHash::from(hash),
+            BlockHash::from(parent_hash),
             chainwork,
             Some(height),
         );
@@ -1483,8 +1599,8 @@ impl
             transactions.push(txdata);
         }
 
-        let hash = Hash::from(block.hash());
-        let parent_hash = Hash::from(block.header.previous_block_hash);
+        let hash = BlockHash::from(block.hash());
+        let parent_hash = BlockHash::from(block.header.previous_block_hash);
 
         let coinbase_tx_height = block
             .coinbase_height()
@@ -2877,17 +2993,17 @@ impl ZainoVersionedSerialise for BlockHeaderData {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct TxidList {
     /// Txids.
-    tx: Vec<Hash>,
+    tx: Vec<BlockHash>,
 }
 
 impl TxidList {
     /// Creates a new `TxidList`.
-    pub fn new(tx: Vec<Hash>) -> Self {
+    pub fn new(tx: Vec<BlockHash>) -> Self {
         Self { tx }
     }
 
     /// Returns a slice of the contained txids.
-    pub fn tx(&self) -> &[Hash] {
+    pub fn tx(&self) -> &[BlockHash] {
         &self.tx
     }
 }
@@ -2904,7 +3020,7 @@ impl ZainoVersionedSerialise for TxidList {
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        let tx = read_vec(r, |r| Hash::deserialize(r))?;
+        let tx = read_vec(r, |r| BlockHash::deserialize(r))?;
         Ok(TxidList::new(tx))
     }
 }

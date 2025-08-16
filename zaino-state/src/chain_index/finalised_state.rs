@@ -20,7 +20,7 @@ use zebra_chain::parameters::NetworkKind;
 
 use crate::{
     chain_index::source::BlockchainSourceError, config::BlockCacheConfig,
-    error::FinalisedStateError, ChainBlock, ChainWork, Hash, Height, StatusType,
+    error::FinalisedStateError, ChainBlock, ChainWork, BlockHash, Height, StatusType,
 };
 
 use std::{sync::Arc, time::Duration};
@@ -250,7 +250,7 @@ impl ZainoDB {
                 }
             };
 
-            let block_hash = Hash::from(block.hash().0);
+            let block_hash = BlockHash::from(block.hash().0);
 
             let (sapling_root, sapling_size, orchard_root, orchard_size) =
                 match source.get_commitment_tree_roots(block_hash).await? {
@@ -338,12 +338,12 @@ impl ZainoDB {
     /// Returns the block height for the given block hash *if* present in the finalised state.
     ///
     /// TODO: Should theis return `Result<Option<Height>, FinalisedStateError>`?
-    pub(crate) async fn get_block_height(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
+    pub(crate) async fn get_block_height(&self, hash: BlockHash) -> Result<Height, FinalisedStateError> {
         self.db.get_block_height(hash).await
     }
 
     /// Returns the block block hash for the given block height *if* present in the finlaised state.
-    pub(crate) async fn get_block_hash(&self, h: Height) -> Result<Hash, FinalisedStateError> {
+    pub(crate) async fn get_block_hash(&self, h: Height) -> Result<BlockHash, FinalisedStateError> {
         self.db.get_block_hash(h).await
     }
 

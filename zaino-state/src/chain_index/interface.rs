@@ -132,8 +132,8 @@ pub trait ChainIndex {
     fn find_fork_point(
         &self,
         snapshot: &Self::Snapshot,
-        block_hash: &types::Hash,
-    ) -> Result<Option<(types::Hash, types::Height)>, Self::Error>;
+        block_hash: &types::BlockHash,
+    ) -> Result<Option<(types::BlockHash, types::Height)>, Self::Error>;
     /// given a transaction id, returns the transaction
     fn get_raw_transaction(
         &self,
@@ -146,7 +146,7 @@ pub trait ChainIndex {
         &self,
         snapshot: &Self::Snapshot,
         txid: [u8; 32],
-    ) -> Result<HashMap<types::Hash, Option<types::Height>>, Self::Error>;
+    ) -> Result<HashMap<types::BlockHash, Option<types::Height>>, Self::Error>;
 }
 
 impl ChainIndex for NodeBackedChainIndex {
@@ -231,8 +231,8 @@ impl ChainIndex for NodeBackedChainIndex {
     fn find_fork_point(
         &self,
         snapshot: &Self::Snapshot,
-        block_hash: &types::Hash,
-    ) -> Result<Option<(types::Hash, types::Height)>, Self::Error> {
+        block_hash: &types::BlockHash,
+    ) -> Result<Option<(types::BlockHash, types::Height)>, Self::Error> {
         let Some(block) = snapshot.as_ref().get_chainblock_by_hash(block_hash) else {
             // No fork point found. This is not an error,
             // as zaino does not guarentee knowledge of all sidechain data.
@@ -279,7 +279,7 @@ impl ChainIndex for NodeBackedChainIndex {
         snapshot: &Self::Snapshot,
         txid: [u8; 32],
     ) -> Result<
-        HashMap<super::types::Hash, std::option::Option<super::types::Height>>,
+        HashMap<super::types::BlockHash, std::option::Option<super::types::Height>>,
         ChainIndexError,
     > {
         Ok(self
@@ -292,7 +292,7 @@ impl ChainIndex for NodeBackedChainIndex {
 /// A snapshot of the non-finalized state, for consistent queries
 pub trait NonFinalizedSnapshot {
     /// Hash -> block
-    fn get_chainblock_by_hash(&self, target_hash: &types::Hash) -> Option<&ChainBlock>;
+    fn get_chainblock_by_hash(&self, target_hash: &types::BlockHash) -> Option<&ChainBlock>;
     /// Height -> block
     fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&ChainBlock>;
 }
@@ -300,7 +300,7 @@ pub trait NonFinalizedSnapshot {
 trait NonFinalizedSnapshotGetHashOrHeight: NonFinalizedSnapshot {
     fn get_chainblock_by_hashorheight(&self, target: &HashOrHeight) -> Option<&ChainBlock> {
         match target {
-            HashOrHeight::Hash(hash) => self.get_chainblock_by_hash(&types::Hash::from(*hash)),
+            HashOrHeight::Hash(hash) => self.get_chainblock_by_hash(&types::BlockHash::from(*hash)),
             HashOrHeight::Height(height) => self.get_chainblock_by_height(&types::Height(height.0)),
         }
     }
@@ -309,7 +309,7 @@ trait NonFinalizedSnapshotGetHashOrHeight: NonFinalizedSnapshot {
 impl<T: NonFinalizedSnapshot> NonFinalizedSnapshotGetHashOrHeight for T {}
 
 impl NonFinalizedSnapshot for NonfinalizedBlockCacheSnapshot {
-    fn get_chainblock_by_hash(&self, target_hash: &types::Hash) -> Option<&ChainBlock> {
+    fn get_chainblock_by_hash(&self, target_hash: &types::BlockHash) -> Option<&ChainBlock> {
         self.blocks.iter().find_map(|(hash, chainblock)| {
             if hash == target_hash {
                 Some(chainblock)

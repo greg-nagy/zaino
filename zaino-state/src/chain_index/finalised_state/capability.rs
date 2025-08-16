@@ -5,7 +5,7 @@ use core::fmt;
 use crate::{
     chain_index::types::AddrEventBytes, error::FinalisedStateError, read_fixed_le, read_u32_le,
     read_u8, version, write_fixed_le, write_u32_le, write_u8, AddrScript, BlockHeaderData,
-    ChainBlock, CommitmentTreeData, FixedEncodedLen, Hash, Height, OrchardCompactTx, OrchardTxList,
+    ChainBlock, CommitmentTreeData, FixedEncodedLen, BlockHash, Height, OrchardCompactTx, OrchardTxList,
     Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
     TxLocation, TxidList, ZainoVersionedSerialise,
 };
@@ -390,10 +390,10 @@ pub trait DbRead: Send + Sync {
     async fn db_height(&self) -> Result<Option<Height>, FinalisedStateError>;
 
     /// Lookup height of a block by its hash.
-    async fn get_block_height(&self, hash: Hash) -> Result<Height, FinalisedStateError>;
+    async fn get_block_height(&self, hash: BlockHash) -> Result<Height, FinalisedStateError>;
 
     /// Lookup hash of a block by its height.
-    async fn get_block_hash(&self, height: Height) -> Result<Hash, FinalisedStateError>;
+    async fn get_block_hash(&self, height: Height) -> Result<BlockHash, FinalisedStateError>;
 
     /// Return the persisted `DbMetadata` singleton.
     async fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError>;
@@ -458,10 +458,10 @@ pub trait BlockCoreExt: Send + Sync {
     ) -> Result<Vec<TxidList>, FinalisedStateError>;
 
     /// Fetch the txid bytes for a given TxLocation.
-    async fn get_txid(&self, tx_location: TxLocation) -> Result<Hash, FinalisedStateError>;
+    async fn get_txid(&self, tx_location: TxLocation) -> Result<BlockHash, FinalisedStateError>;
 
     /// Fetch the TxLocation for the given txid, transaction data is indexed by TxLocation internally.
-    async fn get_tx_location(&self, txid: &Hash)
+    async fn get_tx_location(&self, txid: &BlockHash)
         -> Result<Option<TxLocation>, FinalisedStateError>;
 }
 

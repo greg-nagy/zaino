@@ -16,7 +16,7 @@ use crate::{
     error::FinalisedStateError,
     AddrHistRecord, AddrScript, AtomicStatus, BlockHeaderData, ChainBlock, CommitmentTreeData,
     CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactSize, CompactTxData,
-    FixedEncodedLen as _, Hash, Height, OrchardCompactTx, OrchardTxList, Outpoint,
+    FixedEncodedLen as _, BlockHash, Height, OrchardCompactTx, OrchardTxList, Outpoint,
     SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
     TxInCompact, TxLocation, TxOutCompact, TxidList, ZainoVersionedSerialise as _,
 };
@@ -93,11 +93,11 @@ impl DbRead for DbV1 {
         self.tip_height().await
     }
 
-    async fn get_block_height(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
+    async fn get_block_height(&self, hash: BlockHash) -> Result<Height, FinalisedStateError> {
         self.get_block_height_by_hash(hash).await
     }
 
-    async fn get_block_hash(&self, height: Height) -> Result<Hash, FinalisedStateError> {
+    async fn get_block_hash(&self, height: Height) -> Result<BlockHash, FinalisedStateError> {
         Ok(*self.get_block_header_data(height).await?.index().hash())
     }
 
@@ -177,13 +177,13 @@ impl BlockCoreExt for DbV1 {
         self.get_block_range_txids(start, end).await
     }
 
-    async fn get_txid(&self, tx_location: TxLocation) -> Result<Hash, FinalisedStateError> {
+    async fn get_txid(&self, tx_location: TxLocation) -> Result<BlockHash, FinalisedStateError> {
         self.get_txid(tx_location).await
     }
 
     async fn get_tx_location(
         &self,
-        txid: &Hash,
+        txid: &BlockHash,
     ) -> Result<Option<TxLocation>, FinalisedStateError> {
         self.get_tx_location(txid).await
     }
@@ -657,7 +657,7 @@ impl DbV1 {
                         }
                     };
 
-                    let hash_opt = (|| -> Option<Hash> {
+                    let hash_opt = (|| -> Option<BlockHash> {
                         let ro = zaino_db.env.begin_ro_txn().ok()?;
                         let bytes = ro.get(zaino_db.headers, &hkey).ok()?;
                         let entry = StoredEntryVar::<BlockHeaderData>::deserialize(bytes).ok()?;
@@ -774,7 +774,7 @@ impl DbV1 {
             let mut cursor = ro.open_ro_cursor(zaino_db.heights)?;
 
             for (hash_bytes, height_entry_bytes) in cursor.iter() {
-                let hash = Hash::from_bytes(hash_bytes)?;
+                let hash = BlockHash::from_bytes(hash_bytes)?;
                 let height = *StoredEntryFixed::<Height>::from_bytes(height_entry_bytes)
                     .map_err(|e| FinalisedStateError::Custom(format!("corrupt height entry: {e}")))?
                     .inner();
@@ -878,7 +878,7 @@ impl DbV1 {
         // Build transaction indexes
         let tx_len = block.transactions().len();
         let mut txids = Vec::with_capacity(tx_len);
-        let mut txid_set: HashSet<Hash> = HashSet::with_capacity(tx_len);
+        let mut txid_set: HashSet<BlockHash> = HashSet::with_capacity(tx_len);
         let mut transparent = Vec::with_capacity(tx_len);
         let mut sapling = Vec::with_capacity(tx_len);
         let mut orchard = Vec::with_capacity(tx_len);
@@ -892,7 +892,7 @@ impl DbV1 {
         let mut addrhist_outputs_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
 
         for (tx_index, tx) in block.transactions().iter().enumerate() {
-            let hash = Hash::from_bytes_in_display_order(tx.txid());
+            let hash = BlockHash::from_bytes_in_display_order(tx.txid());
 
             if txid_set.insert(hash) {
                 txids.push(hash);
@@ -942,7 +942,7 @@ impl DbV1 {
                 spent_map.insert(prev_outpoint, tx_location);
 
                 //Check if output is in *this* block, else fetch from DB.
-                let prev_tx_hash = Hash(*prev_outpoint.prev_txid());
+                let prev_tx_hash = BlockHash(*prev_outpoint.prev_txid());
                 if txid_set.contains(&prev_tx_hash) {
                     // Fetch transaction index within block
                     if let Some(tx_index) = txids.iter().position(|h| h == &prev_tx_hash) {
@@ -970,7 +970,7 @@ impl DbV1 {
                     tokio::task::block_in_place(|| {
                         let prev_output = self.get_previous_output_blocking(prev_outpoint)?;
                         let prev_output_tx_location = self
-                            .find_txid_index_blocking(&Hash::from(*prev_outpoint.prev_txid()))?
+                            .find_txid_index_blocking(&BlockHash::from(*prev_outpoint.prev_txid()))?
                             .ok_or_else(|| {
                                 FinalisedStateError::Custom("Previous txid not found".into())
                             })?;
@@ -1291,7 +1291,7 @@ impl DbV1 {
         // Build transaction indexes
         let tx_len = block.transactions().len();
         let mut txids = Vec::with_capacity(tx_len);
-        let mut txid_set: HashSet<Hash> = HashSet::with_capacity(tx_len);
+        let mut txid_set: HashSet<BlockHash> = HashSet::with_capacity(tx_len);
         let mut transparent = Vec::with_capacity(tx_len);
         let mut spent_map: Vec<Outpoint> = Vec::new();
         #[allow(clippy::type_complexity)]
@@ -1302,7 +1302,7 @@ impl DbV1 {
         let mut addrhist_outputs_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
 
         for (tx_index, tx) in block.transactions().iter().enumerate() {
-            let h = Hash::from_bytes_in_display_order(tx.txid());
+            let h = BlockHash::from_bytes_in_display_order(tx.txid());
 
             if txid_set.insert(h) {
                 txids.push(h);
@@ -1336,7 +1336,7 @@ impl DbV1 {
                 spent_map.push(prev_outpoint);
 
                 //Check if output is in *this* block, else fetch from DB.
-                let prev_tx_hash = Hash(*prev_outpoint.prev_txid());
+                let prev_tx_hash = BlockHash(*prev_outpoint.prev_txid());
                 if txid_set.contains(&prev_tx_hash) {
                     // Fetch transaction index within block
                     if let Some(tx_index) = txids.iter().position(|h| h == &prev_tx_hash) {
@@ -1365,7 +1365,7 @@ impl DbV1 {
                         let prev_output = self.get_previous_output_blocking(prev_outpoint)?;
 
                         let prev_output_tx_location = self
-                            .find_txid_index_blocking(&Hash::from(*prev_outpoint.prev_txid()))
+                            .find_txid_index_blocking(&BlockHash::from(*prev_outpoint.prev_txid()))
                             .map_err(|e| FinalisedStateError::InvalidBlock {
                                 height: block.height().expect("already  checked height is some").0,
                                 hash: *block.hash(),
@@ -1582,7 +1582,7 @@ impl DbV1 {
     }
 
     /// Fetch the block height in the main chain for a given block hash.
-    async fn get_block_height_by_hash(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
+    async fn get_block_height_by_hash(&self, hash: BlockHash) -> Result<Height, FinalisedStateError> {
         let height = self
             .resolve_validated_hash_or_height(HashOrHeight::Hash(hash.into()))
             .await?;
@@ -1592,8 +1592,8 @@ impl DbV1 {
     /// Fetch the height range for the given block hashes.
     async fn get_block_range_by_hash(
         &self,
-        start_hash: Hash,
-        end_hash: Hash,
+        start_hash: BlockHash,
+        end_hash: BlockHash,
     ) -> Result<(Height, Height), FinalisedStateError> {
         let start_height = self
             .resolve_validated_hash_or_height(HashOrHeight::Hash(start_hash.into()))
@@ -1611,7 +1611,7 @@ impl DbV1 {
     // Fetch the TxLocation for the given txid, transaction data is indexed by TxLocation internally.
     async fn get_tx_location(
         &self,
-        txid: &Hash,
+        txid: &BlockHash,
     ) -> Result<Option<TxLocation>, FinalisedStateError> {
         if let Some(index) = tokio::task::block_in_place(|| self.find_txid_index_blocking(txid))? {
             Ok(Some(index))
@@ -1696,7 +1696,7 @@ impl DbV1 {
     /// This uses an optimized lookup without decoding the full TxidList.
     ///
     /// NOTE: This method currently ignores the txid version byte for efficiency.
-    async fn get_txid(&self, tx_location: TxLocation) -> Result<Hash, FinalisedStateError> {
+    async fn get_txid(&self, tx_location: TxLocation) -> Result<BlockHash, FinalisedStateError> {
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
 
@@ -1744,19 +1744,19 @@ impl DbV1 {
             // Each txid entry is: [0] version tag + [1..32] txid
 
             // So we skip idx * 33 bytes to reach the start of the correct Hash
-            let offset = cursor.position() + (idx as u64) * Hash::VERSIONED_LEN as u64;
+            let offset = cursor.position() + (idx as u64) * BlockHash::VERSIONED_LEN as u64;
             cursor.set_position(offset);
 
             // Read [0] Txid Record version (skip 1 byte)
             cursor.set_position(cursor.position() + 1);
 
             // Then read 32 bytes for the txid
-            let mut txid_bytes = [0u8; Hash::ENCODED_LEN];
+            let mut txid_bytes = [0u8; BlockHash::ENCODED_LEN];
             cursor
                 .read_exact(&mut txid_bytes)
                 .map_err(|e| FinalisedStateError::Custom(format!("txid read error: {e}")))?;
 
-            Ok(Hash::from(txid_bytes))
+            Ok(BlockHash::from(txid_bytes))
         })
     }
 
@@ -3150,7 +3150,7 @@ impl DbV1 {
     fn validate_block_blocking(
         &self,
         height: Height,
-        hash: Hash,
+        hash: BlockHash,
     ) -> Result<(), FinalisedStateError> {
         if self.is_validated(height.into()) {
             return Ok(());
@@ -3553,7 +3553,7 @@ impl DbV1 {
                         Err(e) => return Err(e),
                     }
 
-                    Ok::<Hash, FinalisedStateError>(hash)
+                    Ok::<BlockHash, FinalisedStateError>(hash)
                 })?;
                 height
             }
@@ -3561,7 +3561,7 @@ impl DbV1 {
             // Hash lookup path.
             HashOrHeight::Hash(z_hash) => {
                 let height = self.resolve_hash_or_height(hash_or_height).await?;
-                let hash = Hash::from(z_hash);
+                let hash = BlockHash::from(z_hash);
                 tokio::task::block_in_place(|| {
                     match self.validate_block_blocking(height, hash) {
                         Ok(()) => {}
@@ -3599,7 +3599,7 @@ impl DbV1 {
 
             // Height lookup path.
             HashOrHeight::Hash(z_hash) => {
-                let hash = Hash::from(z_hash.0);
+                let hash = BlockHash::from(z_hash.0);
                 let hkey = hash.to_bytes()?;
 
                 let height: Height = tokio::task::block_in_place(|| {
@@ -4224,7 +4224,7 @@ impl DbV1 {
         outpoint: Outpoint,
     ) -> Result<TxOutCompact, FinalisedStateError> {
         // Find the tx’s location in the chain
-        let prev_txid = Hash::from(*outpoint.prev_txid());
+        let prev_txid = BlockHash::from(*outpoint.prev_txid());
         let tx_location = self
             .find_txid_index_blocking(&prev_txid)?
             .ok_or_else(|| FinalisedStateError::Custom("Previous txid not found".into()))?;
@@ -4250,7 +4250,7 @@ impl DbV1 {
     /// WARNING: This is a blocking function and **MUST** be called within a blocking thread / task.
     fn find_txid_index_blocking(
         &self,
-        txid: &Hash,
+        txid: &BlockHash,
     ) -> Result<Option<TxLocation>, FinalisedStateError> {
         let ro = self.env.begin_ro_txn()?;
         let mut cursor = ro.open_ro_cursor(self.txids)?;
@@ -4295,11 +4295,11 @@ impl DbV1 {
 
         // Check is at least sotred version + compactsize + checksum
         // else return none.
-        if stored.len() < Hash::VERSION_TAG_LEN + 8 + CHECKSUM_LEN {
+        if stored.len() < BlockHash::VERSION_TAG_LEN + 8 + CHECKSUM_LEN {
             return None;
         }
 
-        let mut cursor = &stored[Hash::VERSION_TAG_LEN..];
+        let mut cursor = &stored[BlockHash::VERSION_TAG_LEN..];
         let item_len = CompactSize::read(&mut cursor).ok()? as usize;
         if cursor.len() < item_len + CHECKSUM_LEN {
             return None;
@@ -4339,11 +4339,11 @@ impl DbV1 {
     ) -> Option<TxOutCompact> {
         const CHECKSUM_LEN: usize = 32;
 
-        if stored.len() < Hash::VERSION_TAG_LEN + 8 + CHECKSUM_LEN {
+        if stored.len() < BlockHash::VERSION_TAG_LEN + 8 + CHECKSUM_LEN {
             return None;
         }
 
-        let mut cursor = &stored[Hash::VERSION_TAG_LEN..];
+        let mut cursor = &stored[BlockHash::VERSION_TAG_LEN..];
         let item_len = CompactSize::read(&mut cursor).ok()? as usize;
         if cursor.len() < item_len + CHECKSUM_LEN {
             return None;
