@@ -10,15 +10,8 @@ use crate::{
             },
             entry::{StoredEntryFixed, StoredEntryVar},
         },
-        types::AddrEventBytes,
-    },
-    config::BlockCacheConfig,
-    error::FinalisedStateError,
-    AddrHistRecord, AddrScript, AtomicStatus, BlockHeaderData, ChainBlock, CommitmentTreeData,
-    CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactSize, CompactTxData,
-    FixedEncodedLen as _, BlockHash, Height, OrchardCompactTx, OrchardTxList, Outpoint,
-    SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
-    TxInCompact, TxLocation, TxOutCompact, TxidList, ZainoVersionedSerialise as _,
+        types::{AddrEventBytes, TransactionHash},
+    }, config::BlockCacheConfig, error::FinalisedStateError, AddrHistRecord, AddrScript, AtomicStatus, BlockHash, BlockHeaderData, ChainBlock, CommitmentTreeData, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactSize, CompactTxData, FixedEncodedLen as _, Height, OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList, TxInCompact, TxLocation, TxOutCompact, TxidList, ZainoVersionedSerialise as _
 };
 
 use zebra_chain::parameters::NetworkKind;
@@ -177,13 +170,13 @@ impl BlockCoreExt for DbV1 {
         self.get_block_range_txids(start, end).await
     }
 
-    async fn get_txid(&self, tx_location: TxLocation) -> Result<BlockHash, FinalisedStateError> {
+    async fn get_txid(&self, tx_location: TxLocation) -> Result<TransactionHash, FinalisedStateError> {
         self.get_txid(tx_location).await
     }
 
     async fn get_tx_location(
         &self,
-        txid: &BlockHash,
+        txid: &TransactionHash,
     ) -> Result<Option<TxLocation>, FinalisedStateError> {
         self.get_tx_location(txid).await
     }
@@ -878,7 +871,7 @@ impl DbV1 {
         // Build transaction indexes
         let tx_len = block.transactions().len();
         let mut txids = Vec::with_capacity(tx_len);
-        let mut txid_set: HashSet<BlockHash> = HashSet::with_capacity(tx_len);
+        let mut txid_set: HashSet<TransactionHash> = HashSet::with_capacity(tx_len);
         let mut transparent = Vec::with_capacity(tx_len);
         let mut sapling = Vec::with_capacity(tx_len);
         let mut orchard = Vec::with_capacity(tx_len);
@@ -892,7 +885,7 @@ impl DbV1 {
         let mut addrhist_outputs_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
 
         for (tx_index, tx) in block.transactions().iter().enumerate() {
-            let hash = BlockHash::from_bytes_in_display_order(tx.txid());
+            let hash = TransactionHash::from_bytes_in_display_order(tx.txid());
 
             if txid_set.insert(hash) {
                 txids.push(hash);
@@ -942,7 +935,7 @@ impl DbV1 {
                 spent_map.insert(prev_outpoint, tx_location);
 
                 //Check if output is in *this* block, else fetch from DB.
-                let prev_tx_hash = BlockHash(*prev_outpoint.prev_txid());
+                let prev_tx_hash = TransactionHash(*prev_outpoint.prev_txid());
                 if txid_set.contains(&prev_tx_hash) {
                     // Fetch transaction index within block
                     if let Some(tx_index) = txids.iter().position(|h| h == &prev_tx_hash) {
@@ -970,7 +963,7 @@ impl DbV1 {
                     tokio::task::block_in_place(|| {
                         let prev_output = self.get_previous_output_blocking(prev_outpoint)?;
                         let prev_output_tx_location = self
-                            .find_txid_index_blocking(&BlockHash::from(*prev_outpoint.prev_txid()))?
+                            .find_txid_index_blocking(&TransactionHash::from(*prev_outpoint.prev_txid()))?
                             .ok_or_else(|| {
                                 FinalisedStateError::Custom("Previous txid not found".into())
                             })?;
@@ -1291,7 +1284,7 @@ impl DbV1 {
         // Build transaction indexes
         let tx_len = block.transactions().len();
         let mut txids = Vec::with_capacity(tx_len);
-        let mut txid_set: HashSet<BlockHash> = HashSet::with_capacity(tx_len);
+        let mut txid_set: HashSet<TransactionHash> = HashSet::with_capacity(tx_len);
         let mut transparent = Vec::with_capacity(tx_len);
         let mut spent_map: Vec<Outpoint> = Vec::new();
         #[allow(clippy::type_complexity)]
@@ -1302,7 +1295,7 @@ impl DbV1 {
         let mut addrhist_outputs_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
 
         for (tx_index, tx) in block.transactions().iter().enumerate() {
-            let h = BlockHash::from_bytes_in_display_order(tx.txid());
+            let h = TransactionHash::from_bytes_in_display_order(tx.txid());
 
             if txid_set.insert(h) {
                 txids.push(h);
@@ -1336,7 +1329,7 @@ impl DbV1 {
                 spent_map.push(prev_outpoint);
 
                 //Check if output is in *this* block, else fetch from DB.
-                let prev_tx_hash = BlockHash(*prev_outpoint.prev_txid());
+                let prev_tx_hash = TransactionHash(*prev_outpoint.prev_txid());
                 if txid_set.contains(&prev_tx_hash) {
                     // Fetch transaction index within block
                     if let Some(tx_index) = txids.iter().position(|h| h == &prev_tx_hash) {
@@ -1365,7 +1358,7 @@ impl DbV1 {
                         let prev_output = self.get_previous_output_blocking(prev_outpoint)?;
 
                         let prev_output_tx_location = self
-                            .find_txid_index_blocking(&BlockHash::from(*prev_outpoint.prev_txid()))
+                            .find_txid_index_blocking(&TransactionHash::from(*prev_outpoint.prev_txid()))
                             .map_err(|e| FinalisedStateError::InvalidBlock {
                                 height: block.height().expect("already  checked height is some").0,
                                 hash: *block.hash(),
@@ -1611,7 +1604,7 @@ impl DbV1 {
     // Fetch the TxLocation for the given txid, transaction data is indexed by TxLocation internally.
     async fn get_tx_location(
         &self,
-        txid: &BlockHash,
+        txid: &TransactionHash,
     ) -> Result<Option<TxLocation>, FinalisedStateError> {
         if let Some(index) = tokio::task::block_in_place(|| self.find_txid_index_blocking(txid))? {
             Ok(Some(index))
@@ -1696,7 +1689,7 @@ impl DbV1 {
     /// This uses an optimized lookup without decoding the full TxidList.
     ///
     /// NOTE: This method currently ignores the txid version byte for efficiency.
-    async fn get_txid(&self, tx_location: TxLocation) -> Result<BlockHash, FinalisedStateError> {
+    async fn get_txid(&self, tx_location: TxLocation) -> Result<TransactionHash, FinalisedStateError> {
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
 
@@ -1744,19 +1737,19 @@ impl DbV1 {
             // Each txid entry is: [0] version tag + [1..32] txid
 
             // So we skip idx * 33 bytes to reach the start of the correct Hash
-            let offset = cursor.position() + (idx as u64) * BlockHash::VERSIONED_LEN as u64;
+            let offset = cursor.position() + (idx as u64) * TransactionHash::VERSIONED_LEN as u64;
             cursor.set_position(offset);
 
             // Read [0] Txid Record version (skip 1 byte)
             cursor.set_position(cursor.position() + 1);
 
             // Then read 32 bytes for the txid
-            let mut txid_bytes = [0u8; BlockHash::ENCODED_LEN];
+            let mut txid_bytes = [0u8; TransactionHash::ENCODED_LEN];
             cursor
                 .read_exact(&mut txid_bytes)
                 .map_err(|e| FinalisedStateError::Custom(format!("txid read error: {e}")))?;
 
-            Ok(BlockHash::from(txid_bytes))
+            Ok(TransactionHash::from(txid_bytes))
         })
     }
 
@@ -2803,7 +2796,7 @@ impl DbV1 {
                 .map_err(|e| FinalisedStateError::Custom(format!("txids decode error: {e}")))?
                 .inner()
                 .clone();
-            let txids = txids_list.tx();
+            let txids = txids_list.txids();
 
             let raw = match txn.get(self.transparent, &height_bytes) {
                 Ok(val) => val,
@@ -2946,7 +2939,7 @@ impl DbV1 {
                 .map_err(|e| FinalisedStateError::Custom(format!("txids decode error: {e}")))?
                 .inner()
                 .clone();
-            let txids = txids_list.tx();
+            let txids = txids_list.txids();
 
             let raw = match txn.get(self.sapling, &height_bytes) {
                 Ok(val) => val,
@@ -3285,7 +3278,7 @@ impl DbV1 {
         }
 
         // *** Merkle root / Txid validation ***
-        let txids: Vec<[u8; 32]> = txid_list_entry.inner().tx().iter().map(|h| h.0).collect();
+        let txids: Vec<[u8; 32]> = txid_list_entry.inner().txids().iter().map(|h| h.0).collect();
 
         let header_merkle_root = header_entry.inner().data().merkle_root();
 
@@ -4224,7 +4217,7 @@ impl DbV1 {
         outpoint: Outpoint,
     ) -> Result<TxOutCompact, FinalisedStateError> {
         // Find the tx’s location in the chain
-        let prev_txid = BlockHash::from(*outpoint.prev_txid());
+        let prev_txid = TransactionHash::from(*outpoint.prev_txid());
         let tx_location = self
             .find_txid_index_blocking(&prev_txid)?
             .ok_or_else(|| FinalisedStateError::Custom("Previous txid not found".into()))?;
@@ -4250,7 +4243,7 @@ impl DbV1 {
     /// WARNING: This is a blocking function and **MUST** be called within a blocking thread / task.
     fn find_txid_index_blocking(
         &self,
-        txid: &BlockHash,
+        txid: &TransactionHash,
     ) -> Result<Option<TxLocation>, FinalisedStateError> {
         let ro = self.env.begin_ro_txn()?;
         let mut cursor = ro.open_ro_cursor(self.txids)?;
@@ -4295,11 +4288,11 @@ impl DbV1 {
 
         // Check is at least sotred version + compactsize + checksum
         // else return none.
-        if stored.len() < BlockHash::VERSION_TAG_LEN + 8 + CHECKSUM_LEN {
+        if stored.len() < TransactionHash::VERSION_TAG_LEN + 8 + CHECKSUM_LEN {
             return None;
         }
 
-        let mut cursor = &stored[BlockHash::VERSION_TAG_LEN..];
+        let mut cursor = &stored[TransactionHash::VERSION_TAG_LEN..];
         let item_len = CompactSize::read(&mut cursor).ok()? as usize;
         if cursor.len() < item_len + CHECKSUM_LEN {
             return None;
@@ -4339,11 +4332,11 @@ impl DbV1 {
     ) -> Option<TxOutCompact> {
         const CHECKSUM_LEN: usize = 32;
 
-        if stored.len() < BlockHash::VERSION_TAG_LEN + 8 + CHECKSUM_LEN {
+        if stored.len() < TransactionHash::VERSION_TAG_LEN + 8 + CHECKSUM_LEN {
             return None;
         }
 
-        let mut cursor = &stored[BlockHash::VERSION_TAG_LEN..];
+        let mut cursor = &stored[TransactionHash::VERSION_TAG_LEN..];
         let item_len = CompactSize::read(&mut cursor).ok()? as usize;
         if cursor.len() < item_len + CHECKSUM_LEN {
             return None;

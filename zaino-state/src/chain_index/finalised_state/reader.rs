@@ -3,11 +3,7 @@
 //! This should be used to fetch chain data in *all* cases.
 
 use crate::{
-    chain_index::{finalised_state::capability::CapabilityRequest, types::AddrEventBytes},
-    error::FinalisedStateError,
-    AddrScript, BlockHeaderData, ChainBlock, CommitmentTreeData, BlockHash, Height, OrchardCompactTx,
-    OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx,
-    TransparentTxList, TxLocation, TxidList,
+    chain_index::{finalised_state::capability::CapabilityRequest, types::{AddrEventBytes, TransactionHash}}, error::FinalisedStateError, AddrScript, BlockHash, BlockHeaderData, ChainBlock, CommitmentTreeData, Height, OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList, TxLocation, TxidList
 };
 
 use super::{
@@ -73,7 +69,7 @@ impl DbReader {
     /// Fetch the TxLocation for the given txid, transaction data is indexed by TxLocation internally.
     pub(crate) async fn get_tx_location(
         &self,
-        txid: &BlockHash,
+        txid: &TransactionHash,
     ) -> Result<Option<TxLocation>, FinalisedStateError> {
         self.db(CapabilityRequest::BlockCoreExt)?
             .get_tx_location(txid)
@@ -105,7 +101,7 @@ impl DbReader {
     pub(crate) async fn get_txid(
         &self,
         tx_location: TxLocation,
-    ) -> Result<BlockHash, FinalisedStateError> {
+    ) -> Result<TransactionHash, FinalisedStateError> {
         self.db(CapabilityRequest::BlockCoreExt)?
             .get_txid(tx_location)
             .await

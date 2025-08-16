@@ -7,15 +7,10 @@ use v0::DbV0;
 use v1::DbV1;
 
 use crate::{
-    chain_index::finalised_state::capability::{
+    chain_index::{finalised_state::capability::{
         BlockCoreExt, BlockShieldedExt, BlockTransparentExt, ChainBlockExt, CompactBlockExt,
         DbCore, DbMetadata, DbRead, DbWrite, TransparentHistExt,
-    },
-    config::BlockCacheConfig,
-    error::FinalisedStateError,
-    AddrScript, BlockHeaderData, ChainBlock, CommitmentTreeData, BlockHash, Height, OrchardCompactTx,
-    OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx,
-    TransparentTxList, TxLocation, TxidList,
+    }, types::TransactionHash}, config::BlockCacheConfig, error::FinalisedStateError, AddrScript, BlockHash, BlockHeaderData, ChainBlock, CommitmentTreeData, Height, OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList, TxLocation, TxidList
 };
 
 use async_trait::async_trait;
@@ -204,7 +199,7 @@ impl BlockCoreExt for DbBackend {
         }
     }
 
-    async fn get_txid(&self, tx_location: TxLocation) -> Result<BlockHash, FinalisedStateError> {
+    async fn get_txid(&self, tx_location: TxLocation) -> Result<TransactionHash, FinalisedStateError> {
         match self {
             Self::V1(db) => db.get_txid(tx_location).await,
             _ => Err(FinalisedStateError::FeatureUnavailable("block_core")),
@@ -213,7 +208,7 @@ impl BlockCoreExt for DbBackend {
 
     async fn get_tx_location(
         &self,
-        txid: &BlockHash,
+        txid: &TransactionHash,
     ) -> Result<Option<TxLocation>, FinalisedStateError> {
         match self {
             Self::V1(db) => db.get_tx_location(txid).await,

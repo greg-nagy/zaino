@@ -541,7 +541,7 @@ impl Outpoint {
 
     /// Build from a *display-order* txid.
     pub fn new_from_be(txid_be: &[u8; 32], index: u32) -> Self {
-        let le = BlockHash::from_bytes_in_display_order(txid_be).0;
+        let le = TransactionHash::from_bytes_in_display_order(txid_be).0;
         Self::new(le, index)
     }
 
@@ -2993,18 +2993,18 @@ impl ZainoVersionedSerialise for BlockHeaderData {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct TxidList {
     /// Txids.
-    tx: Vec<BlockHash>,
+    txids: Vec<TransactionHash>,
 }
 
 impl TxidList {
     /// Creates a new `TxidList`.
-    pub fn new(tx: Vec<BlockHash>) -> Self {
-        Self { tx }
+    pub fn new(tx: Vec<TransactionHash>) -> Self {
+        Self { txids: tx }
     }
 
     /// Returns a slice of the contained txids.
-    pub fn tx(&self) -> &[BlockHash] {
-        &self.tx
+    pub fn txids(&self) -> &[TransactionHash] {
+        &self.txids
     }
 }
 
@@ -3012,7 +3012,7 @@ impl ZainoVersionedSerialise for TxidList {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        write_vec(w, &self.tx, |w, h| h.serialize(w))
+        write_vec(w, &self.txids, |w, h| h.serialize(w))
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
@@ -3020,7 +3020,7 @@ impl ZainoVersionedSerialise for TxidList {
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        let tx = read_vec(r, |r| BlockHash::deserialize(r))?;
+        let tx = read_vec(r, |r| TransactionHash::deserialize(r))?;
         Ok(TxidList::new(tx))
     }
 }
