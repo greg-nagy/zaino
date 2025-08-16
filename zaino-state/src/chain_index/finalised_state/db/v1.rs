@@ -11,7 +11,14 @@ use crate::{
             entry::{StoredEntryFixed, StoredEntryVar},
         },
         types::{AddrEventBytes, TransactionHash},
-    }, config::BlockCacheConfig, error::FinalisedStateError, AddrHistRecord, AddrScript, AtomicStatus, BlockHash, BlockHeaderData, ChainBlock, CommitmentTreeData, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactSize, CompactTxData, FixedEncodedLen as _, Height, OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList, TxInCompact, TxLocation, TxOutCompact, TxidList, ZainoVersionedSerialise as _
+    },
+    config::BlockCacheConfig,
+    error::FinalisedStateError,
+    AddrHistRecord, AddrScript, AtomicStatus, BlockHash, BlockHeaderData, ChainBlock,
+    CommitmentTreeData, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
+    CompactSize, CompactTxData, FixedEncodedLen as _, Height, OrchardCompactTx, OrchardTxList,
+    Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
+    TxInCompact, TxLocation, TxOutCompact, TxidList, ZainoVersionedSerialise as _,
 };
 
 use zebra_chain::parameters::NetworkKind;
@@ -170,7 +177,10 @@ impl BlockCoreExt for DbV1 {
         self.get_block_range_txids(start, end).await
     }
 
-    async fn get_txid(&self, tx_location: TxLocation) -> Result<TransactionHash, FinalisedStateError> {
+    async fn get_txid(
+        &self,
+        tx_location: TxLocation,
+    ) -> Result<TransactionHash, FinalisedStateError> {
         self.get_txid(tx_location).await
     }
 
@@ -963,7 +973,9 @@ impl DbV1 {
                     tokio::task::block_in_place(|| {
                         let prev_output = self.get_previous_output_blocking(prev_outpoint)?;
                         let prev_output_tx_location = self
-                            .find_txid_index_blocking(&TransactionHash::from(*prev_outpoint.prev_txid()))?
+                            .find_txid_index_blocking(&TransactionHash::from(
+                                *prev_outpoint.prev_txid(),
+                            ))?
                             .ok_or_else(|| {
                                 FinalisedStateError::Custom("Previous txid not found".into())
                             })?;
@@ -1358,7 +1370,9 @@ impl DbV1 {
                         let prev_output = self.get_previous_output_blocking(prev_outpoint)?;
 
                         let prev_output_tx_location = self
-                            .find_txid_index_blocking(&TransactionHash::from(*prev_outpoint.prev_txid()))
+                            .find_txid_index_blocking(&TransactionHash::from(
+                                *prev_outpoint.prev_txid(),
+                            ))
                             .map_err(|e| FinalisedStateError::InvalidBlock {
                                 height: block.height().expect("already  checked height is some").0,
                                 hash: *block.hash(),
@@ -1575,7 +1589,10 @@ impl DbV1 {
     }
 
     /// Fetch the block height in the main chain for a given block hash.
-    async fn get_block_height_by_hash(&self, hash: BlockHash) -> Result<Height, FinalisedStateError> {
+    async fn get_block_height_by_hash(
+        &self,
+        hash: BlockHash,
+    ) -> Result<Height, FinalisedStateError> {
         let height = self
             .resolve_validated_hash_or_height(HashOrHeight::Hash(hash.into()))
             .await?;
@@ -1689,7 +1706,10 @@ impl DbV1 {
     /// This uses an optimized lookup without decoding the full TxidList.
     ///
     /// NOTE: This method currently ignores the txid version byte for efficiency.
-    async fn get_txid(&self, tx_location: TxLocation) -> Result<TransactionHash, FinalisedStateError> {
+    async fn get_txid(
+        &self,
+        tx_location: TxLocation,
+    ) -> Result<TransactionHash, FinalisedStateError> {
         tokio::task::block_in_place(|| {
             let txn = self.env.begin_ro_txn()?;
 
@@ -3278,7 +3298,12 @@ impl DbV1 {
         }
 
         // *** Merkle root / Txid validation ***
-        let txids: Vec<[u8; 32]> = txid_list_entry.inner().txids().iter().map(|h| h.0).collect();
+        let txids: Vec<[u8; 32]> = txid_list_entry
+            .inner()
+            .txids()
+            .iter()
+            .map(|h| h.0)
+            .collect();
 
         let header_merkle_root = header_entry.inner().data().merkle_root();
 

@@ -10,7 +10,7 @@ use super::{
 
 use crate::{
     chain_index::source::BlockchainSource, config::BlockCacheConfig, error::FinalisedStateError,
-    ChainBlock, ChainWork, BlockHash, Height,
+    BlockHash, ChainBlock, ChainWork, Height,
 };
 
 use async_trait::async_trait;

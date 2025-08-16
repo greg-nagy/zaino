@@ -3,7 +3,14 @@
 //! This should be used to fetch chain data in *all* cases.
 
 use crate::{
-    chain_index::{finalised_state::capability::CapabilityRequest, types::{AddrEventBytes, TransactionHash}}, error::FinalisedStateError, AddrScript, BlockHash, BlockHeaderData, ChainBlock, CommitmentTreeData, Height, OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList, TxLocation, TxidList
+    chain_index::{
+        finalised_state::capability::CapabilityRequest,
+        types::{AddrEventBytes, TransactionHash},
+    },
+    error::FinalisedStateError,
+    AddrScript, BlockHash, BlockHeaderData, ChainBlock, CommitmentTreeData, Height,
+    OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType,
+    TransparentCompactTx, TransparentTxList, TxLocation, TxidList,
 };
 
 use super::{
@@ -55,12 +62,18 @@ impl DbReader {
     }
 
     /// Fetch the block height in the main chain for a given block hash.
-    pub(crate) async fn get_block_height(&self, hash: BlockHash) -> Result<Height, FinalisedStateError> {
+    pub(crate) async fn get_block_height(
+        &self,
+        hash: BlockHash,
+    ) -> Result<Height, FinalisedStateError> {
         self.inner.get_block_height(hash).await
     }
 
     /// Fetch the block hash in the main chain for a given block height.
-    pub(crate) async fn get_block_hash(&self, height: Height) -> Result<BlockHash, FinalisedStateError> {
+    pub(crate) async fn get_block_hash(
+        &self,
+        height: Height,
+    ) -> Result<BlockHash, FinalisedStateError> {
         self.inner.get_block_hash(height).await
     }
 

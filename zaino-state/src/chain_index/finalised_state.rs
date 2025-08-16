@@ -20,7 +20,7 @@ use zebra_chain::parameters::NetworkKind;
 
 use crate::{
     chain_index::source::BlockchainSourceError, config::BlockCacheConfig,
-    error::FinalisedStateError, ChainBlock, ChainWork, BlockHash, Height, StatusType,
+    error::FinalisedStateError, BlockHash, ChainBlock, ChainWork, Height, StatusType,
 };
 
 use std::{sync::Arc, time::Duration};
@@ -338,7 +338,10 @@ impl ZainoDB {
     /// Returns the block height for the given block hash *if* present in the finalised state.
     ///
     /// TODO: Should theis return `Result<Option<Height>, FinalisedStateError>`?
-    pub(crate) async fn get_block_height(&self, hash: BlockHash) -> Result<Height, FinalisedStateError> {
+    pub(crate) async fn get_block_height(
+        &self,
+        hash: BlockHash,
+    ) -> Result<Height, FinalisedStateError> {
         self.db.get_block_height(hash).await
     }
 

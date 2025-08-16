@@ -3,7 +3,12 @@
 use core::fmt;
 
 use crate::{
-    chain_index::types::{AddrEventBytes, TransactionHash}, error::FinalisedStateError, read_fixed_le, read_u32_le, read_u8, version, write_fixed_le, write_u32_le, write_u8, AddrScript, BlockHash, BlockHeaderData, ChainBlock, CommitmentTreeData, FixedEncodedLen, Height, OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList, TxLocation, TxidList, ZainoVersionedSerialise
+    chain_index::types::{AddrEventBytes, TransactionHash},
+    error::FinalisedStateError,
+    read_fixed_le, read_u32_le, read_u8, version, write_fixed_le, write_u32_le, write_u8,
+    AddrScript, BlockHash, BlockHeaderData, ChainBlock, CommitmentTreeData, FixedEncodedLen,
+    Height, OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType,
+    TransparentCompactTx, TransparentTxList, TxLocation, TxidList, ZainoVersionedSerialise,
 };
 
 use async_trait::async_trait;
@@ -454,11 +459,16 @@ pub trait BlockCoreExt: Send + Sync {
     ) -> Result<Vec<TxidList>, FinalisedStateError>;
 
     /// Fetch the txid bytes for a given TxLocation.
-    async fn get_txid(&self, tx_location: TxLocation) -> Result<TransactionHash, FinalisedStateError>;
+    async fn get_txid(
+        &self,
+        tx_location: TxLocation,
+    ) -> Result<TransactionHash, FinalisedStateError>;
 
     /// Fetch the TxLocation for the given txid, transaction data is indexed by TxLocation internally.
-    async fn get_tx_location(&self, txid: &TransactionHash)
-        -> Result<Option<TxLocation>, FinalisedStateError>;
+    async fn get_tx_location(
+        &self,
+        txid: &TransactionHash,
+    ) -> Result<Option<TxLocation>, FinalisedStateError>;
 }
 
 /// Transparent block data extension.
