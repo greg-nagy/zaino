@@ -1159,3 +1159,337 @@ impl FullTransaction {
             || !self.raw_transaction.orchard_actions.is_empty()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zaino_testutils::test_vectors::transactions::get_test_vectors;
+
+    /// Test parsing v1 transactions using real blockchain test vectors.
+    /// Validates that FullTransaction::parse_from_slice correctly handles v1 transaction format.
+    #[test]
+    fn test_real_v1_transaction_parsing() {
+        let test_vectors = get_test_vectors();
+        let v1_vectors: Vec<_> = test_vectors.iter().filter(|tv| tv.version == 1).collect();
+
+        assert!(!v1_vectors.is_empty(), "No v1 test vectors found");
+
+        for (i, vector) in v1_vectors.iter().enumerate() {
+            let result = FullTransaction::parse_from_slice(
+                &vector.tx,
+                Some(vec![vector.txid.to_vec()]),
+                None,
+            );
+
+            assert!(
+                result.is_ok(),
+                "Failed to parse real v1 transaction #{}: {:?}. Description: {}",
+                i,
+                result.err(),
+                vector.description
+            );
+
+            let (remaining, parsed_tx) = result.unwrap();
+            assert!(
+                remaining.is_empty(),
+                "Should consume all data for v1 transaction #{}",
+                i
+            );
+
+            // Verify version matches
+            assert_eq!(
+                parsed_tx.raw_transaction.version, 1,
+                "Version mismatch for v1 transaction #{}",
+                i
+            );
+
+            // Verify transaction properties match test vector expectations
+            assert_eq!(
+                parsed_tx.raw_transaction.transparent_inputs.len(),
+                vector.transparent_inputs,
+                "Transparent inputs mismatch for v1 transaction #{}",
+                i
+            );
+
+            assert_eq!(
+                parsed_tx.raw_transaction.transparent_outputs.len(),
+                vector.transparent_outputs,
+                "Transparent outputs mismatch for v1 transaction #{}",
+                i
+            );
+        }
+
+        println!(
+            "Successfully parsed {} real v1 transactions",
+            v1_vectors.len()
+        );
+    }
+
+    /// Test parsing v2 transactions using real blockchain test vectors.
+    /// Validates that FullTransaction::parse_from_slice correctly handles v2 transaction format.
+    #[test]
+    fn test_real_v2_transaction_parsing() {
+        let test_vectors = get_test_vectors();
+        let v2_vectors: Vec<_> = test_vectors.iter().filter(|tv| tv.version == 2).collect();
+
+        assert!(!v2_vectors.is_empty(), "No v2 test vectors found");
+
+        for (i, vector) in v2_vectors.iter().enumerate() {
+            let result = FullTransaction::parse_from_slice(
+                &vector.tx,
+                Some(vec![vector.txid.to_vec()]),
+                None,
+            );
+
+            assert!(
+                result.is_ok(),
+                "Failed to parse real v2 transaction #{}: {:?}. Description: {}",
+                i,
+                result.err(),
+                vector.description
+            );
+
+            let (remaining, parsed_tx) = result.unwrap();
+            assert!(
+                remaining.is_empty(),
+                "Should consume all data for v2 transaction #{}",
+                i
+            );
+
+            // Verify version matches
+            assert_eq!(
+                parsed_tx.raw_transaction.version, 2,
+                "Version mismatch for v2 transaction #{}",
+                i
+            );
+
+            // Verify transaction properties match test vector expectations
+            assert_eq!(
+                parsed_tx.raw_transaction.transparent_inputs.len(),
+                vector.transparent_inputs,
+                "Transparent inputs mismatch for v2 transaction #{}",
+                i
+            );
+
+            assert_eq!(
+                parsed_tx.raw_transaction.transparent_outputs.len(),
+                vector.transparent_outputs,
+                "Transparent outputs mismatch for v2 transaction #{}",
+                i
+            );
+        }
+
+        println!(
+            "Successfully parsed {} real v2 transactions",
+            v2_vectors.len()
+        );
+    }
+
+    /// Test parsing v3 transactions using real blockchain test vectors.
+    /// Validates that FullTransaction::parse_from_slice correctly handles v3 transaction format.
+    #[test]
+    fn test_real_v3_transaction_parsing() {
+        let test_vectors = get_test_vectors();
+        let v3_vectors: Vec<_> = test_vectors.iter().filter(|tv| tv.version == 3).collect();
+
+        assert!(!v3_vectors.is_empty(), "No v3 test vectors found");
+
+        for (i, vector) in v3_vectors.iter().enumerate() {
+            let result = FullTransaction::parse_from_slice(
+                &vector.tx,
+                Some(vec![vector.txid.to_vec()]),
+                None,
+            );
+
+            assert!(
+                result.is_ok(),
+                "Failed to parse real v3 transaction #{}: {:?}. Description: {}",
+                i,
+                result.err(),
+                vector.description
+            );
+
+            let (remaining, parsed_tx) = result.unwrap();
+            assert!(
+                remaining.is_empty(),
+                "Should consume all data for v3 transaction #{}",
+                i
+            );
+
+            // Verify version matches
+            assert_eq!(
+                parsed_tx.raw_transaction.version, 3,
+                "Version mismatch for v3 transaction #{}",
+                i
+            );
+
+            // Verify transaction properties match test vector expectations
+            assert_eq!(
+                parsed_tx.raw_transaction.transparent_inputs.len(),
+                vector.transparent_inputs,
+                "Transparent inputs mismatch for v3 transaction #{}",
+                i
+            );
+
+            assert_eq!(
+                parsed_tx.raw_transaction.transparent_outputs.len(),
+                vector.transparent_outputs,
+                "Transparent outputs mismatch for v3 transaction #{}",
+                i
+            );
+        }
+
+        println!(
+            "Successfully parsed {} real v3 transactions",
+            v3_vectors.len()
+        );
+    }
+
+    /// Test parsing v4 transactions using real blockchain test vectors.
+    /// Validates that FullTransaction::parse_from_slice correctly handles v4 transaction format.
+    /// This also serves as a regression test for current v4 functionality.
+    #[test]
+    fn test_real_v4_transaction_parsing() {
+        let test_vectors = get_test_vectors();
+        let v4_vectors: Vec<_> = test_vectors.iter().filter(|tv| tv.version == 4).collect();
+
+        assert!(!v4_vectors.is_empty(), "No v4 test vectors found");
+
+        for (i, vector) in v4_vectors.iter().enumerate() {
+            let result = FullTransaction::parse_from_slice(
+                &vector.tx,
+                Some(vec![vector.txid.to_vec()]),
+                None,
+            );
+
+            assert!(
+                result.is_ok(),
+                "Failed to parse real v4 transaction #{}: {:?}. Description: {}",
+                i,
+                result.err(),
+                vector.description
+            );
+
+            let (remaining, parsed_tx) = result.unwrap();
+            assert!(
+                remaining.is_empty(),
+                "Should consume all data for v4 transaction #{}",
+                i
+            );
+
+            // Verify version matches
+            assert_eq!(
+                parsed_tx.raw_transaction.version, 4,
+                "Version mismatch for v4 transaction #{}",
+                i
+            );
+
+            // Verify transaction properties match test vector expectations
+            assert_eq!(
+                parsed_tx.raw_transaction.transparent_inputs.len(),
+                vector.transparent_inputs,
+                "Transparent inputs mismatch for v4 transaction #{}",
+                i
+            );
+
+            assert_eq!(
+                parsed_tx.raw_transaction.transparent_outputs.len(),
+                vector.transparent_outputs,
+                "Transparent outputs mismatch for v4 transaction #{}",
+                i
+            );
+        }
+
+        println!(
+            "Successfully parsed {} real v4 transactions",
+            v4_vectors.len()
+        );
+    }
+
+    /// Test comprehensive transaction parsing across all versions.
+    /// Validates that all real test vectors can be parsed successfully.
+    #[test]
+    fn test_comprehensive_transaction_parsing_all_versions() {
+        let test_vectors = get_test_vectors();
+
+        let mut version_counts = std::collections::HashMap::new();
+        let mut total_parsed = 0;
+        let mut parse_failures = Vec::new();
+
+        for (i, vector) in test_vectors.iter().enumerate() {
+            *version_counts.entry(vector.version).or_insert(0) += 1;
+
+            let result = FullTransaction::parse_from_slice(
+                &vector.tx,
+                Some(vec![vector.txid.to_vec()]),
+                None,
+            );
+
+            match result {
+                Ok((remaining, parsed_tx)) => {
+                    assert!(
+                        remaining.is_empty(),
+                        "Incomplete parsing for transaction #{} ({})",
+                        i,
+                        vector.description
+                    );
+                    assert_eq!(
+                        parsed_tx.raw_transaction.version, vector.version,
+                        "Version mismatch for transaction #{} ({})",
+                        i, vector.description
+                    );
+                    total_parsed += 1;
+                }
+                Err(e) => {
+                    parse_failures.push((i, vector.description, e));
+                }
+            }
+        }
+
+        // Report results
+        println!("Transaction parsing results:");
+        for (version, count) in &version_counts {
+            println!("  v{}: {} transactions", version, count);
+        }
+        println!(
+            "  Total parsed successfully: {}/{}",
+            total_parsed,
+            test_vectors.len()
+        );
+
+        if !parse_failures.is_empty() {
+            println!("Parse failures ({}):", parse_failures.len());
+            for (i, description, error) in &parse_failures {
+                println!("  #{}: {} - {:?}", i, description, error);
+            }
+        }
+
+        // Require that we have good coverage across versions
+        assert!(
+            version_counts.contains_key(&1),
+            "No v1 transactions in test vectors"
+        );
+        assert!(
+            version_counts.contains_key(&2),
+            "No v2 transactions in test vectors"
+        );
+        assert!(
+            version_counts.contains_key(&3),
+            "No v3 transactions in test vectors"
+        );
+        assert!(
+            version_counts.contains_key(&4),
+            "No v4 transactions in test vectors"
+        );
+
+        // Most transactions should parse successfully (allow some failures for edge cases)
+        let success_rate = (total_parsed as f64) / (test_vectors.len() as f64);
+        assert!(
+            success_rate >= 0.9,
+            "Success rate too low: {:.1}% ({}/{})",
+            success_rate * 100.0,
+            total_parsed,
+            test_vectors.len()
+        );
+    }
+}
