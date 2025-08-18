@@ -545,7 +545,7 @@ async fn get_faucet_txids() {
         let block_txids: Vec<String> = chain_block
             .transactions()
             .iter()
-            .map(|tx_data| hex::encode(tx_data.txid()))
+            .map(|tx_data| tx_data.txid().to_string())
             .collect();
         let filtered_block_txids: Vec<String> = block_txids
             .into_iter()
@@ -643,7 +643,7 @@ async fn get_recipient_txids() {
         let block_txids: Vec<String> = chain_block
             .transactions()
             .iter()
-            .map(|tx_data| hex::encode(tx_data.txid()))
+            .map(|tx_data| tx_data.txid().to_string())
             .collect();
 
         // Get block txids that are relevant to recipient.
@@ -865,11 +865,11 @@ async fn check_faucet_spent_map() {
         parent_chain_work = *chain_block.index().chainwork();
 
         for tx in chain_block.transactions() {
-            let txid = tx.txid();
+            let txid = tx.txid().0;
             let outputs = tx.transparent().outputs();
             for (vout_idx, output) in outputs.iter().enumerate() {
                 if output.script_hash() == faucet_addr_script.hash() {
-                    let outpoint = Outpoint::new_from_be(txid, vout_idx as u32);
+                    let outpoint = Outpoint::new_from_be(&txid, vout_idx as u32);
 
                     let spender = db_reader.get_outpoint_spender(outpoint).await.unwrap();
 
@@ -1001,11 +1001,11 @@ async fn check_recipient_spent_map() {
         parent_chain_work = *chain_block.index().chainwork();
 
         for tx in chain_block.transactions() {
-            let txid = tx.txid();
+            let txid = tx.txid().0;
             let outputs = tx.transparent().outputs();
             for (vout_idx, output) in outputs.iter().enumerate() {
                 if output.script_hash() == recipient_addr_script.hash() {
-                    let outpoint = Outpoint::new_from_be(txid, vout_idx as u32);
+                    let outpoint = Outpoint::new_from_be(&txid, vout_idx as u32);
 
                     let spender = db_reader.get_outpoint_spender(outpoint).await.unwrap();
 

@@ -1589,15 +1589,8 @@ impl
                     .collect::<Result<Vec<_>, _>>()?,
             );
 
-            let txdata = CompactTxData::new(
-                i as u64,
-                // Convert txids to server order (reverse bytes),
-                // required for internal block validation logic (merkle root check).
-                txn.hash().bytes_in_display_order(),
-                transparent,
-                sapling,
-                orchard,
-            );
+            let txdata =
+                CompactTxData::new(i as u64, txn.hash().into(), transparent, sapling, orchard);
             transactions.push(txdata);
         }
 
@@ -1677,7 +1670,7 @@ pub struct CompactTxData {
     /// The index (position) of this transaction within its block (0-based).
     index: u64,
     /// Unique identifier (hash) of the transaction, used for lookup and indexing.
-    txid: [u8; 32],
+    txid: TransactionHash,
     /// Compact representation of transparent inputs/outputs in the transaction.
     transparent: TransparentCompactTx,
     /// Compact representation of Sapling shielded data.
@@ -1690,7 +1683,7 @@ impl CompactTxData {
     /// Creates a new TxData instance.
     pub fn new(
         index: u64,
-        txid: [u8; 32],
+        txid: TransactionHash,
         transparent: TransparentCompactTx,
         sapling: SaplingCompactTx,
         orchard: OrchardCompactTx,
@@ -1710,7 +1703,7 @@ impl CompactTxData {
     }
 
     /// Returns transaction ID.
-    pub fn txid(&self) -> &[u8; 32] {
+    pub fn txid(&self) -> &TransactionHash {
         &self.txid
     }
 
@@ -1781,7 +1774,7 @@ impl CompactTxData {
 
         zaino_proto::proto::compact_formats::CompactTx {
             index: self.index(),
-            hash: self.txid().to_vec(),
+            hash: self.txid().bytes_in_display_order().to_vec(),
             fee,
             spends,
             outputs,
@@ -1800,6 +1793,7 @@ impl TryFrom<(u64, zaino_fetch::chain::transaction::FullTransaction)> for Compac
         (index, tx): (u64, zaino_fetch::chain::transaction::FullTransaction),
     ) -> Result<Self, Self::Error> {
         let txid_vec = tx.tx_id();
+        // NOTE: Is this byte order correct?
         let txid: [u8; 32] = txid_vec
             .try_into()
             .map_err(|_| "txid must be 32 bytes".to_string())?;
@@ -1894,7 +1888,8 @@ impl TryFrom<(u64, zaino_fetch::chain::transaction::FullTransaction)> for Compac
 
         Ok(CompactTxData::new(
             index,
-            txid,
+            // NOTE: do we need to use from_bytes_in_display_order here?
+            txid.into(),
             transparent,
             sapling,
             orchard,
@@ -1908,8 +1903,7 @@ impl ZainoVersionedSerialise for CompactTxData {
     fn encode_body<W: Write>(&self, mut w: &mut W) -> io::Result<()> {
         write_u64_le(&mut w, self.index)?;
 
-        write_fixed_le::<32, _>(&mut w, &self.txid)?;
-
+        self.txid.serialize(&mut w)?;
         self.transparent.serialize(&mut w)?;
         self.sapling.serialize(&mut w)?;
         self.orchard.serialize(&mut w)
@@ -1922,8 +1916,8 @@ impl ZainoVersionedSerialise for CompactTxData {
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
         let index = read_u64_le(&mut r)?;
-        let txid = read_fixed_le::<32, _>(&mut r)?;
 
+        let txid = TransactionHash::deserialize(&mut r)?;
         let transparent = TransparentCompactTx::deserialize(&mut r)?;
         let sapling = SaplingCompactTx::deserialize(&mut r)?;
         let orchard = OrchardCompactTx::deserialize(&mut r)?;

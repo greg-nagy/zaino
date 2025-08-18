@@ -895,10 +895,10 @@ impl DbV1 {
         let mut addrhist_outputs_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
 
         for (tx_index, tx) in block.transactions().iter().enumerate() {
-            let hash = TransactionHash::from_bytes_in_display_order(tx.txid());
+            let hash = tx.txid();
 
-            if txid_set.insert(hash) {
-                txids.push(hash);
+            if txid_set.insert(*hash) {
+                txids.push(*hash);
             }
 
             // Transparent transactions
@@ -1307,10 +1307,10 @@ impl DbV1 {
         let mut addrhist_outputs_map: HashMap<AddrScript, Vec<AddrHistRecord>> = HashMap::new();
 
         for (tx_index, tx) in block.transactions().iter().enumerate() {
-            let h = TransactionHash::from_bytes_in_display_order(tx.txid());
+            let hash = tx.txid();
 
-            if txid_set.insert(h) {
-                txids.push(h);
+            if txid_set.insert(*hash) {
+                txids.push(*hash);
             }
 
             // Transparent transactions
@@ -2873,8 +2873,7 @@ impl DbV1 {
 
             let txs: Vec<CompactTxData> = (0..len)
                 .map(|i| {
-                    let txid = txids[i].bytes_in_display_order();
-
+                    let txid = txids[i];
                     let transparent_tx = transparent[i]
                         .clone()
                         .unwrap_or_else(|| TransparentCompactTx::new(vec![], vec![]));

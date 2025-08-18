@@ -233,8 +233,13 @@ impl NonFinalizedState {
                     .collect(),
             );
 
-            let txdata =
-                CompactTxData::new(i as u64, trnsctn.hash().0, transparent, sapling, orchard);
+            let txdata = CompactTxData::new(
+                i as u64,
+                trnsctn.hash().into(),
+                transparent,
+                sapling,
+                orchard,
+            );
             transactions.push(txdata);
         }
 
@@ -459,7 +464,7 @@ impl NonFinalizedState {
 
                     let txdata = CompactTxData::new(
                         i as u64,
-                        trnsctn.hash().0,
+                        trnsctn.hash().into(),
                         transparent,
                         sapling,
                         orchard,

@@ -94,7 +94,7 @@ impl NodeBackedChainIndex {
         //TODO: finalized state, mempool
         snapshot.blocks.values().filter_map(move |block| {
             block.transactions().iter().find_map(|transaction| {
-                if *transaction.txid() == txid {
+                if transaction.txid().0 == txid {
                     Some(block)
                 } else {
                     None
