@@ -18,9 +18,7 @@ impl<T: ToString> From<RpcRequestError<T>> for StateServiceError {
                 e.to_string()
             )),
             RpcRequestError::JsonRpc(error) => Self::Custom(format!("bad argument: {error}")),
-            RpcRequestError::InternalUnrecoverable => {
-                Self::Custom("TODO: useless crash message".to_string())
-            }
+            RpcRequestError::InternalUnrecoverable(e) => Self::Custom(format!("{e}")),
             RpcRequestError::ServerWorkQueueFull => {
                 Self::Custom("Server queue full. Handling for this not yet implemented".to_string())
             }
@@ -141,8 +139,8 @@ impl<T: ToString> From<RpcRequestError<T>> for FetchServiceError {
             RpcRequestError::JsonRpc(error) => {
                 FetchServiceError::Critical(format!("argument failed to serialze: {error}"))
             }
-            RpcRequestError::InternalUnrecoverable => {
-                FetchServiceError::Critical("Something unspecified went wrong".to_string())
+            RpcRequestError::InternalUnrecoverable(e) => {
+                FetchServiceError::Critical(format!("Internal unrecoverable error: {e}"))
             }
             RpcRequestError::ServerWorkQueueFull => FetchServiceError::Critical(
                 "Server queue full. Handling for this not yet implemented".to_string(),
@@ -229,8 +227,8 @@ impl<T: ToString> From<RpcRequestError<T>> for MempoolError {
             RpcRequestError::JsonRpc(error) => {
                 MempoolError::Critical(format!("argument failed to serialze: {error}"))
             }
-            RpcRequestError::InternalUnrecoverable => {
-                MempoolError::Critical("Something unspecified went wrong".to_string())
+            RpcRequestError::InternalUnrecoverable(e) => {
+                MempoolError::Critical(format!("Internal unrecoverable error: {e}"))
             }
             RpcRequestError::ServerWorkQueueFull => MempoolError::Critical(
                 "Server queue full. Handling for this not yet implemented".to_string(),
@@ -323,8 +321,8 @@ impl<T: ToString> From<RpcRequestError<T>> for NonFinalisedStateError {
             RpcRequestError::JsonRpc(error) => {
                 NonFinalisedStateError::Custom(format!("argument failed to serialze: {error}"))
             }
-            RpcRequestError::InternalUnrecoverable => {
-                NonFinalisedStateError::Custom("Something unspecified went wrong".to_string())
+            RpcRequestError::InternalUnrecoverable(e) => {
+                NonFinalisedStateError::Custom(format!("Internal unrecoverable error: {e}"))
             }
             RpcRequestError::ServerWorkQueueFull => NonFinalisedStateError::Custom(
                 "Server queue full. Handling for this not yet implemented".to_string(),
@@ -379,8 +377,8 @@ impl<T: ToString> From<RpcRequestError<T>> for FinalisedStateError {
             RpcRequestError::JsonRpc(error) => {
                 FinalisedStateError::Custom(format!("argument failed to serialze: {error}"))
             }
-            RpcRequestError::InternalUnrecoverable => {
-                FinalisedStateError::Custom("Something unspecified went wrong".to_string())
+            RpcRequestError::InternalUnrecoverable(e) => {
+                FinalisedStateError::Custom(format!("Internal unrecoverable error: {e}"))
             }
             RpcRequestError::ServerWorkQueueFull => FinalisedStateError::Custom(
                 "Server queue full. Handling for this not yet implemented".to_string(),

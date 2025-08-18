@@ -492,11 +492,6 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         if let Err(e) = self.stage(block.clone()) {
             match *e {
                 mpsc::error::TrySendError::Full(_) => {
-                    // TODO: connect to finalized state to determine where to truncate
-                    // Sync is currently called by integration tests
-                    // and the finalized_state is not public
-                    // deferred until integration tests are of the
-                    // full ChainIndex, and/or are converted to unit tests
                     self.update(finalzed_db.clone()).await?;
                     Box::pin(self.sync_stage_update_loop(block, finalzed_db)).await?;
                 }
