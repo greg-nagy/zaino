@@ -20,7 +20,7 @@ use zaino_state::{
 };
 use zaino_testutils::from_inputs;
 use zaino_testutils::services;
-use zaino_testutils::test_vectors::get_test_vectors;
+use zaino_testutils::test_vectors::transactions::get_test_vectors;
 use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind};
 use zebra_chain::parameters::Network;
