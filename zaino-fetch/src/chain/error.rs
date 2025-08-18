@@ -36,7 +36,9 @@ pub enum ParseError {
     InvalidParseOrder {
         /// the noncomplient field
         field: &'static str,
+        /// TODO: What does this mean
         expected_order: u8,
+        /// TODO: What does this mean
         actual_order: u8,
     },
 

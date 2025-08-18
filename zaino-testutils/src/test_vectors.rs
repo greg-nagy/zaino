@@ -1,20 +1,30 @@
 use lazy_static::lazy_static;
 
 #[derive(Debug, Clone)]
+/// A test transaction
 pub struct TestVector {
+    /// Human-readable description of th transactions
     pub description: &'static str,
+    /// THe transaction version
     pub version: u32,
+    /// The transaction's raw serialized byte representation
     pub tx: Vec<u8>,
+    /// The transaction ID. Sometimes not present?
     pub txid: Option<[u8; 32]>,
+    /// Whether the transaction is a block reward
     pub is_coinbase: u8,
+    /// Whether the transactions has a sapling bundle
     pub has_sapling: u8,
+    /// Whether the transactions has an orchard bundle
     pub has_orchard: u8,
+    /// whether the transaction has transparent inputs
     pub transparent_inputs: usize,
+    /// whether the transaction has transparent outputs
     pub transparent_outputs: usize,
 }
 
-// From https://github.com/zcash-hackworks/zcash-test-vectors/blob/master/plain_transactions.py
 lazy_static! {
+    /// From https://github.com/zcash-hackworks/zcash-test-vectors/blob/master/plain_transactions.py
     pub static ref TEST_VECTORS: Vec<TestVector> = vec![
         TestVector {
             description: "Overwinter transaction #1",
@@ -4005,6 +4015,7 @@ lazy_static! {
     ];
 }
 
+/// helper function to get the test transactions
 pub fn get_test_vectors() -> &'static Vec<TestVector> {
     &TEST_VECTORS
 }

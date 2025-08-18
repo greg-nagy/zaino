@@ -1724,7 +1724,7 @@ mod transaction_v4_tests {
     /// - Header: 4 bytes (version + overwintered flag)
     /// - Version Group ID: 4 bytes
     /// - Transparent inputs: CompactSize(0) + 0 inputs = 1 byte
-    /// - Transparent outputs: CompactSize(0) + 0 outputs = 1 byte  
+    /// - Transparent outputs: CompactSize(0) + 0 outputs = 1 byte
     /// - Lock time: 4 bytes
     /// - Expiry height: 4 bytes
     /// - Value balance sapling: 8 bytes

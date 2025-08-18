@@ -233,13 +233,11 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
                                 .await?
                                 .ok_or(ChainIndexError::database_hole(hash))
                         }
-                        Err(e) => {
-                            Err(ChainIndexError {
-                                kind: ChainIndexErrorKind::InternalServerError,
-                                message: "".to_string(),
-                                source: Some(Box::new(e)),
-                            })
-                        }
+                        Err(e) => Err(ChainIndexError {
+                            kind: ChainIndexErrorKind::InternalServerError,
+                            message: "".to_string(),
+                            source: Some(Box::new(e)),
+                        }),
                         Ok(None) => {
                             match nonfinalized_snapshot
                                 .get_chainblock_by_height(&types::Height(height))

@@ -3,6 +3,7 @@
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
 
+/// Test data
 pub mod test_vectors;
 
 use once_cell::sync::Lazy;

@@ -768,12 +768,12 @@ async fn varying_block_and_transaction_deserialization() {
     let test_vectors = get_test_vectors();
 
     for test_vector in test_vectors {
-        let version = test_vector.version;
+        let _version = test_vector.version;
         let raw_tx = test_vector.tx.clone();
         let txid = test_vector.txid.unwrap_or([0u8; 32]);
-        let is_coinbase = test_vector.is_coinbase;
-        let has_sapling = test_vector.has_sapling;
-        let has_orchard = test_vector.has_orchard;
+        let _is_coinbase = test_vector.is_coinbase;
+        let _has_sapling = test_vector.has_sapling;
+        let _has_orchard = test_vector.has_orchard;
         let transparent_inputs = test_vector.transparent_inputs;
         let transparent_outputs = test_vector.transparent_outputs;
 
