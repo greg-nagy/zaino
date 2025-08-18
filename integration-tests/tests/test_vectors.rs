@@ -1,5 +1,6 @@
 //! Holds code used to build test vector data for unit tests. These tests should not be run by default or in CI.
 
+use anyhow::Context;
 use core2::io::{self, Read, Write};
 use prost::Message;
 use std::fs;
@@ -623,29 +624,36 @@ pub fn read_vectors_from_file<P: AsRef<Path>>(
 }
 
 #[tokio::test]
-async fn varying_block_and_transaction_deserialization() {
+async fn varying_block_and_transaction_deserialization() -> anyhow::Result<()> {
     let test_vectors = get_test_vectors();
 
     for test_vector in test_vectors {
+        let description = test_vector.description;
         let version = test_vector.version;
         let raw_tx = test_vector.tx.clone();
-        let txid = test_vector.txid.unwrap_or([0u8; 32]);
-        let is_coinbase = test_vector.is_coinbase;
+        let txid = test_vector.txid;
+        // todo!: add an 'is_coinbase' method to the transaction struct to check thid
+        let _is_coinbase = test_vector.is_coinbase;
         let has_sapling = test_vector.has_sapling;
         let has_orchard = test_vector.has_orchard;
         let transparent_inputs = test_vector.transparent_inputs;
         let transparent_outputs = test_vector.transparent_outputs;
 
         let deserialized_tx =
-            FullTransaction::parse_from_slice(&raw_tx, Some(vec![txid.to_vec()]), None);
+            FullTransaction::parse_from_slice(&raw_tx, Some(vec![txid.to_vec()]), None)
+                .with_context(|| {
+                    format!("Failed to deserialize transaction with description: {description:?}")
+                })?;
 
-        let tx = deserialized_tx.unwrap().1;
+        let tx = deserialized_tx.1;
+        assert_eq!(tx.version(), version);
         assert_eq!(tx.tx_id(), txid);
-        // assert_eq!(tx.shielded_spends().len() > 0, has_sapling != 0);
-        // assert_eq!(tx.orchard_actions().len() > 0, has_orchard != 0);
+        assert_eq!(tx.shielded_spends().len() > 0, has_sapling != 0);
+        assert_eq!(tx.orchard_actions().len() > 0, has_orchard != 0);
         assert_eq!(tx.transparent_inputs().len() > 0, transparent_inputs > 0);
         assert_eq!(tx.transparent_outputs().len() > 0, transparent_outputs > 0);
 
-        // dbg!(tx);
+        dbg!(tx);
     }
+    Ok(())
 }
