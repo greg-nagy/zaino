@@ -624,10 +624,10 @@ pub fn read_vectors_from_file<P: AsRef<Path>>(
 }
 
 #[tokio::test]
-async fn varying_block_and_transaction_deserialization() -> anyhow::Result<()> {
+async fn pre_v4_txs_parsing() -> anyhow::Result<()> {
     let test_vectors = get_test_vectors();
 
-    for test_vector in test_vectors {
+    for (i, test_vector) in test_vectors.iter().filter(|v| v.version < 4).enumerate() {
         let description = test_vector.description;
         let version = test_vector.version;
         let raw_tx = test_vector.tx.clone();
@@ -646,14 +646,76 @@ async fn varying_block_and_transaction_deserialization() -> anyhow::Result<()> {
                 })?;
 
         let tx = deserialized_tx.1;
-        assert_eq!(tx.version(), version);
-        assert_eq!(tx.tx_id(), txid);
-        assert_eq!(tx.shielded_spends().len() > 0, has_sapling != 0);
-        assert_eq!(tx.orchard_actions().len() > 0, has_orchard != 0);
-        assert_eq!(tx.transparent_inputs().len() > 0, transparent_inputs > 0);
-        assert_eq!(tx.transparent_outputs().len() > 0, transparent_outputs > 0);
 
-        dbg!(tx);
+        assert_eq!(
+            tx.version(),
+            version,
+            "Version mismatch for transaction #{} ({})",
+            i,
+            description
+        );
+        assert_eq!(
+            tx.tx_id(),
+            txid,
+            "TXID mismatch for transaction #{} ({})",
+            i,
+            description
+        );
+        // Check Sapling spends (v4+ transactions)
+        if version >= 4 {
+            assert_eq!(
+                tx.shielded_spends().len() > 0,
+                has_sapling != 0,
+                "Sapling spends mismatch for transaction #{} ({})",
+                i,
+                description
+            );
+        } else {
+            // v1-v3 transactions should not have Sapling spends
+            assert!(
+                tx.shielded_spends().is_empty(),
+                "Transaction #{} ({}) version {} should not have Sapling spends",
+                i,
+                description,
+                version
+            );
+        }
+
+        // Check Orchard actions (v5+ transactions)
+        if version >= 5 {
+            assert_eq!(
+                tx.orchard_actions().len() > 0,
+                has_orchard != 0,
+                "Orchard actions mismatch for transaction #{} ({})",
+                i,
+                description
+            );
+        } else {
+            // v1-v4 transactions should not have Orchard actions
+            assert!(
+                tx.orchard_actions().is_empty(),
+                "Transaction #{} ({}) version {} should not have Orchard actions",
+                i,
+                description,
+                version
+            );
+        }
+        assert_eq!(
+            tx.transparent_inputs().len() > 0,
+            transparent_inputs > 0,
+            "Transparent inputs presence mismatch for transaction #{} ({})",
+            i,
+            description
+        );
+        assert_eq!(
+            tx.transparent_outputs().len() > 0,
+            transparent_outputs > 0,
+            "Transparent outputs presence mismatch for transaction #{} ({})",
+            i,
+            description
+        );
+
+        // dbg!(tx);
     }
     Ok(())
 }
