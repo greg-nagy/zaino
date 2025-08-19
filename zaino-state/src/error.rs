@@ -18,7 +18,7 @@ impl<T: ToString> From<RpcRequestError<T>> for StateServiceError {
                 e.to_string()
             )),
             RpcRequestError::JsonRpc(error) => Self::Custom(format!("bad argument: {error}")),
-            RpcRequestError::InternalUnrecoverable(e) => Self::Custom(format!("{e}")),
+            RpcRequestError::InternalUnrecoverable(e) => Self::Custom(e.to_string()),
             RpcRequestError::ServerWorkQueueFull => {
                 Self::Custom("Server queue full. Handling for this not yet implemented".to_string())
             }
