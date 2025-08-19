@@ -60,8 +60,4 @@ pub enum ParseError {
     /// Field not parsed yet
     #[error("Field not parsed: {0}")]
     FieldNotParsed(&'static str),
-
-    /// Consensus validation error
-    #[error("Consensus error: {0}")]
-    ConsensusError(#[from] crate::chain::transaction::ConsensusError),
 }
