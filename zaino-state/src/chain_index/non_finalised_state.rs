@@ -589,7 +589,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         }
     }
 
-    /// Get a copy of the block cache as it existed at the last [`Self::update`] call
+    /// Get a snapshot of the block cache
     pub fn get_snapshot(&self) -> Arc<NonfinalizedBlockCacheSnapshot> {
         self.current.load_full()
     }
