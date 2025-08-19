@@ -1,31 +1,28 @@
 use std::{collections::HashMap, mem, sync::Arc};
 
-use crate::{
-    chain_index::types::{Hash, Height},
-    BlockData, BlockIndex, ChainWork, CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes,
-    CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactTxData,
-    OrchardCompactTx, SaplingCompactTx, TransparentCompactTx, TxInCompact, TxOutCompact,
-};
 use arc_swap::ArcSwap;
-use futures::{future::join, lock::Mutex};
+use futures::lock::Mutex;
 use primitive_types::U256;
 use tokio::sync::mpsc;
-use tower::Service;
-use zaino_fetch::jsonrpsee::{
-    connector::{JsonRpSeeConnector, RpcRequestError},
-    response::{GetBlockError, GetBlockResponse, GetTreestateResponse},
-};
-use zcash_primitives::merkle_tree::read_commitment_tree;
-use zebra_chain::{parameters::Network, serialization::ZcashDeserialize};
-use zebra_state::{HashOrHeight, ReadResponse, ReadStateService};
+use zebra_chain::parameters::Network;
+use zebra_state::HashOrHeight;
 
-use crate::ChainBlock;
+use crate::{
+    chain_index::{
+        source::ValidatorConnector,
+        types::{Hash, Height},
+    },
+    BlockData, BlockIndex, ChainBlock, ChainWork, CommitmentTreeData, CommitmentTreeRoots,
+    CommitmentTreeSizes, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
+    CompactTxData, OrchardCompactTx, SaplingCompactTx, TransparentCompactTx, TxInCompact,
+    TxOutCompact,
+};
 
 /// Holds the block cache
 pub struct NonFinalizedState {
     /// We need access to the validator's best block hash, as well
     /// as a source of blocks
-    pub(super) source: BlockchainSource,
+    pub(super) source: ValidatorConnector,
     staged: Mutex<mpsc::Receiver<ChainBlock>>,
     staging_sender: mpsc::Sender<ChainBlock>,
     /// This lock should not be exposed to consumers. Rather,
@@ -115,7 +112,10 @@ impl NonFinalizedState {
     /// TODO: Currently, we can't initate without an snapshot, we need to create a cache
     /// of at least one block. Should this be tied to the instantiation of the data structure
     /// itself?
-    pub async fn initialize(source: BlockchainSource, network: Network) -> Result<Self, InitError> {
+    pub async fn initialize(
+        source: ValidatorConnector,
+        network: Network,
+    ) -> Result<Self, InitError> {
         // TODO: Consider arbitrary buffer length
         let (staging_sender, staging_receiver) = mpsc::channel(100);
         let staged = Mutex::new(staging_receiver);
@@ -160,7 +160,7 @@ impl NonFinalizedState {
                 ) => chain_history_block_tx_auth_commitment_hash.bytes_in_serialized_order(),
             },
 
-            nonse: *genesis_block.header.nonce,
+            nonce: *genesis_block.header.nonce,
             solution: genesis_block.header.solution.into(),
         };
 
@@ -384,7 +384,7 @@ impl NonFinalizedState {
                         }
                     },
 
-                    nonse: *block.header.nonce,
+                    nonce: *block.header.nonce,
                     solution: block.header.solution.into(),
                 };
 
@@ -669,181 +669,4 @@ pub enum UpdateError {
     /// The snapshot was already updated by a different process, between when this update started
     /// and when it completed.
     StaleSnapshot,
-}
-
-/// A connection to a validator.
-#[derive(Clone, derive_more::From)]
-pub enum BlockchainSource {
-    /// The connection is via direct read access to a zebrad's data file
-    State(ReadStateService),
-    /// We are connected to a zebrad, zcashd, or other zainod via JsonRpSee
-    Fetch(JsonRpSeeConnector),
-}
-
-#[derive(Debug, thiserror::Error)]
-pub(crate) enum BlockchainSourceError {
-    // TODO: Add logic for handling recoverable errors if any are identified
-    // one candidate may be ephemerable network hiccoughs
-    #[error("critical error in backing block source: {0}")]
-    Unrecoverable(String),
-}
-
-type BlockchainSourceResult<T> = Result<T, BlockchainSourceError>;
-
-/// Methods that will dispatch to a ReadStateService or JsonRpSeeConnector
-impl BlockchainSource {
-    pub(super) async fn get_block(
-        &self,
-        id: HashOrHeight,
-    ) -> BlockchainSourceResult<Option<Arc<zebra_chain::block::Block>>> {
-        match self {
-            BlockchainSource::State(read_state_service) => match read_state_service
-                .clone()
-                .call(zebra_state::ReadRequest::Block(id))
-                .await
-            {
-                Ok(zebra_state::ReadResponse::Block(block)) => Ok(block),
-                Ok(otherwise) => panic!(
-                    "Read Request of Block returned Read Response of {otherwise:#?} \n\
-                    This should be deterministically unreachable"
-                ),
-                Err(e) => Err(BlockchainSourceError::Unrecoverable(e.to_string())),
-            },
-            BlockchainSource::Fetch(json_rp_see_connector) => {
-                match json_rp_see_connector
-                    .get_block(id.to_string(), Some(0))
-                    .await
-                {
-                    Ok(GetBlockResponse::Raw(raw_block)) => Ok(Some(Arc::new(
-                        zebra_chain::block::Block::zcash_deserialize(raw_block.as_ref())
-                            .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?,
-                    ))),
-                    Ok(_) => unreachable!(),
-                    Err(e) => match e {
-                        RpcRequestError::Method(GetBlockError::MissingBlock(_)) => Ok(None),
-                        RpcRequestError::ServerWorkQueueFull => Err(BlockchainSourceError::Unrecoverable("Work queue full. not yet implemented: handling of ephemeral network errors.".to_string())),
-                        _ => Err(BlockchainSourceError::Unrecoverable(e.to_string())),
-                    },
-                }
-            }
-        }
-    }
-
-    async fn get_commitment_tree_roots(
-        &self,
-        id: Hash,
-    ) -> BlockchainSourceResult<(
-        Option<(zebra_chain::sapling::tree::Root, u64)>,
-        Option<(zebra_chain::orchard::tree::Root, u64)>,
-    )> {
-        match self {
-            BlockchainSource::State(read_state_service) => {
-                let (sapling_tree_response, orchard_tree_response) = join(
-                    read_state_service
-                        .clone()
-                        .call(zebra_state::ReadRequest::SaplingTree(HashOrHeight::Hash(
-                            id.into(),
-                        ))),
-                    read_state_service
-                        .clone()
-                        .call(zebra_state::ReadRequest::OrchardTree(HashOrHeight::Hash(
-                            id.into(),
-                        ))),
-                )
-                .await;
-                let (sapling_tree, orchard_tree) = match (
-                    //TODO: Better readstateservice error handling
-                    sapling_tree_response
-                        .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?,
-                    orchard_tree_response
-                        .map_err(|e| BlockchainSourceError::Unrecoverable(e.to_string()))?,
-                ) {
-                    (ReadResponse::SaplingTree(saptree), ReadResponse::OrchardTree(orctree)) => {
-                        (saptree, orctree)
-                    }
-                    (_, _) => panic!("Bad response"),
-                };
-
-                Ok((
-                    sapling_tree
-                        .as_deref()
-                        .map(|tree| (tree.root(), tree.count())),
-                    orchard_tree
-                        .as_deref()
-                        .map(|tree| (tree.root(), tree.count())),
-                ))
-            }
-            BlockchainSource::Fetch(json_rp_see_connector) => {
-                let tree_responses = json_rp_see_connector
-                    .get_treestate(id.to_string())
-                    .await
-                    // As MethodError contains a GetTreestateError, which is an enum with no variants,
-                    // we don't need to account for it at all here
-                    .map_err(|e| match e {
-                        RpcRequestError::ServerWorkQueueFull => {
-                            BlockchainSourceError::Unrecoverable(
-                                "Not yet implemented: handle backing validator\
-                                full queue"
-                                    .to_string(),
-                            )
-                        }
-                        _ => BlockchainSourceError::Unrecoverable(e.to_string()),
-                    })?;
-                let GetTreestateResponse {
-                    sapling, orchard, ..
-                } = tree_responses;
-                let sapling_frontier = sapling
-                    .commitments()
-                    .final_state()
-                    .as_ref()
-                    .map(hex::decode)
-                    .transpose()
-                    .map_err(|_e| {
-                        BlockchainSourceError::Unrecoverable(
-                            InvalidData(format!("could not interpret sapling tree of block {id}"))
-                                .to_string(),
-                        )
-                    })?
-                    .as_deref()
-                    .map(read_commitment_tree::<zebra_chain::sapling::tree::Node, _, 32>)
-                    .transpose()
-                    .map_err(|e| BlockchainSourceError::Unrecoverable(format!("io error: {e}")))?;
-                let orchard_frontier = orchard
-                    .commitments()
-                    .final_state()
-                    .as_ref()
-                    .map(hex::decode)
-                    .transpose()
-                    .map_err(|_e| {
-                        BlockchainSourceError::Unrecoverable(
-                            InvalidData(format!("could not interpret orchard tree of block {id}"))
-                                .to_string(),
-                        )
-                    })?
-                    .as_deref()
-                    .map(read_commitment_tree::<zebra_chain::orchard::tree::Node, _, 32>)
-                    .transpose()
-                    .map_err(|e| BlockchainSourceError::Unrecoverable(format!("io error: {e}")))?;
-                let sapling_root = sapling_frontier
-                    .map(|tree| {
-                        zebra_chain::sapling::tree::Root::try_from(*tree.root().as_ref())
-                            .map(|root| (root, tree.size() as u64))
-                    })
-                    .transpose()
-                    .map_err(|e| {
-                        BlockchainSourceError::Unrecoverable(format!("could not deser: {e}"))
-                    })?;
-                let orchard_root = orchard_frontier
-                    .map(|tree| {
-                        zebra_chain::orchard::tree::Root::try_from(tree.root().to_repr())
-                            .map(|root| (root, tree.size() as u64))
-                    })
-                    .transpose()
-                    .map_err(|e| {
-                        BlockchainSourceError::Unrecoverable(format!("could not deser: {e}"))
-                    })?;
-                Ok((sapling_root, orchard_root))
-            }
-        }
-    }
 }
