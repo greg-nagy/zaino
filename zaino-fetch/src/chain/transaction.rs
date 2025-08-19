@@ -1210,30 +1210,26 @@ mod tests {
             let (remaining, parsed_tx) = result.unwrap();
             assert!(
                 remaining.is_empty(),
-                "Should consume all data for v1 transaction #{}",
-                i
+                "Should consume all data for v1 transaction #{i}"
             );
 
             // Verify version matches
             assert_eq!(
                 parsed_tx.raw_transaction.version, 1,
-                "Version mismatch for v1 transaction #{}",
-                i
+                "Version mismatch for v1 transaction #{i}"
             );
 
             // Verify transaction properties match test vector expectations
             assert_eq!(
                 parsed_tx.raw_transaction.transparent_inputs.len(),
                 vector.transparent_inputs,
-                "Transparent inputs mismatch for v1 transaction #{}",
-                i
+                "Transparent inputs mismatch for v1 transaction #{i}"
             );
 
             assert_eq!(
                 parsed_tx.raw_transaction.transparent_outputs.len(),
                 vector.transparent_outputs,
-                "Transparent outputs mismatch for v1 transaction #{}",
-                i
+                "Transparent outputs mismatch for v1 transaction #{i}"
             );
         }
 
@@ -1274,23 +1270,20 @@ mod tests {
             // Verify version matches
             assert_eq!(
                 parsed_tx.raw_transaction.version, 2,
-                "Version mismatch for v2 transaction #{}",
-                i
+                "Version mismatch for v2 transaction #{i}"
             );
 
             // Verify transaction properties match test vector expectations
             assert_eq!(
                 parsed_tx.raw_transaction.transparent_inputs.len(),
                 vector.transparent_inputs,
-                "Transparent inputs mismatch for v2 transaction #{}",
-                i
+                "Transparent inputs mismatch for v2 transaction #{i}"
             );
 
             assert_eq!(
                 parsed_tx.raw_transaction.transparent_outputs.len(),
                 vector.transparent_outputs,
-                "Transparent outputs mismatch for v2 transaction #{}",
-                i
+                "Transparent outputs mismatch for v2 transaction #{i}"
             );
         }
 
@@ -1331,23 +1324,20 @@ mod tests {
             // Verify version matches
             assert_eq!(
                 parsed_tx.raw_transaction.version, 3,
-                "Version mismatch for v3 transaction #{}",
-                i
+                "Version mismatch for v3 transaction #{i}"
             );
 
             // Verify transaction properties match test vector expectations
             assert_eq!(
                 parsed_tx.raw_transaction.transparent_inputs.len(),
                 vector.transparent_inputs,
-                "Transparent inputs mismatch for v3 transaction #{}",
-                i
+                "Transparent inputs mismatch for v3 transaction #{i}"
             );
 
             assert_eq!(
                 parsed_tx.raw_transaction.transparent_outputs.len(),
                 vector.transparent_outputs,
-                "Transparent outputs mismatch for v3 transaction #{}",
-                i
+                "Transparent outputs mismatch for v3 transaction #{i}"
             );
         }
 
@@ -1382,30 +1372,26 @@ mod tests {
             let (remaining, parsed_tx) = result.unwrap();
             assert!(
                 remaining.is_empty(),
-                "Should consume all data for v4 transaction #{}",
-                i
+                "Should consume all data for v4 transaction #{i}"
             );
 
             // Verify version matches
             assert_eq!(
                 parsed_tx.raw_transaction.version, 4,
-                "Version mismatch for v4 transaction #{}",
-                i
+                "Version mismatch for v4 transaction #{i}"
             );
 
             // Verify transaction properties match test vector expectations
             assert_eq!(
                 parsed_tx.raw_transaction.transparent_inputs.len(),
                 vector.transparent_inputs,
-                "Transparent inputs mismatch for v4 transaction #{}",
-                i
+                "Transparent inputs mismatch for v4 transaction #{i}"
             );
 
             assert_eq!(
                 parsed_tx.raw_transaction.transparent_outputs.len(),
                 vector.transparent_outputs,
-                "Transparent outputs mismatch for v4 transaction #{}",
-                i
+                "Transparent outputs mismatch for v4 transaction #{i}"
             );
         }
 

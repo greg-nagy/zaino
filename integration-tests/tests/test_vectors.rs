@@ -791,34 +791,25 @@ async fn pre_v4_txs_parsing() -> anyhow::Result<()> {
         assert_eq!(
             tx.version(),
             version,
-            "Version mismatch for transaction #{} ({})",
-            i,
-            description
+            "Version mismatch for transaction #{i} ({description})"
         );
         assert_eq!(
             tx.tx_id(),
             txid,
-            "TXID mismatch for transaction #{} ({})",
-            i,
-            description
+            "TXID mismatch for transaction #{i} ({description})"
         );
         // Check Sapling spends (v4+ transactions)
         if version >= 4 {
             assert_eq!(
                 !tx.shielded_spends().is_empty(),
                 has_sapling != 0,
-                "Sapling spends mismatch for transaction #{} ({})",
-                i,
-                description
+                "Sapling spends mismatch for transaction #{i} ({description})"
             );
         } else {
             // v1-v3 transactions should not have Sapling spends
             assert!(
                 tx.shielded_spends().is_empty(),
-                "Transaction #{} ({}) version {} should not have Sapling spends",
-                i,
-                description,
-                version
+                "Transaction #{i} ({description}) version {version} should not have Sapling spends"
             );
         }
 
@@ -827,33 +818,24 @@ async fn pre_v4_txs_parsing() -> anyhow::Result<()> {
             assert_eq!(
                 !tx.orchard_actions().is_empty(),
                 has_orchard != 0,
-                "Orchard actions mismatch for transaction #{} ({})",
-                i,
-                description
+                "Orchard actions mismatch for transaction #{i} ({description})"
             );
         } else {
             // v1-v4 transactions should not have Orchard actions
             assert!(
                 tx.orchard_actions().is_empty(),
-                "Transaction #{} ({}) version {} should not have Orchard actions",
-                i,
-                description,
-                version
+                "Transaction #{i} ({description}) version {version} should not have Orchard actions"
             );
         }
         assert_eq!(
             !tx.transparent_inputs().is_empty(),
             transparent_inputs > 0,
-            "Transparent inputs presence mismatch for transaction #{} ({})",
-            i,
-            description
+            "Transparent inputs presence mismatch for transaction #{i} ({description})"
         );
         assert_eq!(
             !tx.transparent_outputs().is_empty(),
             transparent_outputs > 0,
-            "Transparent outputs presence mismatch for transaction #{} ({})",
-            i,
-            description
+            "Transparent outputs presence mismatch for transaction #{i} ({description})"
         );
 
         // dbg!(tx);
