@@ -1,6 +1,8 @@
 use lazy_static::lazy_static;
 
+/// Test vector data for transaction parsing tests
 #[derive(Debug, Clone)]
+#[allow(missing_docs)]
 pub struct TestVector {
     pub description: &'static str,
     pub version: u32,
@@ -15,8 +17,9 @@ pub struct TestVector {
     pub tx: Vec<u8>,
 }
 
-// From https://github.com/zcash-hackworks/zcash-test-vectors/blob/master/plain_transactions.py
+// From https://github.com/zingolabs/zcash-test-vectors/plain_transactions/plain_transactions.py
 lazy_static! {
+    #[allow(missing_docs)]
     pub static ref TEST_VECTORS: Vec<TestVector> = vec![
         TestVector {
             description: "Sprout transaction v1 #1",
@@ -3657,6 +3660,8 @@ lazy_static! {
     ];
 }
 
+/// Returns reference to transaction test vectors
+#[allow(missing_docs)]
 pub fn get_test_vectors() -> &'static Vec<TestVector> {
     &TEST_VECTORS
 }

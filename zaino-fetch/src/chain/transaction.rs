@@ -1168,10 +1168,10 @@ mod tests {
     use super::*;
     use zaino_testutils::test_vectors::transactions::get_test_vectors;
 
-    /// Test parsing v1 transactions using real blockchain test vectors.
+    /// Test parsing v1 transactions using test vectors.
     /// Validates that FullTransaction::parse_from_slice correctly handles v1 transaction format.
     #[test]
-    fn test_real_v1_transaction_parsing() {
+    fn test_v1_transaction_parsing_with_test_vectors() {
         let test_vectors = get_test_vectors();
         let v1_vectors: Vec<_> = test_vectors.iter().filter(|tv| tv.version == 1).collect();
 
@@ -1186,7 +1186,7 @@ mod tests {
 
             assert!(
                 result.is_ok(),
-                "Failed to parse real v1 transaction #{}: {:?}. Description: {}",
+                "Failed to parse v1 test vector #{}: {:?}. Description: {}",
                 i,
                 result.err(),
                 vector.description
@@ -1223,15 +1223,15 @@ mod tests {
         }
 
         println!(
-            "Successfully parsed {} real v1 transactions",
+            "Successfully parsed {} v1 test vectors",
             v1_vectors.len()
         );
     }
 
-    /// Test parsing v2 transactions using real blockchain test vectors.
+    /// Test parsing v2 transactions using test vectors.
     /// Validates that FullTransaction::parse_from_slice correctly handles v2 transaction format.
     #[test]
-    fn test_real_v2_transaction_parsing() {
+    fn test_v2_transaction_parsing_with_test_vectors() {
         let test_vectors = get_test_vectors();
         let v2_vectors: Vec<_> = test_vectors.iter().filter(|tv| tv.version == 2).collect();
 
@@ -1246,7 +1246,7 @@ mod tests {
 
             assert!(
                 result.is_ok(),
-                "Failed to parse real v2 transaction #{}: {:?}. Description: {}",
+                "Failed to parse v2 test vector #{}: {:?}. Description: {}",
                 i,
                 result.err(),
                 vector.description
@@ -1283,15 +1283,15 @@ mod tests {
         }
 
         println!(
-            "Successfully parsed {} real v2 transactions",
+            "Successfully parsed {} v2 test vectors",
             v2_vectors.len()
         );
     }
 
-    /// Test parsing v3 transactions using real blockchain test vectors.
+    /// Test parsing v3 transactions using test vectors.
     /// Validates that FullTransaction::parse_from_slice correctly handles v3 transaction format.
     #[test]
-    fn test_real_v3_transaction_parsing() {
+    fn test_v3_transaction_parsing_with_test_vectors() {
         let test_vectors = get_test_vectors();
         let v3_vectors: Vec<_> = test_vectors.iter().filter(|tv| tv.version == 3).collect();
 
@@ -1306,7 +1306,7 @@ mod tests {
 
             assert!(
                 result.is_ok(),
-                "Failed to parse real v3 transaction #{}: {:?}. Description: {}",
+                "Failed to parse v3 test vector #{}: {:?}. Description: {}",
                 i,
                 result.err(),
                 vector.description
@@ -1343,16 +1343,16 @@ mod tests {
         }
 
         println!(
-            "Successfully parsed {} real v3 transactions",
+            "Successfully parsed {} v3 test vectors",
             v3_vectors.len()
         );
     }
 
-    /// Test parsing v4 transactions using real blockchain test vectors.
+    /// Test parsing v4 transactions using test vectors.
     /// Validates that FullTransaction::parse_from_slice correctly handles v4 transaction format.
     /// This also serves as a regression test for current v4 functionality.
     #[test]
-    fn test_real_v4_transaction_parsing() {
+    fn test_v4_transaction_parsing_with_test_vectors() {
         let test_vectors = get_test_vectors();
         let v4_vectors: Vec<_> = test_vectors.iter().filter(|tv| tv.version == 4).collect();
 
@@ -1367,7 +1367,7 @@ mod tests {
 
             assert!(
                 result.is_ok(),
-                "Failed to parse real v4 transaction #{}: {:?}. Description: {}",
+                "Failed to parse v4 test vector #{}: {:?}. Description: {}",
                 i,
                 result.err(),
                 vector.description
@@ -1404,7 +1404,7 @@ mod tests {
         }
 
         println!(
-            "Successfully parsed {} real v4 transactions",
+            "Successfully parsed {} v4 test vectors",
             v4_vectors.len()
         );
     }
