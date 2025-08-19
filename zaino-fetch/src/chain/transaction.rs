@@ -298,11 +298,14 @@ impl ParseFromSlice for JoinSplit {
         }
         let proof_size = match tx_version {
             Some(2) | Some(3) => 296, // BCTV14 proof for v2/v3 transactions
-            Some(4) => 192,            // Groth16 proof for v4 transactions  
-            None => 192,               // Default to Groth16 for unknown versions
-            _ => return Err(ParseError::InvalidData(format!(
-                "Unsupported tx_version {:?} for JoinSplit::parse_from_slice", tx_version
-            ))),
+            Some(4) => 192,           // Groth16 proof for v4 transactions
+            None => 192,              // Default to Groth16 for unknown versions
+            _ => {
+                return Err(ParseError::InvalidData(format!(
+                    "Unsupported tx_version {:?} for JoinSplit::parse_from_slice",
+                    tx_version
+                )))
+            }
         };
         let mut cursor = Cursor::new(data);
 
@@ -314,7 +317,11 @@ impl ParseFromSlice for JoinSplit {
         skip_bytes(&mut cursor, 32, "Error skipping JoinSplit::ephemeralKey")?;
         skip_bytes(&mut cursor, 32, "Error skipping JoinSplit::randomSeed")?;
         skip_bytes(&mut cursor, 64, "Error skipping JoinSplit::vmacs")?;
-        skip_bytes(&mut cursor, proof_size, &format!("Error skipping JoinSplit::proof (size {})", proof_size))?;
+        skip_bytes(
+            &mut cursor,
+            proof_size,
+            &format!("Error skipping JoinSplit::proof (size {})", proof_size),
+        )?;
         skip_bytes(
             &mut cursor,
             1202,
@@ -528,8 +535,11 @@ impl TransactionData {
         let join_split_count = CompactSize::read(&mut cursor)?;
         let mut join_splits = Vec::with_capacity(join_split_count as usize);
         for _ in 0..join_split_count {
-            let (remaining_data, join_split) =
-                JoinSplit::parse_from_slice(&data[cursor.position() as usize..], None, Some(version))?;
+            let (remaining_data, join_split) = JoinSplit::parse_from_slice(
+                &data[cursor.position() as usize..],
+                None,
+                Some(version),
+            )?;
             join_splits.push(join_split);
             cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
         }
@@ -609,8 +619,11 @@ impl TransactionData {
         let join_split_count = CompactSize::read(&mut cursor)?;
         let mut join_splits = Vec::with_capacity(join_split_count as usize);
         for _ in 0..join_split_count {
-            let (remaining_data, join_split) =
-                JoinSplit::parse_from_slice(&data[cursor.position() as usize..], None, Some(version))?;
+            let (remaining_data, join_split) = JoinSplit::parse_from_slice(
+                &data[cursor.position() as usize..],
+                None,
+                Some(version),
+            )?;
             join_splits.push(join_split);
             cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
         }
@@ -693,8 +706,11 @@ impl TransactionData {
         let join_split_count = CompactSize::read(&mut cursor)?;
         let mut join_splits = Vec::with_capacity(join_split_count as usize);
         for _ in 0..join_split_count {
-            let (remaining_data, join_split) =
-                JoinSplit::parse_from_slice(&data[cursor.position() as usize..], None, Some(version))?;
+            let (remaining_data, join_split) = JoinSplit::parse_from_slice(
+                &data[cursor.position() as usize..],
+                None,
+                Some(version),
+            )?;
             join_splits.push(join_split);
             cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
         }
@@ -1222,10 +1238,7 @@ mod tests {
             );
         }
 
-        println!(
-            "Successfully parsed {} v1 test vectors",
-            v1_vectors.len()
-        );
+        println!("Successfully parsed {} v1 test vectors", v1_vectors.len());
     }
 
     /// Test parsing v2 transactions using test vectors.
@@ -1282,10 +1295,7 @@ mod tests {
             );
         }
 
-        println!(
-            "Successfully parsed {} v2 test vectors",
-            v2_vectors.len()
-        );
+        println!("Successfully parsed {} v2 test vectors", v2_vectors.len());
     }
 
     /// Test parsing v3 transactions using test vectors.
@@ -1342,10 +1352,7 @@ mod tests {
             );
         }
 
-        println!(
-            "Successfully parsed {} v3 test vectors",
-            v3_vectors.len()
-        );
+        println!("Successfully parsed {} v3 test vectors", v3_vectors.len());
     }
 
     /// Test parsing v4 transactions using test vectors.
@@ -1403,9 +1410,6 @@ mod tests {
             );
         }
 
-        println!(
-            "Successfully parsed {} v4 test vectors",
-            v4_vectors.len()
-        );
+        println!("Successfully parsed {} v4 test vectors", v4_vectors.len());
     }
 }

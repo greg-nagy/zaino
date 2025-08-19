@@ -664,7 +664,7 @@ async fn pre_v4_txs_parsing() -> anyhow::Result<()> {
         // Check Sapling spends (v4+ transactions)
         if version >= 4 {
             assert_eq!(
-                tx.shielded_spends().len() > 0,
+                !tx.shielded_spends().is_empty(),
                 has_sapling != 0,
                 "Sapling spends mismatch for transaction #{} ({})",
                 i,
@@ -684,7 +684,7 @@ async fn pre_v4_txs_parsing() -> anyhow::Result<()> {
         // Check Orchard actions (v5+ transactions)
         if version >= 5 {
             assert_eq!(
-                tx.orchard_actions().len() > 0,
+                !tx.orchard_actions().is_empty(),
                 has_orchard != 0,
                 "Orchard actions mismatch for transaction #{} ({})",
                 i,
@@ -701,14 +701,14 @@ async fn pre_v4_txs_parsing() -> anyhow::Result<()> {
             );
         }
         assert_eq!(
-            tx.transparent_inputs().len() > 0,
+            !tx.transparent_inputs().is_empty(),
             transparent_inputs > 0,
             "Transparent inputs presence mismatch for transaction #{} ({})",
             i,
             description
         );
         assert_eq!(
-            tx.transparent_outputs().len() > 0,
+            !tx.transparent_outputs().is_empty(),
             transparent_outputs > 0,
             "Transparent outputs presence mismatch for transaction #{} ({})",
             i,
