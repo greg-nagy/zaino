@@ -43,4 +43,4 @@ jsonrpsee-types = { workspace = true }
 derive_more = { version = "2.0.1", features = ["from"] }
 
 [dev-dependencies]
-zaino-testutils = { path = "../zaino-testutils" }
+zaino-testvectors = { path = "../zaino-testvectors" }

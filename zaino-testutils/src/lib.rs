@@ -3,7 +3,10 @@
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
 
-pub mod test_vectors;
+/// Convenience reexport of zaino_testvectors
+pub mod test_vectors {
+    pub use zaino_testvectors::*;
+}
 
 use once_cell::sync::Lazy;
 use std::{
