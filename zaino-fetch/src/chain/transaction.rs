@@ -302,8 +302,7 @@ impl ParseFromSlice for JoinSplit {
             None => 192,              // Default to Groth16 for unknown versions
             _ => {
                 return Err(ParseError::InvalidData(format!(
-                    "Unsupported tx_version {:?} for JoinSplit::parse_from_slice",
-                    tx_version
+                    "Unsupported tx_version {tx_version:?} for JoinSplit::parse_from_slice"
                 )))
             }
         };
@@ -320,7 +319,7 @@ impl ParseFromSlice for JoinSplit {
         skip_bytes(
             &mut cursor,
             proof_size,
-            &format!("Error skipping JoinSplit::proof (size {})", proof_size),
+            &format!("Error skipping JoinSplit::proof (size {proof_size})"),
         )?;
         skip_bytes(
             &mut cursor,
