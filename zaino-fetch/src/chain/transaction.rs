@@ -296,11 +296,14 @@ impl ParseFromSlice for JoinSplit {
                 "txid must be None for JoinSplit::parse_from_slice".to_string(),
             ));
         }
-        if tx_version.is_some() {
-            return Err(ParseError::InvalidData(
-                "tx_version must be None for JoinSplit::parse_from_slice".to_string(),
-            ));
-        }
+        let proof_size = match tx_version {
+            Some(2) | Some(3) => 296, // BCTV14 proof for v2/v3 transactions
+            Some(4) => 192,            // Groth16 proof for v4 transactions  
+            None => 192,               // Default to Groth16 for unknown versions
+            _ => return Err(ParseError::InvalidData(format!(
+                "Unsupported tx_version {:?} for JoinSplit::parse_from_slice", tx_version
+            ))),
+        };
         let mut cursor = Cursor::new(data);
 
         skip_bytes(&mut cursor, 8, "Error skipping JoinSplit::vpubOld")?;
@@ -311,7 +314,7 @@ impl ParseFromSlice for JoinSplit {
         skip_bytes(&mut cursor, 32, "Error skipping JoinSplit::ephemeralKey")?;
         skip_bytes(&mut cursor, 32, "Error skipping JoinSplit::randomSeed")?;
         skip_bytes(&mut cursor, 64, "Error skipping JoinSplit::vmacs")?;
-        skip_bytes(&mut cursor, 192, "Error skipping JoinSplit::proofGroth16")?;
+        skip_bytes(&mut cursor, proof_size, &format!("Error skipping JoinSplit::proof (size {})", proof_size))?;
         skip_bytes(
             &mut cursor,
             1202,
@@ -526,7 +529,7 @@ impl TransactionData {
         let mut join_splits = Vec::with_capacity(join_split_count as usize);
         for _ in 0..join_split_count {
             let (remaining_data, join_split) =
-                JoinSplit::parse_from_slice(&data[cursor.position() as usize..], None, None)?;
+                JoinSplit::parse_from_slice(&data[cursor.position() as usize..], None, Some(version))?;
             join_splits.push(join_split);
             cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
         }
@@ -607,7 +610,7 @@ impl TransactionData {
         let mut join_splits = Vec::with_capacity(join_split_count as usize);
         for _ in 0..join_split_count {
             let (remaining_data, join_split) =
-                JoinSplit::parse_from_slice(&data[cursor.position() as usize..], None, None)?;
+                JoinSplit::parse_from_slice(&data[cursor.position() as usize..], None, Some(version))?;
             join_splits.push(join_split);
             cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
         }
@@ -691,7 +694,7 @@ impl TransactionData {
         let mut join_splits = Vec::with_capacity(join_split_count as usize);
         for _ in 0..join_split_count {
             let (remaining_data, join_split) =
-                JoinSplit::parse_from_slice(&data[cursor.position() as usize..], None, None)?;
+                JoinSplit::parse_from_slice(&data[cursor.position() as usize..], None, Some(version))?;
             join_splits.push(join_split);
             cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
         }
@@ -1252,8 +1255,8 @@ mod tests {
             let (remaining, parsed_tx) = result.unwrap();
             assert!(
                 remaining.is_empty(),
-                "Should consume all data for v2 transaction #{}",
-                i
+                "Should consume all data for v2 transaction #{}: {} bytes remaining, total length: {}",
+                i, remaining.len(), vector.tx.len()
             );
 
             // Verify version matches
@@ -1312,8 +1315,8 @@ mod tests {
             let (remaining, parsed_tx) = result.unwrap();
             assert!(
                 remaining.is_empty(),
-                "Should consume all data for v3 transaction #{}",
-                i
+                "Should consume all data for v3 transaction #{}: {} bytes remaining, total length: {}",
+                i, remaining.len(), vector.tx.len()
             );
 
             // Verify version matches
@@ -1403,93 +1406,6 @@ mod tests {
         println!(
             "Successfully parsed {} real v4 transactions",
             v4_vectors.len()
-        );
-    }
-
-    /// Test comprehensive transaction parsing across all versions.
-    /// Validates that all real test vectors can be parsed successfully.
-    #[test]
-    fn test_comprehensive_transaction_parsing_all_versions() {
-        let test_vectors = get_test_vectors();
-
-        let mut version_counts = std::collections::HashMap::new();
-        let mut total_parsed = 0;
-        let mut parse_failures = Vec::new();
-
-        for (i, vector) in test_vectors.iter().enumerate() {
-            *version_counts.entry(vector.version).or_insert(0) += 1;
-
-            let result = FullTransaction::parse_from_slice(
-                &vector.tx,
-                Some(vec![vector.txid.to_vec()]),
-                None,
-            );
-
-            match result {
-                Ok((remaining, parsed_tx)) => {
-                    assert!(
-                        remaining.is_empty(),
-                        "Incomplete parsing for transaction #{} ({})",
-                        i,
-                        vector.description
-                    );
-                    assert_eq!(
-                        parsed_tx.raw_transaction.version, vector.version,
-                        "Version mismatch for transaction #{} ({})",
-                        i, vector.description
-                    );
-                    total_parsed += 1;
-                }
-                Err(e) => {
-                    parse_failures.push((i, vector.description, e));
-                }
-            }
-        }
-
-        // Report results
-        println!("Transaction parsing results:");
-        for (version, count) in &version_counts {
-            println!("  v{}: {} transactions", version, count);
-        }
-        println!(
-            "  Total parsed successfully: {}/{}",
-            total_parsed,
-            test_vectors.len()
-        );
-
-        if !parse_failures.is_empty() {
-            println!("Parse failures ({}):", parse_failures.len());
-            for (i, description, error) in &parse_failures {
-                println!("  #{}: {} - {:?}", i, description, error);
-            }
-        }
-
-        // Require that we have good coverage across versions
-        assert!(
-            version_counts.contains_key(&1),
-            "No v1 transactions in test vectors"
-        );
-        assert!(
-            version_counts.contains_key(&2),
-            "No v2 transactions in test vectors"
-        );
-        assert!(
-            version_counts.contains_key(&3),
-            "No v3 transactions in test vectors"
-        );
-        assert!(
-            version_counts.contains_key(&4),
-            "No v4 transactions in test vectors"
-        );
-
-        // Most transactions should parse successfully (allow some failures for edge cases)
-        let success_rate = (total_parsed as f64) / (test_vectors.len() as f64);
-        assert!(
-            success_rate >= 0.9,
-            "Success rate too low: {:.1}% ({}/{})",
-            success_rate * 100.0,
-            total_parsed,
-            test_vectors.len()
         );
     }
 }
