@@ -35,11 +35,11 @@ use zaino_proto::proto::{
     },
 };
 
+use zcash_protocol::consensus::NetworkType;
 use zebra_chain::{
     block::{Header, Height, SerializedBlock},
     chain_tip::NetworkChainTipHeightEstimator,
     parameters::{ConsensusBranchId, Network, NetworkKind, NetworkUpgrade},
-    primitives,
     serialization::ZcashSerialize,
     subtree::NoteCommitmentSubtreeIndex,
 };
@@ -1191,50 +1191,35 @@ impl ZcashIndexer for StateServiceSubscriber {
         &self,
         raw_address: String,
     ) -> Result<ValidateAddressResponse, Self::Error> {
-        let network = self.config.network.clone();
+        use zcash_keys::address::Address;
+        use zcash_transparent::address::TransparentAddress;
 
         let Ok(address) = raw_address.parse::<zcash_address::ZcashAddress>() else {
             return Ok(ValidateAddressResponse::invalid());
         };
 
-        let address = match address.convert::<primitives::Address>() {
-            Ok(address) => address,
-            Err(err) => {
-                tracing::debug!(?err, "conversion error");
-                return Ok(ValidateAddressResponse::invalid());
-            }
-        };
+        let address =
+            match address.convert_if_network::<Address>(match self.config.network.kind() {
+                NetworkKind::Mainnet => NetworkType::Main,
+                NetworkKind::Testnet => NetworkType::Test,
+                NetworkKind::Regtest => NetworkType::Regtest,
+            }) {
+                Ok(address) => address,
+                Err(err) => {
+                    tracing::debug!(?err, "conversion error");
+                    return Ok(ValidateAddressResponse::invalid());
+                }
+            };
 
         // we want to match zcashd's behaviour
-        if !address.is_transparent() {
-            return Ok(ValidateAddressResponse::invalid());
-        }
-
-        match address.network() {
-            NetworkKind::Mainnet => {
-                if network.kind() != NetworkKind::Mainnet {
-                    Ok(ValidateAddressResponse::invalid())
-                } else {
-                    Ok(ValidateAddressResponse::new(
-                        true,
-                        Some(raw_address),
-                        Some(address.is_script_hash()),
-                    ))
-                }
-            }
-            // Both testnet and regtest have the same address format
-            NetworkKind::Testnet | NetworkKind::Regtest => {
-                if network.kind() == NetworkKind::Mainnet {
-                    Ok(ValidateAddressResponse::invalid())
-                } else {
-                    Ok(ValidateAddressResponse::new(
-                        true,
-                        Some(raw_address),
-                        Some(address.is_script_hash()),
-                    ))
-                }
-            }
-        }
+        Ok(match address {
+            Address::Transparent(taddr) => ValidateAddressResponse::new(
+                true,
+                Some(raw_address),
+                Some(matches!(taddr, TransparentAddress::ScriptHash(_))),
+            ),
+            _ => ValidateAddressResponse::invalid(),
+        })
     }
 
     async fn z_get_subtrees_by_index(
