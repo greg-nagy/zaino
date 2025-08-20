@@ -29,6 +29,7 @@ mod mockchain_tests {
         chain_index::{
             source::test::MockchainSource,
             tests::vectors::{build_mockchain_source, load_test_vectors},
+            types::TransactionHash,
             ChainIndex, NodeBackedChainIndex,
         },
         ChainBlock,
@@ -124,7 +125,10 @@ mod mockchain_tests {
             .flat_map(|block| block.3.transactions.into_iter())
         {
             let zaino_transaction = indexer
-                .get_raw_transaction(&nonfinalized_snapshot, expected_transaction.hash().0)
+                .get_raw_transaction(
+                    &nonfinalized_snapshot,
+                    &TransactionHash::from(expected_transaction.hash()),
+                )
                 .await
                 .unwrap()
                 .unwrap()
@@ -153,7 +157,10 @@ mod mockchain_tests {
             let expected_txid = expected_transaction.hash();
 
             let tx_status = indexer
-                .get_transaction_status(&nonfinalized_snapshot, expected_txid.into())
+                .get_transaction_status(
+                    &nonfinalized_snapshot,
+                    &TransactionHash::from(expected_txid),
+                )
                 .await
                 .unwrap();
             assert_eq!(tx_status.len(), 1);

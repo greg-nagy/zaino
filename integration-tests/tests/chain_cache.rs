@@ -53,7 +53,7 @@ mod chain_query_interface {
             chain_index::{self, ChainIndex},
             BlockCacheConfig,
         },
-        chain_index::{source::ValidatorConnector, NodeBackedChainIndex},
+        chain_index::{source::ValidatorConnector, types::TransactionHash, NodeBackedChainIndex},
         Height, StateService, StateServiceConfig, ZcashService as _,
     };
     use zebra_chain::serialization::{ZcashDeserialize, ZcashDeserializeInto};
@@ -263,7 +263,7 @@ mod chain_query_interface {
             .flat_map(|block| block.transactions().iter().map(|txdata| txdata.txid().0))
         {
             let raw_transaction = chain_index
-                .get_raw_transaction(&snapshot, txid)
+                .get_raw_transaction(&snapshot, &TransactionHash(txid))
                 .await
                 .unwrap()
                 .unwrap();
@@ -303,7 +303,7 @@ mod chain_query_interface {
                 .map(|txdata| (txdata.txid().0, block.height(), block.hash()))
         }) {
             let transaction_status = chain_index
-                .get_transaction_status(&snapshot, *txid)
+                .get_transaction_status(&snapshot, &TransactionHash(txid))
                 .await
                 .unwrap();
             assert_eq!(1, transaction_status.len());

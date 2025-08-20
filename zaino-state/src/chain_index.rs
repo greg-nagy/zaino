@@ -68,22 +68,25 @@ pub trait ChainIndex {
     fn find_fork_point(
         &self,
         snapshot: &Self::Snapshot,
-        block_hash: &types::Hash,
-    ) -> Result<Option<(types::Hash, types::Height)>, Self::Error>;
+        block_hash: &types::BlockHash,
+    ) -> Result<Option<(types::BlockHash, types::Height)>, Self::Error>;
     /// given a transaction id, returns the transaction
     fn get_raw_transaction(
         &self,
         snapshot: &Self::Snapshot,
-        txid: [u8; 32],
+        txid: &types::TransactionHash,
     ) -> impl std::future::Future<Output = Result<Option<Vec<u8>>, Self::Error>>;
     /// Given a transaction ID, returns all known hashes and heights of blocks
     /// containing that transaction. Height is None for blocks not on the best chain.
     fn get_transaction_status(
         &self,
         snapshot: &Self::Snapshot,
-        txid: [u8; 32],
+        txid: &types::TransactionHash,
     ) -> impl std::future::Future<
-        Output = Result<std::collections::HashMap<types::Hash, Option<types::Height>>, Self::Error>,
+        Output = Result<
+            std::collections::HashMap<types::BlockHash, Option<types::Height>>,
+            Self::Error,
+        >,
     >;
 }
 /// The combined index. Contains a view of the mempool, and the full
@@ -170,7 +173,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
             .values()
             .filter_map(move |block| {
                 block.transactions().iter().find_map(|transaction| {
-                    if *transaction.txid() == txid {
+                    if transaction.txid().0 == txid {
                         Some(block)
                     } else {
                         None
@@ -181,7 +184,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
             .chain(
                 match self
                     .finalized_state
-                    .get_tx_location(&crate::Hash(txid))
+                    .get_tx_location(&types::TransactionHash(txid))
                     .await?
                 {
                     Some(tx_location) => {
@@ -266,8 +269,8 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
     fn find_fork_point(
         &self,
         snapshot: &Self::Snapshot,
-        block_hash: &types::Hash,
-    ) -> Result<Option<(types::Hash, types::Height)>, Self::Error> {
+        block_hash: &types::BlockHash,
+    ) -> Result<Option<(types::BlockHash, types::Height)>, Self::Error> {
         let Some(block) = snapshot.as_ref().get_chainblock_by_hash(block_hash) else {
             // No fork point found. This is not an error,
             // as zaino does not guarentee knowledge of all sidechain data.
@@ -284,10 +287,10 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
     async fn get_raw_transaction(
         &self,
         snapshot: &Self::Snapshot,
-        txid: [u8; 32],
+        txid: &types::TransactionHash,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
         let Some(block) = self
-            .blocks_containing_transaction(snapshot, txid)
+            .blocks_containing_transaction(snapshot, txid.0)
             .await?
             .next()
         else {
@@ -303,7 +306,7 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
         full_block
             .transactions
             .iter()
-            .find(|transaction| transaction.hash().0 == txid)
+            .find(|transaction| transaction.hash().0 == txid.0)
             .map(ZcashSerialize::zcash_serialize_to_vec)
             .ok_or_else(|| ChainIndexError::database_hole(block.index().hash()))?
             .map_err(ChainIndexError::backing_validator)
@@ -316,10 +319,11 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
     async fn get_transaction_status(
         &self,
         snapshot: &Self::Snapshot,
-        txid: [u8; 32],
-    ) -> Result<HashMap<types::Hash, std::option::Option<types::Height>>, ChainIndexError> {
+        txid: &types::TransactionHash,
+    ) -> Result<HashMap<types::BlockHash, std::option::Option<types::Height>>, ChainIndexError>
+    {
         Ok(self
-            .blocks_containing_transaction(snapshot, txid)
+            .blocks_containing_transaction(snapshot, txid.0)
             .await?
             .map(|block| (*block.hash(), block.height()))
             .collect())
@@ -329,13 +333,13 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
 /// A snapshot of the non-finalized state, for consistent queries
 pub trait NonFinalizedSnapshot {
     /// Hash -> block
-    fn get_chainblock_by_hash(&self, target_hash: &types::Hash) -> Option<&ChainBlock>;
+    fn get_chainblock_by_hash(&self, target_hash: &types::BlockHash) -> Option<&ChainBlock>;
     /// Height -> block
     fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&ChainBlock>;
 }
 
 impl NonFinalizedSnapshot for NonfinalizedBlockCacheSnapshot {
-    fn get_chainblock_by_hash(&self, target_hash: &types::Hash) -> Option<&ChainBlock> {
+    fn get_chainblock_by_hash(&self, target_hash: &types::BlockHash) -> Option<&ChainBlock> {
         self.blocks.iter().find_map(|(hash, chainblock)| {
             if hash == target_hash {
                 Some(chainblock)

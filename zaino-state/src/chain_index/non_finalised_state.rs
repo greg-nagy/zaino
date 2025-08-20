@@ -418,7 +418,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                             .current
                             .load()
                             .blocks
-                            .contains_key(&types::Hash(hash.0))
+                            .contains_key(&types::BlockHash(hash.0))
                         {
                             nonbest_blocks.insert(block.hash(), block);
                         }
@@ -439,7 +439,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 .into_iter()
                 .map(|(hash, block)| {
                     let prev_hash =
-                        crate::chain_index::types::Hash(block.header.previous_block_hash.0);
+                        crate::chain_index::types::BlockHash(block.header.previous_block_hash.0);
                     (
                         hash,
                         block,
@@ -714,13 +714,18 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                     .collect(),
             );
 
-            let txdata =
-                CompactTxData::new(i as u64, trnsctn.hash().0, transparent, sapling, orchard);
+            let txdata = CompactTxData::new(
+                i as u64,
+                trnsctn.hash().into(),
+                transparent,
+                sapling,
+                orchard,
+            );
             transactions.push(txdata);
         }
 
         let height = prev_height.map(|height| height + 1);
-        let hash = Hash::from(block.hash());
+        let hash = BlockHash::from(block.hash());
         let chainwork = prev_block.chainwork().add(&ChainWork::from(U256::from(
             block
                 .header
