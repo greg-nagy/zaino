@@ -1415,11 +1415,6 @@ impl ZcashIndexer for StateServiceSubscriber {
         )?;
 
         let mut error_string = None;
-        if start == 0 || end == 0 {
-            error_string = Some(format!(
-                "start {start:?} and end {end:?} must both be greater than zero"
-            ));
-        }
         if start > end {
             error_string = Some(format!(
                 "start {start:?} must be less than or equal to end {end:?}"

@@ -1,6 +1,6 @@
 //! Traits and types for the blockchain source thats serves zaino, commonly a validator connection.
 
-use std::{str::FromStr as _, sync::Arc};
+use std::{error::Error, str::FromStr as _, sync::Arc};
 
 use crate::chain_index::types::Hash;
 use async_trait::async_trait;
@@ -46,6 +46,17 @@ pub trait BlockchainSource: Clone + Send + Sync + 'static {
     /// Returns the hash of the block at the tip of the best chain.
     async fn get_best_block_hash(&self)
         -> BlockchainSourceResult<Option<zebra_chain::block::Hash>>;
+
+    /// Get a listener for new nonfinalized blocks,
+    /// if supported
+    async fn nonfinalized_listener(
+        &self,
+    ) -> Result<
+        Option<
+            tokio::sync::mpsc::Receiver<(zebra_chain::block::Hash, Arc<zebra_chain::block::Block>)>,
+        >,
+        Box<dyn Error + Send + Sync>,
+    >;
 }
 
 /// An error originating from a blockchain source.
@@ -415,6 +426,34 @@ impl BlockchainSource for ValidatorConnector {
             )),
         }
     }
+    async fn nonfinalized_listener(
+        &self,
+    ) -> Result<
+        Option<
+            tokio::sync::mpsc::Receiver<(zebra_chain::block::Hash, Arc<zebra_chain::block::Block>)>,
+        >,
+        Box<dyn Error + Send + Sync>,
+    > {
+        match self {
+            ValidatorConnector::State(State {
+                read_state_service,
+                mempool_fetcher: _,
+            }) => {
+                match read_state_service
+                    .clone()
+                    .call(zebra_state::ReadRequest::NonFinalizedBlocksListener)
+                    .await
+                {
+                    Ok(ReadResponse::NonFinalizedBlocksListener(listener)) => {
+                        Ok(Some(listener.unwrap()))
+                    }
+                    Ok(_) => unreachable!(),
+                    Err(e) => Err(e),
+                }
+            }
+            ValidatorConnector::Fetch(_json_rp_see_connector) => Ok(None),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -520,29 +559,26 @@ pub(crate) mod test {
             self.active_chain_height.load(Ordering::SeqCst)
         }
 
-        fn valid_height(&self, height: u32) -> Result<usize, BlockchainSourceError> {
+        fn valid_height(&self, height: u32) -> Option<usize> {
+            let active_chain_height = self.active_height() as usize;
             let valid_height = height as usize;
 
-            if valid_height >= self.blocks.len() {
-                return Err(BlockchainSourceError::Unrecoverable(format!(
-                    "Height {height} is out of range (max height = {})",
-                    self.blocks.len().saturating_sub(1)
-                )));
+            if valid_height <= active_chain_height {
+                Some(valid_height)
+            } else {
+                None
             }
-
-            Ok(valid_height)
         }
 
-        fn valid_hash(
-            &self,
-            hash: &zebra_chain::block::Hash,
-        ) -> Result<usize, BlockchainSourceError> {
-            self.hashes
-                .iter()
-                .position(|h| h.0 == hash.0)
-                .ok_or_else(|| {
-                    BlockchainSourceError::Unrecoverable("Block hash not found".to_string())
-                })
+        fn valid_hash(&self, hash: &zebra_chain::block::Hash) -> Option<usize> {
+            let active_chain_height = self.active_height() as usize;
+            let height_index = self.hashes.iter().position(|h| h.0 == hash.0);
+
+            if height_index.is_some() && height_index.unwrap() <= active_chain_height {
+                height_index
+            } else {
+                None
+            }
         }
     }
 
@@ -552,24 +588,19 @@ pub(crate) mod test {
             &self,
             id: HashOrHeight,
         ) -> BlockchainSourceResult<Option<Arc<zebra_chain::block::Block>>> {
-            let active_chain_height = self.active_height() as usize;
-
             match id {
-                HashOrHeight::Height(height) => {
-                    let height = self.valid_height(height.0)?;
-                    if height <= active_chain_height {
-                        Ok(Some(Arc::clone(&self.blocks[height])))
-                    } else {
-                        Ok(None)
-                    }
+                HashOrHeight::Height(h) => {
+                    let Some(height_index) = self.valid_height(h.0) else {
+                        return Ok(None);
+                    };
+                    Ok(Some(Arc::clone(&self.blocks[height_index])))
                 }
                 HashOrHeight::Hash(hash) => {
-                    let height = self.valid_hash(&hash)?;
-                    if height <= active_chain_height {
-                        Ok(Some(Arc::clone(&self.blocks[height])))
-                    } else {
-                        Ok(None)
-                    }
+                    let Some(hash_index) = self.valid_hash(&hash) else {
+                        return Ok(None);
+                    };
+
+                    Ok(Some(Arc::clone(&self.blocks[hash_index])))
                 }
             }
         }
@@ -658,6 +689,19 @@ pub(crate) mod test {
             }
 
             Ok(Some(self.blocks[active_chain_height].hash()))
+        }
+        async fn nonfinalized_listener(
+            &self,
+        ) -> Result<
+            Option<
+                tokio::sync::mpsc::Receiver<(
+                    zebra_chain::block::Hash,
+                    Arc<zebra_chain::block::Block>,
+                )>,
+            >,
+            Box<dyn Error + Send + Sync>,
+        > {
+            Ok(None)
         }
     }
 }

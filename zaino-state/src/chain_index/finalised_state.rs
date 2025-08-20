@@ -19,8 +19,10 @@ use tracing::info;
 use zebra_chain::parameters::NetworkKind;
 
 use crate::{
-    chain_index::source::BlockchainSourceError, config::BlockCacheConfig,
-    error::FinalisedStateError, ChainBlock, ChainWork, Hash, Height, StatusType,
+    chain_index::{source::BlockchainSourceError, types::GENESIS_HEIGHT},
+    config::BlockCacheConfig,
+    error::FinalisedStateError,
+    ChainBlock, ChainWork, Hash, Height, StatusType,
 };
 
 use std::{sync::Arc, time::Duration};
@@ -206,11 +208,13 @@ impl ZainoDB {
         T: BlockchainSource,
     {
         let network = self.cfg.network.clone();
-        let db_height = self.db_height().await?.unwrap_or(Height(0));
+        let db_height_opt = self.db_height().await?;
+        let mut db_height = db_height_opt.unwrap_or(GENESIS_HEIGHT);
 
-        let mut parent_chainwork = if db_height.0 == 0 {
+        let mut parent_chainwork = if db_height_opt.is_none() {
             ChainWork::from_u256(0.into())
         } else {
+            db_height.0 += 1;
             match self
                 .db
                 .backend(CapabilityRequest::BlockCoreExt)?
@@ -226,9 +230,7 @@ impl ZainoDB {
             }
         };
 
-        let start_height = if db_height.0 == 0 { 0 } else { db_height.0 + 1 };
-
-        for height_int in (start_height)..=height.0 {
+        for height_int in (db_height.0)..=height.0 {
             let block = match source
                 .get_block(zebra_state::HashOrHeight::Height(
                     zebra_chain::block::Height(height_int),
@@ -332,15 +334,19 @@ impl ZainoDB {
     }
 
     /// Returns the block height for the given block hash *if* present in the finalised state.
-    ///
-    /// TODO: Should theis return `Result<Option<Height>, FinalisedStateError>`?
-    pub(crate) async fn get_block_height(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
+    pub(crate) async fn get_block_height(
+        &self,
+        hash: Hash,
+    ) -> Result<Option<Height>, FinalisedStateError> {
         self.db.get_block_height(hash).await
     }
 
     /// Returns the block block hash for the given block height *if* present in the finlaised state.
-    pub(crate) async fn get_block_hash(&self, h: Height) -> Result<Hash, FinalisedStateError> {
-        self.db.get_block_hash(h).await
+    pub(crate) async fn get_block_hash(
+        &self,
+        height: Height,
+    ) -> Result<Option<Hash>, FinalisedStateError> {
+        self.db.get_block_hash(height).await
     }
 
     /// Returns metadata for the running ZainoDB.

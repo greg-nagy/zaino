@@ -10,7 +10,7 @@ use crate::{
             },
             entry::{StoredEntryFixed, StoredEntryVar},
         },
-        types::AddrEventBytes,
+        types::{AddrEventBytes, GENESIS_HEIGHT},
     },
     config::BlockCacheConfig,
     error::FinalisedStateError,
@@ -93,12 +93,26 @@ impl DbRead for DbV1 {
         self.tip_height().await
     }
 
-    async fn get_block_height(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
-        self.get_block_height_by_hash(hash).await
+    async fn get_block_height(&self, hash: Hash) -> Result<Option<Height>, FinalisedStateError> {
+        match self.get_block_height_by_hash(hash).await {
+            Ok(height) => Ok(Some(height)),
+            Err(
+                FinalisedStateError::DataUnavailable(_)
+                | FinalisedStateError::FeatureUnavailable(_),
+            ) => Ok(None),
+            Err(other) => Err(other),
+        }
     }
 
-    async fn get_block_hash(&self, height: Height) -> Result<Hash, FinalisedStateError> {
-        Ok(*self.get_block_header_data(height).await?.index().hash())
+    async fn get_block_hash(&self, height: Height) -> Result<Option<Hash>, FinalisedStateError> {
+        match self.get_block_header_data(height).await {
+            Ok(header) => Ok(Some(*header.index().hash())),
+            Err(
+                FinalisedStateError::DataUnavailable(_)
+                | FinalisedStateError::FeatureUnavailable(_),
+            ) => Ok(None),
+            Err(other) => Err(other),
+        }
     }
 
     async fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
@@ -288,7 +302,10 @@ impl CompactBlockExt for DbV1 {
 
 #[async_trait]
 impl ChainBlockExt for DbV1 {
-    async fn get_chain_block(&self, height: Height) -> Result<ChainBlock, FinalisedStateError> {
+    async fn get_chain_block(
+        &self,
+        height: Height,
+    ) -> Result<Option<ChainBlock>, FinalisedStateError> {
         self.get_chain_block(height).await
     }
 }
@@ -846,9 +863,9 @@ impl DbV1 {
                 }
                 // no block in db, this must be genesis block.
                 Err(lmdb::Error::NotFound) => {
-                    if block_height.0 != 1 {
+                    if block_height.0 != GENESIS_HEIGHT.0 {
                         return Err(FinalisedStateError::Custom(format!(
-                            "first block must be height 1, got {block_height:?}"
+                            "first block must be height 0, got {block_height:?}"
                         )));
                     }
                 }
@@ -1224,7 +1241,12 @@ impl DbV1 {
         })?;
 
         // fetch chain_block from db and delete
-        let chain_block = self.get_chain_block(height).await?;
+        let Some(chain_block) = self.get_chain_block(height).await? else {
+            return Err(FinalisedStateError::DataUnavailable(format!(
+                "attempted to delete missing block: {}",
+                height.0
+            )));
+        };
         self.delete_block(&chain_block).await?;
 
         // update validated_tip / validated_set
@@ -2766,10 +2788,18 @@ impl DbV1 {
     /// Returns the ChainBlock for the given Height.
     ///
     /// TODO: Add separate range fetch method!
-    async fn get_chain_block(&self, height: Height) -> Result<ChainBlock, FinalisedStateError> {
-        let validated_height = self
+    async fn get_chain_block(
+        &self,
+        height: Height,
+    ) -> Result<Option<ChainBlock>, FinalisedStateError> {
+        let validated_height = match self
             .resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))
-            .await?;
+            .await
+        {
+            Ok(height) => height,
+            Err(FinalisedStateError::DataUnavailable(_)) => return Ok(None),
+            Err(other) => return Err(other),
+        };
         let height_bytes = validated_height.to_bytes()?;
 
         tokio::task::block_in_place(|| {
@@ -2894,12 +2924,12 @@ impl DbV1 {
                 .inner();
 
             // Construct ChainBlock
-            Ok(ChainBlock::new(
+            Ok(Some(ChainBlock::new(
                 *header.index(),
                 *header.data(),
                 txs,
                 commitment_tree_data,
-            ))
+            )))
         })
     }
 

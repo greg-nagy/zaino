@@ -108,14 +108,14 @@ impl DbRead for DbBackend {
         }
     }
 
-    async fn get_block_height(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
+    async fn get_block_height(&self, hash: Hash) -> Result<Option<Height>, FinalisedStateError> {
         match self {
             Self::V0(db) => db.get_block_height(hash).await,
             Self::V1(db) => db.get_block_height(hash).await,
         }
     }
 
-    async fn get_block_hash(&self, height: Height) -> Result<Hash, FinalisedStateError> {
+    async fn get_block_hash(&self, height: Height) -> Result<Option<Hash>, FinalisedStateError> {
         match self {
             Self::V0(db) => db.get_block_hash(height).await,
             Self::V1(db) => db.get_block_hash(height).await,
@@ -353,7 +353,10 @@ impl CompactBlockExt for DbBackend {
 
 #[async_trait]
 impl ChainBlockExt for DbBackend {
-    async fn get_chain_block(&self, height: Height) -> Result<ChainBlock, FinalisedStateError> {
+    async fn get_chain_block(
+        &self,
+        height: Height,
+    ) -> Result<Option<ChainBlock>, FinalisedStateError> {
         match self {
             Self::V1(db) => db.get_chain_block(height).await,
             _ => Err(FinalisedStateError::FeatureUnavailable("chain_block")),
