@@ -872,7 +872,7 @@ async fn check_faucet_spent_map() {
             let outputs = tx.transparent().outputs();
             for (vout_idx, output) in outputs.iter().enumerate() {
                 if output.script_hash() == faucet_addr_script.hash() {
-                    let outpoint = Outpoint::new_from_be(&txid, vout_idx as u32);
+                    let outpoint = Outpoint::new(txid, vout_idx as u32);
 
                     let spender = db_reader.get_outpoint_spender(outpoint).await.unwrap();
 
@@ -1008,7 +1008,7 @@ async fn check_recipient_spent_map() {
             let outputs = tx.transparent().outputs();
             for (vout_idx, output) in outputs.iter().enumerate() {
                 if output.script_hash() == recipient_addr_script.hash() {
-                    let outpoint = Outpoint::new_from_be(&txid, vout_idx as u32);
+                    let outpoint = Outpoint::new(txid, vout_idx as u32);
 
                     let spender = db_reader.get_outpoint_spender(outpoint).await.unwrap();
 
