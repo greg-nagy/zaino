@@ -260,15 +260,15 @@ mod chain_query_interface {
         for txid in snapshot
             .blocks
             .values()
-            .flat_map(|block| block.transactions().iter().map(|txdata| txdata.txid()))
+            .flat_map(|block| block.transactions().iter().map(|txdata| txdata.txid().0))
         {
             let raw_transaction = chain_index
-                .get_raw_transaction(&snapshot, *txid)
+                .get_raw_transaction(&snapshot, txid)
                 .await
                 .unwrap()
                 .unwrap();
             assert_eq!(
-                *txid,
+                txid,
                 zebra_chain::transaction::Transaction::zcash_deserialize(&raw_transaction[..])
                     .unwrap()
                     .hash()
@@ -300,7 +300,7 @@ mod chain_query_interface {
             block
                 .transactions()
                 .iter()
-                .map(|txdata| (txdata.txid(), block.height(), block.hash()))
+                .map(|txdata| (txdata.txid().0, block.height(), block.hash()))
         }) {
             let transaction_status = chain_index
                 .get_transaction_status(&snapshot, *txid)

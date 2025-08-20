@@ -248,7 +248,7 @@ impl ZainoDB {
                 }
             };
 
-            let block_hash = Hash::from(block.hash().0);
+            let block_hash = BlockHash::from(block.hash().0);
 
             let (sapling_root, sapling_size, orchard_root, orchard_size) =
                 match source.get_commitment_tree_roots(block_hash).await? {
