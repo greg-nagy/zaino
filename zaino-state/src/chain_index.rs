@@ -111,7 +111,7 @@ where {
         use futures::TryFutureExt as _;
 
         let (non_finalized_state, finalized_db) = futures::try_join!(
-            crate::NonFinalizedState::initialize(source.clone(), config.network.clone()),
+            crate::NonFinalizedState::initialize(source.clone(), config.network.clone(), None),
             finalised_state::ZainoDB::spawn(config, source)
                 .map_err(crate::InitError::FinalisedStateInitialzationError)
         )?;
