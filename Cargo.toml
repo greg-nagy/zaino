@@ -35,7 +35,6 @@ zingo-infra-services = { git = "https://github.com/zingolabs/infrastructure.git"
 
 # Librustzcash
 zcash_address = "0.9"
-zcash_client_backend = { version = "0.19.0", features = ["lightwalletd-tonic"] }
 zcash_keys = "0.10"
 zcash_protocol = "0.6"
 zcash_primitives = "0.24"

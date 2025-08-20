@@ -40,8 +40,7 @@ pub(crate) async fn spawn_v0_zaino_db(
                 // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
                 nu6_1: None,
                 nu7: None,
-            }
-            .into(),
+            },
         ),
         no_sync: false,
         no_db: false,
@@ -106,8 +105,7 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v0_zaino_db() -> (
                     // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
                     nu6_1: None,
                     nu7: None,
-                }
-                .into(),
+                },
             ),
         ))
         .unwrap();
@@ -232,8 +230,7 @@ async fn load_db_from_file() {
                 // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
                 nu6_1: None,
                 nu7: None,
-            }
-            .into(),
+            },
         ),
         no_sync: false,
         no_db: false,
@@ -279,8 +276,7 @@ async fn load_db_from_file() {
                             // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
                             nu6_1: None,
                             nu7: None,
-                        }
-                        .into(),
+                        },
                     ),
                 ))
                 .unwrap();
@@ -373,8 +369,7 @@ async fn get_compact_blocks() {
                     // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
                     nu6_1: None,
                     nu7: None,
-                }
-                .into(),
+                },
             ),
         ))
         .unwrap();

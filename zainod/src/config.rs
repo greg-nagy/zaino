@@ -244,8 +244,7 @@ impl IndexerConfig {
                     // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
                     nu6_1: None,
                     nu7: None,
-                }
-                .into(),
+                },
             )),
             "Testnet" => Ok(zebra_chain::parameters::Network::new_default_testnet()),
             "Mainnet" => Ok(zebra_chain::parameters::Network::Mainnet),
