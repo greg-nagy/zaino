@@ -382,9 +382,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                         ))
                     })?,
                 };
-                let chainblock = self
-                    .block_to_chainblock(prev_block, &block, Some(best_tip.0))
-                    .await?;
+                let chainblock = self.block_to_chainblock(prev_block, &block).await?;
                 best_tip = (best_tip.0 + 1, *chainblock.hash());
                 new_blocks.push(chainblock.clone());
             } else {
@@ -483,7 +481,6 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                     .block_to_chainblock(
                         &parent_block.expect("partitioned, known to be some"),
                         &block,
-                        None,
                     )
                     .await?;
                 nonbest_chainblocks.insert(*chainblock.hash(), chainblock);
@@ -620,7 +617,6 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         &self,
         prev_block: &ChainBlock,
         block: &zebra_chain::block::Block,
-        prev_height: Option<Height>,
     ) -> Result<ChainBlock, SyncError> {
         let (sapling_root_and_len, orchard_root_and_len) = self
             .source
@@ -636,155 +632,20 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
             orchard_root_and_len.unwrap_or_default(),
         );
 
-        let data = BlockData {
-            version: block.header.version,
-            time: block.header.time.timestamp(),
-            merkle_root: block.header.merkle_root.0,
-            bits: u32::from_be_bytes(block.header.difficulty_threshold.bytes_in_display_order()),
-            block_commitments: match block.commitment(&self.network).map_err(|e| {
-                // Currently, this can only fail when the zebra provides unvalid data.
-                // Sidechain blocks will fail, however, and when we incorporate them
-                // we must adapt this to match
-                SyncError::ZebradConnectionError(NodeConnectionError::UnrecoverableError(Box::new(
-                    e,
-                )))
-            })? {
-                zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
-                zebra_chain::block::Commitment::FinalSaplingRoot(root) => root.into(),
-                zebra_chain::block::Commitment::ChainHistoryActivationReserved => [0; 32],
-                zebra_chain::block::Commitment::ChainHistoryRoot(chain_history_mmr_root_hash) => {
-                    chain_history_mmr_root_hash.bytes_in_serialized_order()
-                }
-                zebra_chain::block::Commitment::ChainHistoryBlockTxAuthCommitment(
-                    chain_history_block_tx_auth_commitment_hash,
-                ) => chain_history_block_tx_auth_commitment_hash.bytes_in_serialized_order(),
-            },
-
-            nonce: *block.header.nonce,
-            solution: block.header.solution.into(),
-        };
-
-        let mut transactions = Vec::new();
-        for (i, trnsctn) in block.transactions.iter().enumerate() {
-            let transparent = TransparentCompactTx::new(
-                trnsctn
-                    .inputs()
-                    .iter()
-                    .filter_map(|input| {
-                        input
-                            .outpoint()
-                            .map(|outpoint| TxInCompact::new(outpoint.hash.0, outpoint.index))
-                    })
-                    .collect(),
-                trnsctn
-                    .outputs()
-                    .iter()
-                    .filter_map(|output| {
-                        TxOutCompact::try_from((
-                            u64::from(output.value),
-                            output.lock_script.as_raw_bytes(),
-                        ))
-                        .ok()
-                    })
-                    .collect(),
-            );
-
-            let sapling = SaplingCompactTx::new(
-                Some(i64::from(trnsctn.sapling_value_balance().sapling_amount())),
-                trnsctn
-                    .sapling_nullifiers()
-                    .map(|nf| CompactSaplingSpend::new(*nf.0))
-                    .collect(),
-                trnsctn
-                    .sapling_outputs()
-                    .map(|output| {
-                        CompactSaplingOutput::new(
-                            output.cm_u.to_bytes(),
-                            <[u8; 32]>::from(output.ephemeral_key),
-                            // This unwrap is unnecessary, but to remove it one would need to write
-                            // a new array of [input[0], input[1]..] and enumerate all 52 elements
-                            //
-                            // This would be uglier than the unwrap
-                            <[u8; 580]>::from(output.enc_ciphertext)[..52]
-                                .try_into()
-                                .unwrap(),
-                        )
-                    })
-                    .collect(),
-            );
-            let orchard = OrchardCompactTx::new(
-                Some(i64::from(trnsctn.orchard_value_balance().orchard_amount())),
-                trnsctn
-                    .orchard_actions()
-                    .map(|action| {
-                        CompactOrchardAction::new(
-                            <[u8; 32]>::from(action.nullifier),
-                            <[u8; 32]>::from(action.cm_x),
-                            <[u8; 32]>::from(action.ephemeral_key),
-                            // This unwrap is unnecessary, but to remove it one would need to write
-                            // a new array of [input[0], input[1]..] and enumerate all 52 elements
-                            //
-                            // This would be uglier than the unwrap
-                            <[u8; 580]>::from(action.enc_ciphertext)[..52]
-                                .try_into()
-                                .unwrap(),
-                        )
-                    })
-                    .collect(),
-            );
-
-            let txdata =
-                CompactTxData::new(i as u64, trnsctn.hash().0, transparent, sapling, orchard);
-            transactions.push(txdata);
-        }
-
-        let height = prev_height.map(|height| height + 1);
-        let hash = Hash::from(block.hash());
-        let chainwork = prev_block.chainwork().add(&ChainWork::from(U256::from(
-            block
-                .header
-                .difficulty_threshold
-                .to_work()
-                .ok_or_else(|| {
-                    SyncError::ZebradConnectionError(NodeConnectionError::UnrecoverableError(
-                        Box::new(InvalidData(format!(
-                            "Invalid work field of block {} {:?}",
-                            block.hash(),
-                            height
-                        ))),
-                    ))
-                })?
-                .as_u128(),
-        )));
-
-        let parent_hash = *prev_block.hash();
-
-        let index = BlockIndex {
-            hash,
-            parent_hash,
-            chainwork,
-            height,
-        };
-
-        //TODO: Is a default (zero) root correct?
-        let commitment_tree_roots = CommitmentTreeRoots::new(
-            <[u8; 32]>::from(sapling_root),
-            <[u8; 32]>::from(orchard_root),
-        );
-
-        let commitment_tree_size =
-            CommitmentTreeSizes::new(sapling_size as u32, orchard_size as u32);
-
-        let commitment_tree_data =
-            CommitmentTreeData::new(commitment_tree_roots, commitment_tree_size);
-
-        let chainblock = ChainBlock {
-            index,
-            data,
-            transactions,
-            commitment_tree_data,
-        };
-        Ok(chainblock)
+        ChainBlock::try_from((
+            block,
+            sapling_root,
+            sapling_size as u32,
+            orchard_root,
+            orchard_size as u32,
+            prev_block.chainwork(),
+            &self.network,
+        ))
+        .map_err(|e| {
+            SyncError::ZebradConnectionError(NodeConnectionError::UnrecoverableError(Box::new(
+                InvalidData(e),
+            )))
+        })
     }
 }
 
