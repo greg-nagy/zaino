@@ -1372,7 +1372,7 @@ impl
             merkle_root: block.header.merkle_root.0,
             bits: u32::from_be_bytes(block.header.difficulty_threshold.bytes_in_display_order()),
             block_commitments: match block
-                .commitment(&network)
+                .commitment(network)
                 .map_err(|_| "Block commitment could not be computed".to_string())?
             {
                 zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
