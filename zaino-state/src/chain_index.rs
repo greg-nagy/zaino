@@ -135,7 +135,8 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
         tokio::task::spawn(async move {
             loop {
                 nfs.sync(fs.clone()).await?;
-                //TODO: configure
+                //TODO: configure sleep duration?
+                //TODO: sync finalized state
                 tokio::time::sleep(Duration::from_millis(500)).await
             }
         })
@@ -193,6 +194,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
                     None => None,
                 }
                 .into_iter(),
+                //TODO: chain with mempool when available
             ))
     }
 }
@@ -286,6 +288,7 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
         snapshot: &Self::Snapshot,
         txid: [u8; 32],
     ) -> Result<Option<Vec<u8>>, Self::Error> {
+        // TODO: mempool?
         let Some(block) = self
             .blocks_containing_transaction(snapshot, txid)
             .await?
@@ -318,6 +321,7 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
         snapshot: &Self::Snapshot,
         txid: [u8; 32],
     ) -> Result<HashMap<types::Hash, std::option::Option<types::Height>>, ChainIndexError> {
+        // TODO: mempool
         Ok(self
             .blocks_containing_transaction(snapshot, txid)
             .await?
