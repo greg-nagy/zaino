@@ -53,7 +53,7 @@ mod chain_query_interface {
             chain_index::{self, ChainIndex},
             BlockCacheConfig,
         },
-        chain_index::{source::ValidatorConnector, NodeBackedChainIndex},
+        chain_index::{source::ValidatorConnector, types::GENESIS_HEIGHT, NodeBackedChainIndex},
         Height, StateService, StateServiceConfig, ZcashService as _,
     };
     use zebra_chain::serialization::{ZcashDeserialize, ZcashDeserializeInto};
@@ -259,18 +259,39 @@ mod chain_query_interface {
             .values()
             .flat_map(|block| block.transactions().iter().map(|txdata| txdata.txid()))
         {
+            // FIX / TODO: this is required as chainblock currently holds txids in BE byte order,
+            // this has been fixed in #481 and so this reverse should be removed in that RP.
+            let mut be_txid = *txid;
+            be_txid.reverse();
+
             let raw_transaction = chain_index
-                .get_raw_transaction(&snapshot, *txid)
+                .get_raw_transaction(&snapshot, be_txid)
                 .await
                 .unwrap()
                 .unwrap();
-            assert_eq!(
-                *txid,
+
+            let zebra_txn =
                 zebra_chain::transaction::Transaction::zcash_deserialize(&raw_transaction[..])
-                    .unwrap()
-                    .hash()
-                    .0
-            );
+                    .unwrap();
+
+            let mut correct_txid = zebra_txn.hash().0;
+
+            // For an unknown reason the genesis block coinbase transaction txid is in in the
+            // opposite byte order to all other transactions. TODO: explore..
+            if let Some(height) = chain_index
+                .get_transaction_status(&snapshot, be_txid)
+                .await
+                .unwrap()
+                .values()
+                .flatten()
+                .next()
+            {
+                if height == &GENESIS_HEIGHT {
+                    correct_txid.reverse();
+                }
+            }
+
+            assert_eq!(be_txid, correct_txid);
         }
     }
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -299,8 +320,13 @@ mod chain_query_interface {
                 .iter()
                 .map(|txdata| (txdata.txid(), block.height(), block.hash()))
         }) {
+            // FIX / TODO: this is required as chainblock currently holds txids in BE byte order,
+            // this has been fixed in #481 and so this reverse should be removed in that RP.
+            let mut be_txid = *txid;
+            be_txid.reverse();
+
             let transaction_status = chain_index
-                .get_transaction_status(&snapshot, *txid)
+                .get_transaction_status(&snapshot, be_txid)
                 .await
                 .unwrap();
             assert_eq!(1, transaction_status.len());

@@ -30,7 +30,7 @@ mod mockchain_tests {
             tests::vectors::{build_mockchain_source, load_test_vectors},
             ChainIndex, NodeBackedChainIndex,
         },
-        ChainBlock,
+        ChainBlock, ChainWork,
     };
 
     async fn load_test_vectors_and_sync_chain_index() -> (
@@ -80,6 +80,9 @@ mod mockchain_tests {
         };
 
         let indexer = NodeBackedChainIndex::new(source, config).await.unwrap();
+
+        let mut parent_chain_work = ChainWork::from_u256(0.into());
+
         loop {
             let nonfinalized_snapshot = ChainIndex::snapshot_nonfinalized_state(&indexer);
             if nonfinalized_snapshot.blocks.len() != 1 {
@@ -87,6 +90,49 @@ mod mockchain_tests {
             }
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
+
+        for (
+            _h,
+            _chain_block,
+            _compact_block,
+            zebra_block,
+            (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+        ) in blocks.clone()
+        {
+            let chain_block = ChainBlock::try_from((
+                &zebra_block,
+                sapling_root,
+                sapling_root_size as u32,
+                orchard_root,
+                orchard_root_size as u32,
+                &parent_chain_work,
+                &zebra_chain::parameters::Network::new_regtest(
+                    zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                        before_overwinter: Some(1),
+                        overwinter: Some(1),
+                        sapling: Some(1),
+                        blossom: Some(1),
+                        heartwood: Some(1),
+                        canopy: Some(1),
+                        nu5: Some(1),
+                        nu6: Some(1),
+                        // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
+                        nu6_1: None,
+                        nu7: None,
+                    },
+                ),
+            ))
+            .unwrap();
+
+            if chain_block.index().height().unwrap().0 > 100 {
+                break;
+            }
+
+            parent_chain_work = *chain_block.index().chainwork();
+
+            indexer.finalized_db.write_block(chain_block).await.unwrap();
+        }
+
         (blocks, indexer)
     }
 

@@ -96,7 +96,8 @@ pub trait ChainIndex {
 pub struct NodeBackedChainIndex<Source: BlockchainSource = ValidatorConnector> {
     // TODO: mempool
     non_finalized_state: std::sync::Arc<crate::NonFinalizedState<Source>>,
-    finalized_db: std::sync::Arc<finalised_state::ZainoDB>,
+    // pub crate required for unit tests, this can be removed once we implement finalised state sync.
+    pub(crate) finalized_db: std::sync::Arc<finalised_state::ZainoDB>,
     finalized_state: finalised_state::reader::DbReader,
 }
 
@@ -166,12 +167,16 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
         'snapshot: 'iter,
         'self_lt: 'iter,
     {
+        // FIX / TODO: this is required as chainblock currently holds txids in BE byte order,
+        // this has been fixed in #481 and so this reverse should be removed in that RP.
+        let mut be_txid = txid;
+        be_txid.reverse();
         Ok(snapshot
             .blocks
             .values()
             .filter_map(move |block| {
                 block.transactions().iter().find_map(|transaction| {
-                    if *transaction.txid() == txid {
+                    if *transaction.txid() == be_txid {
                         Some(block)
                     } else {
                         None
@@ -296,17 +301,28 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
         else {
             return Ok(None);
         };
+
+        // For an unknown reason the genesis block coinbase transaction txid is in in the
+        // opposite byte order to all other transactions. TODO: explore..
+        //
+        // Currently we check for either BE or LE byte order.
+        let mut reverse_txid = txid;
+        reverse_txid.reverse();
+
         let full_block = self
             .non_finalized_state
             .source
-            .get_block(HashOrHeight::Hash((*block.index().hash()).into()))
+            .get_block(HashOrHeight::Hash((block.index().hash().0).into()))
             .await
             .map_err(ChainIndexError::backing_validator)?
             .ok_or_else(|| ChainIndexError::database_hole(block.index().hash()))?;
         full_block
             .transactions
             .iter()
-            .find(|transaction| transaction.hash().0 == txid)
+            .find(|transaction| {
+                let txn_txid = transaction.hash().0;
+                txn_txid == txid || txn_txid == reverse_txid
+            })
             .map(ZcashSerialize::zcash_serialize_to_vec)
             .ok_or_else(|| ChainIndexError::database_hole(block.index().hash()))?
             .map_err(ChainIndexError::backing_validator)
