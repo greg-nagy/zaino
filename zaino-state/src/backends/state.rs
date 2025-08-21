@@ -1,20 +1,12 @@
 //! Zcash chain fetch and tx submission service backed by Zebras [`ReadStateService`].
 
 use crate::{
-    chain_index::mempool::{Mempool, MempoolSubscriber},
-    config::StateServiceConfig,
-    error::{BlockCacheError, StateServiceError},
-    indexer::{
+    chain_index::mempool::{Mempool, MempoolSubscriber}, config::StateServiceConfig, error::{BlockCacheError, StateServiceError}, indexer::{
         handle_raw_transaction, IndexerSubscriber, LightWalletIndexer, ZcashIndexer, ZcashService,
-    },
-    local_cache::{compact_block_to_nullifiers, BlockCache, BlockCacheSubscriber},
-    status::{AtomicStatus, StatusType},
-    stream::{
+    }, local_cache::{compact_block_to_nullifiers, BlockCache, BlockCacheSubscriber}, status::{AtomicStatus, StatusType}, stream::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
         UtxoReplyStream,
-    },
-    utils::{blockid_to_hashorheight, get_build_info, ServiceMetadata},
-    MempoolKey, MempoolValue,
+    }, utils::{blockid_to_hashorheight, get_build_info, ServiceMetadata}, Hash, MempoolKey, MempoolValue
 };
 
 use nonempty::NonEmpty;
@@ -1505,7 +1497,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
         )?;
         Ok(BlockId {
             height: chain_height.as_usize() as u64,
-            hash: chain_hash.0.to_vec(),
+            hash: Hash::from_bytes_in_display_order(&chain_hash.0).0.to_vec(),
         })
     }
 
