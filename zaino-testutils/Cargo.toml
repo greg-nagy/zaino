@@ -14,8 +14,8 @@ zaino-state = { workspace = true, features = ["bench"] }
 zaino-testvectors.workspace = true
 
 # Librustzcash
-zcash_protocol = { workspace = true }
-zcash_client_backend = { workspace = true }
+zcash_protocol = "0.5.4"
+zcash_client_backend = { version = "0.18.0", features = ["lightwalletd-tonic"] }
 
 # Zebra
 zebra-chain = { workspace = true }
