@@ -88,13 +88,13 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v1_zaino_db() -> (
     ) in blocks.clone()
     {
         let chain_block = ChainBlock::try_from((
-            zebra_block,
+            &zebra_block,
             sapling_root,
             sapling_root_size as u32,
             orchard_root,
             orchard_root_size as u32,
-            parent_chain_work,
-            zebra_chain::parameters::Network::new_regtest(
+            &parent_chain_work,
+            &zebra_chain::parameters::Network::new_regtest(
                 zebra_chain::parameters::testnet::ConfiguredActivationHeights {
                     before_overwinter: Some(1),
                     overwinter: Some(1),
@@ -259,13 +259,13 @@ async fn load_db_from_file() {
             ) in blocks_clone
             {
                 let chain_block = ChainBlock::try_from((
-                    zebra_block,
+                    &zebra_block,
                     sapling_root,
                     sapling_root_size as u32,
                     orchard_root,
                     orchard_root_size as u32,
-                    parent_chain_work,
-                    zebra_chain::parameters::Network::new_regtest(
+                    &parent_chain_work,
+                    &zebra_chain::parameters::Network::new_regtest(
                         zebra_chain::parameters::testnet::ConfiguredActivationHeights {
                             before_overwinter: Some(1),
                             overwinter: Some(1),
@@ -405,13 +405,13 @@ async fn get_chain_blocks() {
     ) in blocks.iter()
     {
         let chain_block = ChainBlock::try_from((
-            zebra_block.clone(),
+            zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
             *orchard_root,
             *orchard_root_size as u32,
-            parent_chain_work,
-            zebra_chain::parameters::Network::new_regtest(
+            &parent_chain_work,
+            &zebra_chain::parameters::Network::new_regtest(
                 zebra_chain::parameters::testnet::ConfiguredActivationHeights {
                     before_overwinter: Some(1),
                     overwinter: Some(1),
@@ -455,13 +455,13 @@ async fn get_compact_blocks() {
     ) in blocks.iter()
     {
         let chain_block = ChainBlock::try_from((
-            zebra_block.clone(),
+            zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
             *orchard_root,
             *orchard_root_size as u32,
-            parent_chain_work,
-            zebra_chain::parameters::Network::new_regtest(
+            &parent_chain_work,
+            &zebra_chain::parameters::Network::new_regtest(
                 zebra_chain::parameters::testnet::ConfiguredActivationHeights {
                     before_overwinter: Some(1),
                     overwinter: Some(1),
@@ -516,13 +516,13 @@ async fn get_faucet_txids() {
     ) in blocks.iter()
     {
         let chain_block = ChainBlock::try_from((
-            zebra_block.clone(),
+            zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
             *orchard_root,
             *orchard_root_size as u32,
-            parent_chain_work,
-            zebra_chain::parameters::Network::new_regtest(
+            &parent_chain_work,
+            &zebra_chain::parameters::Network::new_regtest(
                 zebra_chain::parameters::testnet::ConfiguredActivationHeights {
                     before_overwinter: Some(1),
                     overwinter: Some(1),
@@ -614,13 +614,13 @@ async fn get_recipient_txids() {
     ) in blocks.iter()
     {
         let chain_block = ChainBlock::try_from((
-            zebra_block.clone(),
+            zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
             *orchard_root,
             *orchard_root_size as u32,
-            parent_chain_work,
-            zebra_chain::parameters::Network::new_regtest(
+            &parent_chain_work,
+            &zebra_chain::parameters::Network::new_regtest(
                 zebra_chain::parameters::testnet::ConfiguredActivationHeights {
                     before_overwinter: Some(1),
                     overwinter: Some(1),
@@ -840,13 +840,13 @@ async fn check_faucet_spent_map() {
     ) in blocks.iter()
     {
         let chain_block = ChainBlock::try_from((
-            zebra_block.clone(),
+            zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
             *orchard_root,
             *orchard_root_size as u32,
-            parent_chain_work,
-            zebra_chain::parameters::Network::new_regtest(
+            &parent_chain_work,
+            &zebra_chain::parameters::Network::new_regtest(
                 zebra_chain::parameters::testnet::ConfiguredActivationHeights {
                     before_overwinter: Some(1),
                     overwinter: Some(1),
@@ -976,13 +976,13 @@ async fn check_recipient_spent_map() {
     ) in blocks.iter()
     {
         let chain_block = ChainBlock::try_from((
-            zebra_block.clone(),
+            zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
             *orchard_root,
             *orchard_root_size as u32,
-            parent_chain_work,
-            zebra_chain::parameters::Network::new_regtest(
+            &parent_chain_work,
+            &zebra_chain::parameters::Network::new_regtest(
                 zebra_chain::parameters::testnet::ConfiguredActivationHeights {
                     before_overwinter: Some(1),
                     overwinter: Some(1),
