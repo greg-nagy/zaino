@@ -18,9 +18,7 @@ impl<T: ToString> From<RpcRequestError<T>> for StateServiceError {
                 e.to_string()
             )),
             RpcRequestError::JsonRpc(error) => Self::Custom(format!("bad argument: {error}")),
-            RpcRequestError::InternalUnrecoverable => {
-                Self::Custom("TODO: useless crash message".to_string())
-            }
+            RpcRequestError::InternalUnrecoverable(e) => Self::Custom(e.to_string()),
             RpcRequestError::ServerWorkQueueFull => {
                 Self::Custom("Server queue full. Handling for this not yet implemented".to_string())
             }
@@ -141,8 +139,8 @@ impl<T: ToString> From<RpcRequestError<T>> for FetchServiceError {
             RpcRequestError::JsonRpc(error) => {
                 FetchServiceError::Critical(format!("argument failed to serialze: {error}"))
             }
-            RpcRequestError::InternalUnrecoverable => {
-                FetchServiceError::Critical("Something unspecified went wrong".to_string())
+            RpcRequestError::InternalUnrecoverable(e) => {
+                FetchServiceError::Critical(format!("Internal unrecoverable error: {e}"))
             }
             RpcRequestError::ServerWorkQueueFull => FetchServiceError::Critical(
                 "Server queue full. Handling for this not yet implemented".to_string(),
@@ -229,8 +227,8 @@ impl<T: ToString> From<RpcRequestError<T>> for MempoolError {
             RpcRequestError::JsonRpc(error) => {
                 MempoolError::Critical(format!("argument failed to serialze: {error}"))
             }
-            RpcRequestError::InternalUnrecoverable => {
-                MempoolError::Critical("Something unspecified went wrong".to_string())
+            RpcRequestError::InternalUnrecoverable(e) => {
+                MempoolError::Critical(format!("Internal unrecoverable error: {e}"))
             }
             RpcRequestError::ServerWorkQueueFull => MempoolError::Critical(
                 "Server queue full. Handling for this not yet implemented".to_string(),
@@ -323,8 +321,8 @@ impl<T: ToString> From<RpcRequestError<T>> for NonFinalisedStateError {
             RpcRequestError::JsonRpc(error) => {
                 NonFinalisedStateError::Custom(format!("argument failed to serialze: {error}"))
             }
-            RpcRequestError::InternalUnrecoverable => {
-                NonFinalisedStateError::Custom("Something unspecified went wrong".to_string())
+            RpcRequestError::InternalUnrecoverable(e) => {
+                NonFinalisedStateError::Custom(format!("Internal unrecoverable error: {e}"))
             }
             RpcRequestError::ServerWorkQueueFull => NonFinalisedStateError::Custom(
                 "Server queue full. Handling for this not yet implemented".to_string(),
@@ -379,8 +377,8 @@ impl<T: ToString> From<RpcRequestError<T>> for FinalisedStateError {
             RpcRequestError::JsonRpc(error) => {
                 FinalisedStateError::Custom(format!("argument failed to serialze: {error}"))
             }
-            RpcRequestError::InternalUnrecoverable => {
-                FinalisedStateError::Custom("Something unspecified went wrong".to_string())
+            RpcRequestError::InternalUnrecoverable(e) => {
+                FinalisedStateError::Custom(format!("Internal unrecoverable error: {e}"))
             }
             RpcRequestError::ServerWorkQueueFull => FinalisedStateError::Custom(
                 "Server queue full. Handling for this not yet implemented".to_string(),
@@ -521,6 +519,37 @@ impl ChainIndexError {
                 "InternalServerError: hole in validator database, missing block {missing_block}"
             ),
             source: None,
+        }
+    }
+}
+impl From<FinalisedStateError> for ChainIndexError {
+    fn from(value: FinalisedStateError) -> Self {
+        let message = match &value {
+            FinalisedStateError::DataUnavailable(err) => format!("unhandled missing data: {err}"),
+            FinalisedStateError::FeatureUnavailable(err) => {
+                format!("unhandled missing feature: {err}")
+            }
+            FinalisedStateError::InvalidBlock {
+                height,
+                hash: _,
+                reason,
+            } => format!("invalid block at height {height}: {reason}"),
+            FinalisedStateError::Custom(err) | FinalisedStateError::Critical(err) => err.clone(),
+            FinalisedStateError::LmdbError(error) => error.to_string(),
+            FinalisedStateError::SerdeJsonError(error) => error.to_string(),
+            FinalisedStateError::StatusError(status_error) => status_error.to_string(),
+            FinalisedStateError::JsonRpcConnectorError(transport_error) => {
+                transport_error.to_string()
+            }
+            FinalisedStateError::IoError(error) => error.to_string(),
+            FinalisedStateError::BlockchainSourceError(blockchain_source_error) => {
+                blockchain_source_error.to_string()
+            }
+        };
+        ChainIndexError {
+            kind: ChainIndexErrorKind::InternalServerError,
+            message,
+            source: Some(Box::new(value)),
         }
     }
 }

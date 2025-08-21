@@ -188,13 +188,13 @@ impl DbRead for Router {
         self.backend(CapabilityRequest::ReadCore)?.db_height().await
     }
 
-    async fn get_block_height(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
+    async fn get_block_height(&self, hash: Hash) -> Result<Option<Height>, FinalisedStateError> {
         self.backend(CapabilityRequest::ReadCore)?
             .get_block_height(hash)
             .await
     }
 
-    async fn get_block_hash(&self, h: Height) -> Result<Hash, FinalisedStateError> {
+    async fn get_block_hash(&self, h: Height) -> Result<Option<Hash>, FinalisedStateError> {
         self.backend(CapabilityRequest::ReadCore)?
             .get_block_hash(h)
             .await

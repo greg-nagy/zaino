@@ -248,23 +248,22 @@ async fn vectors_can_be_loaded_and_deserialised() {
         !blocks.is_empty(),
         "expected at least one block in test-vectors"
     );
-    let mut prev_h: u32 = 0;
-    for (h, chain_block, compact_block, _zebra_block, _block_roots) in &blocks {
+    let mut expected_height: u32 = 0;
+    for (height, chain_block, compact_block, _zebra_block, _block_roots) in &blocks {
         // println!("Checking block at height {h}");
 
         assert_eq!(
-            prev_h,
-            (h - 1),
-            "Chain height continuity check failed at height {h}"
+            expected_height, *height,
+            "Chain height continuity check failed at height {height}"
         );
-        prev_h = *h;
+        expected_height = *height + 1;
 
         let compact_block_hash = compact_block.hash.clone();
         let chain_block_hash_bytes = chain_block.hash().0.to_vec();
 
         assert_eq!(
             compact_block_hash, chain_block_hash_bytes,
-            "Block hash check failed at height {h}"
+            "Block hash check failed at height {height}"
         );
 
         // ChainBlock round trip check.
@@ -272,7 +271,7 @@ async fn vectors_can_be_loaded_and_deserialised() {
         let reparsed = ChainBlock::from_bytes(&bytes).unwrap();
         assert_eq!(
             chain_block, &reparsed,
-            "ChainBlock round-trip failed at height {h}"
+            "ChainBlock round-trip failed at height {height}"
         );
     }
 

@@ -11,7 +11,7 @@ use zaino_proto::proto::compact_formats::{
 
 /// Txin format as described in <https://en.bitcoin.it/wiki/Transaction>
 #[derive(Debug, Clone)]
-struct TxIn {
+pub struct TxIn {
     // PrevTxHash - Size\[bytes\]: 32
     prev_txid: Vec<u8>,
     // PrevTxOutIndex - Size\[bytes\]: 4
@@ -72,7 +72,7 @@ impl ParseFromSlice for TxIn {
 
 /// Txout format as described in <https://en.bitcoin.it/wiki/Transaction>
 #[derive(Debug, Clone)]
-struct TxOut {
+pub struct TxOut {
     /// Non-negative int giving the number of zatoshis to be transferred
     ///
     /// Size\[bytes\]: 8
@@ -149,7 +149,7 @@ fn parse_transparent(data: &[u8]) -> Result<(&[u8], Vec<TxIn>, Vec<TxOut>), Pars
 /// Spend is a Sapling Spend Description as described in 7.3 of the Zcash
 /// protocol specification.
 #[derive(Debug, Clone)]
-struct Spend {
+pub struct Spend {
     // Cv \[IGNORED\] - Size\[bytes\]: 32
     // Anchor \[IGNORED\] - Size\[bytes\]: 32
     /// A nullifier to a sapling note.
@@ -203,7 +203,7 @@ impl ParseFromSlice for Spend {
 /// output is a Sapling Output Description as described in section 7.4 of the
 /// Zcash protocol spec.
 #[derive(Debug, Clone)]
-struct Output {
+pub struct Output {
     // Cv \[IGNORED\] - Size\[bytes\]: 32
     /// U-coordinate of the note commitment, derived from the note's value, recipient, and a
     /// random value.

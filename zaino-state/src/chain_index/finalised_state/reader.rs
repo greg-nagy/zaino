@@ -59,12 +59,18 @@ impl DbReader {
     }
 
     /// Fetch the block height in the main chain for a given block hash.
-    pub(crate) async fn get_block_height(&self, hash: Hash) -> Result<Height, FinalisedStateError> {
+    pub(crate) async fn get_block_height(
+        &self,
+        hash: Hash,
+    ) -> Result<Option<Height>, FinalisedStateError> {
         self.inner.get_block_height(hash).await
     }
 
     /// Fetch the block hash in the main chain for a given block height.
-    pub(crate) async fn get_block_hash(&self, height: Height) -> Result<Hash, FinalisedStateError> {
+    pub(crate) async fn get_block_hash(
+        &self,
+        height: Height,
+    ) -> Result<Option<Hash>, FinalisedStateError> {
         self.inner.get_block_hash(height).await
     }
 
@@ -378,7 +384,7 @@ impl DbReader {
     pub(crate) async fn get_chain_block(
         &self,
         height: Height,
-    ) -> Result<ChainBlock, FinalisedStateError> {
+    ) -> Result<Option<ChainBlock>, FinalisedStateError> {
         self.db(CapabilityRequest::ChainBlockExt)?
             .get_chain_block(height)
             .await

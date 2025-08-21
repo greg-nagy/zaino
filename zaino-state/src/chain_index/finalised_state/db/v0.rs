@@ -6,8 +6,11 @@
 //! for this reason ZainoDB-V0 does not use the standard serialisation schema used elswhere in Zaino.
 
 use crate::{
-    chain_index::finalised_state::capability::{
-        CompactBlockExt, DbCore, DbMetadata, DbRead, DbVersion, DbWrite,
+    chain_index::{
+        finalised_state::capability::{
+            CompactBlockExt, DbCore, DbMetadata, DbRead, DbVersion, DbWrite,
+        },
+        types::GENESIS_HEIGHT,
     },
     config::BlockCacheConfig,
     error::FinalisedStateError,
@@ -41,15 +44,29 @@ impl DbRead for DbV0 {
     async fn get_block_height(
         &self,
         hash: crate::Hash,
-    ) -> Result<crate::Height, FinalisedStateError> {
-        self.get_block_height_by_hash(hash).await
+    ) -> Result<Option<Height>, FinalisedStateError> {
+        match self.get_block_height_by_hash(hash).await {
+            Ok(height) => Ok(Some(height)),
+            Err(
+                FinalisedStateError::DataUnavailable(_)
+                | FinalisedStateError::FeatureUnavailable(_),
+            ) => Ok(None),
+            Err(other) => Err(other),
+        }
     }
 
     async fn get_block_hash(
         &self,
         height: crate::Height,
-    ) -> Result<crate::Hash, FinalisedStateError> {
-        self.get_block_hash_by_height(height).await
+    ) -> Result<Option<crate::Hash>, FinalisedStateError> {
+        match self.get_block_hash_by_height(height).await {
+            Ok(hash) => Ok(Some(hash)),
+            Err(
+                FinalisedStateError::DataUnavailable(_)
+                | FinalisedStateError::FeatureUnavailable(_),
+            ) => Ok(None),
+            Err(other) => Err(other),
+        }
     }
 
     async fn get_metadata(&self) -> Result<DbMetadata, FinalisedStateError> {
@@ -379,9 +396,9 @@ impl DbV0 {
                 }
                 // no block in db, this must be genesis block.
                 Err(lmdb::Error::NotFound) => {
-                    if block_height != 1 {
+                    if block_height != GENESIS_HEIGHT.0 {
                         return Err(FinalisedStateError::Custom(format!(
-                            "first block must be height 1, got {block_height:?}"
+                            "first block must be height 0, got {block_height:?}"
                         )));
                     }
                 }
