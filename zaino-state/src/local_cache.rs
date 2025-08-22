@@ -138,7 +138,7 @@ impl BlockCacheSubscriber {
     ) -> Result<CompactBlock, BlockCacheError> {
         let hash_or_height: HashOrHeight = hash_or_height.parse()?;
 
-        let mut compact_block = if self
+        if self
             .non_finalised_state
             .contains_hash_or_height(hash_or_height)
             .await
@@ -147,7 +147,7 @@ impl BlockCacheSubscriber {
             self.non_finalised_state
                 .get_compact_block(hash_or_height)
                 .await
-                .map_err(BlockCacheError::NonFinalisedStateError)
+                .map_err(Into::into)
         } else {
             match &self.finalised_state {
                 // Fetch from finalised state.
@@ -168,11 +168,7 @@ impl BlockCacheSubscriber {
                     Ok(block)
                 }
             }
-        }?;
-        compact_block.hash.reverse();
-        compact_block.prev_hash.reverse();
-        
-        Ok(compact_block)
+        }
     }
 
     /// Returns a compact block holding only action nullifiers.
