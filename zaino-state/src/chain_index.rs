@@ -301,13 +301,6 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
             return Ok(None);
         };
 
-        // For an unknown reason the genesis block coinbase transaction txid is in in the
-        // opposite byte order to all other transactions. TODO: explore..
-        //
-        // Currently we check for either BE or LE byte order.
-        let mut reverse_txid = *txid;
-        reverse_txid.0.reverse();
-
         let full_block = self
             .non_finalized_state
             .source
@@ -320,7 +313,7 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
             .iter()
             .find(|transaction| {
                 let txn_txid = transaction.hash().0;
-                txn_txid == txid.0 || txn_txid == reverse_txid.0
+                txn_txid == txid.0
             })
             .map(ZcashSerialize::zcash_serialize_to_vec)
             .ok_or_else(|| ChainIndexError::database_hole(block.index().hash()))?

@@ -53,10 +53,7 @@ mod chain_query_interface {
             chain_index::{self, ChainIndex},
             BlockCacheConfig,
         },
-        chain_index::{
-            source::ValidatorConnector, types::TransactionHash, types::GENESIS_HEIGHT,
-            NodeBackedChainIndex,
-        },
+        chain_index::{source::ValidatorConnector, types::TransactionHash, NodeBackedChainIndex},
         Height, StateService, StateServiceConfig, ZcashService as _,
     };
     use zebra_chain::serialization::{ZcashDeserialize, ZcashDeserializeInto};
@@ -276,22 +273,7 @@ mod chain_query_interface {
                 zebra_chain::transaction::Transaction::zcash_deserialize(&raw_transaction[..])
                     .unwrap();
 
-            let mut correct_txid = zebra_txn.hash().0;
-
-            // For an unknown reason the genesis block coinbase transaction txid is in in the
-            // opposite byte order to all other transactions. TODO: explore..
-            if let Some(height) = chain_index
-                .get_transaction_status(&snapshot, &TransactionHash(txid))
-                .await
-                .unwrap()
-                .values()
-                .flatten()
-                .next()
-            {
-                if height == &GENESIS_HEIGHT {
-                    correct_txid.reverse();
-                }
-            }
+            let correct_txid = zebra_txn.hash().0;
 
             assert_eq!(txid, correct_txid);
         }
