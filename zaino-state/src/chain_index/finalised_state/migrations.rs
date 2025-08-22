@@ -136,6 +136,17 @@ impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
 
                 let shadow_db_height_opt = shadow.db_height().await?;
                 let mut shadow_db_height = shadow_db_height_opt.unwrap_or(GENESIS_HEIGHT);
+                let mut build_start_height = if shadow_db_height_opt.is_some() {
+                    parent_chain_work = *shadow
+                        .get_block_header(shadow_db_height)
+                        .await?
+                        .index()
+                        .chainwork();
+
+                    shadow_db_height + 1
+                } else {
+                    shadow_db_height
+                };
                 let mut primary_db_height = router.db_height().await?.unwrap_or(GENESIS_HEIGHT);
 
                 info!(
@@ -148,17 +159,7 @@ impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
                         break;
                     }
 
-                    if shadow_db_height_opt.is_some() {
-                        parent_chain_work = *shadow
-                            .get_block_header(shadow_db_height)
-                            .await?
-                            .index()
-                            .chainwork();
-
-                        shadow_db_height.0 += 1;
-                    }
-
-                    for height in (shadow_db_height.0)..=primary_db_height.0 {
+                    for height in (build_start_height.0)..=primary_db_height.0 {
                         let block = source
                             .get_block(zebra_state::HashOrHeight::Height(
                                 zebra_chain::block::Height(height),
@@ -197,12 +198,15 @@ impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
                         ))
                         .map_err(FinalisedStateError::Custom)?;
 
+                        parent_chain_work = *chain_block.chainwork();
+
                         shadow.write_block(chain_block).await?;
                     }
 
                     std::thread::sleep(std::time::Duration::from_millis(100));
 
                     shadow_db_height = shadow.db_height().await?.unwrap_or(Height(0));
+                    build_start_height = shadow_db_height + 1;
                     primary_db_height = router.db_height().await?.unwrap_or(Height(0));
                 }
 

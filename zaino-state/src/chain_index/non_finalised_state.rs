@@ -1,7 +1,6 @@
-use std::{collections::HashMap, mem, sync::Arc};
-
+use super::{finalised_state::ZainoDB, source::BlockchainSource};
 use crate::{
-    chain_index::types::{self, Hash, Height},
+    chain_index::types::{self, Hash, Height, GENESIS_HEIGHT},
     error::FinalisedStateError,
     BlockData, BlockIndex, ChainBlock, ChainWork, CommitmentTreeData, CommitmentTreeRoots,
     CommitmentTreeSizes, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
@@ -11,11 +10,10 @@ use crate::{
 use arc_swap::ArcSwap;
 use futures::lock::Mutex;
 use primitive_types::U256;
+use std::{collections::HashMap, mem, sync::Arc};
 use tokio::sync::mpsc;
 use zebra_chain::parameters::Network;
 use zebra_state::HashOrHeight;
-
-use super::{finalised_state::ZainoDB, source::BlockchainSource, types::GENESIS_HEIGHT};
 
 /// Holds the block cache
 pub struct NonFinalizedState<Source: BlockchainSource> {

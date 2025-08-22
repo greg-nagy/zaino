@@ -237,6 +237,63 @@ pub(crate) fn build_mockchain_source(
     MockchainSource::new(zebra_blocks, block_roots, block_hashes)
 }
 
+#[allow(clippy::type_complexity)]
+pub(crate) fn build_active_mockchain_source(
+    // the input data for this function could be reduced for wider use
+    // but is more simple to pass all test block data here.
+    blockchain_data: Vec<(
+        u32,
+        ChainBlock,
+        CompactBlock,
+        zebra_chain::block::Block,
+        (
+            zebra_chain::sapling::tree::Root,
+            u64,
+            zebra_chain::orchard::tree::Root,
+            u64,
+        ),
+    )>,
+) -> MockchainSource {
+    let (
+        mut heights,
+        mut chain_blocks,
+        mut compact_blocks,
+        mut zebra_blocks,
+        mut block_roots,
+        mut block_hashes,
+    ) = (
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+
+    for (
+        height,
+        chain_block,
+        compact_block,
+        zebra_block,
+        (sapling_root, sapling_tree_size, orchard_root, orchard_tree_size),
+    ) in blockchain_data.clone()
+    {
+        heights.push(height);
+        chain_blocks.push(chain_block.clone());
+        compact_blocks.push(compact_block);
+        zebra_blocks.push(Arc::new(zebra_block));
+
+        block_roots.push((
+            Some((sapling_root, sapling_tree_size)),
+            Some((orchard_root, orchard_tree_size)),
+        ));
+
+        block_hashes.push(*chain_block.index().hash());
+    }
+
+    MockchainSource::new_with_active_height(zebra_blocks, block_roots, block_hashes, 0)
+}
+
 // ***** Tests *****
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
