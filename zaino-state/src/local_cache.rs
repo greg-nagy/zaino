@@ -171,7 +171,7 @@ impl BlockCacheSubscriber {
         }?;
         compact_block.hash.reverse();
         compact_block.prev_hash.reverse();
-
+        
         Ok(compact_block)
     }
 
