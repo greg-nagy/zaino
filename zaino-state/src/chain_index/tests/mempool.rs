@@ -272,7 +272,7 @@ async fn get_mempool_stream() {
         .map(|b| b.transactions.clone())
         .unwrap_or_default();
 
-    let (mut rx, handle) = subscriber.get_mempool_stream().await.unwrap();
+    let (mut rx, handle) = subscriber.get_mempool_stream(None).await.unwrap();
 
     let expected_count = mempool_transactions.len();
     let mut received: HashMap<String, Vec<u8>> = HashMap::new();
@@ -283,7 +283,7 @@ async fn get_mempool_stream() {
         while received.len() < expected_count {
             match rx.recv().await {
                 Some(Ok((MempoolKey(k), MempoolValue(v)))) => {
-                    received.insert(k, v.as_ref().to_vec());
+                    received.insert(k, v.as_ref().as_ref().to_vec());
                 }
                 Some(Err(e)) => panic!("stream yielded error: {e:?}"),
                 None => break,

@@ -254,6 +254,15 @@ pub enum MempoolError {
     #[error("Critical error: {0}")]
     Critical(String),
 
+    /// Incorrect expected chain tip given from client.
+    #[error(
+        "Incorrect chain tip (expected {expected_chain_tip:?}, current {current_chain_tip:?})"
+    )]
+    IncorrectChainTip {
+        expected_chain_tip: BlockHash,
+        current_chain_tip: BlockHash,
+    },
+
     /// Error from JsonRpcConnector.
     #[error("JsonRpcConnector error: {0}")]
     JsonRpcConnectorError(#[from] zaino_fetch::jsonrpsee::error::TransportError),
