@@ -272,13 +272,13 @@ impl ZainoDB {
                 };
 
             let chain_block = match ChainBlock::try_from((
-                (*block).clone(),
+                block.as_ref(),
                 sapling_root,
                 sapling_size as u32,
                 orchard_root,
                 orchard_size as u32,
-                parent_chainwork,
-                network.clone(),
+                &parent_chainwork,
+                &network.clone(),
             )) {
                 Ok(block) => block,
                 Err(_) => {

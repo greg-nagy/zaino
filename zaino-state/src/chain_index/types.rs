@@ -1451,13 +1451,13 @@ impl
 
 impl
     TryFrom<(
-        zebra_chain::block::Block,
+        &zebra_chain::block::Block,
         zebra_chain::sapling::tree::Root,
         u32,
         zebra_chain::orchard::tree::Root,
         u32,
-        ChainWork,
-        zebra_chain::parameters::Network,
+        &ChainWork,
+        &zebra_chain::parameters::Network,
     )> for ChainBlock
 {
     // TODO: update error type.
@@ -1473,13 +1473,13 @@ impl
             parent_chain_work,
             network,
         ): (
-            zebra_chain::block::Block,
+            &zebra_chain::block::Block,
             zebra_chain::sapling::tree::Root,
             u32,
             zebra_chain::orchard::tree::Root,
             u32,
-            ChainWork,
-            zebra_chain::parameters::Network,
+            &ChainWork,
+            &zebra_chain::parameters::Network,
         ),
     ) -> Result<Self, Self::Error> {
         let data = BlockData {
@@ -1488,7 +1488,7 @@ impl
             merkle_root: block.header.merkle_root.0,
             bits: u32::from_be_bytes(block.header.difficulty_threshold.bytes_in_display_order()),
             block_commitments: match block
-                .commitment(&network)
+                .commitment(network)
                 .map_err(|_| "Block commitment could not be computed".to_string())?
             {
                 zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
@@ -1555,14 +1555,18 @@ impl
                     .map(|output| {
                         let cipher: [u8; 52] = <[u8; 580]>::from(output.enc_ciphertext)[..52]
                             .try_into()
-                            .map_err(|_| "Ciphertext slice conversion failed")?;
-                        Ok::<CompactSaplingOutput, String>(CompactSaplingOutput::new(
+                            // This unwrap is unnecessary, but to remove it one would need to write
+                            // a new array of [input[0], input[1]..] and enumerate all 52 elements
+                            //
+                            // This would be uglier than the unwrap
+                            .unwrap();
+                        CompactSaplingOutput::new(
                             output.cm_u.to_bytes(),
                             <[u8; 32]>::from(output.ephemeral_key),
                             cipher,
-                        ))
+                        )
                     })
-                    .collect::<Result<Vec<_>, _>>()?,
+                    .collect::<Vec<_>>(),
             );
 
             let orchard_value = {
@@ -1579,15 +1583,19 @@ impl
                     .map(|action| {
                         let cipher: [u8; 52] = <[u8; 580]>::from(action.enc_ciphertext)[..52]
                             .try_into()
-                            .map_err(|_| "Ciphertext slice conversion failed")?;
-                        Ok::<CompactOrchardAction, String>(CompactOrchardAction::new(
+                            // This unwrap is unnecessary, but to remove it one would need to write
+                            // a new array of [input[0], input[1]..] and enumerate all 52 elements
+                            //
+                            // This would be uglier than the unwrap
+                            .unwrap();
+                        CompactOrchardAction::new(
                             <[u8; 32]>::from(action.nullifier),
                             <[u8; 32]>::from(action.cm_x),
                             <[u8; 32]>::from(action.ephemeral_key),
                             cipher,
-                        ))
+                        )
                     })
-                    .collect::<Result<Vec<_>, _>>()?,
+                    .collect::<Vec<_>>(),
             );
 
             let txdata =
@@ -1598,11 +1606,7 @@ impl
         let hash = BlockHash::from(block.hash());
         let parent_hash = BlockHash::from(block.header.previous_block_hash);
 
-        let coinbase_tx_height = block
-            .coinbase_height()
-            .ok_or_else(|| "Missing coinbase height".to_string())?;
-        let height = Height::try_from(coinbase_tx_height.0)
-            .map_err(|e| format!("Invalid block height: {e}"))?;
+        let height = block.coinbase_height().map(|height| Height(height.0));
 
         let block_work = block.header.difficulty_threshold.to_work().ok_or_else(|| {
             "Failed to calculate block work from difficulty threshold".to_string()
@@ -1613,7 +1617,7 @@ impl
             hash,
             parent_hash,
             chainwork,
-            height: Some(height),
+            height,
         };
 
         let commitment_tree_roots = CommitmentTreeRoots::new(

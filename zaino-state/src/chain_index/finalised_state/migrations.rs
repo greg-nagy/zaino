@@ -188,13 +188,13 @@ impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
                             })?;
 
                         let chain_block = ChainBlock::try_from((
-                            (*block).clone(),
+                            block.as_ref(),
                             sapling_root,
                             sapling_root_size as u32,
                             orchard_root,
                             orchard_root_size as u32,
-                            parent_chain_work,
-                            cfg.network.clone(),
+                            &parent_chain_work,
+                            &cfg.network,
                         ))
                         .map_err(FinalisedStateError::Custom)?;
 
