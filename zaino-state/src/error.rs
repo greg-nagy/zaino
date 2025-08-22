@@ -1,6 +1,6 @@
 //! Holds error types for Zaino-state.
 
-use crate::Hash;
+use crate::BlockHash;
 
 use std::{any::type_name, fmt::Display};
 
@@ -428,7 +428,7 @@ pub enum FinalisedStateError {
     #[error("invalid block @ height {height} (hash {hash}): {reason}")]
     InvalidBlock {
         height: u32,
-        hash: Hash,
+        hash: BlockHash,
         reason: String,
     },
 

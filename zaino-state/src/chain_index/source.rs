@@ -2,7 +2,7 @@
 
 use std::{error::Error, str::FromStr as _, sync::Arc};
 
-use crate::chain_index::types::Hash;
+use crate::chain_index::types::{BlockHash, TransactionHash};
 use async_trait::async_trait;
 use futures::{future::join, TryFutureExt as _};
 use tower::{Service, ServiceExt as _};
@@ -26,7 +26,7 @@ pub trait BlockchainSource: Clone + Send + Sync + 'static {
     /// Returns the block commitment tree data by hash or height
     async fn get_commitment_tree_roots(
         &self,
-        id: Hash,
+        id: BlockHash,
     ) -> BlockchainSourceResult<(
         Option<(zebra_chain::sapling::tree::Root, u64)>,
         Option<(zebra_chain::orchard::tree::Root, u64)>,
@@ -40,7 +40,7 @@ pub trait BlockchainSource: Clone + Send + Sync + 'static {
     /// Returns the transaction by txid
     async fn get_transaction(
         &self,
-        txid: Hash,
+        txid: TransactionHash,
     ) -> BlockchainSourceResult<Option<Arc<zebra_chain::transaction::Transaction>>>;
 
     /// Returns the hash of the block at the tip of the best chain.
@@ -142,7 +142,7 @@ impl BlockchainSource for ValidatorConnector {
 
     async fn get_commitment_tree_roots(
         &self,
-        id: Hash,
+        id: BlockHash,
     ) -> BlockchainSourceResult<(
         Option<(zebra_chain::sapling::tree::Root, u64)>,
         Option<(zebra_chain::orchard::tree::Root, u64)>,
@@ -287,7 +287,7 @@ impl BlockchainSource for ValidatorConnector {
 
     async fn get_transaction(
         &self,
-        txid: Hash,
+        txid: TransactionHash,
     ) -> BlockchainSourceResult<Option<Arc<zebra_chain::transaction::Transaction>>> {
         match self {
             ValidatorConnector::State(State {
@@ -426,6 +426,7 @@ impl BlockchainSource for ValidatorConnector {
             )),
         }
     }
+
     async fn nonfinalized_listener(
         &self,
     ) -> Result<
@@ -473,7 +474,7 @@ pub(crate) mod test {
     pub(crate) struct MockchainSource {
         blocks: Vec<Arc<Block>>,
         roots: Vec<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>,
-        hashes: Vec<Hash>,
+        hashes: Vec<BlockHash>,
         active_chain_height: Arc<AtomicU32>,
     }
 
@@ -484,7 +485,7 @@ pub(crate) mod test {
         pub(crate) fn new(
             blocks: Vec<Arc<Block>>,
             roots: Vec<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>,
-            hashes: Vec<Hash>,
+            hashes: Vec<BlockHash>,
         ) -> Self {
             assert!(
                 blocks.len() == roots.len() && roots.len() == hashes.len(),
@@ -513,7 +514,7 @@ pub(crate) mod test {
         pub(crate) fn new_with_active_height(
             blocks: Vec<Arc<Block>>,
             roots: Vec<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>,
-            hashes: Vec<Hash>,
+            hashes: Vec<BlockHash>,
             active_chain_height: u32,
         ) -> Self {
             assert!(blocks.len() == roots.len() && roots.len() == hashes.len());
@@ -607,7 +608,7 @@ pub(crate) mod test {
 
         async fn get_commitment_tree_roots(
             &self,
-            id: Hash,
+            id: BlockHash,
         ) -> BlockchainSourceResult<(
             Option<(zebra_chain::sapling::tree::Root, u64)>,
             Option<(zebra_chain::orchard::tree::Root, u64)>,
@@ -645,7 +646,7 @@ pub(crate) mod test {
 
         async fn get_transaction(
             &self,
-            txid: Hash,
+            txid: TransactionHash,
         ) -> BlockchainSourceResult<Option<Arc<zebra_chain::transaction::Transaction>>> {
             let zebra_txid: zebra_chain::transaction::Hash =
                 zebra_chain::transaction::Hash::from(txid.0);
