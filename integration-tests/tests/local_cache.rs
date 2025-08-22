@@ -76,6 +76,7 @@ async fn create_test_manager_and_block_cache(
     let block_cache_config = BlockCacheConfig {
         map_capacity: None,
         map_shard_amount: None,
+        db_version: 1,
         db_path: test_manager.data_dir.clone(),
         db_size: None,
         network,

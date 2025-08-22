@@ -103,9 +103,9 @@ pub struct FinalisedState {
     state: Option<ReadStateService>,
     /// LMDB Database Environmant.
     database: Arc<Environment>,
-    /// LMDB Databas containing `<block_height, block_hash>`.
+    /// LMDB Database containing `<block_height, block_hash>`.
     heights_to_hashes: Database,
-    /// LMDB Databas containing `<block_hash, compact_block>`.
+    /// LMDB Database containing `<block_hash, compact_block>`.
     hashes_to_blocks: Database,
     /// Database reader request sender.
     request_sender: tokio::sync::mpsc::Sender<DbRequest>,
@@ -361,7 +361,7 @@ impl FinalisedState {
                                     }
                                 }
                             }
-                            Err(_) => Err(FinalisedStateError::MissingData(format!(
+                            Err(_) => Err(FinalisedStateError::Custom(format!(
                                 "Block {hash_or_height:?} not found in finalised state or validator."
                             ))),
                         }
@@ -616,7 +616,7 @@ impl FinalisedState {
         let hash_bytes: &[u8] = match txn.get(self.heights_to_hashes, &height_key) {
             Ok(bytes) => bytes,
             Err(lmdb::Error::NotFound) => {
-                return Err(FinalisedStateError::MissingData(format!(
+                return Err(FinalisedStateError::Custom(format!(
                     "No hash found for height {height}"
                 )));
             }
@@ -637,9 +637,7 @@ impl FinalisedState {
             let height = DbHeight::from_be_bytes(height_bytes)?;
             Ok(height.0)
         } else {
-            Err(FinalisedStateError::MissingData(
-                "No heights found in LMDB.".to_string(),
-            ))
+            Ok(Height(0))
         }
     }
 

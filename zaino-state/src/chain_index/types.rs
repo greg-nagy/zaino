@@ -22,9 +22,9 @@ use super::encoding::{
 /// Block hash (SHA256d hash of the block header).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub struct Hash(pub [u8; 32]);
+pub struct BlockHash(pub [u8; 32]);
 
-impl Hash {
+impl BlockHash {
     /// Return the hash bytes in big-endian byte-order suitable for printing out byte by byte.
     pub fn bytes_in_display_order(&self) -> [u8; 32] {
         let mut reversed_bytes = self.0;
@@ -32,22 +32,22 @@ impl Hash {
         reversed_bytes
     }
 
-    /// Convert bytes in big-endian byte-order into a [`block::Hash`](crate::Hash).
-    pub fn from_bytes_in_display_order(bytes_in_display_order: &[u8; 32]) -> Hash {
+    /// Convert bytes in big-endian byte-order into a [`self::BlockHash`].
+    pub fn from_bytes_in_display_order(bytes_in_display_order: &[u8; 32]) -> BlockHash {
         let mut internal_byte_order = *bytes_in_display_order;
         internal_byte_order.reverse();
 
-        Hash(internal_byte_order)
+        BlockHash(internal_byte_order)
     }
 }
 
-impl fmt::Display for Hash {
+impl fmt::Display for BlockHash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(&self.encode_hex::<String>())
     }
 }
 
-impl ToHex for &Hash {
+impl ToHex for &BlockHash {
     fn encode_hex<T: FromIterator<char>>(&self) -> T {
         self.bytes_in_display_order().encode_hex()
     }
@@ -57,7 +57,7 @@ impl ToHex for &Hash {
     }
 }
 
-impl ToHex for Hash {
+impl ToHex for BlockHash {
     fn encode_hex<T: FromIterator<char>>(&self) -> T {
         (&self).encode_hex()
     }
@@ -67,7 +67,7 @@ impl ToHex for Hash {
     }
 }
 
-impl FromHex for Hash {
+impl FromHex for BlockHash {
     type Error = <[u8; 32] as FromHex>::Error;
 
     fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, Self::Error> {
@@ -77,44 +77,43 @@ impl FromHex for Hash {
     }
 }
 
-impl From<[u8; 32]> for Hash {
+impl From<[u8; 32]> for BlockHash {
     fn from(bytes: [u8; 32]) -> Self {
-        Hash(bytes)
+        BlockHash(bytes)
     }
 }
 
-impl From<Hash> for [u8; 32] {
-    fn from(hash: Hash) -> Self {
+impl From<BlockHash> for [u8; 32] {
+    fn from(hash: BlockHash) -> Self {
         hash.0
     }
 }
 
-impl From<Hash> for zebra_chain::block::Hash {
-    fn from(h: Hash) -> Self {
-        zebra_chain::block::Hash(h.0)
+impl From<BlockHash> for zebra_chain::block::Hash {
+    fn from(hash: BlockHash) -> Self {
+        zebra_chain::block::Hash(hash.0)
     }
 }
 
-impl From<zebra_chain::block::Hash> for Hash {
-    fn from(h: zebra_chain::block::Hash) -> Self {
-        Hash(h.0)
+impl From<zebra_chain::block::Hash> for BlockHash {
+    fn from(hash: zebra_chain::block::Hash) -> Self {
+        BlockHash(hash.0)
     }
 }
 
-impl From<Hash> for zcash_primitives::block::BlockHash {
-    fn from(h: Hash) -> Self {
-        // Convert to display order (big-endian)
-        zcash_primitives::block::BlockHash(h.bytes_in_display_order())
+impl From<BlockHash> for zcash_primitives::block::BlockHash {
+    fn from(hash: BlockHash) -> Self {
+        zcash_primitives::block::BlockHash(hash.0)
     }
 }
 
-impl From<zcash_primitives::block::BlockHash> for Hash {
-    fn from(h: zcash_primitives::block::BlockHash) -> Self {
-        Hash::from_bytes_in_display_order(&h.0)
+impl From<zcash_primitives::block::BlockHash> for BlockHash {
+    fn from(hash: zcash_primitives::block::BlockHash) -> Self {
+        BlockHash(hash.0)
     }
 }
 
-impl ZainoVersionedSerialise for Hash {
+impl ZainoVersionedSerialise for BlockHash {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
@@ -127,12 +126,129 @@ impl ZainoVersionedSerialise for Hash {
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let bytes = read_fixed_le::<32, _>(r)?;
-        Ok(Hash(bytes))
+        Ok(BlockHash(bytes))
     }
 }
 
 /// Hash = 32-byte body.
-impl FixedEncodedLen for Hash {
+impl FixedEncodedLen for BlockHash {
+    /// 32 bytes, LE
+    const ENCODED_LEN: usize = 32;
+}
+
+/// Transaction hash.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
+pub struct TransactionHash(pub [u8; 32]);
+
+impl TransactionHash {
+    /// Return the hash bytes in big-endian byte-order suitable for printing out byte by byte.
+    pub fn bytes_in_display_order(&self) -> [u8; 32] {
+        let mut reversed_bytes = self.0;
+        reversed_bytes.reverse();
+        reversed_bytes
+    }
+
+    /// Convert bytes in big-endian byte-order into a [`self::TransactionHash`].
+    pub fn from_bytes_in_display_order(bytes_in_display_order: &[u8; 32]) -> TransactionHash {
+        let mut internal_byte_order = *bytes_in_display_order;
+        internal_byte_order.reverse();
+
+        TransactionHash(internal_byte_order)
+    }
+}
+
+impl fmt::Display for TransactionHash {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(&self.encode_hex::<String>())
+    }
+}
+
+impl ToHex for &TransactionHash {
+    fn encode_hex<T: FromIterator<char>>(&self) -> T {
+        self.bytes_in_display_order().encode_hex()
+    }
+
+    fn encode_hex_upper<T: FromIterator<char>>(&self) -> T {
+        self.bytes_in_display_order().encode_hex_upper()
+    }
+}
+
+impl ToHex for TransactionHash {
+    fn encode_hex<T: FromIterator<char>>(&self) -> T {
+        (&self).encode_hex()
+    }
+
+    fn encode_hex_upper<T: FromIterator<char>>(&self) -> T {
+        (&self).encode_hex_upper()
+    }
+}
+
+impl FromHex for TransactionHash {
+    type Error = <[u8; 32] as FromHex>::Error;
+
+    fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, Self::Error> {
+        let hash = <[u8; 32]>::from_hex(hex)?;
+
+        Ok(Self::from_bytes_in_display_order(&hash))
+    }
+}
+
+impl From<[u8; 32]> for TransactionHash {
+    fn from(bytes: [u8; 32]) -> Self {
+        TransactionHash(bytes)
+    }
+}
+
+impl From<TransactionHash> for [u8; 32] {
+    fn from(hash: TransactionHash) -> Self {
+        hash.0
+    }
+}
+
+impl From<TransactionHash> for zebra_chain::transaction::Hash {
+    fn from(hash: TransactionHash) -> Self {
+        zebra_chain::transaction::Hash(hash.0)
+    }
+}
+
+impl From<zebra_chain::transaction::Hash> for TransactionHash {
+    fn from(hash: zebra_chain::transaction::Hash) -> Self {
+        TransactionHash(hash.0)
+    }
+}
+
+impl From<TransactionHash> for zcash_primitives::transaction::TxId {
+    fn from(hash: TransactionHash) -> Self {
+        zcash_primitives::transaction::TxId::from_bytes(hash.0)
+    }
+}
+
+impl From<zcash_primitives::transaction::TxId> for TransactionHash {
+    fn from(hash: zcash_primitives::transaction::TxId) -> Self {
+        TransactionHash(hash.into())
+    }
+}
+
+impl ZainoVersionedSerialise for TransactionHash {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        write_fixed_le::<32, _>(w, &self.0)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        let bytes = read_fixed_le::<32, _>(r)?;
+        Ok(TransactionHash(bytes))
+    }
+}
+
+/// Hash = 32-byte body.
+impl FixedEncodedLen for TransactionHash {
     /// 32 bytes, LE
     const ENCODED_LEN: usize = 32;
 }
@@ -144,6 +260,9 @@ impl FixedEncodedLen for Hash {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct Height(pub(crate) u32);
+
+/// The first block
+pub const GENESIS_HEIGHT: Height = Height(0);
 
 impl TryFrom<u32> for Height {
     type Error = &'static str;
@@ -253,9 +372,9 @@ impl FixedEncodedLen for Height {
 /// for keys in Lexicographically sorted B-Tree.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub struct Index(pub u32);
+pub struct ShardIndex(pub u32);
 
-impl ZainoVersionedSerialise for Index {
+impl ZainoVersionedSerialise for ShardIndex {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
@@ -269,12 +388,12 @@ impl ZainoVersionedSerialise for Index {
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let raw = read_u32_be(r)?;
-        Ok(Index(raw))
+        Ok(ShardIndex(raw))
     }
 }
 
 /// Index = 4-byte big-endian body.
-impl FixedEncodedLen for Index {
+impl FixedEncodedLen for ShardIndex {
     /// 4 bytes (BE u32)
     const ENCODED_LEN: usize = 4;
 }
@@ -425,7 +544,7 @@ impl Outpoint {
 
     /// Build from a *display-order* txid.
     pub fn new_from_be(txid_be: &[u8; 32], index: u32) -> Self {
-        let le = Hash::from_bytes_in_display_order(txid_be).0;
+        let le = TransactionHash::from_bytes_in_display_order(txid_be).0;
         Self::new(le, index)
     }
 
@@ -474,9 +593,9 @@ impl FixedEncodedLen for Outpoint {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct BlockIndex {
     /// The hash identifying this block uniquely.
-    pub(super) hash: Hash,
+    pub(super) hash: BlockHash,
     /// The hash of this block's parent block (previous block in chain).
-    pub(super) parent_hash: Hash,
+    pub(super) parent_hash: BlockHash,
     /// The cumulative proof-of-work of the blockchain up to this block, used for chain selection.
     pub(super) chainwork: ChainWork,
     /// The height of this block if it's in the current best chain. None if it's part of a fork.
@@ -486,8 +605,8 @@ pub struct BlockIndex {
 impl BlockIndex {
     /// Constructs a new `BlockIndex`.
     pub fn new(
-        hash: Hash,
-        parent_hash: Hash,
+        hash: BlockHash,
+        parent_hash: BlockHash,
         chainwork: ChainWork,
         height: Option<Height>,
     ) -> Self {
@@ -500,12 +619,12 @@ impl BlockIndex {
     }
 
     /// Returns the hash of this block.
-    pub fn hash(&self) -> &Hash {
+    pub fn hash(&self) -> &BlockHash {
         &self.hash
     }
 
     /// Returns the hash of the parent block.
-    pub fn parent_hash(&self) -> &Hash {
+    pub fn parent_hash(&self) -> &BlockHash {
         &self.parent_hash
     }
 
@@ -544,8 +663,8 @@ impl ZainoVersionedSerialise for BlockIndex {
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
-        let hash = Hash::deserialize(&mut r)?;
-        let parent_hash = Hash::deserialize(&mut r)?;
+        let hash = BlockHash::deserialize(&mut r)?;
+        let parent_hash = BlockHash::deserialize(&mut r)?;
         let chainwork = ChainWork::deserialize(&mut r)?;
         let height = read_option(&mut r, |r| Height::deserialize(r))?;
 
@@ -649,7 +768,7 @@ pub struct BlockData {
     /// Compact difficulty target used for proof-of-work and difficulty calculation.
     pub(super) bits: u32,
     /// Equihash nonse.
-    pub(super) nonse: [u8; 32],
+    pub(super) nonce: [u8; 32],
     /// Equihash solution
     pub(super) solution: EquihashSolution,
 }
@@ -672,7 +791,7 @@ impl BlockData {
             merkle_root,
             block_commitments,
             bits,
-            nonse,
+            nonce: nonse,
             solution,
         }
     }
@@ -747,7 +866,7 @@ impl BlockData {
 
     /// Returns Equihash Nonse.
     pub fn nonse(&self) -> [u8; 32] {
-        self.nonse
+        self.nonce
     }
 
     /// Returns Equihash Nonse.
@@ -769,7 +888,7 @@ impl ZainoVersionedSerialise for BlockData {
         write_fixed_le::<32, _>(&mut w, &self.block_commitments)?;
 
         write_u32_le(&mut w, self.bits)?;
-        write_fixed_le::<32, _>(&mut w, &self.nonse)?;
+        write_fixed_le::<32, _>(&mut w, &self.nonce)?;
 
         self.solution.serialize(&mut w)
     }
@@ -1125,7 +1244,7 @@ impl ChainBlock {
     }
 
     /// Returns the block hash.
-    pub fn hash(&self) -> &Hash {
+    pub fn hash(&self) -> &BlockHash {
         self.index.hash()
     }
 
@@ -1160,7 +1279,17 @@ impl ChainBlock {
         let vtx: Vec<zaino_proto::proto::compact_formats::CompactTx> = self
             .transactions()
             .iter()
-            .map(|tx| tx.to_compact_tx(None))
+            .filter_map(|tx| {
+                let has_shielded = !tx.sapling().spends().is_empty()
+                    || !tx.sapling().outputs().is_empty()
+                    || !tx.orchard().actions().is_empty();
+
+                if !has_shielded {
+                    return None;
+                }
+
+                Some(tx.to_compact_tx(None))
+            })
             .collect();
 
         let sapling_commitment_tree_size = self.commitment_tree_data().sizes().sapling();
@@ -1172,7 +1301,6 @@ impl ChainBlock {
             hash,
             prev_hash,
             time: self.data().time() as u32,
-            // Header not currently used by CompactBlocks.
             header: vec![],
             vtx,
             chain_metadata: Some(zaino_proto::proto::compact_formats::ChainMetadata {
@@ -1311,13 +1439,205 @@ impl
 
         // --- Final index and block data ---
         let index = BlockIndex::new(
-            Hash::from(hash),
-            Hash::from(parent_hash),
+            BlockHash::from(hash),
+            BlockHash::from(parent_hash),
             chainwork,
             Some(height),
         );
 
         Ok(ChainBlock::new(index, block_data, tx, commitment_tree_data))
+    }
+}
+
+impl
+    TryFrom<(
+        &zebra_chain::block::Block,
+        zebra_chain::sapling::tree::Root,
+        u32,
+        zebra_chain::orchard::tree::Root,
+        u32,
+        &ChainWork,
+        &zebra_chain::parameters::Network,
+    )> for ChainBlock
+{
+    // TODO: update error type.
+    type Error = String;
+
+    fn try_from(
+        (
+            block,
+            sapling_root,
+            sapling_root_size,
+            orchard_root,
+            orchard_root_size,
+            parent_chain_work,
+            network,
+        ): (
+            &zebra_chain::block::Block,
+            zebra_chain::sapling::tree::Root,
+            u32,
+            zebra_chain::orchard::tree::Root,
+            u32,
+            &ChainWork,
+            &zebra_chain::parameters::Network,
+        ),
+    ) -> Result<Self, Self::Error> {
+        let data = BlockData {
+            version: block.header.version,
+            time: block.header.time.timestamp(),
+            merkle_root: block.header.merkle_root.0,
+            bits: u32::from_be_bytes(block.header.difficulty_threshold.bytes_in_display_order()),
+            block_commitments: match block
+                .commitment(network)
+                .map_err(|_| "Block commitment could not be computed".to_string())?
+            {
+                zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
+                zebra_chain::block::Commitment::FinalSaplingRoot(root) => root.into(),
+                zebra_chain::block::Commitment::ChainHistoryActivationReserved => [0; 32],
+                zebra_chain::block::Commitment::ChainHistoryRoot(chain_history_mmr_root_hash) => {
+                    chain_history_mmr_root_hash.bytes_in_serialized_order()
+                }
+                zebra_chain::block::Commitment::ChainHistoryBlockTxAuthCommitment(
+                    chain_history_block_tx_auth_commitment_hash,
+                ) => chain_history_block_tx_auth_commitment_hash.bytes_in_serialized_order(),
+            },
+
+            nonce: *block.header.nonce,
+            solution: block.header.solution.into(),
+        };
+
+        let mut transactions = Vec::new();
+        for (i, txn) in block.transactions.iter().enumerate() {
+            let inputs: Vec<TxInCompact> = txn
+                .inputs()
+                .iter()
+                .map(|input| match input.outpoint() {
+                    Some(outpoint) => TxInCompact::new(outpoint.hash.0, outpoint.index),
+                    None => TxInCompact::null_prevout(),
+                })
+                .collect();
+
+            let outputs = txn
+                .outputs()
+                .iter()
+                .map(|output| {
+                    let value = u64::from(output.value);
+                    let script_bytes = output.lock_script.as_raw_bytes();
+
+                    let addr = AddrScript::from_script(script_bytes).unwrap_or_else(|| {
+                        let mut fallback = [0u8; 20];
+                        let usable = script_bytes.len().min(20);
+                        fallback[..usable].copy_from_slice(&script_bytes[..usable]);
+                        AddrScript::new(fallback, ScriptType::NonStandard as u8)
+                    });
+
+                    TxOutCompact::new(value, *addr.hash(), addr.script_type())
+                        .ok_or_else(|| "TxOutCompact conversion failed".to_string())
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let transparent = TransparentCompactTx::new(inputs, outputs);
+
+            let sapling_value = {
+                let val = txn.sapling_value_balance().sapling_amount();
+                if val == 0 {
+                    None
+                } else {
+                    Some(i64::from(val))
+                }
+            };
+            let sapling = SaplingCompactTx::new(
+                sapling_value,
+                txn.sapling_nullifiers()
+                    .map(|nf| CompactSaplingSpend::new(*nf.0))
+                    .collect(),
+                txn.sapling_outputs()
+                    .map(|output| {
+                        let cipher: [u8; 52] = <[u8; 580]>::from(output.enc_ciphertext)[..52]
+                            .try_into()
+                            // This unwrap is unnecessary, but to remove it one would need to write
+                            // a new array of [input[0], input[1]..] and enumerate all 52 elements
+                            //
+                            // This would be uglier than the unwrap
+                            .unwrap();
+                        CompactSaplingOutput::new(
+                            output.cm_u.to_bytes(),
+                            <[u8; 32]>::from(output.ephemeral_key),
+                            cipher,
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            );
+
+            let orchard_value = {
+                let val = txn.orchard_value_balance().orchard_amount();
+                if val == 0 {
+                    None
+                } else {
+                    Some(i64::from(val))
+                }
+            };
+            let orchard = OrchardCompactTx::new(
+                orchard_value,
+                txn.orchard_actions()
+                    .map(|action| {
+                        let cipher: [u8; 52] = <[u8; 580]>::from(action.enc_ciphertext)[..52]
+                            .try_into()
+                            // This unwrap is unnecessary, but to remove it one would need to write
+                            // a new array of [input[0], input[1]..] and enumerate all 52 elements
+                            //
+                            // This would be uglier than the unwrap
+                            .unwrap();
+                        CompactOrchardAction::new(
+                            <[u8; 32]>::from(action.nullifier),
+                            <[u8; 32]>::from(action.cm_x),
+                            <[u8; 32]>::from(action.ephemeral_key),
+                            cipher,
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            );
+
+            let txdata =
+                CompactTxData::new(i as u64, txn.hash().into(), transparent, sapling, orchard);
+            transactions.push(txdata);
+        }
+
+        let hash = BlockHash::from(block.hash());
+        let parent_hash = BlockHash::from(block.header.previous_block_hash);
+
+        let height = block.coinbase_height().map(|height| Height(height.0));
+
+        let block_work = block.header.difficulty_threshold.to_work().ok_or_else(|| {
+            "Failed to calculate block work from difficulty threshold".to_string()
+        })?;
+        let chainwork = parent_chain_work.add(&ChainWork::from(U256::from(block_work.as_u128())));
+
+        let index = BlockIndex {
+            hash,
+            parent_hash,
+            chainwork,
+            height,
+        };
+
+        let commitment_tree_roots = CommitmentTreeRoots::new(
+            <[u8; 32]>::from(sapling_root),
+            <[u8; 32]>::from(orchard_root),
+        );
+
+        let commitment_tree_size = CommitmentTreeSizes::new(sapling_root_size, orchard_root_size);
+
+        let commitment_tree_data =
+            CommitmentTreeData::new(commitment_tree_roots, commitment_tree_size);
+
+        let chainblock = ChainBlock {
+            index,
+            data,
+            transactions,
+            commitment_tree_data,
+        };
+
+        Ok(chainblock)
     }
 }
 
@@ -1355,7 +1675,7 @@ pub struct CompactTxData {
     /// The index (position) of this transaction within its block (0-based).
     index: u64,
     /// Unique identifier (hash) of the transaction, used for lookup and indexing.
-    txid: [u8; 32],
+    txid: TransactionHash,
     /// Compact representation of transparent inputs/outputs in the transaction.
     transparent: TransparentCompactTx,
     /// Compact representation of Sapling shielded data.
@@ -1368,7 +1688,7 @@ impl CompactTxData {
     /// Creates a new TxData instance.
     pub fn new(
         index: u64,
-        txid: [u8; 32],
+        txid: TransactionHash,
         transparent: TransparentCompactTx,
         sapling: SaplingCompactTx,
         orchard: OrchardCompactTx,
@@ -1388,7 +1708,7 @@ impl CompactTxData {
     }
 
     /// Returns transaction ID.
-    pub fn txid(&self) -> &[u8; 32] {
+    pub fn txid(&self) -> &TransactionHash {
         &self.txid
     }
 
@@ -1459,7 +1779,7 @@ impl CompactTxData {
 
         zaino_proto::proto::compact_formats::CompactTx {
             index: self.index(),
-            hash: self.txid().to_vec(),
+            hash: self.txid().bytes_in_display_order().to_vec(),
             fee,
             spends,
             outputs,
@@ -1478,6 +1798,7 @@ impl TryFrom<(u64, zaino_fetch::chain::transaction::FullTransaction)> for Compac
         (index, tx): (u64, zaino_fetch::chain::transaction::FullTransaction),
     ) -> Result<Self, Self::Error> {
         let txid_vec = tx.tx_id();
+        // NOTE: Is this byte order correct?
         let txid: [u8; 32] = txid_vec
             .try_into()
             .map_err(|_| "txid must be 32 bytes".to_string())?;
@@ -1572,7 +1893,8 @@ impl TryFrom<(u64, zaino_fetch::chain::transaction::FullTransaction)> for Compac
 
         Ok(CompactTxData::new(
             index,
-            txid,
+            // NOTE: do we need to use from_bytes_in_display_order here?
+            txid.into(),
             transparent,
             sapling,
             orchard,
@@ -1586,8 +1908,7 @@ impl ZainoVersionedSerialise for CompactTxData {
     fn encode_body<W: Write>(&self, mut w: &mut W) -> io::Result<()> {
         write_u64_le(&mut w, self.index)?;
 
-        write_fixed_le::<32, _>(&mut w, &self.txid)?;
-
+        self.txid.serialize(&mut w)?;
         self.transparent.serialize(&mut w)?;
         self.sapling.serialize(&mut w)?;
         self.orchard.serialize(&mut w)
@@ -1600,8 +1921,8 @@ impl ZainoVersionedSerialise for CompactTxData {
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut r = r;
         let index = read_u64_le(&mut r)?;
-        let txid = read_fixed_le::<32, _>(&mut r)?;
 
+        let txid = TransactionHash::deserialize(&mut r)?;
         let transparent = TransparentCompactTx::deserialize(&mut r)?;
         let sapling = SaplingCompactTx::deserialize(&mut r)?;
         let orchard = OrchardCompactTx::deserialize(&mut r)?;
@@ -1683,6 +2004,14 @@ impl TxInCompact {
         Self {
             prevout_txid,
             prevout_index,
+        }
+    }
+
+    /// Constructs a canonical "null prevout" (coinbase marker).
+    pub fn null_prevout() -> Self {
+        Self {
+            prevout_txid: [0u8; 32],
+            prevout_index: u32::MAX,
         }
     }
 
@@ -1897,17 +2226,21 @@ impl TxOutCompact {
 impl<T: AsRef<[u8]>> TryFrom<(u64, T)> for TxOutCompact {
     type Error = ();
 
-    fn try_from((value, script_hash): (u64, T)) -> Result<Self, Self::Error> {
-        let script_hash_ref = script_hash.as_ref();
-        if script_hash_ref.len() == 21 {
-            let script_type = script_hash_ref[0];
+    fn try_from((value, script): (u64, T)) -> Result<Self, Self::Error> {
+        let script_bytes = script.as_ref();
+
+        if let Some(addr) = AddrScript::from_script(script_bytes) {
+            TxOutCompact::new(value, *addr.hash(), addr.script_type()).ok_or(())
+        } else if script_bytes.len() == 21 {
+            let script_type = script_bytes[0];
             let mut hash_bytes = [0u8; 20];
-            hash_bytes.copy_from_slice(&script_hash_ref[1..]);
+            hash_bytes.copy_from_slice(&script_bytes[1..]);
             TxOutCompact::new(value, hash_bytes, script_type).ok_or(())
         } else {
+            // fallback for nonstandard scripts
             let mut fallback = [0u8; 20];
-            let usable_len = script_hash_ref.len().min(20);
-            fallback[..usable_len].copy_from_slice(&script_hash_ref[..usable_len]);
+            let usable_len = script_bytes.len().min(20);
+            fallback[..usable_len].copy_from_slice(&script_bytes[..usable_len]);
             TxOutCompact::new(value, fallback, ScriptType::NonStandard as u8).ok_or(())
         }
     }
@@ -2661,18 +2994,18 @@ impl ZainoVersionedSerialise for BlockHeaderData {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct TxidList {
     /// Txids.
-    tx: Vec<Hash>,
+    txids: Vec<TransactionHash>,
 }
 
 impl TxidList {
     /// Creates a new `TxidList`.
-    pub fn new(tx: Vec<Hash>) -> Self {
-        Self { tx }
+    pub fn new(tx: Vec<TransactionHash>) -> Self {
+        Self { txids: tx }
     }
 
     /// Returns a slice of the contained txids.
-    pub fn tx(&self) -> &[Hash] {
-        &self.tx
+    pub fn txids(&self) -> &[TransactionHash] {
+        &self.txids
     }
 }
 
@@ -2680,7 +3013,7 @@ impl ZainoVersionedSerialise for TxidList {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        write_vec(w, &self.tx, |w, h| h.serialize(w))
+        write_vec(w, &self.txids, |w, h| h.serialize(w))
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
@@ -2688,7 +3021,7 @@ impl ZainoVersionedSerialise for TxidList {
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        let tx = read_vec(r, |r| Hash::deserialize(r))?;
+        let tx = read_vec(r, |r| TransactionHash::deserialize(r))?;
         Ok(TxidList::new(tx))
     }
 }
