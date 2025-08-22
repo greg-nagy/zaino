@@ -298,20 +298,20 @@ impl BlockchainSource for ValidatorConnector {
                 let mut read_state_service = read_state_service.clone();
                 let mempool_fetcher = mempool_fetcher.clone();
 
-                let txid_tr: zebra_chain::transaction::Hash =
+                let zebra_txid: zebra_chain::transaction::Hash =
                     zebra_chain::transaction::Hash::from(txid.0);
 
-                let resp = read_state_service
+                let response = read_state_service
                     .ready()
-                    .and_then(|svc| svc.call(zebra_state::ReadRequest::Transaction(txid_tr)))
+                    .and_then(|svc| svc.call(zebra_state::ReadRequest::Transaction(zebra_txid)))
                     .await
                     .map_err(|e| {
                         BlockchainSourceError::Unrecoverable(format!("state read failed: {e}"))
                     })?;
 
-                if let zebra_state::ReadResponse::Transaction(opt) = resp {
-                    if let Some(found) = opt {
-                        return Ok(Some((found).tx.clone()));
+                if let zebra_state::ReadResponse::Transaction(opt) = response {
+                    if let Some(mined_tx) = opt {
+                        return Ok(Some((mined_tx).tx.clone()));
                     }
                 } else {
                     unreachable!("unmatched response to a `Transaction` read request");
@@ -324,11 +324,11 @@ impl BlockchainSource for ValidatorConnector {
                     )
                 })?;
 
-                if mempool_txids.contains(&txid_tr) {
+                if mempool_txids.contains(&zebra_txid) {
                     let serialized_transaction = if let GetTransactionResponse::Raw(
                         serialized_transaction,
                     ) = mempool_fetcher
-                        .get_raw_transaction(txid_tr.to_string(), Some(0))
+                        .get_raw_transaction(zebra_txid.to_string(), Some(0))
                         .await
                         .map_err(|e| {
                             BlockchainSourceError::Unrecoverable(format!(
@@ -535,7 +535,7 @@ pub(crate) mod test {
 
         pub(crate) fn mine_blocks(&self, blocks: u32) {
             // len() returns one-indexed length, height is zero-indexed.
-            let max_height = self.blocks.len().saturating_sub(1) as u32;
+            let max_height = self.max_chain_height();
             let _ = self.active_chain_height.fetch_update(
                 Ordering::SeqCst,
                 Ordering::SeqCst,
@@ -654,7 +654,7 @@ pub(crate) mod test {
             let mempool_height = active_chain_height + 1;
 
             for height in 0..=active_chain_height {
-                if height >= self.blocks.len() {
+                if height > self.max_chain_height() as usize {
                     break;
                 }
                 if let Some(found) = self.blocks[height]
