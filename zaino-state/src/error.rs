@@ -1,6 +1,6 @@
 //! Holds error types for Zaino-state.
 
-use crate::Hash;
+use crate::BlockHash;
 
 use std::{any::type_name, fmt::Display};
 
@@ -258,6 +258,10 @@ pub enum MempoolError {
     #[error("JsonRpcConnector error: {0}")]
     JsonRpcConnectorError(#[from] zaino_fetch::jsonrpsee::error::TransportError),
 
+    /// Errors originating from the BlockchainSource in use.
+    #[error("blockchain source error: {0}")]
+    BlockchainSourceError(#[from] crate::chain_index::source::BlockchainSourceError),
+
     /// Error from a Tokio Watch Receiver.
     #[error("Join error: {0}")]
     WatchRecvError(#[from] tokio::sync::watch::error::RecvError),
@@ -424,7 +428,7 @@ pub enum FinalisedStateError {
     #[error("invalid block @ height {height} (hash {hash}): {reason}")]
     InvalidBlock {
         height: u32,
-        hash: Hash,
+        hash: BlockHash,
         reason: String,
     },
 

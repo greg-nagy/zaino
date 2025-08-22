@@ -22,7 +22,7 @@ use crate::{
     chain_index::{source::BlockchainSourceError, types::GENESIS_HEIGHT},
     config::BlockCacheConfig,
     error::FinalisedStateError,
-    ChainBlock, ChainWork, Hash, Height, StatusType,
+    BlockHash, ChainBlock, ChainWork, Height, StatusType,
 };
 
 use std::{sync::Arc, time::Duration};
@@ -248,7 +248,7 @@ impl ZainoDB {
                 }
             };
 
-            let block_hash = Hash::from(block.hash().0);
+            let block_hash = BlockHash::from(block.hash().0);
 
             let (sapling_root, sapling_size, orchard_root, orchard_size) =
                 match source.get_commitment_tree_roots(block_hash).await? {
@@ -336,7 +336,7 @@ impl ZainoDB {
     /// Returns the block height for the given block hash *if* present in the finalised state.
     pub(crate) async fn get_block_height(
         &self,
-        hash: Hash,
+        hash: BlockHash,
     ) -> Result<Option<Height>, FinalisedStateError> {
         self.db.get_block_height(hash).await
     }
@@ -345,7 +345,7 @@ impl ZainoDB {
     pub(crate) async fn get_block_hash(
         &self,
         height: Height,
-    ) -> Result<Option<Hash>, FinalisedStateError> {
+    ) -> Result<Option<BlockHash>, FinalisedStateError> {
         self.db.get_block_hash(height).await
     }
 

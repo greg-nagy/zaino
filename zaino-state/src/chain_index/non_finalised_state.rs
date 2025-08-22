@@ -1,7 +1,6 @@
-use std::{collections::HashMap, mem, sync::Arc};
-
+use super::{finalised_state::ZainoDB, source::BlockchainSource};
 use crate::{
-    chain_index::types::{self, Hash, Height},
+    chain_index::types::{self, BlockHash, Height, TransactionHash, GENESIS_HEIGHT},
     error::FinalisedStateError,
     BlockData, BlockIndex, ChainBlock, ChainWork, CommitmentTreeData, CommitmentTreeRoots,
     CommitmentTreeSizes, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
@@ -11,11 +10,10 @@ use crate::{
 use arc_swap::ArcSwap;
 use futures::lock::Mutex;
 use primitive_types::U256;
+use std::{collections::HashMap, mem, sync::Arc};
 use tokio::sync::mpsc;
 use zebra_chain::parameters::Network;
 use zebra_state::HashOrHeight;
-
-use super::{finalised_state::ZainoDB, source::BlockchainSource, types::GENESIS_HEIGHT};
 
 /// Holds the block cache
 pub struct NonFinalizedState<Source: BlockchainSource> {
@@ -46,12 +44,12 @@ pub struct NonfinalizedBlockCacheSnapshot {
     /// this includes all blocks on-chain, as well as
     /// all blocks known to have been on-chain before being
     /// removed by a reorg. Blocks reorged away have no height.
-    pub blocks: HashMap<Hash, ChainBlock>,
+    pub blocks: HashMap<BlockHash, ChainBlock>,
     /// hashes indexed by height
-    pub heights_to_hashes: HashMap<Height, Hash>,
+    pub heights_to_hashes: HashMap<Height, BlockHash>,
     // Do we need height here?
     /// The highest known block
-    pub best_tip: (Height, Hash),
+    pub best_tip: (Height, BlockHash),
 }
 
 #[derive(Debug)]
@@ -254,7 +252,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
 
                     let txdata = CompactTxData::new(
                         i as u64,
-                        trnsctn.hash().0,
+                        TransactionHash(trnsctn.hash().0),
                         transparent,
                         sapling,
                         orchard,
@@ -263,8 +261,8 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 }
 
                 let height = Some(GENESIS_HEIGHT);
-                let hash = Hash::from(genesis_block.hash());
-                let parent_hash = Hash::from(genesis_block.header.previous_block_hash);
+                let hash = BlockHash::from(genesis_block.hash());
+                let parent_hash = BlockHash::from(genesis_block.header.previous_block_hash);
                 let chainwork = ChainWork::from(U256::from(
                     genesis_block
                         .header
@@ -366,7 +364,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         {
             dbg!("syncing block", best_tip.0 + 1);
             // If this block is next in the chain, we sync it as normal
-            let parent_hash = Hash::from(block.header.previous_block_hash);
+            let parent_hash = BlockHash::from(block.header.previous_block_hash);
             if parent_hash == best_tip.1 {
                 let prev_block = match new_blocks.last() {
                     Some(block) => block,
@@ -435,7 +433,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                             .current
                             .load()
                             .blocks
-                            .contains_key(&types::Hash(hash.0))
+                            .contains_key(&types::BlockHash(hash.0))
                         {
                             nonbest_blocks.insert(block.hash(), block);
                         }
@@ -456,7 +454,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 .into_iter()
                 .map(|(hash, block)| {
                     let prev_hash =
-                        crate::chain_index::types::Hash(block.header.previous_block_hash.0);
+                        crate::chain_index::types::BlockHash(block.header.previous_block_hash.0);
                     (
                         hash,
                         block,
@@ -530,7 +528,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
     }
     /// Add all blocks from the staging area, and save a new cache snapshot
     pub(crate) async fn update(&self, finalized_db: Arc<ZainoDB>) -> Result<(), UpdateError> {
-        let mut new = HashMap::<Hash, ChainBlock>::new();
+        let mut new = HashMap::<BlockHash, ChainBlock>::new();
         let mut staged = self.staged.lock().await;
         loop {
             match staged.try_recv() {
@@ -559,7 +557,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
             .await
             .map_err(|_e| UpdateError::FinalizedStateCorruption)?
             .unwrap_or(Height(0));
-        let (newly_finalized, blocks): (HashMap<_, _>, HashMap<Hash, _>) = new
+        let (newly_finalized, blocks): (HashMap<_, _>, HashMap<BlockHash, _>) = new
             .into_iter()
             .partition(|(_hash, block)| match block.index().height() {
                 Some(height) => height < finalized_height,

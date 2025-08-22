@@ -53,7 +53,7 @@ mod chain_query_interface {
             chain_index::{self, ChainIndex},
             BlockCacheConfig,
         },
-        chain_index::{source::ValidatorConnector, types::GENESIS_HEIGHT, NodeBackedChainIndex},
+        chain_index::{source::ValidatorConnector, types::TransactionHash, NodeBackedChainIndex},
         Height, StateService, StateServiceConfig, ZcashService as _,
     };
     use zebra_chain::serialization::{ZcashDeserialize, ZcashDeserializeInto};
@@ -68,7 +68,7 @@ mod chain_query_interface {
         zaino_no_db: bool,
         enable_clients: bool,
     ) -> (TestManager, StateService, NodeBackedChainIndex) {
-        let (test_manager, _json_service) = create_test_manager_and_connector(
+        let (test_manager, json_service) = create_test_manager_and_connector(
             validator,
             chain_cache.clone(),
             enable_zaino,
@@ -160,7 +160,10 @@ mod chain_query_interface {
             no_db: false,
         };
         let chain_index = NodeBackedChainIndex::new(
-            ValidatorConnector::State(state_service.read_state_service().clone()),
+            ValidatorConnector::State(chain_index::source::State {
+                read_state_service: state_service.read_state_service().clone(),
+                mempool_fetcher: json_service,
+            }),
             config,
         )
         .await
@@ -209,6 +212,7 @@ mod chain_query_interface {
             );
         }
     }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn find_fork_point() {
         let (test_manager, _json_service, chain_index) = create_test_manager_and_chain_index(
@@ -238,6 +242,7 @@ mod chain_query_interface {
             )
         }
     }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_raw_transaction() {
         let (test_manager, _json_service, chain_index) = create_test_manager_and_chain_index(
@@ -257,43 +262,23 @@ mod chain_query_interface {
         for txid in snapshot
             .blocks
             .values()
-            .flat_map(|block| block.transactions().iter().map(|txdata| txdata.txid()))
+            .flat_map(|block| block.transactions().iter().map(|txdata| txdata.txid().0))
         {
-            // FIX / TODO: this is required as chainblock currently holds txids in BE byte order,
-            // this has been fixed in #481 and so this reverse should be removed in that RP.
-            let mut be_txid = *txid;
-            be_txid.reverse();
-
             let raw_transaction = chain_index
-                .get_raw_transaction(&snapshot, be_txid)
+                .get_raw_transaction(&snapshot, &TransactionHash(txid))
                 .await
                 .unwrap()
                 .unwrap();
-
             let zebra_txn =
                 zebra_chain::transaction::Transaction::zcash_deserialize(&raw_transaction[..])
                     .unwrap();
 
-            let mut correct_txid = zebra_txn.hash().0;
+            let correct_txid = zebra_txn.hash().0;
 
-            // For an unknown reason the genesis block coinbase transaction txid is in in the
-            // opposite byte order to all other transactions. TODO: explore..
-            if let Some(height) = chain_index
-                .get_transaction_status(&snapshot, be_txid)
-                .await
-                .unwrap()
-                .values()
-                .flatten()
-                .next()
-            {
-                if height == &GENESIS_HEIGHT {
-                    correct_txid.reverse();
-                }
-            }
-
-            assert_eq!(be_txid, correct_txid);
+            assert_eq!(txid, correct_txid);
         }
     }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_transaction_status() {
         let (test_manager, _json_service, chain_index) = create_test_manager_and_chain_index(
@@ -318,15 +303,10 @@ mod chain_query_interface {
             block
                 .transactions()
                 .iter()
-                .map(|txdata| (txdata.txid(), block.height(), block.hash()))
+                .map(|txdata| (txdata.txid().0, block.height(), block.hash()))
         }) {
-            // FIX / TODO: this is required as chainblock currently holds txids in BE byte order,
-            // this has been fixed in #481 and so this reverse should be removed in that RP.
-            let mut be_txid = *txid;
-            be_txid.reverse();
-
             let transaction_status = chain_index
-                .get_transaction_status(&snapshot, be_txid)
+                .get_transaction_status(&snapshot, &TransactionHash(txid))
                 .await
                 .unwrap();
             assert_eq!(1, transaction_status.len());

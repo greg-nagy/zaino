@@ -43,7 +43,7 @@ impl DbRead for DbV0 {
 
     async fn get_block_height(
         &self,
-        hash: crate::Hash,
+        hash: crate::BlockHash,
     ) -> Result<Option<Height>, FinalisedStateError> {
         match self.get_block_height_by_hash(hash).await {
             Ok(height) => Ok(Some(height)),
@@ -58,7 +58,7 @@ impl DbRead for DbV0 {
     async fn get_block_hash(
         &self,
         height: crate::Height,
-    ) -> Result<Option<crate::Hash>, FinalisedStateError> {
+    ) -> Result<Option<crate::BlockHash>, FinalisedStateError> {
         match self.get_block_hash_by_height(height).await {
             Ok(hash) => Ok(Some(hash)),
             Err(
@@ -617,7 +617,7 @@ impl DbV0 {
     /// Fetch the block height in the main chain for a given block hash.
     async fn get_block_height_by_hash(
         &self,
-        hash: crate::Hash,
+        hash: crate::BlockHash,
     ) -> Result<crate::Height, FinalisedStateError> {
         let zebra_hash: ZebraHash = zebra_chain::block::Hash::from(hash);
         let hash_key = serde_json::to_vec(&DbHash(zebra_hash))?;
@@ -636,7 +636,7 @@ impl DbV0 {
     async fn get_block_hash_by_height(
         &self,
         height: crate::Height,
-    ) -> Result<crate::Hash, FinalisedStateError> {
+    ) -> Result<crate::BlockHash, FinalisedStateError> {
         let zebra_height: ZebraHeight = height.into();
         let height_key = DbHeight(zebra_height).to_be_bytes();
 
@@ -646,7 +646,7 @@ impl DbV0 {
             let hash_bytes: &[u8] = txn.get(self.heights_to_hashes, &height_key)?;
             let db_hash: DbHash = serde_json::from_slice(hash_bytes)?;
 
-            Ok(crate::Hash::from(db_hash.0))
+            Ok(crate::BlockHash::from(db_hash.0))
         })
     }
 
