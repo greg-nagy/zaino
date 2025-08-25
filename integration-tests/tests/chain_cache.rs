@@ -305,13 +305,13 @@ mod chain_query_interface {
                 .iter()
                 .map(|txdata| (txdata.txid().0, block.height(), block.hash()))
         }) {
-            let transaction_status = chain_index
+            let (transaction_status_blocks, _transaction_mempool_status) = chain_index
                 .get_transaction_status(&snapshot, &TransactionHash(txid))
                 .await
                 .unwrap();
-            assert_eq!(1, transaction_status.len());
-            assert_eq!(transaction_status.keys().next().unwrap(), block_hash);
-            assert_eq!(transaction_status.values().next().unwrap(), &height)
+            assert_eq!(1, transaction_status_blocks.len());
+            assert_eq!(transaction_status_blocks.keys().next().unwrap(), block_hash);
+            assert_eq!(transaction_status_blocks.values().next().unwrap(), &height)
         }
     }
 }

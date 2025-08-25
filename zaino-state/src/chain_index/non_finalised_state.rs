@@ -111,6 +111,9 @@ pub enum InitError {
     /// the connected node returned garbage data
     InvalidNodeData(Box<dyn std::error::Error + Send + Sync + 'static>),
     #[error(transparent)]
+    /// The mempool state failed to initialize
+    MempoolInitialzationError(#[from] crate::error::MempoolError),
+    #[error(transparent)]
     /// The finalized state failed to initialize
     FinalisedStateInitialzationError(#[from] FinalisedStateError),
     /// the initial block provided was not on the best chain

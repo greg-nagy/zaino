@@ -202,15 +202,15 @@ mod mockchain_tests {
         {
             let expected_txid = expected_transaction.hash();
 
-            let tx_status = indexer
+            let (tx_status_blocks, _tx_mempool_status) = indexer
                 .get_transaction_status(
                     &nonfinalized_snapshot,
                     &TransactionHash::from(expected_txid),
                 )
                 .await
                 .unwrap();
-            assert_eq!(tx_status.len(), 1);
-            let (hash, height) = tx_status.iter().next().unwrap();
+            assert_eq!(tx_status_blocks.len(), 1);
+            let (hash, height) = tx_status_blocks.iter().next().unwrap();
             assert_eq!(hash.0, block_hash.0);
             assert_eq!(height.unwrap().0, block_height.unwrap().0);
         }
