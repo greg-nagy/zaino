@@ -28,14 +28,18 @@ mod mockchain_tests {
         bench::BlockCacheConfig,
         chain_index::{
             source::test::MockchainSource,
-            tests::vectors::{build_mockchain_source, load_test_vectors},
+            tests::vectors::{
+                build_active_mockchain_source, build_mockchain_source, load_test_vectors,
+            },
             types::TransactionHash,
             ChainIndex, NodeBackedChainIndex,
         },
         ChainBlock, ChainWork,
     };
 
-    async fn load_test_vectors_and_sync_chain_index() -> (
+    async fn load_test_vectors_and_sync_chain_index(
+        active_mockchain_source: bool,
+    ) -> (
         Vec<(
             u32,
             ChainBlock,
@@ -49,10 +53,16 @@ mod mockchain_tests {
             ),
         )>,
         NodeBackedChainIndex<MockchainSource>,
+        MockchainSource,
     ) {
         let (blocks, _faucet, _recipient) = load_test_vectors().unwrap();
 
-        let source = build_mockchain_source(blocks.clone());
+        let source = if active_mockchain_source {
+            build_active_mockchain_source(blocks.clone())
+        } else {
+            build_mockchain_source(blocks.clone())
+        };
+
         let temp_dir: TempDir = tempfile::tempdir().unwrap();
         let db_path: PathBuf = temp_dir.path().to_path_buf();
 
@@ -81,7 +91,9 @@ mod mockchain_tests {
             no_db: false,
         };
 
-        let indexer = NodeBackedChainIndex::new(source, config).await.unwrap();
+        let indexer = NodeBackedChainIndex::new(source.clone(), config)
+            .await
+            .unwrap();
 
         let mut parent_chain_work = ChainWork::from_u256(0.into());
 
@@ -135,12 +147,12 @@ mod mockchain_tests {
             indexer.finalized_db.write_block(chain_block).await.unwrap();
         }
 
-        (blocks, indexer)
+        (blocks, indexer, source)
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_block_range() {
-        let (blocks, indexer) = load_test_vectors_and_sync_chain_index().await;
+        let (blocks, indexer, _mockchain) = load_test_vectors_and_sync_chain_index(false).await;
         let nonfinalized_snapshot = indexer.snapshot_nonfinalized_state();
 
         let start = crate::Height(0);
@@ -164,7 +176,7 @@ mod mockchain_tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_raw_transaction() {
-        let (blocks, indexer) = load_test_vectors_and_sync_chain_index().await;
+        let (blocks, indexer, _mockchain) = load_test_vectors_and_sync_chain_index(false).await;
         let nonfinalized_snapshot = indexer.snapshot_nonfinalized_state();
         for expected_transaction in blocks
             .into_iter()
@@ -183,9 +195,10 @@ mod mockchain_tests {
             assert_eq!(expected_transaction.as_ref(), &zaino_transaction)
         }
     }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_transaction_status() {
-        let (blocks, indexer) = load_test_vectors_and_sync_chain_index().await;
+        let (blocks, indexer, _mockchain) = load_test_vectors_and_sync_chain_index(false).await;
         let nonfinalized_snapshot = indexer.snapshot_nonfinalized_state();
 
         for (expected_transaction, block_hash, block_height) in
@@ -213,6 +226,72 @@ mod mockchain_tests {
             let (hash, height) = tx_status_blocks.iter().next().unwrap();
             assert_eq!(hash.0, block_hash.0);
             assert_eq!(height.unwrap().0, block_height.unwrap().0);
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn get_mempool_transaction() {
+        let (blocks, indexer, mockchain) = load_test_vectors_and_sync_chain_index(true).await;
+        let block_data: Vec<zebra_chain::block::Block> = blocks
+            .iter()
+            .map(|(_height, _chain_block, _compact_block, zebra_block, _roots)| zebra_block.clone())
+            .collect();
+
+        mockchain.mine_blocks(150);
+        std::thread::sleep(std::time::Duration::from_millis(2000));
+
+        let mempool_height = (dbg!(mockchain.active_height()) as usize) + 1;
+        let mempool_transactions = block_data
+            .get(mempool_height)
+            .map(|b| b.transactions.clone())
+            .unwrap_or_default();
+
+        let nonfinalized_snapshot = indexer.snapshot_nonfinalized_state();
+        for expected_transaction in mempool_transactions.into_iter() {
+            let zaino_transaction = indexer
+                .get_raw_transaction(
+                    &nonfinalized_snapshot,
+                    &TransactionHash::from(expected_transaction.hash()),
+                )
+                .await
+                .unwrap()
+                .unwrap()
+                .zcash_deserialize_into::<zebra_chain::transaction::Transaction>()
+                .unwrap();
+            assert_eq!(expected_transaction.as_ref(), &zaino_transaction)
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn get_mempool_transaction_status() {
+        let (blocks, indexer, mockchain) = load_test_vectors_and_sync_chain_index(true).await;
+        let block_data: Vec<zebra_chain::block::Block> = blocks
+            .iter()
+            .map(|(_height, _chain_block, _compact_block, zebra_block, _roots)| zebra_block.clone())
+            .collect();
+
+        mockchain.mine_blocks(150);
+        std::thread::sleep(std::time::Duration::from_millis(2000));
+
+        let mempool_height = (dbg!(mockchain.active_height()) as usize) + 1;
+        let mempool_transactions = block_data
+            .get(mempool_height)
+            .map(|b| b.transactions.clone())
+            .unwrap_or_default();
+
+        let nonfinalized_snapshot = indexer.snapshot_nonfinalized_state();
+        for expected_transaction in mempool_transactions.into_iter() {
+            let expected_txid = expected_transaction.hash();
+
+            let (tx_status_blocks, tx_mempool_status) = indexer
+                .get_transaction_status(
+                    &nonfinalized_snapshot,
+                    &TransactionHash::from(expected_txid),
+                )
+                .await
+                .unwrap();
+            assert!(tx_status_blocks.is_empty());
+            assert!(tx_mempool_status);
         }
     }
 }
