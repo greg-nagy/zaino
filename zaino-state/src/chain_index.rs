@@ -114,12 +114,20 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
 where {
         use futures::TryFutureExt as _;
 
-        let (non_finalized_state, finalized_db) = futures::try_join!(
-            crate::NonFinalizedState::initialize(source.clone(), config.network.clone(), None),
-            finalised_state::ZainoDB::spawn(config, source)
+        let finalized_db = Arc::new(
+            finalised_state::ZainoDB::spawn(config.clone(), source.clone())
                 .map_err(crate::InitError::FinalisedStateInitialzationError)
-        )?;
-        let finalized_db = std::sync::Arc::new(finalized_db);
+                .await?,
+        );
+        let reader = finalized_db.to_reader();
+        let top_of_finalized = if let Some(height) = reader.db_height().await? {
+            reader.get_chain_block(height).await?
+        } else {
+            None
+        };
+
+        let non_finalized_state =
+            crate::NonFinalizedState::initialize(source, config.network, top_of_finalized).await?;
         let chain_index = Self {
             non_finalized_state: std::sync::Arc::new(non_finalized_state),
             finalized_state: finalized_db.to_reader(),
