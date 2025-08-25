@@ -21,7 +21,7 @@ async fn spawn_mempool_and_mockchain() -> (
 ) {
     let (blocks, _faucet, _recipient) = load_test_vectors().unwrap();
 
-    let mockchain = build_active_mockchain_source(blocks.clone());
+    let mockchain = build_active_mockchain_source(0, blocks.clone());
 
     let mempool = Mempool::spawn(mockchain.clone(), None).await.unwrap();
 
@@ -259,7 +259,7 @@ async fn get_mempool_info() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn get_mempool_stream() {
     let (_mempool, subscriber, mockchain, block_data) = spawn_mempool_and_mockchain().await;
-    let mut subscriber = subscriber; // get_mempool_stream takes &mut self
+    let mut subscriber = subscriber;
 
     mockchain.mine_blocks(150);
     let active_chain_height = dbg!(mockchain.active_height());

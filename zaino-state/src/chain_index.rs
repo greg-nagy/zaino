@@ -421,8 +421,8 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
     /// Returns a stream of mempool transactions, ending the stream when the chain tip block hash
     /// changes (a new block is mined or a reorg occurs).
     ///
-    /// If the chain tip has changed from the given spanshot at the time of calling
-    ///  an IncorrectChainTip error is returned holding the current chain tip block hash.
+    /// If the chain tip has changed from the given snapshot at the time of calling
+    /// an IncorrectChainTip error is returned holding the current chain tip block hash.
     /// NOTE: Is this correct here?
     fn get_mempool_stream(
         &self,

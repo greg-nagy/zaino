@@ -58,7 +58,7 @@ mod mockchain_tests {
         let (blocks, _faucet, _recipient) = load_test_vectors().unwrap();
 
         let source = if active_mockchain_source {
-            build_active_mockchain_source(blocks.clone())
+            build_active_mockchain_source(1, blocks.clone())
         } else {
             build_mockchain_source(blocks.clone())
         };
@@ -351,11 +351,26 @@ mod mockchain_tests {
             .map(|b| b.transactions.clone())
             .unwrap_or_default();
         let exclude_tx = mempool_transactions.pop().unwrap();
-        let exclude_txid = vec![exclude_tx.hash().to_string()[..4].to_string()];
+        dbg!(&exclude_tx.hash());
+
+        // Reverse format to client type.
+        //
+        // TODO: Explore whether this is the correct byte order or whether we
+        // replicated a bug in old code.
+        let exclude_txid: String = exclude_tx
+            .hash()
+            .to_string()
+            .chars()
+            .collect::<Vec<_>>()
+            .chunks(2)
+            .rev()
+            .map(|chunk| chunk.iter().collect::<String>())
+            .collect();
+        dbg!(&exclude_txid);
         mempool_transactions.sort_by_key(|a| a.hash());
 
         let mut found_mempool_transactions: Vec<zebra_chain::transaction::Transaction> = indexer
-            .get_mempool_transactions(exclude_txid)
+            .get_mempool_transactions(vec![exclude_txid])
             .await
             .unwrap()
             .iter()
@@ -376,7 +391,7 @@ mod mockchain_tests {
         );
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn get_mempool_stream() {
         let (blocks, indexer, mockchain) = load_test_vectors_and_sync_chain_index(true).await;
         let block_data: Vec<zebra_chain::block::Block> = blocks
@@ -384,8 +399,15 @@ mod mockchain_tests {
             .map(|(_height, _chain_block, _compact_block, zebra_block, _roots)| zebra_block.clone())
             .collect();
 
-        mockchain.mine_blocks(150);
+        dbg!(indexer.snapshot_nonfinalized_state().best_tip);
+
+        for _ in 0..150 {
+            mockchain.mine_blocks(1);
+            sleep(Duration::from_millis(200)).await;
+        }
         sleep(Duration::from_millis(2000)).await;
+
+        dbg!(indexer.snapshot_nonfinalized_state().best_tip);
 
         let mempool_height = (dbg!(mockchain.active_height()) as usize) + 1;
         let mut mempool_transactions = block_data
@@ -395,11 +417,10 @@ mod mockchain_tests {
         mempool_transactions.sort_by_key(|a| a.hash());
 
         let nonfinalized_snapshot = indexer.snapshot_nonfinalized_state();
-
         let stream = indexer.get_mempool_stream(&nonfinalized_snapshot).unwrap();
 
         let mut streamed: Vec<zebra_chain::transaction::Transaction> = stream
-            .take(mempool_transactions.len())
+            .take(mempool_transactions.len() + 1)
             .collect::<Vec<_>>()
             .await
             .into_iter()

@@ -133,6 +133,7 @@ impl<T: BlockchainSource> Mempool<T> {
             let mut best_block_hash: Hash;
             let mut check_block_hash: Hash;
 
+            // Initialise tip.
             loop {
                 match mempool.fetcher.get_best_block_hash().await {
                     Ok(block_hash_opt) => match block_hash_opt {
@@ -165,18 +166,12 @@ impl<T: BlockchainSource> Mempool<T> {
                 }
             }
 
+            // Main loop
             loop {
+                // Check chain tip.
                 match mempool.fetcher.get_best_block_hash().await {
                     Ok(block_hash_opt) => match block_hash_opt {
                         Some(hash) => {
-                            if mempool.mempool_chain_tip.send(hash.into()).is_err() {
-                                mempool.status.store(StatusType::RecoverableError.into());
-                                mempool.state.notify(status.clone().into());
-                                warn!("error sending mempool chain_tip to subscribers");
-                                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                                continue;
-                            };
-
                             check_block_hash = hash;
                         }
                         None => {
@@ -195,7 +190,12 @@ impl<T: BlockchainSource> Mempool<T> {
                     }
                 }
 
+                // If chain tip has changed reset mempool.
                 if check_block_hash != best_block_hash {
+                    status.store(StatusType::Syncing.into());
+                    state.notify(status.clone().into());
+                    state.clear();
+
                     if mempool
                         .mempool_chain_tip
                         .send(check_block_hash.into())
@@ -204,12 +204,10 @@ impl<T: BlockchainSource> Mempool<T> {
                         mempool.status.store(StatusType::RecoverableError.into());
                         mempool.state.notify(status.clone().into());
                         warn!("error sending mempool chain_tip to subscribers");
-                        continue;
-                    };
-                    best_block_hash = check_block_hash;
-                    status.store(StatusType::Syncing.into());
-                    state.notify(status.clone().into());
-                    state.clear();
+                    } else {
+                        best_block_hash = check_block_hash;
+                    }
+
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     continue;
                 }
