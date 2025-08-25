@@ -399,25 +399,23 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
     /// more bandwidth-efficient; if two or more transactions in the mempool
     /// match a shortened txid, they are all sent (none is excluded). Transactions
     /// in the exclude list that don't exist in the mempool are ignored.
-    fn get_mempool_transactions(
+    async fn get_mempool_transactions(
         &self,
         exclude_list: Vec<String>,
-    ) -> impl std::future::Future<Output = Result<Vec<Vec<u8>>, Self::Error>> {
+    ) -> Result<Vec<Vec<u8>>, Self::Error> {
         let subscriber = self.mempool.clone();
 
-        async move {
-            // Use the mempool's own filtering (it already handles client-endian shortened prefixes).
-            let pairs: Vec<(mempool::MempoolKey, mempool::MempoolValue)> =
-                subscriber.get_filtered_mempool(exclude_list).await;
+        // Use the mempool's own filtering (it already handles client-endian shortened prefixes).
+        let pairs: Vec<(mempool::MempoolKey, mempool::MempoolValue)> =
+            subscriber.get_filtered_mempool(exclude_list).await;
 
-            // Transform to the Vec<Vec<u8>> that the trait requires.
-            let bytes: Vec<Vec<u8>> = pairs
-                .into_iter()
-                .map(|(_, v)| v.0.as_ref().as_ref().to_vec())
-                .collect();
+        // Transform to the Vec<Vec<u8>> that the trait requires.
+        let bytes: Vec<Vec<u8>> = pairs
+            .into_iter()
+            .map(|(_, v)| v.0.as_ref().as_ref().to_vec())
+            .collect();
 
-            Ok(bytes)
-        }
+        Ok(bytes)
     }
 
     /// Returns a stream of mempool transactions, ending the stream when the chain tip block hash

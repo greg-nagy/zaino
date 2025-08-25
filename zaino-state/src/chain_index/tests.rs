@@ -294,4 +294,130 @@ mod mockchain_tests {
             assert!(tx_mempool_status);
         }
     }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn get_mempool_transactions() {
+        let (blocks, indexer, mockchain) = load_test_vectors_and_sync_chain_index(true).await;
+        let block_data: Vec<zebra_chain::block::Block> = blocks
+            .iter()
+            .map(|(_height, _chain_block, _compact_block, zebra_block, _roots)| zebra_block.clone())
+            .collect();
+
+        mockchain.mine_blocks(150);
+        std::thread::sleep(std::time::Duration::from_millis(2000));
+
+        let mempool_height = (dbg!(mockchain.active_height()) as usize) + 1;
+        let mut mempool_transactions = block_data
+            .get(mempool_height)
+            .map(|b| b.transactions.clone())
+            .unwrap_or_default();
+        mempool_transactions.sort_by_key(|a| a.hash());
+
+        let mut found_mempool_transactions: Vec<zebra_chain::transaction::Transaction> = indexer
+            .get_mempool_transactions(Vec::new())
+            .await
+            .unwrap()
+            .iter()
+            .map(|txn_bytes| {
+                txn_bytes
+                    .zcash_deserialize_into::<zebra_chain::transaction::Transaction>()
+                    .unwrap()
+            })
+            .collect();
+        found_mempool_transactions.sort_by_key(|a| a.hash());
+        assert_eq!(
+            mempool_transactions
+                .iter()
+                .map(|tx| tx.as_ref().clone())
+                .collect::<Vec<_>>(),
+            found_mempool_transactions,
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn get_filtered_mempool_transactions() {
+        let (blocks, indexer, mockchain) = load_test_vectors_and_sync_chain_index(true).await;
+        let block_data: Vec<zebra_chain::block::Block> = blocks
+            .iter()
+            .map(|(_height, _chain_block, _compact_block, zebra_block, _roots)| zebra_block.clone())
+            .collect();
+
+        mockchain.mine_blocks(150);
+        std::thread::sleep(std::time::Duration::from_millis(2000));
+
+        let mempool_height = (dbg!(mockchain.active_height()) as usize) + 1;
+        let mut mempool_transactions = block_data
+            .get(mempool_height)
+            .map(|b| b.transactions.clone())
+            .unwrap_or_default();
+        let exclude_tx = mempool_transactions.pop().unwrap();
+        let exclude_txid = vec![exclude_tx.hash().to_string()[..4].to_string()];
+        mempool_transactions.sort_by_key(|a| a.hash());
+
+        let mut found_mempool_transactions: Vec<zebra_chain::transaction::Transaction> = indexer
+            .get_mempool_transactions(exclude_txid)
+            .await
+            .unwrap()
+            .iter()
+            .map(|txn_bytes| {
+                txn_bytes
+                    .zcash_deserialize_into::<zebra_chain::transaction::Transaction>()
+                    .unwrap()
+            })
+            .collect();
+        found_mempool_transactions.sort_by_key(|a| a.hash());
+        assert_eq!(mempool_transactions.len(), found_mempool_transactions.len());
+        assert_eq!(
+            mempool_transactions
+                .iter()
+                .map(|tx| tx.as_ref().clone())
+                .collect::<Vec<_>>(),
+            found_mempool_transactions,
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn get_mempool_stream() {
+        let (blocks, indexer, mockchain) = load_test_vectors_and_sync_chain_index(true).await;
+        let block_data: Vec<zebra_chain::block::Block> = blocks
+            .iter()
+            .map(|(_height, _chain_block, _compact_block, zebra_block, _roots)| zebra_block.clone())
+            .collect();
+
+        mockchain.mine_blocks(150);
+        std::thread::sleep(std::time::Duration::from_millis(2000));
+
+        let mempool_height = (dbg!(mockchain.active_height()) as usize) + 1;
+        let mut mempool_transactions = block_data
+            .get(mempool_height)
+            .map(|b| b.transactions.clone())
+            .unwrap_or_default();
+        mempool_transactions.sort_by_key(|a| a.hash());
+
+        let nonfinalized_snapshot = indexer.snapshot_nonfinalized_state();
+
+        let stream = indexer.get_mempool_stream(&nonfinalized_snapshot).unwrap();
+
+        let mut streamed: Vec<zebra_chain::transaction::Transaction> = stream
+            .take(mempool_transactions.len())
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .map(|res| res.unwrap())
+            .map(|bytes| {
+                bytes
+                    .zcash_deserialize_into::<zebra_chain::transaction::Transaction>()
+                    .unwrap()
+            })
+            .collect();
+        streamed.sort_by_key(|a| a.hash());
+
+        assert_eq!(
+            mempool_transactions
+                .iter()
+                .map(|tx| tx.as_ref().clone())
+                .collect::<Vec<_>>(),
+            streamed,
+        );
+    }
 }
