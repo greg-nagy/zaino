@@ -1,7 +1,7 @@
 //! Zaino-State ChainIndex Mempool unit tests.
 
 use std::{collections::HashMap, io::Cursor, str::FromStr as _};
-use tokio::time::{timeout, Duration};
+use tokio::time::{sleep, timeout, Duration};
 use zebra_chain::serialization::ZcashDeserialize as _;
 
 use crate::{
@@ -86,7 +86,7 @@ async fn get_mempool() {
             mockchain.mine_blocks(10);
             active_chain_height = dbg!(mockchain.active_height());
 
-            std::thread::sleep(std::time::Duration::from_millis(2000));
+            sleep(Duration::from_millis(2000)).await;
         }
     }
 }
@@ -98,7 +98,7 @@ async fn get_filtered_mempool() {
     mockchain.mine_blocks(150);
     let active_chain_height = dbg!(mockchain.active_height());
 
-    std::thread::sleep(std::time::Duration::from_millis(2000));
+    sleep(Duration::from_millis(2000)).await;
 
     let mempool_index = (active_chain_height as usize) + 1;
     let mempool_transactions = block_data
@@ -176,7 +176,7 @@ async fn get_mempool_transaction() {
     mockchain.mine_blocks(150);
     let active_chain_height = dbg!(mockchain.active_height());
 
-    std::thread::sleep(std::time::Duration::from_millis(2000));
+    sleep(Duration::from_millis(2000)).await;
 
     let mempool_index = (active_chain_height as usize) + 1;
     let mempool_transactions = block_data
@@ -211,7 +211,7 @@ async fn get_mempool_info() {
     mockchain.mine_blocks(150);
     let active_chain_height = dbg!(mockchain.active_height());
 
-    std::thread::sleep(std::time::Duration::from_millis(2000));
+    sleep(Duration::from_millis(2000)).await;
 
     let mempool_index = (active_chain_height as usize) + 1;
     let mempool_transactions = block_data
@@ -264,7 +264,7 @@ async fn get_mempool_stream() {
     mockchain.mine_blocks(150);
     let active_chain_height = dbg!(mockchain.active_height());
 
-    std::thread::sleep(std::time::Duration::from_millis(2000));
+    sleep(Duration::from_millis(2000)).await;
 
     let mempool_index = (active_chain_height as usize) + 1;
     let mempool_transactions = block_data

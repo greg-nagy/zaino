@@ -17,9 +17,9 @@ pub(crate) fn init_tracing() {
 }
 
 mod mockchain_tests {
-    use std::{path::PathBuf, time::Duration};
-
+    use std::path::PathBuf;
     use tempfile::TempDir;
+    use tokio::time::{sleep, Duration};
     use tokio_stream::StreamExt as _;
     use zaino_proto::proto::compact_formats::CompactBlock;
     use zebra_chain::serialization::ZcashDeserializeInto;
@@ -238,7 +238,7 @@ mod mockchain_tests {
             .collect();
 
         mockchain.mine_blocks(150);
-        std::thread::sleep(std::time::Duration::from_millis(2000));
+        sleep(Duration::from_millis(2000)).await;
 
         let mempool_height = (dbg!(mockchain.active_height()) as usize) + 1;
         let mempool_transactions = block_data
@@ -271,7 +271,7 @@ mod mockchain_tests {
             .collect();
 
         mockchain.mine_blocks(150);
-        std::thread::sleep(std::time::Duration::from_millis(2000));
+        sleep(Duration::from_millis(2000)).await;
 
         let mempool_height = (dbg!(mockchain.active_height()) as usize) + 1;
         let mempool_transactions = block_data
@@ -304,7 +304,7 @@ mod mockchain_tests {
             .collect();
 
         mockchain.mine_blocks(150);
-        std::thread::sleep(std::time::Duration::from_millis(2000));
+        sleep(Duration::from_millis(2000)).await;
 
         let mempool_height = (dbg!(mockchain.active_height()) as usize) + 1;
         let mut mempool_transactions = block_data
@@ -343,7 +343,7 @@ mod mockchain_tests {
             .collect();
 
         mockchain.mine_blocks(150);
-        std::thread::sleep(std::time::Duration::from_millis(2000));
+        sleep(Duration::from_millis(2000)).await;
 
         let mempool_height = (dbg!(mockchain.active_height()) as usize) + 1;
         let mut mempool_transactions = block_data
@@ -385,7 +385,7 @@ mod mockchain_tests {
             .collect();
 
         mockchain.mine_blocks(150);
-        std::thread::sleep(std::time::Duration::from_millis(2000));
+        sleep(Duration::from_millis(2000)).await;
 
         let mempool_height = (dbg!(mockchain.active_height()) as usize) + 1;
         let mut mempool_transactions = block_data
