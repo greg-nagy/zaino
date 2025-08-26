@@ -12,6 +12,7 @@ use futures::lock::Mutex;
 use primitive_types::U256;
 use std::{collections::HashMap, mem, sync::Arc};
 use tokio::sync::mpsc;
+use tracing::{info, warn};
 use zebra_chain::parameters::Network;
 use zebra_state::HashOrHeight;
 
@@ -387,6 +388,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 best_tip = (best_tip.0 + 1, *chainblock.hash());
                 new_blocks.push(chainblock.clone());
             } else {
+                info!("Reorg detected, syncing non finalized state.");
                 let mut next_height_down = best_tip.0 - 1;
                 // If not, there's been a reorg, and we need to adjust our best-tip
                 let prev_hash = loop {
@@ -427,6 +429,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         }
         if let Some(ref listener) = self.nfs_change_listener {
             let Some(mut listener) = listener.try_lock() else {
+                warn!("Error fetching non-finalized change listener");
                 return Err(SyncError::CompetingSyncProcess);
             };
             loop {

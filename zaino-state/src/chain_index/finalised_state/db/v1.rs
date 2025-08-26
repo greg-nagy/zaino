@@ -841,6 +841,7 @@ impl DbV1 {
 
     /// Writes a given (finalised) [`ChainBlock`] to ZainoDB.
     pub(crate) async fn write_block(&self, block: ChainBlock) -> Result<(), FinalisedStateError> {
+        dbg!("writing block to db:", &block.height());
         self.status.store(StatusType::Syncing.into());
         let block_hash = *block.index().hash();
         let block_hash_bytes = block_hash.to_bytes()?;
