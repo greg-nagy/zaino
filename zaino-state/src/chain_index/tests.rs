@@ -190,6 +190,25 @@ mod mockchain_tests {
         }
     }
 
+    // #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    // async fn sync_blocks_after_startup() {
+    //     let (_blocks, indexer, mockchain) = load_test_vectors_and_sync_chain_index(true).await;
+
+    //     let indexer_tip = dbg!(indexer.snapshot_nonfinalized_state().best_tip).0 .0;
+    //     let active_mockchain_tip = dbg!(mockchain.active_height());
+    //     assert_eq!(active_mockchain_tip, indexer_tip);
+
+    //     for _ in 0..20 {
+    //         mockchain.mine_blocks(1);
+    //         sleep(Duration::from_millis(600)).await;
+    //     }
+    //     sleep(Duration::from_millis(2000)).await;
+
+    //     let indexer_tip = dbg!(indexer.snapshot_nonfinalized_state().best_tip).0 .0;
+    //     let active_mockchain_tip = dbg!(mockchain.active_height());
+    //     assert_eq!(active_mockchain_tip, indexer_tip);
+    // }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_mempool_transaction() {
         let (blocks, indexer, mockchain) = load_test_vectors_and_sync_chain_index(true).await;
@@ -356,15 +375,7 @@ mod mockchain_tests {
     //         .map(|(_height, _chain_block, _compact_block, zebra_block, _roots)| zebra_block.clone())
     //         .collect();
 
-    //     dbg!(indexer.snapshot_nonfinalized_state().best_tip);
-
-    //     // for _ in 0..150 {
-    //     //     mockchain.mine_blocks(1);
-    //     //     sleep(Duration::from_millis(200)).await;
-    //     // }
     //     sleep(Duration::from_millis(2000)).await;
-
-    //     dbg!(indexer.snapshot_nonfinalized_state().best_tip);
 
     //     let mempool_height = (dbg!(mockchain.active_height()) as usize) + 1;
     //     let mut mempool_transactions = block_data

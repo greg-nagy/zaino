@@ -557,32 +557,32 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 .iter()
                 .map(|(hash, block)| (*hash, block.clone())),
         );
-        let mut finalized_height = finalized_db
+        let finalized_height = finalized_db
             .to_reader()
             .db_height()
             .await
             .map_err(|_e| UpdateError::FinalizedStateCorruption)?
             .unwrap_or(Height(0));
-        let (newly_finalized, blocks): (HashMap<_, _>, HashMap<BlockHash, _>) = new
+        let (_newly_finalized, blocks): (HashMap<_, _>, HashMap<BlockHash, _>) = new
             .into_iter()
             .partition(|(_hash, block)| match block.index().height() {
-                Some(height) => height < finalized_height,
+                Some(height) => height <= finalized_height,
                 None => false,
             });
 
-        let mut newly_finalized = newly_finalized.into_values().collect::<Vec<_>>();
-        newly_finalized.sort_by_key(|chain_block| {
-            chain_block
-                .height()
-                .expect("partitioned out only blocks with Some heights")
-        });
-        for block in newly_finalized {
-            finalized_height = finalized_height + 1;
-            if Some(finalized_height) != block.height() {
-                return Err(UpdateError::FinalizedStateCorruption);
-            }
-            finalized_db.write_block(block).await.expect("TODO");
-        }
+        // let mut newly_finalized = newly_finalized.into_values().collect::<Vec<_>>();
+        // newly_finalized.sort_by_key(|chain_block| {
+        //     chain_block
+        //         .height()
+        //         .expect("partitioned out only blocks with Some heights")
+        // });
+        // for block in newly_finalized {
+        //     finalized_height = finalized_height + 1;
+        //     if Some(finalized_height) != block.height() {
+        //         return Err(UpdateError::FinalizedStateCorruption);
+        //     }
+        //     finalized_db.write_block(block).await.expect("TODO");
+        // }
 
         let best_tip = blocks.iter().fold(snapshot.best_tip, |acc, (hash, block)| {
             match block.index().height() {
