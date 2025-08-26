@@ -138,13 +138,7 @@ impl<T: BlockchainSource> Mempool<T> {
                 match mempool.fetcher.get_best_block_hash().await {
                     Ok(block_hash_opt) => match block_hash_opt {
                         Some(hash) => {
-                            if mempool.mempool_chain_tip.send(hash.into()).is_err() {
-                                mempool.status.store(StatusType::RecoverableError.into());
-                                mempool.state.notify(status.clone().into());
-                                warn!("error sending mempool chain_tip to subscribers");
-                                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                                continue;
-                            };
+                            mempool.mempool_chain_tip.send_replace(hash.into());
                             best_block_hash = hash;
                             break;
                         }
@@ -196,17 +190,10 @@ impl<T: BlockchainSource> Mempool<T> {
                     state.notify(status.clone().into());
                     state.clear();
 
-                    if mempool
+                    mempool
                         .mempool_chain_tip
-                        .send(check_block_hash.into())
-                        .is_err()
-                    {
-                        mempool.status.store(StatusType::RecoverableError.into());
-                        mempool.state.notify(status.clone().into());
-                        warn!("error sending mempool chain_tip to subscribers");
-                    } else {
-                        best_block_hash = check_block_hash;
-                    }
+                        .send_replace(check_block_hash.into());
+                    best_block_hash = check_block_hash;
 
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     continue;
