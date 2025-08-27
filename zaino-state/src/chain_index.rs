@@ -19,6 +19,7 @@ use futures::Stream;
 use non_finalised_state::NonfinalizedBlockCacheSnapshot;
 use source::{BlockchainSource, ValidatorConnector};
 use tokio_stream::StreamExt;
+use tracing::info;
 use types::ChainBlock;
 pub use zebra_chain::parameters::Network as ZebraNetwork;
 use zebra_chain::serialization::ZcashSerialize;
@@ -167,11 +168,15 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
     pub(super) fn start_sync_loop(
         &self,
     ) -> tokio::task::JoinHandle<Result<std::convert::Infallible, SyncError>> {
+        info!("Starting ChainIndex sync.");
         let nfs = self.non_finalized_state.clone();
         let fs = self.finalized_db.clone();
         tokio::task::spawn(async move {
             loop {
+                // Sync nfs to chain tip, trimming blocks to finalized tip.
                 nfs.sync(fs.clone()).await?;
+
+                // Sync fs to chain tip - 100.
                 {
                     let snapshot = nfs.get_snapshot();
                     while snapshot.best_tip.0 .0
@@ -205,11 +210,13 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
                             .map_err(|_e| SyncError::CompetingSyncProcess)?;
                     }
                 }
-                //TODO: configure sleep duration?
+                // TODO: configure sleep duration?
                 tokio::time::sleep(Duration::from_millis(500)).await
+                // TODO: Check for shutdown signal.
             }
         })
     }
+
     async fn get_fullblock_bytes_from_node(
         &self,
         id: HashOrHeight,

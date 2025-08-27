@@ -841,7 +841,6 @@ impl DbV1 {
 
     /// Writes a given (finalised) [`ChainBlock`] to ZainoDB.
     pub(crate) async fn write_block(&self, block: ChainBlock) -> Result<(), FinalisedStateError> {
-        dbg!("writing block to db:", &block.height());
         self.status.store(StatusType::Syncing.into());
         let block_hash = *block.index().hash();
         let block_hash_bytes = block_hash.to_bytes()?;
@@ -1204,9 +1203,21 @@ impl DbV1 {
                 tokio::task::block_in_place(|| self.env.sync(true))
                     .map_err(|e| FinalisedStateError::Custom(format!("LMDB sync failed: {e}")))?;
                 self.status.store(StatusType::Ready.into());
+
+                info!(
+                    "Successfully committed block {} at height {} to ZainoDB.",
+                    &block.index().hash(),
+                    &block
+                        .index()
+                        .height()
+                        .expect("height always some in the finalised state")
+                );
+
                 Ok(())
             }
             Err(e) => {
+                warn!("Error writing block to DB.");
+
                 let _ = self.delete_block(&block).await;
                 tokio::task::block_in_place(|| self.env.sync(true))
                     .map_err(|e| FinalisedStateError::Custom(format!("LMDB sync failed: {e}")))?;
@@ -2592,7 +2603,6 @@ impl DbV1 {
         start_height: Height,
         end_height: Height,
     ) -> Result<Option<Vec<TxLocation>>, FinalisedStateError> {
-        dbg!(&addr_script, &start_height, &end_height);
         let addr_bytes = addr_script.to_bytes()?;
 
         tokio::task::block_in_place(|| {

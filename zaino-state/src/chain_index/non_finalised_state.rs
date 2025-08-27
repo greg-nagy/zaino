@@ -135,6 +135,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         start_block: Option<ChainBlock>,
     ) -> Result<Self, InitError> {
         // TODO: Consider arbitrary buffer length
+        info!("Initialising non-finalised state.");
         let (staging_sender, staging_receiver) = mpsc::channel(100);
         let staged = Mutex::new(staging_receiver);
         let chainblock = match start_block {
@@ -340,9 +341,8 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         })
     }
 
-    /// sync to the top of the chain
-    pub(crate) async fn sync(&self, finalzed_db: Arc<ZainoDB>) -> Result<(), SyncError> {
-        dbg!("syncing");
+    /// sync to the top of the chain, trimming to the finalised tip.
+    pub(crate) async fn sync(&self, finalized_db: Arc<ZainoDB>) -> Result<(), SyncError> {
         let initial_state = self.get_snapshot();
         let mut new_blocks = Vec::new();
         let mut nonbest_blocks = HashMap::new();
@@ -366,7 +366,6 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 )))
             })?
         {
-            dbg!("syncing block", best_tip.0 + 1);
             // If this block is next in the chain, we sync it as normal
             let parent_hash = BlockHash::from(block.header.previous_block_hash);
             if parent_hash == best_tip.1 {
@@ -385,10 +384,15 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                     })?,
                 };
                 let chainblock = self.block_to_chainblock(prev_block, &block).await?;
+                info!(
+                    "syncing block {} at height {}",
+                    &chainblock.index().hash(),
+                    best_tip.0 + 1
+                );
                 best_tip = (best_tip.0 + 1, *chainblock.hash());
                 new_blocks.push(chainblock.clone());
             } else {
-                info!("Reorg detected, syncing non finalized state.");
+                info!("Reorg detected at height {}", best_tip.0 + 1);
                 let mut next_height_down = best_tip.0 - 1;
                 // If not, there's been a reorg, and we need to adjust our best-tip
                 let prev_hash = loop {
@@ -400,7 +404,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                     match initial_state
                         .blocks
                         .values()
-                        .find(|block| block.height() == Some(best_tip.0 - 1))
+                        .find(|block| block.height() == Some(next_height_down))
                         .map(ChainBlock::hash)
                     {
                         Some(hash) => break hash,
@@ -421,12 +425,13 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
 
         for block in new_blocks {
             if let Err(e) = self
-                .sync_stage_update_loop(block, finalzed_db.clone())
+                .sync_stage_update_loop(block, finalized_db.clone())
                 .await
             {
                 return Err(e.into());
             }
         }
+
         if let Some(ref listener) = self.nfs_change_listener {
             let Some(mut listener) = listener.try_lock() else {
                 warn!("Error fetching non-finalized change listener");
@@ -453,7 +458,9 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 }
             }
         }
-        self.update(finalzed_db.clone()).await?;
+
+        self.update(finalized_db.clone()).await?;
+
         let mut nonbest_chainblocks = HashMap::new();
         loop {
             let (next_up, later): (Vec<_>, Vec<_>) = nonbest_blocks
@@ -473,6 +480,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                     )
                 })
                 .partition(|(_hash, _block, prev_block)| prev_block.is_some());
+
             if next_up.is_empty() {
                 // Only store non-best chain blocks
                 // if we have a path from them
@@ -494,29 +502,28 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 .map(|(hash, block, _parent_block)| (hash, block))
                 .collect();
         }
+
         for block in nonbest_chainblocks.into_values() {
             if let Err(e) = self
-                .sync_stage_update_loop(block, finalzed_db.clone())
+                .sync_stage_update_loop(block, finalized_db.clone())
                 .await
             {
                 return Err(e.into());
             }
         }
-
-        dbg!("synced");
         Ok(())
     }
 
     async fn sync_stage_update_loop(
         &self,
         block: ChainBlock,
-        finalzed_db: Arc<ZainoDB>,
+        finalized_db: Arc<ZainoDB>,
     ) -> Result<(), UpdateError> {
         if let Err(e) = self.stage(block.clone()) {
             match *e {
                 mpsc::error::TrySendError::Full(_) => {
-                    self.update(finalzed_db.clone()).await?;
-                    Box::pin(self.sync_stage_update_loop(block, finalzed_db)).await?;
+                    self.update(finalized_db.clone()).await?;
+                    Box::pin(self.sync_stage_update_loop(block, finalized_db)).await?;
                 }
                 mpsc::error::TrySendError::Closed(_block) => {
                     return Err(UpdateError::ReceiverDisconnected)
@@ -525,6 +532,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         }
         Ok(())
     }
+
     /// Stage a block
     pub fn stage(
         &self,
@@ -532,7 +540,8 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
     ) -> Result<(), Box<mpsc::error::TrySendError<ChainBlock>>> {
         self.staging_sender.try_send(block).map_err(Box::new)
     }
-    /// Add all blocks from the staging area, and save a new cache snapshot
+
+    /// Add all blocks from the staging area, and save a new cache snapshot, trimming block below the finalised tip.
     pub(crate) async fn update(&self, finalized_db: Arc<ZainoDB>) -> Result<(), UpdateError> {
         let mut new = HashMap::<BlockHash, ChainBlock>::new();
         let mut staged = self.staged.lock().await;
@@ -557,32 +566,20 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 .iter()
                 .map(|(hash, block)| (*hash, block.clone())),
         );
+
         let finalized_height = finalized_db
             .to_reader()
             .db_height()
             .await
             .map_err(|_e| UpdateError::FinalizedStateCorruption)?
             .unwrap_or(Height(0));
-        let (_newly_finalized, blocks): (HashMap<_, _>, HashMap<BlockHash, _>) = new
+
+        let (_finalized_blocks, blocks): (HashMap<_, _>, HashMap<BlockHash, _>) = new
             .into_iter()
             .partition(|(_hash, block)| match block.index().height() {
-                Some(height) => height <= finalized_height,
+                Some(height) => height < finalized_height,
                 None => false,
             });
-
-        // let mut newly_finalized = newly_finalized.into_values().collect::<Vec<_>>();
-        // newly_finalized.sort_by_key(|chain_block| {
-        //     chain_block
-        //         .height()
-        //         .expect("partitioned out only blocks with Some heights")
-        // });
-        // for block in newly_finalized {
-        //     finalized_height = finalized_height + 1;
-        //     if Some(finalized_height) != block.height() {
-        //         return Err(UpdateError::FinalizedStateCorruption);
-        //     }
-        //     finalized_db.write_block(block).await.expect("TODO");
-        // }
 
         let best_tip = blocks.iter().fold(snapshot.best_tip, |acc, (hash, block)| {
             match block.index().height() {
@@ -590,12 +587,14 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 _ => acc,
             }
         });
+
         let heights_to_hashes = blocks
             .iter()
             .filter_map(|(hash, chainblock)| {
                 chainblock.index().height.map(|height| (height, *hash))
             })
             .collect();
+
         // Need to get best hash at some point in this process
         let stored = self.current.compare_and_swap(
             &snapshot,
@@ -605,7 +604,30 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 best_tip,
             }),
         );
+
         if Arc::ptr_eq(&stored, &snapshot) {
+            let stale_best_tip = snapshot.best_tip;
+            let new_best_tip = best_tip;
+
+            // Log chain tip change
+            if new_best_tip != stale_best_tip {
+                if new_best_tip.0 > stale_best_tip.0 {
+                    info!(
+                        "non-finalized tip advanced: Height: {} -> {}, Hash: {} -> {}",
+                        stale_best_tip.0, new_best_tip.0, stale_best_tip.1, new_best_tip.1,
+                    );
+                } else if new_best_tip.0 == stale_best_tip.0 && new_best_tip.1 != stale_best_tip.1 {
+                    info!(
+                        "non-finalized tip reorg at height {}: Hash: {} -> {}",
+                        new_best_tip.0, stale_best_tip.1, new_best_tip.1,
+                    );
+                } else if new_best_tip.0 < stale_best_tip.0 {
+                    info!(
+                        "non-finalized tip rollback from height {} to {}, Hash: {} -> {}",
+                        stale_best_tip.0, new_best_tip.0, stale_best_tip.1, new_best_tip.1,
+                    );
+                }
+            }
             Ok(())
         } else {
             Err(UpdateError::StaleSnapshot)
