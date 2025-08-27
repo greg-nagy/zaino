@@ -19,17 +19,3 @@ Note: Recently the newest GCC version on Arch has broken a build script in the `
 `cargo make help`
 will print a help output.
 `Makefile.toml` holds a configuration file.
-
-NOTE: The client rpc get_subtree_roots tests are currently ignored, to run them testnet and mainnet chains must first be generated.
-
-To run client rpc test `get_subtree_roots_sapling`:
-1) sync Zebrad testnet to at least 2 sapling shards
-2) copy the Zebrad testnet `state` cache to `zaino/integration-tests/chain_cache/get_subtree_roots_sapling` directory.
-
-See the `get_subtree_roots_sapling` test fixture doc comments in infrastructure for more details.
-
-To run client rpc test `get_subtree_roots_orchard`:
-1) sync Zebrad mainnet to at least 2 orchard shards
-2) copy the Zebrad mainnet `state` cache to `zaino/integration-tests/chain_cache/get_subtree_roots_orchard` directory.
-
-See the `get_subtree_roots_orchard` test fixture doc comments in infrastructure for more details.
