@@ -15,6 +15,11 @@ Note: Recently the newest GCC version on Arch has broken a build script in the `
 2) Build release binary `cargo build --release`
 3) Run `cargo nextest run`
 
+## Cargo Make
+`cargo make help`
+will print a help output.
+`Makefile.toml` holds a configuration file.
+
 NOTE: The client rpc get_subtree_roots tests are currently ignored, to run them testnet and mainnet chains must first be generated.
 
 To run client rpc test `get_subtree_roots_sapling`:
