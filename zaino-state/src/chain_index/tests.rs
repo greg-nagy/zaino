@@ -55,6 +55,8 @@ mod mockchain_tests {
         NodeBackedChainIndex<MockchainSource>,
         MockchainSource,
     ) {
+        super::init_tracing();
+
         let (blocks, _faucet, _recipient) = load_test_vectors().unwrap();
 
         let source = if active_mockchain_source {
@@ -190,24 +192,24 @@ mod mockchain_tests {
         }
     }
 
-    // #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-    // async fn sync_blocks_after_startup() {
-    //     let (_blocks, indexer, mockchain) = load_test_vectors_and_sync_chain_index(true).await;
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn sync_blocks_after_startup() {
+        let (_blocks, indexer, mockchain) = load_test_vectors_and_sync_chain_index(true).await;
 
-    //     let indexer_tip = dbg!(indexer.snapshot_nonfinalized_state().best_tip).0 .0;
-    //     let active_mockchain_tip = dbg!(mockchain.active_height());
-    //     assert_eq!(active_mockchain_tip, indexer_tip);
+        let indexer_tip = dbg!(indexer.snapshot_nonfinalized_state().best_tip).0 .0;
+        let active_mockchain_tip = dbg!(mockchain.active_height());
+        assert_eq!(active_mockchain_tip, indexer_tip);
 
-    //     for _ in 0..20 {
-    //         mockchain.mine_blocks(1);
-    //         sleep(Duration::from_millis(600)).await;
-    //     }
-    //     sleep(Duration::from_millis(2000)).await;
+        for _ in 0..20 {
+            mockchain.mine_blocks(1);
+            sleep(Duration::from_millis(600)).await;
+        }
+        sleep(Duration::from_millis(2000)).await;
 
-    //     let indexer_tip = dbg!(indexer.snapshot_nonfinalized_state().best_tip).0 .0;
-    //     let active_mockchain_tip = dbg!(mockchain.active_height());
-    //     assert_eq!(active_mockchain_tip, indexer_tip);
-    // }
+        let indexer_tip = dbg!(indexer.snapshot_nonfinalized_state().best_tip).0 .0;
+        let active_mockchain_tip = dbg!(mockchain.active_height());
+        assert_eq!(active_mockchain_tip, indexer_tip);
+    }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_mempool_transaction() {
@@ -367,46 +369,60 @@ mod mockchain_tests {
         );
     }
 
-    // #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-    // async fn get_mempool_stream() {
-    //     let (blocks, indexer, mockchain) = load_test_vectors_and_sync_chain_index(true).await;
-    //     let block_data: Vec<zebra_chain::block::Block> = blocks
-    //         .iter()
-    //         .map(|(_height, _chain_block, _compact_block, zebra_block, _roots)| zebra_block.clone())
-    //         .collect();
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn get_mempool_stream() {
+        let (blocks, indexer, mockchain) = load_test_vectors_and_sync_chain_index(true).await;
 
-    //     sleep(Duration::from_millis(2000)).await;
+        let block_data: Vec<zebra_chain::block::Block> = blocks
+            .iter()
+            .map(|(_height, _chain_block, _compact_block, zebra_block, _roots)| zebra_block.clone())
+            .collect();
 
-    //     let mempool_height = (dbg!(mockchain.active_height()) as usize) + 1;
-    //     let mut mempool_transactions = block_data
-    //         .get(mempool_height)
-    //         .map(|b| b.transactions.clone())
-    //         .unwrap_or_default();
-    //     mempool_transactions.sort_by_key(|a| a.hash());
+        sleep(Duration::from_millis(2000)).await;
 
-    //     let nonfinalized_snapshot = indexer.snapshot_nonfinalized_state();
-    //     let stream = indexer.get_mempool_stream(&nonfinalized_snapshot).unwrap();
+        let next_mempool_height_index = (dbg!(mockchain.active_height()) as usize) + 1;
+        let mut mempool_transactions = block_data
+            .get(next_mempool_height_index)
+            .map(|block| block.transactions.clone())
+            .unwrap_or_default();
+        mempool_transactions.sort_by_key(|transaction| transaction.hash());
 
-    //     let mut streamed: Vec<zebra_chain::transaction::Transaction> = stream
-    //         .take(mempool_transactions.len() + 1)
-    //         .collect::<Vec<_>>()
-    //         .await
-    //         .into_iter()
-    //         .map(|res| res.unwrap())
-    //         .map(|bytes| {
-    //             bytes
-    //                 .zcash_deserialize_into::<zebra_chain::transaction::Transaction>()
-    //                 .unwrap()
-    //         })
-    //         .collect();
-    //     streamed.sort_by_key(|a| a.hash());
+        let mempool_stream_task = tokio::spawn(async move {
+            let nonfinalized_snapshot = indexer.snapshot_nonfinalized_state();
+            let mut mempool_stream = indexer
+                .get_mempool_stream(&nonfinalized_snapshot)
+                .expect("failed to create mempool stream");
 
-    //     assert_eq!(
-    //         mempool_transactions
-    //             .iter()
-    //             .map(|tx| tx.as_ref().clone())
-    //             .collect::<Vec<_>>(),
-    //         streamed,
-    //     );
-    // }
+            let mut indexer_mempool_transactions: Vec<zebra_chain::transaction::Transaction> =
+                Vec::new();
+
+            while let Some(tx_bytes_res) = mempool_stream.next().await {
+                let tx_bytes = tx_bytes_res.expect("stream error");
+                let tx: zebra_chain::transaction::Transaction =
+                    tx_bytes.zcash_deserialize_into().expect("deserialize tx");
+                indexer_mempool_transactions.push(tx);
+            }
+
+            indexer_mempool_transactions.sort_by_key(|tx| tx.hash());
+            indexer_mempool_transactions
+        });
+
+        // Ensure the subscription is attached before we mine the block that will close the stream.
+        sleep(Duration::from_millis(500)).await;
+
+        // Mining a block should finalize the current mempool set and end the stream.
+        mockchain.mine_blocks(1);
+
+        // Wait for the collector task to complete and return the results.
+        let indexer_mempool_stream_transactions =
+            mempool_stream_task.await.expect("collector task failed");
+
+        assert_eq!(
+            mempool_transactions
+                .iter()
+                .map(|tx| tx.as_ref().clone())
+                .collect::<Vec<_>>(),
+            indexer_mempool_stream_transactions,
+        );
+    }
 }

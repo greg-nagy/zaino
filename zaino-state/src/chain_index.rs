@@ -205,6 +205,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
                                     .ok_or(SyncError::CompetingSyncProcess)?,
                             )
                             .ok_or(SyncError::CompetingSyncProcess)?;
+                        // TODO: Handle write errors better (fix db and continue)
                         fs.write_block(next_finalized_block.clone())
                             .await
                             .map_err(|_e| SyncError::CompetingSyncProcess)?;
