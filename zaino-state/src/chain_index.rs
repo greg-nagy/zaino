@@ -169,7 +169,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndexer<Source> {
     }
 
     /// Creates a [`NodeBackedChainIndex`] from self,
-    /// a clone-safe, ready only view onto the running indexer.
+    /// a clone-safe, read-only view onto the running indexer.
     pub async fn to_index(&self) -> NodeBackedChainIndex<Source> {
         NodeBackedChainIndex {
             mempool: self.mempool.subscriber(),
