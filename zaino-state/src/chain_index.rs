@@ -124,7 +124,7 @@ pub trait ChainIndex {
 /// the entire chain at once. Backed by a source of blocks, either
 /// a zebra ReadStateService (direct read access to a running
 /// zebrad's database) or a jsonRPC connection to a validator.
-pub struct NodeBackedChainIndexer<Source: BlockchainSource = ValidatorConnector> {
+pub struct NodeBackedChainIndex<Source: BlockchainSource = ValidatorConnector> {
     #[allow(dead_code)]
     mempool: std::sync::Arc<mempool::Mempool<Source>>,
     non_finalized_state: std::sync::Arc<crate::NonFinalizedState<Source>>,
@@ -133,7 +133,7 @@ pub struct NodeBackedChainIndexer<Source: BlockchainSource = ValidatorConnector>
     status: AtomicStatus,
 }
 
-impl<Source: BlockchainSource> NodeBackedChainIndexer<Source> {
+impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
     /// Creates a new chainindex from a connection to a validator
     /// Currently this is a ReadStateService or JsonRpSeeConnector
     pub async fn new(
@@ -170,8 +170,8 @@ impl<Source: BlockchainSource> NodeBackedChainIndexer<Source> {
 
     /// Creates a [`NodeBackedChainIndex`] from self,
     /// a clone-safe, read-only view onto the running indexer.
-    pub async fn to_index(&self) -> NodeBackedChainIndex<Source> {
-        NodeBackedChainIndex {
+    pub async fn to_index(&self) -> NodeBackedChainIndexSubscriber<Source> {
+        NodeBackedChainIndexSubscriber {
             mempool: self.mempool.subscriber(),
             non_finalized_state: self.non_finalized_state.clone(),
             finalized_state: self.finalized_db.to_reader(),
@@ -260,20 +260,20 @@ impl<Source: BlockchainSource> NodeBackedChainIndexer<Source> {
     }
 }
 
-/// A clone-safe *read-only* view onto a running [`NodeBackedChainIndexer`].
+/// A clone-safe *read-only* view onto a running [`NodeBackedChainIndex`].
 ///
 /// Designed for concurrent efficiency.
 ///
-/// [`NodeBackedChainIndex`] can safely be cloned and dropped freely.
+/// [`NodeBackedChainIndexSubscriber`] can safely be cloned and dropped freely.
 #[derive(Clone)]
-pub struct NodeBackedChainIndex<Source: BlockchainSource = ValidatorConnector> {
+pub struct NodeBackedChainIndexSubscriber<Source: BlockchainSource = ValidatorConnector> {
     mempool: mempool::MempoolSubscriber,
     non_finalized_state: std::sync::Arc<crate::NonFinalizedState<Source>>,
     finalized_state: finalised_state::reader::DbReader,
     status: AtomicStatus,
 }
 
-impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
+impl<Source: BlockchainSource> NodeBackedChainIndexSubscriber<Source> {
     /// Displays the status of the chain_index
     pub fn status(&self) -> StatusType {
         let finalized_status = self.finalized_state.status();
@@ -342,7 +342,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
     }
 }
 
-impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
+impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Source> {
     type Snapshot = Arc<NonfinalizedBlockCacheSnapshot>;
     type Error = ChainIndexError;
 

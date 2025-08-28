@@ -32,7 +32,7 @@ mod mockchain_tests {
                 build_active_mockchain_source, build_mockchain_source, load_test_vectors,
             },
             types::TransactionHash,
-            ChainIndex, NodeBackedChainIndex, NodeBackedChainIndexer,
+            ChainIndex, NodeBackedChainIndex, NodeBackedChainIndexSubscriber,
         },
         ChainBlock,
     };
@@ -52,8 +52,8 @@ mod mockchain_tests {
                 u64,
             ),
         )>,
-        NodeBackedChainIndexer<MockchainSource>,
         NodeBackedChainIndex<MockchainSource>,
+        NodeBackedChainIndexSubscriber<MockchainSource>,
         MockchainSource,
     ) {
         super::init_tracing();
@@ -94,7 +94,7 @@ mod mockchain_tests {
             no_db: false,
         };
 
-        let indexer = NodeBackedChainIndexer::new(source.clone(), config)
+        let indexer = NodeBackedChainIndex::new(source.clone(), config)
             .await
             .unwrap();
         let index_reader = indexer.to_index().await;

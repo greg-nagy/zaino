@@ -55,7 +55,7 @@ mod chain_query_interface {
         },
         chain_index::{
             source::ValidatorConnector, types::TransactionHash, NodeBackedChainIndex,
-            NodeBackedChainIndexer,
+            NodeBackedChainIndexSubscriber,
         },
         Height, StateService, StateServiceConfig, ZcashService as _,
     };
@@ -73,8 +73,8 @@ mod chain_query_interface {
     ) -> (
         TestManager,
         StateService,
-        NodeBackedChainIndexer,
         NodeBackedChainIndex,
+        NodeBackedChainIndexSubscriber,
     ) {
         let (test_manager, json_service) = create_test_manager_and_connector(
             validator,
@@ -167,7 +167,7 @@ mod chain_query_interface {
             no_sync: false,
             no_db: false,
         };
-        let chain_index = NodeBackedChainIndexer::new(
+        let chain_index = NodeBackedChainIndex::new(
             ValidatorConnector::State(chain_index::source::State {
                 read_state_service: state_service.read_state_service().clone(),
                 mempool_fetcher: json_service,
