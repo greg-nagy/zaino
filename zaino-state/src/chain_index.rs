@@ -191,7 +191,7 @@ where {
         let combined_status = StatusType::from(self.status.load())
             .combine(finalized_status)
             .combine(mempool_status);
-        self.status.store(combined_status.clone() as usize);
+        self.status.store(combined_status as usize);
         combined_status
     }
 }
