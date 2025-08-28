@@ -167,7 +167,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
         let fs = self.finalized_db.clone();
         let status = self.status.clone();
         tokio::task::spawn(async move {
-            Ok(loop {
+            loop {
                 if status.load() == StatusType::Closing as usize {
                     break;
                 }
@@ -209,7 +209,8 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
                 }
                 status.store(StatusType::Ready as usize);
                 tokio::time::sleep(Duration::from_millis(500)).await
-            })
+            }
+            Ok(())
         })
     }
     async fn get_fullblock_bytes_from_node(
