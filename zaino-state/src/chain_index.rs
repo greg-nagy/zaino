@@ -12,13 +12,14 @@
 //!   - NOTE: Full transaction and block data is served from the backend finalizer.
 
 use crate::error::{ChainIndexError, ChainIndexErrorKind, FinalisedStateError};
-use crate::SyncError;
+use crate::{AtomicStatus, StatusType, SyncError};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use futures::Stream;
+use futures::{FutureExt, Stream};
 use non_finalised_state::NonfinalizedBlockCacheSnapshot;
 use source::{BlockchainSource, ValidatorConnector};
 use tokio_stream::StreamExt;
+use tracing::info;
 use types::ChainBlock;
 pub use zebra_chain::parameters::Network as ZebraNetwork;
 use zebra_chain::serialization::ZcashSerialize;
@@ -223,8 +224,7 @@ pub trait ChainIndex {
     /// Returns a stream of mempool transactions, ending the stream when the chain tip block hash
     /// changes (a new block is mined or a reorg occurs).
     ///
-    /// If the chain tip has changed from the given spanshot an IncorrectChainTip error is returned.
-    /// NOTE: Is this correct here?
+    /// If the chain tip has changed from the given spanshot returns None.
     #[allow(clippy::type_complexity)]
     fn get_mempool_stream(
         &self,
@@ -346,12 +346,12 @@ pub trait ChainIndex {
 /// - Automatic synchronization between state layers
 /// - Snapshot-based consistency for queries
 pub struct NodeBackedChainIndex<Source: BlockchainSource = ValidatorConnector> {
-    _mempool_state: std::sync::Arc<mempool::Mempool<Source>>,
-    mempool: mempool::MempoolSubscriber,
+    #[allow(dead_code)]
+    mempool: std::sync::Arc<mempool::Mempool<Source>>,
     non_finalized_state: std::sync::Arc<crate::NonFinalizedState<Source>>,
-    // pub crate required for unit tests, this can be removed once we implement finalised state sync.
-    pub(crate) finalized_db: std::sync::Arc<finalised_state::ZainoDB>,
-    finalized_state: finalised_state::reader::DbReader,
+    finalized_db: std::sync::Arc<finalised_state::ZainoDB>,
+    sync_loop_handle: Option<tokio::task::JoinHandle<Result<(), SyncError>>>,
+    status: AtomicStatus,
 }
 
 impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
@@ -360,45 +360,152 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
     pub async fn new(
         source: Source,
         config: crate::config::BlockCacheConfig,
-    ) -> Result<Self, crate::InitError>
-where {
+    ) -> Result<Self, crate::InitError> {
         use futures::TryFutureExt as _;
 
-        let (mempool_state, non_finalized_state, finalized_db) = futures::try_join!(
-            mempool::Mempool::spawn(source.clone(), None)
-                .map_err(crate::InitError::MempoolInitialzationError),
-            crate::NonFinalizedState::initialize(source.clone(), config.network.clone(), None),
-            finalised_state::ZainoDB::spawn(config, source)
-                .map_err(crate::InitError::FinalisedStateInitialzationError)
-        )?;
-        let finalized_db = std::sync::Arc::new(finalized_db);
-        let chain_index = Self {
-            mempool: mempool_state.subscriber(),
-            _mempool_state: std::sync::Arc::new(mempool_state),
-            non_finalized_state: std::sync::Arc::new(non_finalized_state),
-            finalized_state: finalized_db.to_reader(),
-            finalized_db,
+        let finalized_db =
+            Arc::new(finalised_state::ZainoDB::spawn(config.clone(), source.clone()).await?);
+        let mempool_state = mempool::Mempool::spawn(source.clone(), None)
+            .map_err(crate::InitError::MempoolInitialzationError)
+            .await?;
+
+        let reader = finalized_db.to_reader();
+        let top_of_finalized = if let Some(height) = reader.db_height().await? {
+            reader.get_chain_block(height).await?
+        } else {
+            None
         };
-        chain_index.start_sync_loop();
+
+        let non_finalized_state =
+            crate::NonFinalizedState::initialize(source, config.network, top_of_finalized).await?;
+        let mut chain_index = Self {
+            mempool: std::sync::Arc::new(mempool_state),
+            non_finalized_state: std::sync::Arc::new(non_finalized_state),
+            finalized_db,
+            sync_loop_handle: None,
+            status: AtomicStatus::new(StatusType::Spawning as u16),
+        };
+        chain_index.sync_loop_handle = Some(chain_index.start_sync_loop());
         Ok(chain_index)
+    }
+
+    /// Creates a [`NodeBackedChainIndexSubscriber`] from self,
+    /// a clone-safe, drop-safe, read-only view onto the running indexer.
+    pub async fn subscriber(&self) -> NodeBackedChainIndexSubscriber<Source> {
+        NodeBackedChainIndexSubscriber {
+            mempool: self.mempool.subscriber(),
+            non_finalized_state: self.non_finalized_state.clone(),
+            finalized_state: self.finalized_db.to_reader(),
+            status: self.status.clone(),
+        }
+    }
+
+    /// Shut down the sync process, for a cleaner drop
+    /// an error indicates a failure to cleanly shutdown. Dropping the
+    /// chain index should still stop everything
+    pub async fn shutdown(&self) -> Result<(), FinalisedStateError> {
+        self.finalized_db.shutdown().await?;
+        self.mempool.close();
+        self.status.store(StatusType::Closing as usize);
+        Ok(())
+    }
+
+    /// Displays the status of the chain_index
+    pub fn status(&self) -> StatusType {
+        let finalized_status = self.finalized_db.status();
+        let mempool_status = self.mempool.status();
+        let combined_status = StatusType::from(self.status.load())
+            .combine(finalized_status)
+            .combine(mempool_status);
+        self.status.store(combined_status as usize);
+        combined_status
+    }
+
+    pub(super) fn start_sync_loop(&self) -> tokio::task::JoinHandle<Result<(), SyncError>> {
+        info!("Starting ChainIndex sync.");
+        let nfs = self.non_finalized_state.clone();
+        let fs = self.finalized_db.clone();
+        let status = self.status.clone();
+        tokio::task::spawn(async move {
+            loop {
+                if status.load() == StatusType::Closing as usize {
+                    break;
+                }
+
+                status.store(StatusType::Syncing as usize);
+                // Sync nfs to chain tip, trimming blocks to finalized tip.
+                nfs.sync(fs.clone()).await?;
+
+                // Sync fs to chain tip - 100.
+                {
+                    let snapshot = nfs.get_snapshot();
+                    while snapshot.best_tip.0 .0
+                        > (fs
+                            .to_reader()
+                            .db_height()
+                            .await
+                            .map_err(|_e| SyncError::CannotReadFinalizedState)?
+                            .unwrap_or(types::Height(0))
+                            .0
+                            + 100)
+                    {
+                        let next_finalized_height = fs
+                            .to_reader()
+                            .db_height()
+                            .await
+                            .map_err(|_e| SyncError::CannotReadFinalizedState)?
+                            .map(|height| height + 1)
+                            .unwrap_or(types::Height(0));
+                        let next_finalized_block = snapshot
+                            .blocks
+                            .get(
+                                snapshot
+                                    .heights_to_hashes
+                                    .get(&(next_finalized_height))
+                                    .ok_or(SyncError::CompetingSyncProcess)?,
+                            )
+                            .ok_or(SyncError::CompetingSyncProcess)?;
+                        // TODO: Handle write errors better (fix db and continue)
+                        fs.write_block(next_finalized_block.clone())
+                            .await
+                            .map_err(|_e| SyncError::CompetingSyncProcess)?;
+                    }
+                }
+                status.store(StatusType::Ready as usize);
+                // TODO: configure sleep duration?
+                tokio::time::sleep(Duration::from_millis(500)).await
+                // TODO: Check for shutdown signal.
+            }
+            Ok(())
+        })
     }
 }
 
-impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
-    pub(super) fn start_sync_loop(
-        &self,
-    ) -> tokio::task::JoinHandle<Result<std::convert::Infallible, SyncError>> {
-        let nfs = self.non_finalized_state.clone();
-        let fs = self.finalized_db.clone();
-        tokio::task::spawn(async move {
-            loop {
-                nfs.sync(fs.clone()).await?;
-                //TODO: configure sleep duration?
-                //TODO: sync finalized state
-                tokio::time::sleep(Duration::from_millis(500)).await
-            }
-        })
+/// A clone-safe *read-only* view onto a running [`NodeBackedChainIndex`].
+///
+/// Designed for concurrent efficiency.
+///
+/// [`NodeBackedChainIndexSubscriber`] can safely be cloned and dropped freely.
+#[derive(Clone)]
+pub struct NodeBackedChainIndexSubscriber<Source: BlockchainSource = ValidatorConnector> {
+    mempool: mempool::MempoolSubscriber,
+    non_finalized_state: std::sync::Arc<crate::NonFinalizedState<Source>>,
+    finalized_state: finalised_state::reader::DbReader,
+    status: AtomicStatus,
+}
+
+impl<Source: BlockchainSource> NodeBackedChainIndexSubscriber<Source> {
+    /// Displays the status of the chain_index
+    pub fn status(&self) -> StatusType {
+        let finalized_status = self.finalized_state.status();
+        let mempool_status = self.mempool.status();
+        let combined_status = StatusType::from(self.status.load())
+            .combine(finalized_status)
+            .combine(mempool_status);
+        self.status.store(combined_status as usize);
+        combined_status
     }
+
     async fn get_fullblock_bytes_from_node(
         &self,
         id: HashOrHeight,
@@ -456,7 +563,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
     }
 }
 
-impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
+impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Source> {
     type Snapshot = Arc<NonfinalizedBlockCacheSnapshot>;
     type Error = ChainIndexError;
 
@@ -566,6 +673,9 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
         // This would be a more efficient way to fetch transaction data.
         //
         // Should NodeBackedChainIndex keep a clone of source to use here?
+        //
+        // This will require careful attention as there is a case where a transaction may still exist,
+        // but may have been reorged into a different block, possibly breaking the validation of this interface.
         let full_block = self
             .non_finalized_state
             .source
@@ -642,25 +752,23 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
     /// Returns a stream of mempool transactions, ending the stream when the chain tip block hash
     /// changes (a new block is mined or a reorg occurs).
     ///
-    /// If the chain tip has changed from the given snapshot at the time of calling
-    /// an IncorrectChainTip error is returned holding the current chain tip block hash.
-    /// NOTE: Is this correct here?
+    /// Returns None if the chain tip has changed from the given snapshot.
     fn get_mempool_stream(
         &self,
         snapshot: &Self::Snapshot,
-    ) -> Option<impl Stream<Item = Result<Vec<u8>, Self::Error>>> {
+    ) -> Option<impl futures::Stream<Item = Result<Vec<u8>, Self::Error>>> {
         let expected_chain_tip = snapshot.best_tip.1;
-
         let mut subscriber = self.mempool.clone();
 
-        let (out_tx, out_rx) = tokio::sync::mpsc::channel::<Result<Vec<u8>, ChainIndexError>>(32);
+        match subscriber
+            .get_mempool_stream(Some(expected_chain_tip))
+            .now_or_never()
+        {
+            Some(Ok((in_rx, _handle))) => {
+                let (out_tx, out_rx) =
+                    tokio::sync::mpsc::channel::<Result<Vec<u8>, ChainIndexError>>(32);
 
-        tokio::spawn(async move {
-            match subscriber
-                .get_mempool_stream(Some(expected_chain_tip))
-                .await
-            {
-                Ok((in_rx, _handle)) => {
+                tokio::spawn(async move {
                     let mut in_stream = tokio_stream::wrappers::ReceiverStream::new(in_rx);
                     while let Some(item) = in_stream.next().await {
                         match item {
@@ -677,14 +785,28 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
                             }
                         }
                     }
-                }
-                Err(e) => {
-                    let _ = out_tx.send(Err(e.into())).await;
-                }
-            }
-        });
+                });
 
-        Some(tokio_stream::wrappers::ReceiverStream::new(out_rx))
+                Some(tokio_stream::wrappers::ReceiverStream::new(out_rx))
+            }
+            Some(Err(crate::error::MempoolError::IncorrectChainTip { .. })) => None,
+            Some(Err(e)) => {
+                let (out_tx, out_rx) =
+                    tokio::sync::mpsc::channel::<Result<Vec<u8>, ChainIndexError>>(1);
+                let _ = out_tx.try_send(Err(e.into()));
+                Some(tokio_stream::wrappers::ReceiverStream::new(out_rx))
+            }
+            None => {
+                // Should not happen because the inner tip check is synchronous, but fail safe.
+                let (out_tx, out_rx) =
+                    tokio::sync::mpsc::channel::<Result<Vec<u8>, ChainIndexError>>(1);
+                let _ = out_tx.try_send(Err(ChainIndexError::child_process_status_error(
+                    "mempool",
+                    crate::error::StatusError(crate::StatusType::RecoverableError),
+                )));
+                Some(tokio_stream::wrappers::ReceiverStream::new(out_rx))
+            }
+        }
     }
 }
 
