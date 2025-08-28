@@ -158,7 +158,7 @@ where {
         Ok(chain_index)
     }
 
-    /// Creates a [`NodeBackedChainIndexReader`] from self,
+    /// Creates a [`NodeBackedChainIndex`] from self,
     /// a clone-safe, ready only view onto the running indexer.
     pub async fn to_index(&self) -> NodeBackedChainIndex<Source> {
         NodeBackedChainIndex {
