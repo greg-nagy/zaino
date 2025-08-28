@@ -126,12 +126,9 @@ pub trait ChainIndex {
 /// zebrad's database) or a jsonRPC connection to a validator.
 pub struct NodeBackedChainIndex<Source: BlockchainSource = ValidatorConnector> {
     #[allow(dead_code)]
-    mempool_state: std::sync::Arc<mempool::Mempool<Source>>,
-    mempool: mempool::MempoolSubscriber,
+    mempool: std::sync::Arc<mempool::Mempool<Source>>,
     non_finalized_state: std::sync::Arc<crate::NonFinalizedState<Source>>,
-    // pub crate required for unit tests, this can be removed once we implement finalised state sync.
-    pub(crate) finalized_db: std::sync::Arc<finalised_state::ZainoDB>,
-    finalized_state: finalised_state::reader::DbReader,
+    finalized_db: std::sync::Arc<finalised_state::ZainoDB>,
     sync_loop_handle: Option<tokio::task::JoinHandle<Result<(), SyncError>>>,
     status: AtomicStatus,
 }
@@ -142,8 +139,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
     pub async fn new(
         source: Source,
         config: crate::config::BlockCacheConfig,
-    ) -> Result<Self, crate::InitError>
-where {
+    ) -> Result<Self, crate::InitError> {
         use futures::TryFutureExt as _;
 
         let finalized_db =
@@ -162,10 +158,8 @@ where {
         let non_finalized_state =
             crate::NonFinalizedState::initialize(source, config.network, top_of_finalized).await?;
         let mut chain_index = Self {
-            mempool: mempool_state.subscriber(),
-            mempool_state: std::sync::Arc::new(mempool_state),
+            mempool: std::sync::Arc::new(mempool_state),
             non_finalized_state: std::sync::Arc::new(non_finalized_state),
-            finalized_state: reader,
             finalized_db,
             sync_loop_handle: None,
             status: AtomicStatus::new(StatusType::Spawning as u16),
@@ -174,12 +168,23 @@ where {
         Ok(chain_index)
     }
 
+    /// Creates a [`NodeBackedChainIndexSubscriber`] from self,
+    /// a clone-safe, drop-safe, read-only view onto the running indexer.
+    pub async fn subscriber(&self) -> NodeBackedChainIndexSubscriber<Source> {
+        NodeBackedChainIndexSubscriber {
+            mempool: self.mempool.subscriber(),
+            non_finalized_state: self.non_finalized_state.clone(),
+            finalized_state: self.finalized_db.to_reader(),
+            status: self.status.clone(),
+        }
+    }
+
     /// Shut down the sync process, for a cleaner drop
     /// an error indicates a failure to cleanly shutdown. Dropping the
     /// chain index should still stop everything
     pub async fn shutdown(&self) -> Result<(), FinalisedStateError> {
         self.finalized_db.shutdown().await?;
-        self.mempool_state.close();
+        self.mempool.close();
         self.status.store(StatusType::Closing as usize);
         Ok(())
     }
@@ -187,16 +192,14 @@ where {
     /// Displays the status of the chain_index
     pub fn status(&self) -> StatusType {
         let finalized_status = self.finalized_db.status();
-        let mempool_status = self.mempool_state.status();
+        let mempool_status = self.mempool.status();
         let combined_status = StatusType::from(self.status.load())
             .combine(finalized_status)
             .combine(mempool_status);
         self.status.store(combined_status as usize);
         combined_status
     }
-}
 
-impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
     pub(super) fn start_sync_loop(&self) -> tokio::task::JoinHandle<Result<(), SyncError>> {
         info!("Starting ChainIndex sync.");
         let nfs = self.non_finalized_state.clone();
@@ -254,6 +257,32 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
             }
             Ok(())
         })
+    }
+}
+
+/// A clone-safe *read-only* view onto a running [`NodeBackedChainIndex`].
+///
+/// Designed for concurrent efficiency.
+///
+/// [`NodeBackedChainIndexSubscriber`] can safely be cloned and dropped freely.
+#[derive(Clone)]
+pub struct NodeBackedChainIndexSubscriber<Source: BlockchainSource = ValidatorConnector> {
+    mempool: mempool::MempoolSubscriber,
+    non_finalized_state: std::sync::Arc<crate::NonFinalizedState<Source>>,
+    finalized_state: finalised_state::reader::DbReader,
+    status: AtomicStatus,
+}
+
+impl<Source: BlockchainSource> NodeBackedChainIndexSubscriber<Source> {
+    /// Displays the status of the chain_index
+    pub fn status(&self) -> StatusType {
+        let finalized_status = self.finalized_state.status();
+        let mempool_status = self.mempool.status();
+        let combined_status = StatusType::from(self.status.load())
+            .combine(finalized_status)
+            .combine(mempool_status);
+        self.status.store(combined_status as usize);
+        combined_status
     }
 
     async fn get_fullblock_bytes_from_node(
@@ -313,7 +342,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
     }
 }
 
-impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
+impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Source> {
     type Snapshot = Arc<NonfinalizedBlockCacheSnapshot>;
     type Error = ChainIndexError;
 

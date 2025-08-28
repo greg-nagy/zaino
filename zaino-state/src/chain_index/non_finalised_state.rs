@@ -342,7 +342,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
     }
 
     /// sync to the top of the chain, trimming to the finalised tip.
-    pub(crate) async fn sync(&self, finalized_db: Arc<ZainoDB>) -> Result<(), SyncError> {
+    pub(super) async fn sync(&self, finalized_db: Arc<ZainoDB>) -> Result<(), SyncError> {
         let initial_state = self.get_snapshot();
         let mut new_blocks = Vec::new();
         let mut nonbest_blocks = HashMap::new();
@@ -534,15 +534,12 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
     }
 
     /// Stage a block
-    pub fn stage(
-        &self,
-        block: ChainBlock,
-    ) -> Result<(), Box<mpsc::error::TrySendError<ChainBlock>>> {
+    fn stage(&self, block: ChainBlock) -> Result<(), Box<mpsc::error::TrySendError<ChainBlock>>> {
         self.staging_sender.try_send(block).map_err(Box::new)
     }
 
     /// Add all blocks from the staging area, and save a new cache snapshot, trimming block below the finalised tip.
-    pub(crate) async fn update(&self, finalized_db: Arc<ZainoDB>) -> Result<(), UpdateError> {
+    async fn update(&self, finalized_db: Arc<ZainoDB>) -> Result<(), UpdateError> {
         let mut new = HashMap::<BlockHash, ChainBlock>::new();
         let mut staged = self.staged.lock().await;
         loop {
@@ -635,7 +632,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
     }
 
     /// Get a snapshot of the block cache
-    pub fn get_snapshot(&self) -> Arc<NonfinalizedBlockCacheSnapshot> {
+    pub(super) fn get_snapshot(&self) -> Arc<NonfinalizedBlockCacheSnapshot> {
         self.current.load_full()
     }
 
