@@ -178,17 +178,19 @@ where {
     /// an error indicates a failure to cleanly shutdown. Dropping the
     /// chain index should still stop everything
     pub async fn shutdown(&self) -> Result<(), FinalisedStateError> {
-        //TODO: mempool
         self.finalized_db.shutdown().await?;
+        self.mempool_state.close();
         self.status.store(StatusType::Closing as usize);
         Ok(())
     }
 
     /// Displays the status of the chain_index
     pub fn status(&self) -> StatusType {
-        //TODO: mempool
         let finalized_status = self.finalized_db.status();
-        let combined_status = StatusType::from(self.status.load()).combine(finalized_status);
+        let mempool_status = self.mempool_state.status();
+        let combined_status = StatusType::from(self.status.load())
+            .combine(finalized_status)
+            .combine(mempool_status);
         self.status.store(combined_status.clone() as usize);
         combined_status
     }
