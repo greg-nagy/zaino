@@ -246,7 +246,7 @@ pub trait ChainIndex {
 /// - A zebra `ReadStateService` for direct database access (preferred for performance)
 /// - A JSON-RPC connection to any validator node (zcashd, zebrad, or another zainod)
 ///
-/// To use the [`ChainIndex`] trait methods, call [`subscriber()`](NodeBackedChainIndex::subscriber) 
+/// To use the [`ChainIndex`] trait methods, call [`subscriber()`](NodeBackedChainIndex::subscriber)
 /// to get a [`NodeBackedChainIndexSubscriber`] which implements the trait.
 ///
 /// # Construction

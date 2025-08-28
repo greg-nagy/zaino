@@ -46,8 +46,8 @@ pub use chain_index::types::{
     ChainWork, CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes, CompactOrchardAction,
     CompactSaplingOutput, CompactSaplingSpend, CompactTxData, Height, OrchardCompactTx,
     OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, ScriptType, ShardIndex, ShardRoot,
-    TransparentCompactTx, TransparentTxList, TxInCompact, TxLocation, TxOutCompact, TxidList,
-    TransactionHash,
+    TransactionHash, TransparentCompactTx, TransparentTxList, TxInCompact, TxLocation,
+    TxOutCompact, TxidList,
 };
 
 pub(crate) mod local_cache;
@@ -66,7 +66,9 @@ pub mod bench {
 
 pub(crate) mod config;
 
-pub use config::{BackendConfig, BackendType, BlockCacheConfig, FetchServiceConfig, StateServiceConfig};
+pub use config::{
+    BackendConfig, BackendType, BlockCacheConfig, FetchServiceConfig, StateServiceConfig,
+};
 
 pub(crate) mod error;
 
