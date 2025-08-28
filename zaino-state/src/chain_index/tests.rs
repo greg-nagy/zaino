@@ -97,7 +97,7 @@ mod mockchain_tests {
         let indexer = NodeBackedChainIndex::new(source.clone(), config)
             .await
             .unwrap();
-        let index_reader = indexer.to_index().await;
+        let index_reader = indexer.subscriber().await;
 
         loop {
             let check_height: u32 = match active_mockchain_source {
