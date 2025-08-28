@@ -37,7 +37,7 @@ pub struct Mempool<T: BlockchainSource> {
     /// The hash of the chain tip for which this mempool is currently serving.
     mempool_chain_tip: tokio::sync::watch::Sender<BlockHash>,
     /// Mempool sync handle.
-    sync_task_handle: Option<tokio::task::JoinHandle<()>>,
+    sync_task_handle: Option<std::sync::Mutex<tokio::task::JoinHandle<()>>>,
     /// mempool status.
     status: AtomicStatus,
 }
@@ -111,7 +111,7 @@ impl<T: BlockchainSource> Mempool<T> {
             };
         }
 
-        mempool.sync_task_handle = Some(mempool.serve().await?);
+        mempool.sync_task_handle = Some(std::sync::Mutex::new(mempool.serve().await?));
 
         Ok(mempool)
     }
@@ -312,11 +312,13 @@ impl<T: BlockchainSource> Mempool<T> {
     }
 
     /// Sets the mempool to close gracefully.
-    pub fn close(&mut self) {
+    pub fn close(&self) {
         self.status.store(StatusType::Closing.into());
         self.state.notify(self.status());
-        if let Some(handle) = self.sync_task_handle.take() {
-            handle.abort();
+        if let Some(ref handle) = self.sync_task_handle {
+            if let Ok(handle) = handle.lock() {
+                handle.abort();
+            }
         }
     }
 }
@@ -326,7 +328,9 @@ impl<T: BlockchainSource> Drop for Mempool<T> {
         self.status.store(StatusType::Closing.into());
         self.state.notify(StatusType::Closing);
         if let Some(handle) = self.sync_task_handle.take() {
-            handle.abort();
+            if let Ok(handle) = handle.lock() {
+                handle.abort();
+            }
         }
     }
 }
