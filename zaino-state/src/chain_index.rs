@@ -103,8 +103,7 @@ pub struct NodeBackedChainIndex<Source: BlockchainSource = ValidatorConnector> {
     pub(crate) finalized_db: std::sync::Arc<finalised_state::ZainoDB>,
     finalized_state: finalised_state::reader::DbReader,
     sync_loop_handle: Option<tokio::task::JoinHandle<Result<(), SyncError>>>,
-    status: Arc<AtomicStatus>,
-    shutdown_signal: std::sync::Mutex<futures::channel::oneshot::Sender<()>>,
+    status: AtomicStatus,
 }
 
 impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
@@ -131,59 +130,48 @@ where {
 
         let non_finalized_state =
             crate::NonFinalizedState::initialize(source, config.network, top_of_finalized).await?;
-        let (shutdown_signal, shutdown_receiver) = futures::channel::oneshot::channel();
         let mut chain_index = Self {
             non_finalized_state: std::sync::Arc::new(non_finalized_state),
             finalized_state: finalized_db.to_reader(),
             finalized_db,
             sync_loop_handle: None,
-            status: Arc::new(AtomicStatus::new(StatusType::Spawning as u16)),
-            shutdown_signal: std::sync::Mutex::new(shutdown_signal),
+            status: AtomicStatus::new(StatusType::Spawning as u16),
         };
-        chain_index.sync_loop_handle = Some(chain_index.start_sync_loop(shutdown_receiver));
+        chain_index.sync_loop_handle = Some(chain_index.start_sync_loop());
         Ok(chain_index)
     }
 
     /// Shut down the sync process, for a cleaner drop
     /// an error indicates a failure to cleanly shutdown. Dropping the
     /// chain index should still stop everything
-    pub fn shutdown(&self) -> Result<(), ()> {
-        match self.shutdown_signal.lock() {
-            Ok(mut shutdown_guard) => {
-                let (mut sender, _) = futures::channel::oneshot::channel();
-                std::mem::swap(&mut *shutdown_guard, &mut sender);
-
-                match sender.send(()) {
-                    Ok(()) => {
-                        self.status.store(StatusType::Closing as usize);
-                        Ok(())
-                    }
-                    Err(_) => Err(()),
-                }
-            }
-            Err(_) => Err(()),
-        }
+    pub async fn shutdown(&self) -> Result<(), FinalisedStateError> {
+        //TODO: mempool
+        self.finalized_db.shutdown().await?;
+        self.status.store(StatusType::Closing as usize);
+        Ok(())
     }
 
     /// Displays the status of the chain_index
-    pub fn get_status(&self) -> StatusType {
-        StatusType::from(self.status.load())
+    pub fn status(&self) -> StatusType {
+        //TODO: mempool
+        let finalized_status = self.finalized_db.status();
+        let combined_status = StatusType::from(self.status.load()).combine(finalized_status);
+        self.status.store(combined_status.clone() as usize);
+        combined_status
     }
 }
 
 impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
-    pub(super) fn start_sync_loop(
-        &self,
-        mut shutdown_receiver: futures::channel::oneshot::Receiver<()>,
-    ) -> tokio::task::JoinHandle<Result<(), SyncError>> {
+    pub(super) fn start_sync_loop(&self) -> tokio::task::JoinHandle<Result<(), SyncError>> {
         let nfs = self.non_finalized_state.clone();
         let fs = self.finalized_db.clone();
         let status = self.status.clone();
         tokio::task::spawn(async move {
             Ok(loop {
-                if shutdown_receiver.try_recv() == Ok(Some(())) {
+                if status.load() == StatusType::Closing as usize {
                     break;
                 }
+
                 status.store(StatusType::Syncing as usize);
                 nfs.sync(fs.clone()).await?;
                 {
