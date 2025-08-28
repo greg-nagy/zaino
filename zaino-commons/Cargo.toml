@@ -1,0 +1,22 @@
+[package]
+name = "zaino-commons"
+description = "Common types and configurations shared across Zaino crates."
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+version = { workspace = true }
+
+[dependencies]
+# Zebra
+zebra-chain = { workspace = true }
+
+# Zingo Infrastructure  
+zingo-infra-services = { workspace = true }
+
+# Serialization
+serde = { workspace = true, features = ["derive"] }
+
+# Error handling
+thiserror = { workspace = true }
