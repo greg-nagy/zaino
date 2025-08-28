@@ -125,7 +125,8 @@ pub trait ChainIndex {
 /// a zebra ReadStateService (direct read access to a running
 /// zebrad's database) or a jsonRPC connection to a validator.
 pub struct NodeBackedChainIndex<Source: BlockchainSource = ValidatorConnector> {
-    _mempool_state: std::sync::Arc<mempool::Mempool<Source>>,
+    #[allow(dead_code)]
+    mempool_state: std::sync::Arc<mempool::Mempool<Source>>,
     mempool: mempool::MempoolSubscriber,
     non_finalized_state: std::sync::Arc<crate::NonFinalizedState<Source>>,
     // pub crate required for unit tests, this can be removed once we implement finalised state sync.
@@ -153,7 +154,7 @@ where {
         let finalized_db = std::sync::Arc::new(finalized_db);
         let chain_index = Self {
             mempool: mempool_state.subscriber(),
-            _mempool_state: std::sync::Arc::new(mempool_state),
+            mempool_state: std::sync::Arc::new(mempool_state),
             non_finalized_state: std::sync::Arc::new(non_finalized_state),
             finalized_state: finalized_db.to_reader(),
             finalized_db,
@@ -384,6 +385,9 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
         // This would be a more efficient way to fetch transaction data.
         //
         // Should NodeBackedChainIndex keep a clone of source to use here?
+        //
+        // This will require careful attention as there is a case where a transaction may still exist,
+        // but may have been reorged into a different block, possibly breaking the validation of this interface.
         let full_block = self
             .non_finalized_state
             .source
