@@ -13,6 +13,7 @@ version = { workspace = true }
 bench = []
 
 [dependencies]
+zaino-commons = { path = "../zaino-commons" }
 zaino-fetch = { workspace = true }
 zaino-proto = { workspace = true }
 
