@@ -12,7 +12,7 @@
 //!   - NOTE: Full transaction and block data is served from the backend finalizer.
 
 use crate::error::{ChainIndexError, ChainIndexErrorKind, FinalisedStateError};
-use crate::SyncError;
+use crate::{AtomicStatus, StatusType, SyncError};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use futures::{FutureExt, Stream};
@@ -132,6 +132,8 @@ pub struct NodeBackedChainIndex<Source: BlockchainSource = ValidatorConnector> {
     // pub crate required for unit tests, this can be removed once we implement finalised state sync.
     pub(crate) finalized_db: std::sync::Arc<finalised_state::ZainoDB>,
     finalized_state: finalised_state::reader::DbReader,
+    sync_loop_handle: Option<tokio::task::JoinHandle<Result<(), SyncError>>>,
+    status: AtomicStatus,
 }
 
 impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
@@ -144,35 +146,69 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
 where {
         use futures::TryFutureExt as _;
 
-        let (mempool_state, non_finalized_state, finalized_db) = futures::try_join!(
-            mempool::Mempool::spawn(source.clone(), None)
-                .map_err(crate::InitError::MempoolInitialzationError),
-            crate::NonFinalizedState::initialize(source.clone(), config.network.clone(), None),
-            finalised_state::ZainoDB::spawn(config, source)
-                .map_err(crate::InitError::FinalisedStateInitialzationError)
-        )?;
-        let finalized_db = std::sync::Arc::new(finalized_db);
-        let chain_index = Self {
+        let finalized_db =
+            Arc::new(finalised_state::ZainoDB::spawn(config.clone(), source.clone()).await?);
+        let mempool_state = mempool::Mempool::spawn(source.clone(), None)
+            .map_err(crate::InitError::MempoolInitialzationError)
+            .await?;
+
+        let reader = finalized_db.to_reader();
+        let top_of_finalized = if let Some(height) = reader.db_height().await? {
+            reader.get_chain_block(height).await?
+        } else {
+            None
+        };
+
+        let non_finalized_state =
+            crate::NonFinalizedState::initialize(source, config.network, top_of_finalized).await?;
+        let mut chain_index = Self {
             mempool: mempool_state.subscriber(),
             mempool_state: std::sync::Arc::new(mempool_state),
             non_finalized_state: std::sync::Arc::new(non_finalized_state),
-            finalized_state: finalized_db.to_reader(),
+            finalized_state: reader,
             finalized_db,
+            sync_loop_handle: None,
+            status: AtomicStatus::new(StatusType::Spawning as u16),
         };
-        chain_index.start_sync_loop();
+        chain_index.sync_loop_handle = Some(chain_index.start_sync_loop());
         Ok(chain_index)
+    }
+
+    /// Shut down the sync process, for a cleaner drop
+    /// an error indicates a failure to cleanly shutdown. Dropping the
+    /// chain index should still stop everything
+    pub async fn shutdown(&self) -> Result<(), FinalisedStateError> {
+        self.finalized_db.shutdown().await?;
+        self.mempool_state.close();
+        self.status.store(StatusType::Closing as usize);
+        Ok(())
+    }
+
+    /// Displays the status of the chain_index
+    pub fn status(&self) -> StatusType {
+        let finalized_status = self.finalized_db.status();
+        let mempool_status = self.mempool_state.status();
+        let combined_status = StatusType::from(self.status.load())
+            .combine(finalized_status)
+            .combine(mempool_status);
+        self.status.store(combined_status as usize);
+        combined_status
     }
 }
 
 impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
-    pub(super) fn start_sync_loop(
-        &self,
-    ) -> tokio::task::JoinHandle<Result<std::convert::Infallible, SyncError>> {
+    pub(super) fn start_sync_loop(&self) -> tokio::task::JoinHandle<Result<(), SyncError>> {
         info!("Starting ChainIndex sync.");
         let nfs = self.non_finalized_state.clone();
         let fs = self.finalized_db.clone();
+        let status = self.status.clone();
         tokio::task::spawn(async move {
             loop {
+                if status.load() == StatusType::Closing as usize {
+                    break;
+                }
+
+                status.store(StatusType::Syncing as usize);
                 // Sync nfs to chain tip, trimming blocks to finalized tip.
                 nfs.sync(fs.clone()).await?;
 
@@ -211,10 +247,12 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
                             .map_err(|_e| SyncError::CompetingSyncProcess)?;
                     }
                 }
+                status.store(StatusType::Ready as usize);
                 // TODO: configure sleep duration?
                 tokio::time::sleep(Duration::from_millis(500)).await
                 // TODO: Check for shutdown signal.
             }
+            Ok(())
         })
     }
 

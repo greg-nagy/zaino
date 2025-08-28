@@ -41,8 +41,8 @@ impl DbReader {
     // ***** DB Core Read *****
 
     /// Returns the status of the serving ZainoDB.
-    pub(crate) async fn status(&self) -> StatusType {
-        self.inner.status().await
+    pub(crate) fn status(&self) -> StatusType {
+        self.inner.status()
     }
 
     /// Returns the greatest block `Height` stored in the db
