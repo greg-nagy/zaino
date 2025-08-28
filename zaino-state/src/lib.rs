@@ -29,10 +29,10 @@ pub use backends::{
 // NOTE: This will replace local_cache. Currently WIP.
 pub mod chain_index;
 
-// Core ChainIndex trait and implementation
-pub use chain_index::{ChainIndex, NodeBackedChainIndex};
+// Core ChainIndex trait and implementations
+pub use chain_index::{ChainIndex, NodeBackedChainIndex, NodeBackedChainIndexSubscriber};
 // Source types for ChainIndex backends
-pub use chain_index::source::{BlockchainSource, ValidatorConnector};
+pub use chain_index::source::{BlockchainSource, State, ValidatorConnector};
 // Supporting types
 pub use chain_index::encoding::*;
 pub use chain_index::mempool::Mempool;

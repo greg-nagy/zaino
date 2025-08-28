@@ -92,14 +92,15 @@ mod tests;
 ///     false, // db enabled
 /// );
 ///
-/// // Create the chain index
+/// // Create the chain index and get a subscriber for queries
 /// let chain_index = NodeBackedChainIndex::new(source, config).await?;
+/// let subscriber = chain_index.subscriber().await;
 ///
 /// // Take a snapshot for consistent queries
-/// let snapshot = chain_index.snapshot_nonfinalized_state();
+/// let snapshot = subscriber.snapshot_nonfinalized_state();
 ///
-/// // Query blocks in a range
-/// if let Some(stream) = chain_index.get_block_range(
+/// // Query blocks in a range using the subscriber
+/// if let Some(stream) = subscriber.get_block_range(
 ///     &snapshot,
 ///     zaino_state::Height(100000),
 ///     Some(zaino_state::Height(100010))
@@ -142,8 +143,12 @@ mod tests;
 ///     false, // db enabled
 /// );
 ///
-/// // Create the chain index
+/// // Create the chain index and get a subscriber for queries
 /// let chain_index = NodeBackedChainIndex::new(source, config).await?;
+/// let subscriber = chain_index.subscriber().await;
+///
+/// // Use the subscriber to access ChainIndex trait methods
+/// let snapshot = subscriber.snapshot_nonfinalized_state();
 /// # Ok(())
 /// # }
 /// ```
@@ -236,16 +241,19 @@ pub trait ChainIndex {
 /// chain state, both finalized and non-finalized, to allow queries over
 /// the entire chain at once.
 ///
-/// This is the primary implementation of [`ChainIndex`] and replaces the functionality
+/// This is the primary implementation backing [`ChainIndex`] and replaces the functionality
 /// previously provided by `FetchService` and `StateService`. It can be backed by either:
 /// - A zebra `ReadStateService` for direct database access (preferred for performance)
 /// - A JSON-RPC connection to any validator node (zcashd, zebrad, or another zainod)
+///
+/// To use the [`ChainIndex`] trait methods, call [`subscriber()`](NodeBackedChainIndex::subscriber) 
+/// to get a [`NodeBackedChainIndexSubscriber`] which implements the trait.
 ///
 /// # Construction
 ///
 /// Use [`NodeBackedChainIndex::new()`] with:
 /// - A [`ValidatorConnector`] source (State variant preferred, Fetch as fallback)
-/// - A [`BlockCacheConfig`] containing cache and database settings
+/// - A [`crate::config::BlockCacheConfig`] containing cache and database settings
 ///
 /// # Example with StateService (Preferred)
 ///
@@ -288,6 +296,10 @@ pub trait ChainIndex {
 /// };
 ///
 /// let chain_index = NodeBackedChainIndex::new(source, config).await?;
+/// let subscriber = chain_index.subscriber().await;
+///
+/// // Use the subscriber to access ChainIndex trait methods
+/// let snapshot = subscriber.snapshot_nonfinalized_state();
 /// # Ok(())
 /// # }
 /// ```
@@ -323,6 +335,9 @@ pub trait ChainIndex {
 /// };
 ///
 /// let chain_index = NodeBackedChainIndex::new(source, config).await?;
+/// let subscriber = chain_index.subscriber().await;
+///
+/// // Use the subscriber to access ChainIndex trait methods
 /// # Ok(())
 /// # }
 /// ```
