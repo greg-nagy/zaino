@@ -407,13 +407,10 @@ mod mockchain_tests {
             indexer_mempool_transactions
         });
 
-        // Ensure the subscription is attached before we mine the block that will close the stream.
         sleep(Duration::from_millis(500)).await;
 
-        // Mining a block should finalize the current mempool set and end the stream.
         mockchain.mine_blocks(1);
 
-        // Wait for the collector task to complete and return the results.
         let indexer_mempool_stream_transactions =
             mempool_stream_task.await.expect("collector task failed");
 
@@ -424,5 +421,20 @@ mod mockchain_tests {
                 .collect::<Vec<_>>(),
             indexer_mempool_stream_transactions,
         );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn get_mempool_stream_for_stale_snapshot() {
+        let (_blocks, indexer, mockchain) = load_test_vectors_and_sync_chain_index(true).await;
+        sleep(Duration::from_millis(2000)).await;
+
+        let stale_nonfinalized_snapshot = indexer.snapshot_nonfinalized_state();
+
+        mockchain.mine_blocks(1);
+        sleep(Duration::from_millis(2000)).await;
+
+        let mempool_stream = indexer.get_mempool_stream(&stale_nonfinalized_snapshot);
+
+        assert!(mempool_stream.is_none());
     }
 }

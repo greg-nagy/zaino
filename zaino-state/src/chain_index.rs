@@ -15,7 +15,7 @@ use crate::error::{ChainIndexError, ChainIndexErrorKind, FinalisedStateError};
 use crate::SyncError;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use futures::Stream;
+use futures::{FutureExt, Stream};
 use non_finalised_state::NonfinalizedBlockCacheSnapshot;
 use source::{BlockchainSource, ValidatorConnector};
 use tokio_stream::StreamExt;
@@ -111,8 +111,7 @@ pub trait ChainIndex {
     /// Returns a stream of mempool transactions, ending the stream when the chain tip block hash
     /// changes (a new block is mined or a reorg occurs).
     ///
-    /// If the chain tip has changed from the given spanshot an IncorrectChainTip error is returned.
-    /// NOTE: Is this correct here?
+    /// If the chain tip has changed from the given spanshot returns None.
     #[allow(clippy::type_complexity)]
     fn get_mempool_stream(
         &self,
@@ -461,25 +460,23 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
     /// Returns a stream of mempool transactions, ending the stream when the chain tip block hash
     /// changes (a new block is mined or a reorg occurs).
     ///
-    /// If the chain tip has changed from the given snapshot at the time of calling
-    /// an IncorrectChainTip error is returned holding the current chain tip block hash.
-    /// NOTE: Is this correct here?
+    /// Returns None if the chain tip has changed from the given snapshot.
     fn get_mempool_stream(
         &self,
         snapshot: &Self::Snapshot,
-    ) -> Option<impl Stream<Item = Result<Vec<u8>, Self::Error>>> {
+    ) -> Option<impl futures::Stream<Item = Result<Vec<u8>, Self::Error>>> {
         let expected_chain_tip = snapshot.best_tip.1;
-
         let mut subscriber = self.mempool.clone();
 
-        let (out_tx, out_rx) = tokio::sync::mpsc::channel::<Result<Vec<u8>, ChainIndexError>>(32);
+        match subscriber
+            .get_mempool_stream(Some(expected_chain_tip))
+            .now_or_never()
+        {
+            Some(Ok((in_rx, _handle))) => {
+                let (out_tx, out_rx) =
+                    tokio::sync::mpsc::channel::<Result<Vec<u8>, ChainIndexError>>(32);
 
-        tokio::spawn(async move {
-            match subscriber
-                .get_mempool_stream(Some(expected_chain_tip))
-                .await
-            {
-                Ok((in_rx, _handle)) => {
+                tokio::spawn(async move {
                     let mut in_stream = tokio_stream::wrappers::ReceiverStream::new(in_rx);
                     while let Some(item) = in_stream.next().await {
                         match item {
@@ -496,14 +493,28 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndex<Source> {
                             }
                         }
                     }
-                }
-                Err(e) => {
-                    let _ = out_tx.send(Err(e.into())).await;
-                }
-            }
-        });
+                });
 
-        Some(tokio_stream::wrappers::ReceiverStream::new(out_rx))
+                Some(tokio_stream::wrappers::ReceiverStream::new(out_rx))
+            }
+            Some(Err(crate::error::MempoolError::IncorrectChainTip { .. })) => None,
+            Some(Err(e)) => {
+                let (out_tx, out_rx) =
+                    tokio::sync::mpsc::channel::<Result<Vec<u8>, ChainIndexError>>(1);
+                let _ = out_tx.try_send(Err(e.into()));
+                Some(tokio_stream::wrappers::ReceiverStream::new(out_rx))
+            }
+            None => {
+                // Should not happen because the inner tip check is synchronous, but fail safe.
+                let (out_tx, out_rx) =
+                    tokio::sync::mpsc::channel::<Result<Vec<u8>, ChainIndexError>>(1);
+                let _ = out_tx.try_send(Err(ChainIndexError::child_process_status_error(
+                    "mempool",
+                    crate::error::StatusError(crate::StatusType::RecoverableError),
+                )));
+                Some(tokio_stream::wrappers::ReceiverStream::new(out_rx))
+            }
+        }
     }
 }
 
