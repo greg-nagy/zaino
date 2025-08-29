@@ -29,20 +29,25 @@ pub use backends::{
 // NOTE: This will replace local_cache. Currently WIP.
 pub mod chain_index;
 
+// Core ChainIndex trait and implementations
+pub use chain_index::{ChainIndex, NodeBackedChainIndex, NodeBackedChainIndexSubscriber};
+// Source types for ChainIndex backends
+pub use chain_index::source::{BlockchainSource, State, ValidatorConnector};
+// Supporting types
 pub use chain_index::encoding::*;
 pub use chain_index::mempool::Mempool;
 pub use chain_index::non_finalised_state::{
-    BlockchainSource, InitError, NodeConnectionError, NonFinalizedState,
-    NonfinalizedBlockCacheSnapshot, SyncError, UpdateError,
+    InitError, NodeConnectionError, NonFinalizedState, NonfinalizedBlockCacheSnapshot, SyncError,
+    UpdateError,
 };
 // NOTE: Should these be pub at all?
 pub use chain_index::types::{
-    AddrHistRecord, AddrScript, BlockData, BlockHeaderData, BlockIndex, ChainBlock, ChainWork,
-    CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes, CompactOrchardAction,
-    CompactSaplingOutput, CompactSaplingSpend, CompactTxData, Hash, Height, Index,
-    OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, ScriptType,
-    ShardRoot, TransparentCompactTx, TransparentTxList, TxInCompact, TxLocation, TxOutCompact,
-    TxidList,
+    AddrHistRecord, AddrScript, BlockData, BlockHash, BlockHeaderData, BlockIndex, ChainBlock,
+    ChainWork, CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes, CompactOrchardAction,
+    CompactSaplingOutput, CompactSaplingSpend, CompactTxData, Height, OrchardCompactTx,
+    OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, ScriptType, ShardIndex, ShardRoot,
+    TransactionHash, TransparentCompactTx, TransparentTxList, TxInCompact, TxLocation,
+    TxOutCompact, TxidList,
 };
 
 pub(crate) mod local_cache;
@@ -61,7 +66,9 @@ pub mod bench {
 
 pub(crate) mod config;
 
-pub use config::{BackendConfig, BackendType, FetchServiceConfig, StateServiceConfig};
+pub use config::{
+    BackendConfig, BackendType, BlockCacheConfig, FetchServiceConfig, StateServiceConfig,
+};
 
 pub(crate) mod error;
 

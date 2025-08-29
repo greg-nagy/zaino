@@ -182,8 +182,8 @@ impl FetchServiceConfig {
     }
 }
 
-/// Holds config data for `[ChainIndex]`.
-/// TODO: Rename when ChainIndex update is complete.
+/// Holds config data for `[ZainoDb]`.
+/// TODO: Rename  to *ZainoDbConfig* when ChainIndex update is complete **and** remove legacy fields.
 #[derive(Debug, Clone)]
 pub struct BlockCacheConfig {
     /// Capacity of the Dashmap.
@@ -197,6 +197,8 @@ pub struct BlockCacheConfig {
     ///
     /// NOTE: map_capacity and shard map must both be set for either to be used.
     pub map_shard_amount: Option<usize>,
+    /// Database version selected to be run.
+    pub db_version: u32,
     /// Block Cache database file path.
     pub db_path: PathBuf,
     /// Block Cache database maximum size in gb.
@@ -214,9 +216,11 @@ pub struct BlockCacheConfig {
 impl BlockCacheConfig {
     /// Returns a new instance of [`FetchServiceConfig`].
     #[allow(dead_code)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         map_capacity: Option<usize>,
         map_shard_amount: Option<usize>,
+        db_version: u32,
         db_path: PathBuf,
         db_size: Option<usize>,
         network: zebra_chain::parameters::Network,
@@ -226,6 +230,7 @@ impl BlockCacheConfig {
         BlockCacheConfig {
             map_capacity,
             map_shard_amount,
+            db_version,
             db_path,
             db_size,
             network,
@@ -240,6 +245,8 @@ impl From<StateServiceConfig> for BlockCacheConfig {
         Self {
             map_capacity: value.map_capacity,
             map_shard_amount: value.map_shard_amount,
+            // TODO: update zaino configs to include db version.
+            db_version: 1,
             db_path: value.db_path,
             db_size: value.db_size,
             network: value.network,
@@ -254,6 +261,8 @@ impl From<FetchServiceConfig> for BlockCacheConfig {
         Self {
             map_capacity: value.map_capacity,
             map_shard_amount: value.map_shard_amount,
+            // TODO: update zaino configs to include db version.
+            db_version: 1,
             db_path: value.db_path,
             db_size: value.db_size,
             network: value.network,
