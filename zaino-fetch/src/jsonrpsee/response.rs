@@ -1,4 +1,7 @@
-//! Response types for jsonRPC client.
+//! Response types for jsonRPSeeConnector.
+//!
+//! These types are redefined rather than imported from zebra_rpc
+//! to prevent locking consumers into a zebra_rpc version
 
 use std::{convert::Infallible, num::ParseIntError};
 
