@@ -1,7 +1,7 @@
 # Workspace Members are in dependency order, do not change this without prior consideration.
 [workspace]
 members = [
-    "zaino-commons",
+    "zaino-common",
     "integration-tests",
     "zaino-testutils",
     "zainod",

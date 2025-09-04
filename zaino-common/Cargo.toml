@@ -1,5 +1,5 @@
 [package]
-name = "zaino-commons"
+name = "zaino-common"
 description = "Common types and configurations shared across Zaino crates."
 authors = { workspace = true }
 repository = { workspace = true }

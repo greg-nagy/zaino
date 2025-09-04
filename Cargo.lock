@@ -5926,7 +5926,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zaino-commons"
+name = "zaino-common"
 version = "0.1.2"
 dependencies = [
  "serde",
@@ -6041,7 +6041,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "whoami",
- "zaino-commons",
+ "zaino-common",
  "zaino-fetch",
  "zaino-proto",
  "zcash_address 0.9.0",
