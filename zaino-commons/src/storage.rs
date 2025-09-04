@@ -3,33 +3,49 @@
 use std::path::PathBuf;
 
 /// Cache configuration for DashMaps.
-///
-/// Used to configure the capacity and sharding of concurrent hash maps
-/// used throughout Zaino services.
-#[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct CacheConfig {
-    /// Capacity of the DashMaps used for caching.
-    pub capacity: Option<usize>,
-    /// Number of shards used in the DashMap.
+    /// Capacity of the DashMaps used for caching
+    pub capacity: usize,
+    /// Power of 2 for number of shards (e.g., 4 means 16 shards)
     ///
-    /// shard_amount should be greater than 0 and be a power of two.
-    /// If a shard_amount which is not a power of two is provided, the function will panic.
-    pub shard_amount: Option<usize>,
+    /// The actual shard count will be 2^shard_power.
+    /// Valid range is typically 0-8 (1 to 256 shards).
+    pub shard_power: u8,
+}
+
+impl CacheConfig {
+    /// Get the actual number of shards (2^shard_power)
+    pub fn shard_count(&self) -> u32 {
+        // // 'a<<b' works by shifting the binary representation of a, b postions to the left
+        // 1 << self.shard_power // 2^shard_power
+        2u32.pow(self.shard_power.into())
+    }
 }
 
 /// Database size limit configuration.
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+///
+/// This enum provides a clean TOML interface and easy extensibility for different units.
+#[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DatabaseSize {
-    /// No size limit - database can grow indefinitely
-    Unlimited,
     /// Limited to a specific size in GB
-    Limited { gb: usize },
+    Gb(usize),
+    // Future: easy to add Mb(usize), Tb(usize), etc.
 }
 
 impl Default for DatabaseSize {
     fn default() -> Self {
-        DatabaseSize::Unlimited
+        DatabaseSize::Gb(128)  // Default to 128 GB
+    }
+}
+
+impl DatabaseSize {
+    /// Convert to bytes
+    pub fn as_bytes(&self) -> usize {
+        match self {
+            DatabaseSize::Gb(gb) => gb * 1024 * 1024 * 1024,
+        }
     }
 }
 
@@ -41,7 +57,8 @@ impl Default for DatabaseSize {
 pub struct DatabaseConfig {
     /// Database file path.
     pub path: PathBuf,
-    /// Database size limit.
+    /// Database size limit. Defaults to 128 GB.
+    #[serde(default)]
     pub size: DatabaseSize,
 }
 
@@ -59,8 +76,8 @@ impl Default for DatabaseConfig {
 /// This is used by services that need both in-memory caching and persistent storage.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct StorageConfig {
-    /// Cache configuration for DashMaps
-    pub cache: CacheConfig,
+    /// Custom cache configuration. If None, DashMap uses its defaults.
+    pub cache: Option<CacheConfig>,
     /// Database configuration
     pub database: DatabaseConfig,
 }
@@ -68,7 +85,7 @@ pub struct StorageConfig {
 impl Default for StorageConfig {
     fn default() -> Self {
         Self {
-            cache: CacheConfig::default(),
+            cache: None, // Use DashMap defaults
             database: DatabaseConfig::default(),
         }
     }
