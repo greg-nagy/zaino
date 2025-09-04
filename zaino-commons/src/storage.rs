@@ -23,6 +23,15 @@ impl CacheConfig {
     }
 }
 
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            capacity: 10000,  // Default capacity
+            shard_power: 4,   // Default to 16 shards
+        }
+    }
+}
+
 /// Database size limit configuration.
 ///
 /// This enum provides a clean TOML interface and easy extensibility for different units.
@@ -76,8 +85,9 @@ impl Default for DatabaseConfig {
 /// This is used by services that need both in-memory caching and persistent storage.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct StorageConfig {
-    /// Custom cache configuration. If None, DashMap uses its defaults.
-    pub cache: Option<CacheConfig>,
+    /// Cache configuration. Uses defaults if not specified in TOML.
+    #[serde(default)]
+    pub cache: CacheConfig,
     /// Database configuration
     pub database: DatabaseConfig,
 }
@@ -85,7 +95,7 @@ pub struct StorageConfig {
 impl Default for StorageConfig {
     fn default() -> Self {
         Self {
-            cache: None, // Use DashMap defaults
+            cache: CacheConfig::default(),
             database: DatabaseConfig::default(),
         }
     }
