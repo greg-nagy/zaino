@@ -194,9 +194,9 @@ impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
                             orchard_root,
                             orchard_root_size as u32,
                             &parent_chain_work,
-                            &cfg.network,
+                            &cfg.network.to_zebra_network(),
                         ))
-                        .map_err(FinalisedStateError::Custom)?;
+                        .map_err(|_| FinalisedStateError::Custom("Failed to build chain block".to_string()))?;
 
                         parent_chain_work = *chain_block.chainwork();
 
@@ -241,12 +241,12 @@ impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
             }
 
             // Now safe to delete old database files
-            let db_path_dir = match cfg.network.kind() {
+            let db_path_dir = match cfg.network.to_zebra_network().kind() {
                 NetworkKind::Mainnet => "live",
                 NetworkKind::Testnet => "test",
                 NetworkKind::Regtest => "local",
             };
-            let db_path = cfg.db_path.join(db_path_dir);
+            let db_path = cfg.storage.database.path.join(db_path_dir);
 
             info!("Wiping v0 database from disk.");
 
