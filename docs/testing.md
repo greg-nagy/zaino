@@ -6,16 +6,20 @@
 
 ### Tests
 1) Symlink or copy compiled `zebrad`, `zcashd` and `zcash-cli` binaries to `zaino/test_binaries/bins/*`
-
+2) Add `zaino/test_binaries/bins` to `$PATH` or to `$TEST_BINARIES_DIR`
 **Client Rpc Tests** _For the client rpc tests to pass a Zaino release binary must be built.
 WARNING: these tests do not use the binary built by cargo nextest._
 Note: Recently the newest GCC version on Arch has broken a build script in the `rocksdb` dependency. A workaround is:
 `export CXXFLAGS="$CXXFLAGS -include cstdint"`
 
-2) Build release binary `cargo build --release`
-3) Run `cargo nextest run`
+3) Build release binary `cargo build --release`
+4) Run `cargo nextest run`
 
 ## Cargo Make
+Another method to work with tests is using `cargo make`, a Rust task runner and build tool.
+This can be installed by running `cargo install --force cargo-make` which will install cargo-make in your ~/.cargo/bin.
+From that point you will have two executables available: `cargo-make` (invoked with `cargo make` and `makers` which is invoked directly and not as a cargo plugin.
+
 `cargo make help`
 will print a help output.
 `Makefile.toml` holds a configuration file.
