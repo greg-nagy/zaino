@@ -156,7 +156,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
         };
 
         let non_finalized_state =
-            crate::NonFinalizedState::initialize(source, config.network, top_of_finalized).await?;
+            crate::NonFinalizedState::initialize(source, config.network.to_zebra_network(), top_of_finalized).await?;
         let mut chain_index = Self {
             mempool: std::sync::Arc::new(mempool_state),
             non_finalized_state: std::sync::Arc::new(non_finalized_state),
