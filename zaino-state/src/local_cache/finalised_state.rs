@@ -135,20 +135,20 @@ impl FinalisedState {
         config: BlockCacheConfig,
     ) -> Result<Self, FinalisedStateError> {
         info!("Launching Finalised State..");
-        let db_size = config.db_size.unwrap_or(64);
-        let db_path_dir = match config.network.kind() {
+        let db_size_bytes = config.storage.database.size.as_bytes();
+        let db_path_dir = match config.network.to_zebra_network().kind() {
             NetworkKind::Mainnet => "live",
             NetworkKind::Testnet => "test",
             NetworkKind::Regtest => "local",
         };
-        let db_path = config.db_path.join(db_path_dir);
+        let db_path = config.storage.database.path.join(db_path_dir);
         if !db_path.exists() {
             fs::create_dir_all(&db_path)?;
         }
         let database = Arc::new(
             Environment::new()
                 .set_max_dbs(2)
-                .set_map_size(db_size * 1024 * 1024 * 1024)
+                .set_map_size(db_size_bytes)
                 .open(&db_path)?,
         );
 
@@ -276,7 +276,7 @@ impl FinalisedState {
 
                             match fetch_block_from_node(
                                 finalised_state.state.as_ref(),
-                                Some(&finalised_state.config.network),
+                                Some(&finalised_state.config.network.to_zebra_network()),
                                 &finalised_state.fetcher,
                                 HashOrHeight::Height(height),
                             )
@@ -342,7 +342,7 @@ impl FinalisedState {
                         warn!("Failed to fetch block from DB, re-fetching from validator.");
                         match fetch_block_from_node(
                             finalised_state.state.as_ref(),
-                            Some(&finalised_state.config.network),
+                            Some(&finalised_state.config.network.to_zebra_network()),
                             &finalised_state.fetcher,
                             hash_or_height,
                         )
