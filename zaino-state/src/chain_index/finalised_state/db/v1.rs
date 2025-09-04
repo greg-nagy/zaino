@@ -461,14 +461,13 @@ impl DbV1 {
         info!("Launching ZainoDB");
 
         // Prepare database details and path.
-        let db_size = config.db_size.unwrap_or(128);
-        let db_size_bytes = db_size * 1024 * 1024 * 1024;
-        let db_path_dir = match config.network.kind() {
+        let db_size_bytes = config.storage.database.size.as_bytes();
+        let db_path_dir = match config.network.to_zebra_network().kind() {
             NetworkKind::Mainnet => "mainnet",
             NetworkKind::Testnet => "testnet",
             NetworkKind::Regtest => "regtest",
         };
-        let db_path = config.db_path.join(db_path_dir).join("v1");
+        let db_path = config.storage.database.path.join(db_path_dir).join("v1");
         if !db_path.exists() {
             fs::create_dir_all(&db_path)?;
         }
