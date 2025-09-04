@@ -1,7 +1,6 @@
 //! Holds config data for Zaino-State services.
 
-use std::path::PathBuf;
-use zaino_commons::{Network, ServiceConfig, StorageConfig, DatabaseSize};
+use zaino_commons::{Network, ServiceConfig, StorageConfig};
 
 #[derive(Debug, Clone, serde::Deserialize, PartialEq, Copy)]
 #[serde(rename_all = "lowercase")]
@@ -55,7 +54,6 @@ pub struct StateServiceConfig {
 
 impl StateServiceConfig {
     /// Returns a new instance of [`StateServiceConfig`].
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         validator_config: zebra_state::Config,
         validator_rpc_address: std::net::SocketAddr,
@@ -64,12 +62,8 @@ impl StateServiceConfig {
         validator_cookie_path: Option<String>,
         validator_rpc_user: Option<String>,
         validator_rpc_password: Option<String>,
-        service_timeout: Option<u32>,
-        service_channel_size: Option<u32>,
-        map_capacity: Option<usize>,
-        map_shard_amount: Option<usize>,
-        db_path: PathBuf,
-        db_size: Option<usize>,
+        service: ServiceConfig,
+        storage: StorageConfig,
         network: Network,
         no_sync: bool,
         no_db: bool,
@@ -82,23 +76,8 @@ impl StateServiceConfig {
             validator_cookie_path,
             validator_rpc_user: validator_rpc_user.unwrap_or("xxxxxx".to_string()),
             validator_rpc_password: validator_rpc_password.unwrap_or("xxxxxx".to_string()),
-            service: ServiceConfig {
-                timeout: service_timeout.unwrap_or(30),
-                channel_size: service_channel_size.unwrap_or(32),
-            },
-            storage: StorageConfig {
-                cache: zaino_commons::CacheConfig {
-                    capacity: map_capacity,
-                    shard_amount: map_shard_amount,
-                },
-                database: zaino_commons::DatabaseConfig {
-                    path: db_path,
-                    size: match db_size {
-                        Some(gb) => DatabaseSize::Limited { gb },
-                        None => DatabaseSize::Unlimited,
-                    },
-                },
-            },
+            service,
+            storage,
             network,
             no_sync,
             no_db,
@@ -135,19 +114,14 @@ pub struct FetchServiceConfig {
 
 impl FetchServiceConfig {
     /// Returns a new instance of [`FetchServiceConfig`].
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         validator_rpc_address: std::net::SocketAddr,
         validator_cookie_auth: bool,
         validator_cookie_path: Option<String>,
         validator_rpc_user: Option<String>,
         validator_rpc_password: Option<String>,
-        service_timeout: Option<u32>,
-        service_channel_size: Option<u32>,
-        map_capacity: Option<usize>,
-        map_shard_amount: Option<usize>,
-        db_path: PathBuf,
-        db_size: Option<usize>,
+        service: ServiceConfig,
+        storage: StorageConfig,
         network: Network,
         no_sync: bool,
         no_db: bool,
@@ -158,24 +132,8 @@ impl FetchServiceConfig {
             validator_cookie_path,
             validator_rpc_user: validator_rpc_user.unwrap_or("xxxxxx".to_string()),
             validator_rpc_password: validator_rpc_password.unwrap_or("xxxxxx".to_string()),
-            // NOTE: This timeout is currently long to ease development but should be reduced before production.
-            service: ServiceConfig {
-                timeout: service_timeout.unwrap_or(60),
-                channel_size: service_channel_size.unwrap_or(32),
-            },
-            storage: StorageConfig {
-                cache: zaino_commons::CacheConfig {
-                    capacity: map_capacity,
-                    shard_amount: map_shard_amount,
-                },
-                database: zaino_commons::DatabaseConfig {
-                    path: db_path,
-                    size: match db_size {
-                        Some(gb) => DatabaseSize::Limited { gb },
-                        None => DatabaseSize::Unlimited,
-                    },
-                },
-            },
+            service,
+            storage,
             network,
             no_sync,
             no_db,
@@ -202,33 +160,17 @@ pub struct BlockCacheConfig {
 }
 
 impl BlockCacheConfig {
-    /// Returns a new instance of [`FetchServiceConfig`].
+    /// Returns a new instance of [`BlockCacheConfig`].
     #[allow(dead_code)]
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        map_capacity: Option<usize>,
-        map_shard_amount: Option<usize>,
+        storage: StorageConfig,
         db_version: u32,
-        db_path: PathBuf,
-        db_size: Option<usize>,
         network: Network,
         no_sync: bool,
         no_db: bool,
     ) -> Self {
         BlockCacheConfig {
-            storage: StorageConfig {
-                cache: zaino_commons::CacheConfig {
-                    capacity: map_capacity,
-                    shard_amount: map_shard_amount,
-                },
-                database: zaino_commons::DatabaseConfig {
-                    path: db_path,
-                    size: match db_size {
-                        Some(gb) => DatabaseSize::Limited { gb },
-                        None => DatabaseSize::Unlimited,
-                    },
-                },
-            },
+            storage,
             db_version,
             network,
             no_sync,
