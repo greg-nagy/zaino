@@ -16,6 +16,7 @@ use std::{
 use tempfile::TempDir;
 use testvectors::{seeds, REG_O_ADDR_FROM_ABANDONART};
 use tracing_subscriber::EnvFilter;
+use zaino_common::{CacheConfig, DatabaseConfig, ServiceConfig, StorageConfig};
 use zaino_state::BackendType;
 use zainodlib::config::default_ephemeral_cookie_path;
 pub use zingo_infra_services as services;
@@ -450,12 +451,16 @@ impl TestManager {
                 validator_cookie_path: None,
                 validator_user: Some("xxxxxx".to_string()),
                 validator_password: Some("xxxxxx".to_string()),
-                map_capacity: None,
-                map_shard_amount: None,
-                zaino_db_path,
+                service: ServiceConfig::default(),
+                storage: StorageConfig {
+                    cache: CacheConfig::default(),
+                    database: DatabaseConfig {
+                        path: zaino_db_path,
+                        ..Default::default()
+                    },
+                },
                 zebra_db_path,
-                db_size: None,
-                network: network.to_string(),
+                network: network.into(),
                 no_sync: zaino_no_sync,
                 no_db: zaino_no_db,
                 slow_sync: false,
@@ -629,12 +634,16 @@ impl TestManager {
                 validator_cookie_path: None,
                 validator_user: Some("xxxxxx".to_string()),
                 validator_password: Some("xxxxxx".to_string()),
-                map_capacity: None,
-                map_shard_amount: None,
-                zaino_db_path,
+                service: ServiceConfig::default(),
+                storage: StorageConfig {
+                    cache: CacheConfig::default(),
+                    database: DatabaseConfig {
+                        path: zaino_db_path,
+                        ..Default::default()
+                    },
+                },
                 zebra_db_path,
-                db_size: None,
-                network: network.to_string(),
+                network: network.into(),
                 no_sync: zaino_no_sync,
                 no_db: zaino_no_db,
                 slow_sync: false,
