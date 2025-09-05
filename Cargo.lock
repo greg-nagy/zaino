@@ -6106,6 +6106,7 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "tracing-subscriber",
+ "zaino-common",
  "zaino-fetch",
  "zaino-serve",
  "zaino-state",
