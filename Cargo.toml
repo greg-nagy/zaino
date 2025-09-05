@@ -56,7 +56,7 @@ clap = "4.0"
 
 # Tracing
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = [
+tracing-subscriber = { version = "0.3.20", features = [
     "fmt",
     "env-filter",
     "time",
