@@ -78,7 +78,7 @@ async fn create_test_manager_and_services(
             },
             ..Default::default()
         },
-        network_type.into(),
+        network_type,
         zaino_sync_bool,
         true,
     ))

@@ -114,6 +114,37 @@ pub struct FetchServiceConfig {
     pub no_db: bool,
 }
 
+impl FetchServiceConfig {
+    /// Returns a new instance of [`FetchServiceConfig`].
+    #[allow(clippy::too_many_arguments)]
+    // TODO: replace with struct-literal init only?
+    pub fn new(
+        validator_rpc_address: std::net::SocketAddr,
+        validator_cookie_auth: bool,
+        validator_cookie_path: Option<String>,
+        validator_rpc_user: Option<String>,
+        validator_rpc_password: Option<String>,
+        service: ServiceConfig,
+        storage: StorageConfig,
+        network: Network,
+        no_sync: bool,
+        no_db: bool,
+    ) -> Self {
+        FetchServiceConfig {
+            validator_rpc_address,
+            validator_cookie_auth,
+            validator_cookie_path,
+            validator_rpc_user: validator_rpc_user.unwrap_or("xxxxxx".to_string()),
+            validator_rpc_password: validator_rpc_password.unwrap_or("xxxxxx".to_string()),
+            service,
+            storage,
+            network,
+            no_sync,
+            no_db,
+        }
+    }
+}
+
 /// Holds config data for `[ZainoDb]`.
 /// TODO: Rename  to *ZainoDbConfig* when ChainIndex update is complete **and** remove legacy fields.
 #[derive(Debug, Clone)]
