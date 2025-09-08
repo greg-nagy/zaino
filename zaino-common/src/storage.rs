@@ -90,6 +90,7 @@ impl Default for DatabaseConfig {
 ///
 /// This is used by services that need both in-memory caching and persistent storage.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default)]
 pub struct StorageConfig {
     /// Cache configuration. Uses defaults if not specified in TOML.
     #[serde(default)]
@@ -98,11 +99,3 @@ pub struct StorageConfig {
     pub database: DatabaseConfig,
 }
 
-impl Default for StorageConfig {
-    fn default() -> Self {
-        Self {
-            cache: CacheConfig::default(),
-            database: DatabaseConfig::default(),
-        }
-    }
-}

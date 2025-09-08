@@ -167,9 +167,9 @@ impl Network {
     }
 }
 
-impl Into<zingo_infra_services::network::Network> for Network {
-    fn into(self) -> zingo_infra_services::network::Network {
-        match self {
+impl From<Network> for zingo_infra_services::network::Network {
+    fn from(val: Network) -> Self {
+        match val {
             Network::Mainnet => zingo_infra_services::network::Network::Mainnet,
             Network::Regtest(_) => zingo_infra_services::network::Network::Regtest,
             Network::Testnet => zingo_infra_services::network::Network::Testnet,
@@ -251,9 +251,9 @@ impl From<zebra_chain::parameters::Network> for Network {
     }
 }
 
-impl Into<zebra_chain::parameters::Network> for Network {
-    fn into(self) -> zebra_chain::parameters::Network {
-        match self {
+impl From<Network> for zebra_chain::parameters::Network {
+    fn from(val: Network) -> Self {
+        match val {
             Network::Regtest(activation_heights) => {
                 zebra_chain::parameters::Network::new_regtest(activation_heights.into())
             }
@@ -263,14 +263,8 @@ impl Into<zebra_chain::parameters::Network> for Network {
     }
 }
 
-impl Into<zebra_chain::parameters::Network> for &Network {
-    fn into(self) -> zebra_chain::parameters::Network {
-        (*self).into()
-    }
-}
-
-impl Default for Network {
-    fn default() -> Self {
-        Network::Testnet
+impl From<&Network> for zebra_chain::parameters::Network {
+    fn from(val: &Network) -> Self {
+        (*val).into()
     }
 }
