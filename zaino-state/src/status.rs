@@ -40,6 +40,9 @@ impl AtomicStatus {
 }
 
 /// Status of the server's components.
+///
+/// TODO: Some of these statuses may be artefacts of a previous version
+/// of the status. We may be able to remove some of them
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum StatusType {
     /// Running initial startup routine.

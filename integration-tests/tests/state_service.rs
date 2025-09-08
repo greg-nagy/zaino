@@ -1,3 +1,5 @@
+use zaino_common::network::ActivationHeights;
+use zaino_common::{DatabaseConfig, ServiceConfig, StorageConfig};
 use zaino_state::BackendType;
 use zaino_state::{
     FetchService, FetchServiceConfig, FetchServiceSubscriber, LightWalletIndexer, StateService,
@@ -7,7 +9,7 @@ use zaino_testutils::from_inputs;
 use zaino_testutils::services;
 use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind, ZEBRAD_TESTNET_CACHE_DIR};
-use zebra_chain::{parameters::Network, subtree::NoteCommitmentSubtreeIndex};
+use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetInfo};
 
 async fn create_test_manager_and_services(
@@ -42,29 +44,15 @@ async fn create_test_manager_and_services(
         Some(services::network::Network::Mainnet) => {
             println!("Waiting for validator to spawn..");
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-            (Network::Mainnet, false)
+            (zaino_common::Network::Mainnet, false)
         }
         Some(services::network::Network::Testnet) => {
             println!("Waiting for validator to spawn..");
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-            (Network::new_default_testnet(), false)
+            (zaino_common::Network::Testnet, false)
         }
         _ => (
-            Network::new_regtest(
-                zebra_chain::parameters::testnet::ConfiguredActivationHeights {
-                    before_overwinter: Some(1),
-                    overwinter: Some(1),
-                    sapling: Some(1),
-                    blossom: Some(1),
-                    heartwood: Some(1),
-                    canopy: Some(1),
-                    nu5: Some(1),
-                    nu6: Some(1),
-                    // TODO: What is network upgrade 6.1? What does a minor version NU mean?
-                    nu6_1: None,
-                    nu7: None,
-                },
-            ),
+            zaino_common::Network::Regtest(ActivationHeights::default()),
             true,
         ),
     };
@@ -77,18 +65,20 @@ async fn create_test_manager_and_services(
         None,
         None,
         None,
-        None,
-        None,
-        None,
-        None,
-        test_manager
-            .local_net
-            .data_dir()
-            .path()
-            .to_path_buf()
-            .join("zaino"),
-        None,
-        network_type.clone(),
+        ServiceConfig::default(),
+        StorageConfig {
+            database: DatabaseConfig {
+                path: test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        network_type.into(),
         zaino_sync_bool,
         true,
     ))
@@ -116,17 +106,19 @@ async fn create_test_manager_and_services(
         None,
         None,
         None,
-        None,
-        None,
-        None,
-        None,
-        test_manager
-            .local_net
-            .data_dir()
-            .path()
-            .to_path_buf()
-            .join("zaino"),
-        None,
+        ServiceConfig::default(),
+        StorageConfig {
+            database: DatabaseConfig {
+                path: test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
         network_type,
         true,
         true,

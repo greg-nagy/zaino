@@ -26,8 +26,8 @@ impl CacheConfig {
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
-            capacity: 10000,  // Default capacity
-            shard_power: 4,   // Default to 16 shards
+            capacity: 10000, // Default capacity
+            shard_power: 4,  // Default to 16 shards
         }
     }
 }
@@ -45,13 +45,19 @@ pub enum DatabaseSize {
 
 impl Default for DatabaseSize {
     fn default() -> Self {
-        DatabaseSize::Gb(128)  // Default to 128 GB
+        DatabaseSize::Gb(128) // Default to 128 GB
+    }
+}
+
+impl PartialEq for DatabaseSize {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_byte_count() == other.to_byte_count()
     }
 }
 
 impl DatabaseSize {
     /// Convert to bytes
-    pub fn as_bytes(&self) -> usize {
+    pub fn to_byte_count(&self) -> usize {
         match self {
             DatabaseSize::Gb(gb) => gb * 1024 * 1024 * 1024,
         }

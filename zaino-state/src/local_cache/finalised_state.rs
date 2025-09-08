@@ -135,7 +135,7 @@ impl FinalisedState {
         config: BlockCacheConfig,
     ) -> Result<Self, FinalisedStateError> {
         info!("Launching Finalised State..");
-        let db_size_bytes = config.storage.database.size.as_bytes();
+        let db_size_bytes = config.storage.database.size.to_byte_count();
         let db_path_dir = match config.network.to_zebra_network().kind() {
             NetworkKind::Mainnet => "live",
             NetworkKind::Testnet => "test",

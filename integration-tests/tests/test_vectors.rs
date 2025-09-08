@@ -8,6 +8,10 @@ use std::fs::File;
 use std::io::BufReader;
 use std::io::BufWriter;
 use std::path::Path;
+use zaino_common::network::ActivationHeights;
+use zaino_common::DatabaseConfig;
+use zaino_common::ServiceConfig;
+use zaino_common::StorageConfig;
 use zaino_fetch::chain::transaction::FullTransaction;
 use zaino_fetch::chain::utils::ParseFromSlice;
 use zaino_proto::proto::compact_formats::CompactBlock;
@@ -26,7 +30,6 @@ use zaino_testutils::services;
 use zaino_testutils::test_vectors::transactions::get_test_vectors;
 use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind};
-use zebra_chain::parameters::Network;
 use zebra_chain::serialization::{ZcashDeserialize, ZcashSerialize};
 use zebra_rpc::methods::GetAddressUtxos;
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetBlockTransaction};
@@ -53,33 +56,19 @@ async fn create_test_manager_and_services(
     .await
     .unwrap();
 
-    let (network_type, _zaino_sync_bool) = match network {
+    let (network_type, zaino_sync_bool) = match network {
         Some(services::network::Network::Mainnet) => {
             println!("Waiting for validator to spawn..");
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-            (Network::Mainnet, false)
+            (zaino_common::Network::Mainnet, false)
         }
         Some(services::network::Network::Testnet) => {
             println!("Waiting for validator to spawn..");
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-            (Network::new_default_testnet(), false)
+            (zaino_common::Network::Testnet, false)
         }
         _ => (
-            Network::new_regtest(
-                zebra_chain::parameters::testnet::ConfiguredActivationHeights {
-                    before_overwinter: Some(1),
-                    overwinter: Some(1),
-                    sapling: Some(1),
-                    blossom: Some(1),
-                    heartwood: Some(1),
-                    canopy: Some(1),
-                    nu5: Some(1),
-                    nu6: Some(1),
-                    // TODO: What is network upgrade 6.1? What does a minor version NU mean?
-                    nu6_1: None,
-                    nu7: None,
-                },
-            ),
+            zaino_common::Network::Regtest(ActivationHeights::default()),
             true,
         ),
     };
@@ -105,19 +94,21 @@ async fn create_test_manager_and_services(
         None,
         None,
         None,
-        None,
-        None,
-        None,
-        None,
-        test_manager
-            .local_net
-            .data_dir()
-            .path()
-            .to_path_buf()
-            .join("zaino"),
-        None,
+        ServiceConfig::default(),
+        StorageConfig {
+            database: DatabaseConfig {
+                path: test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
         network_type,
-        true,
+        zaino_sync_bool,
         true,
     ))
     .await
