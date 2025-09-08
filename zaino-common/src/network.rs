@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 
 /// Network type for Zaino configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "lowercase")]
 pub enum Network {
     /// Mainnet network
     Mainnet,
@@ -156,7 +155,7 @@ impl Network {
         }
     }
 
-    /// Determines if sync should be skipped for testing.
+    /// Determines if we should wait for the server to fully sync. Used for testing
     ///
     /// - Mainnet/Testnet: Skip sync (false) because we don't want to sync real chains in tests
     /// - Regtest: Enable sync (true) because regtest is local and fast to sync

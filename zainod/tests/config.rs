@@ -46,15 +46,15 @@ fn test_deserialize_full_valid_config() {
             validator_cookie_path = "{validator_cookie_file_name}"
             validator_user = "user"
             validator_password = "password"
-            map_capacity = 10000
-            map_shard_amount = 16
-            zaino_db_path = "{zaino_db_dir_name}"
+            storage.database.path = "{zaino_db_dir_name}"
             zebra_db_path = "{zebra_db_dir_name}"
             db_size = 100
             network = "Mainnet"
             no_sync = false
             no_db = false
             slow_sync = false
+
+            
         "#
         );
 
