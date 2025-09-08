@@ -17,7 +17,7 @@ use crate::{
         UtxoReplyStream,
     },
     utils::{blockid_to_hashorheight, get_build_info, ServiceMetadata},
-    BlockHash, MempoolKey,
+    MempoolKey,
 };
 
 use nonempty::NonEmpty;
@@ -1516,9 +1516,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
         )?;
         Ok(BlockId {
             height: chain_height.as_usize() as u64,
-            hash: BlockHash::from_bytes_in_display_order(&chain_hash.0)
-                .0
-                .to_vec(),
+            hash: chain_hash.0.to_vec(),
         })
     }
 
