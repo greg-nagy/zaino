@@ -160,9 +160,9 @@ impl Network {
     ///
     /// - Mainnet/Testnet: Skip sync (false) because we don't want to sync real chains in tests
     /// - Regtest: Enable sync (true) because regtest is local and fast to sync
-    pub fn should_sync_for_testing(&self) -> bool {
+    pub fn wait_on_server_sync(&self) -> bool {
         match self {
-            Network::Mainnet | Network::Testnet => false, // Real networks - don't sync in tests
+            Network::Mainnet | Network::Testnet => false, // Real networks - don't try to sync the whole chain
             Network::Regtest(_) => true,                  // Local network - safe and fast to sync
         }
     }
