@@ -448,9 +448,13 @@ impl FinalisedState {
             .blocks
             .0
             .saturating_sub(99);
-        for block_height in ((reorg_height.0 + 1)
-            .max(self.config.network.to_zebra_network().sapling_activation_height().0))
-            ..=sync_height
+        for block_height in ((reorg_height.0 + 1).max(
+            self.config
+                .network
+                .to_zebra_network()
+                .sapling_activation_height()
+                .0,
+        ))..=sync_height
         {
             if self.get_hash(block_height).is_ok() {
                 self.delete_block(Height(block_height))?;

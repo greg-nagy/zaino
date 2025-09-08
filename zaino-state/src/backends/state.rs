@@ -1110,18 +1110,19 @@ impl ZcashIndexer for StateServiceSubscriber {
             }
         };
 
-        let sapling = match NetworkUpgrade::Sapling.activation_height(&self.config.network.into()) {
-            Some(activation_height) if height >= activation_height => Some(
-                state
-                    .ready()
-                    .and_then(|service| service.call(ReadRequest::SaplingTree(hash_or_height)))
-                    .await?,
-            ),
-            _ => None,
-        }
-        .and_then(|sap_response| {
-            expected_read_response!(sap_response, SaplingTree).map(|tree| tree.to_rpc_bytes())
-        });
+        let sapling =
+            match NetworkUpgrade::Sapling.activation_height(&self.config.network.into()) {
+                Some(activation_height) if height >= activation_height => Some(
+                    state
+                        .ready()
+                        .and_then(|service| service.call(ReadRequest::SaplingTree(hash_or_height)))
+                        .await?,
+                ),
+                _ => None,
+            }
+            .and_then(|sap_response| {
+                expected_read_response!(sap_response, SaplingTree).map(|tree| tree.to_rpc_bytes())
+            });
 
         let orchard = match NetworkUpgrade::Nu5.activation_height(&self.config.network.into()) {
             Some(activation_height) if height >= activation_height => Some(
@@ -1188,18 +1189,19 @@ impl ZcashIndexer for StateServiceSubscriber {
             return Ok(ValidateAddressResponse::invalid());
         };
 
-        let address =
-            match address.convert_if_network::<Address>(match self.config.network.to_zebra_network().kind() {
+        let address = match address.convert_if_network::<Address>(
+            match self.config.network.to_zebra_network().kind() {
                 NetworkKind::Mainnet => NetworkType::Main,
                 NetworkKind::Testnet => NetworkType::Test,
                 NetworkKind::Regtest => NetworkType::Regtest,
-            }) {
-                Ok(address) => address,
-                Err(err) => {
-                    tracing::debug!(?err, "conversion error");
-                    return Ok(ValidateAddressResponse::invalid());
-                }
-            };
+            },
+        ) {
+            Ok(address) => address,
+            Err(err) => {
+                tracing::debug!(?err, "conversion error");
+                return Ok(ValidateAddressResponse::invalid());
+            }
+        };
 
         // we want to match zcashd's behaviour
         Ok(match address {
@@ -1324,13 +1326,13 @@ impl ZcashIndexer for StateServiceSubscriber {
                                 Ok(GetRawTransaction::Object(Box::new(
                                     TransactionObject::from_transaction(
                                         parsed_tx.into(),
-                                        None,                 // best_chain_height
-                                        Some(0),              // confirmations
+                                        None,                        // best_chain_height
+                                        Some(0),                     // confirmations
                                         &self.config.network.into(), // network
-                                        None,                 // block_time
-                                        None,                 // block_hash
-                                        Some(false),          // in_best_chain
-                                        txid,                 // txid
+                                        None,                        // block_time
+                                        None,                        // block_hash
+                                        Some(false),                 // in_best_chain
+                                        txid,                        // txid
                                     ),
                                 )))
                             }

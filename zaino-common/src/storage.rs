@@ -89,8 +89,7 @@ impl Default for DatabaseConfig {
 /// Storage configuration combining cache and database settings.
 ///
 /// This is used by services that need both in-memory caching and persistent storage.
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
 pub struct StorageConfig {
     /// Cache configuration. Uses defaults if not specified in TOML.
     #[serde(default)]
@@ -98,4 +97,3 @@ pub struct StorageConfig {
     /// Database configuration
     pub database: DatabaseConfig,
 }
-

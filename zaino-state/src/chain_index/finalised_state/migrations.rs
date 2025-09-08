@@ -196,7 +196,9 @@ impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
                             &parent_chain_work,
                             &cfg.network.to_zebra_network(),
                         ))
-                        .map_err(|_| FinalisedStateError::Custom("Failed to build chain block".to_string()))?;
+                        .map_err(|_| {
+                            FinalisedStateError::Custom("Failed to build chain block".to_string())
+                        })?;
 
                         parent_chain_work = *chain_block.chainwork();
 

@@ -18,7 +18,9 @@ use serde::{
 #[cfg(feature = "disable_tls_unencrypted_traffic_mode")]
 use tracing::warn;
 use tracing::{error, info};
-use zaino_common::{CacheConfig, DatabaseConfig, DatabaseSize, Network, ServiceConfig, StorageConfig};
+use zaino_common::{
+    CacheConfig, DatabaseConfig, DatabaseSize, Network, ServiceConfig, StorageConfig,
+};
 use zaino_state::{BackendConfig, FetchServiceConfig, StateServiceConfig};
 
 use crate::error::IndexerError;
