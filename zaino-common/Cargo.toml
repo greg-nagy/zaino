@@ -12,7 +12,7 @@ version = { workspace = true }
 # Zebra
 zebra-chain = { workspace = true }
 
-# Zingo Infrastructure  
+# Zingo Infrastructure
 zingo-infra-services = { workspace = true }
 
 # Serialization

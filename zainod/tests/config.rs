@@ -54,7 +54,7 @@ fn test_deserialize_full_valid_config() {
             no_db = false
             slow_sync = false
 
-            
+
         "#
         );
 
