@@ -43,7 +43,7 @@ pub struct ActivationHeights {
     #[serde(rename = "NU6")]
     pub nu6: Option<u32>,
     /// Activation height for `NU6.1` network upgrade.
-    /// see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
+    /// see <https://zips.z.cash/#nu6-1-candidate-zips> for info on NU6.1
     #[serde(rename = "NU6.1")]
     pub nu6_1: Option<u32>,
     /// Activation height for `NU7` network upgrade.
