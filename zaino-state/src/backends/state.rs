@@ -17,7 +17,7 @@ use crate::{
         UtxoReplyStream,
     },
     utils::{blockid_to_hashorheight, get_build_info, ServiceMetadata},
-    BlockHash, MempoolKey,
+    MempoolKey,
 };
 
 use nonempty::NonEmpty;
