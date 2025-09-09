@@ -724,25 +724,14 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
         let blocks_containing_transaction = self
             .blocks_containing_transaction(snapshot, txid.0)
             .await?
-            .map(|block| (*block.hash(), block.height()))
-            .collect::<Vec<(crate::BlockHash, Option<crate::Height>)>>();
-        let mut best_chain_block = match blocks_containing_transaction
+            .collect::<Vec<_>>();
+        let mut best_chain_block = blocks_containing_transaction
             .iter()
-            .find_map(|(hash, height)| height.map(|height| (hash, height)))
-        {
-            Some((hash, height)) => Some(BestChainLocation::Block(*hash, height)),
-            None => None,
-        };
+            .find_map(|block| BestChainLocation::try_from(block).ok());
         let mut non_best_chain_blocks: HashSet<NonBestChainLocation> =
             blocks_containing_transaction
                 .iter()
-                .filter_map(|(hash, height)| {
-                    if height.is_some() {
-                        None
-                    } else {
-                        Some(NonBestChainLocation::Block(*hash))
-                    }
-                })
+                .filter_map(|block| NonBestChainLocation::try_from(block).ok())
                 .collect();
         let in_mempool = self
             .mempool

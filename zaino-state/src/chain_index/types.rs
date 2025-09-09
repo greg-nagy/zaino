@@ -64,6 +64,27 @@ pub enum NonBestChainLocation {
     Mempool,
 }
 
+impl TryFrom<&ChainBlock> for NonBestChainLocation {
+    type Error = ();
+
+    fn try_from(value: &ChainBlock) -> Result<Self, Self::Error> {
+        match value.height() {
+            Some(_) => Err(()),
+            None => Ok(NonBestChainLocation::Block(*value.hash())),
+        }
+    }
+}
+impl TryFrom<&ChainBlock> for BestChainLocation {
+    type Error = ();
+
+    fn try_from(value: &ChainBlock) -> Result<Self, Self::Error> {
+        match value.height() {
+            None => Err(()),
+            Some(height) => Ok(BestChainLocation::Block(*value.hash(), height)),
+        }
+    }
+}
+
 impl fmt::Display for BlockHash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(&self.encode_hex::<String>())
