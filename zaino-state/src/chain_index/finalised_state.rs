@@ -154,22 +154,22 @@ impl ZainoDB {
     /// * `Some(version)` – DB exists, version returned.
     /// * `None`      – directory or key is missing -> fresh DB.
     async fn try_find_current_db_version(cfg: &BlockCacheConfig) -> Option<u32> {
-        let legacy_dir = match cfg.network.kind() {
+        let legacy_dir = match cfg.network.to_zebra_network().kind() {
             NetworkKind::Mainnet => "live",
             NetworkKind::Testnet => "test",
             NetworkKind::Regtest => "local",
         };
-        let legacy_path = cfg.db_path.join(legacy_dir);
+        let legacy_path = cfg.storage.database.path.join(legacy_dir);
         if legacy_path.join("data.mdb").exists() && legacy_path.join("lock.mdb").exists() {
             return Some(0);
         }
 
-        let net_dir = match cfg.network.kind() {
+        let net_dir = match cfg.network.to_zebra_network().kind() {
             NetworkKind::Mainnet => "mainnet",
             NetworkKind::Testnet => "testnet",
             NetworkKind::Regtest => "regtest",
         };
-        let net_path = cfg.db_path.join(net_dir);
+        let net_path = cfg.storage.database.path.join(net_dir);
         if net_path.exists() && net_path.is_dir() {
             for (i, version_dir) in VERSION_DIRS.iter().enumerate() {
                 let db_path = net_path.join(version_dir);
@@ -207,7 +207,7 @@ impl ZainoDB {
     where
         T: BlockchainSource,
     {
-        let network = self.cfg.network.clone();
+        let network = self.cfg.network;
         let db_height_opt = self.db_height().await?;
         let mut db_height = db_height_opt.unwrap_or(GENESIS_HEIGHT);
 
@@ -278,7 +278,7 @@ impl ZainoDB {
                 orchard_root,
                 orchard_size as u32,
                 &parent_chainwork,
-                &network.clone(),
+                &network.to_zebra_network(),
             )) {
                 Ok(block) => block,
                 Err(_) => {

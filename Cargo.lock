@@ -2213,6 +2213,7 @@ dependencies = [
  "tokio",
  "tracing-subscriber",
  "url",
+ "zaino-common",
  "zaino-fetch",
  "zaino-proto",
  "zaino-state",
@@ -5968,6 +5969,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "zaino-common"
+version = "0.1.2"
+dependencies = [
+ "serde",
+ "thiserror 1.0.69",
+ "zebra-chain 2.0.0",
+ "zingo-infra-services",
+]
+
+[[package]]
 name = "zaino-fetch"
 version = "0.1.2"
 dependencies = [
@@ -6073,6 +6084,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "whoami",
+ "zaino-common",
  "zaino-fetch",
  "zaino-proto",
  "zcash_address 0.9.0",
@@ -6104,6 +6116,7 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "tracing-subscriber",
+ "zaino-common",
  "zaino-state",
  "zaino-testvectors",
  "zainod",
@@ -6137,6 +6150,7 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "tracing-subscriber",
+ "zaino-common",
  "zaino-fetch",
  "zaino-serve",
  "zaino-state",

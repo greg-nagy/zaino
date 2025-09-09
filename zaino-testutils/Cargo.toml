@@ -12,6 +12,7 @@ version = { workspace = true }
 zainod = { workspace = true }
 zaino-state = { workspace = true, features = ["bench"] }
 zaino-testvectors.workspace = true
+zaino-common.workspace = true
 
 # Librustzcash
 zcash_protocol = "0.5.4"

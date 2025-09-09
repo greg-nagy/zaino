@@ -1,6 +1,7 @@
 # Workspace Members are in dependency order, do not change this without prior consideration.
 [workspace]
 members = [
+    "zaino-common",
     "integration-tests",
     "zaino-testutils",
     "zainod",
@@ -120,6 +121,7 @@ zaino-fetch = { path = "zaino-fetch" }
 zaino-proto = { path = "zaino-proto" }
 zaino-serve = { path = "zaino-serve" }
 zaino-state = { path = "zaino-state" }
+zaino-common.path = "zaino-common"
 zaino-testutils = { path = "zaino-testutils" }
 zaino-testvectors = { path = "zaino-testvectors" }
 zainod = { path = "zainod" }
