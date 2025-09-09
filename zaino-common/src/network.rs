@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// Network type for Zaino configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(from = "NetworkDeserialize")]
 pub enum Network {
     /// Mainnet network
     Mainnet,
@@ -11,6 +12,27 @@ pub enum Network {
     Testnet,
     /// Regtest network (for local testing)
     Regtest(ActivationHeights),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+enum NetworkDeserialize {
+    Mainnet,
+    Testnet,
+    // This hack doesn't allow deserializing
+    // non-default ActivationHeights, this
+    // will need to be revisited if we want
+    // to support that in read configs
+    Regtest,
+}
+
+impl From<NetworkDeserialize> for Network {
+    fn from(value: NetworkDeserialize) -> Self {
+        match value {
+            NetworkDeserialize::Mainnet => Network::Mainnet,
+            NetworkDeserialize::Testnet => Network::Testnet,
+            NetworkDeserialize::Regtest => Network::Regtest(ActivationHeights::default()),
+        }
+    }
 }
 
 /// Configurable activation heights for Regtest and configured Testnets.

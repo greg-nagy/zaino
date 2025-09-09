@@ -388,7 +388,7 @@ fn test_figment_env_override_toml_and_defaults() {
         )?;
         jail.set_env("ZAINO_NETWORK", "Mainnet");
         jail.set_env("ZAINO_ENABLE_JSON_SERVER", "true");
-        jail.set_env("ZAINO_MAP_CAPACITY", "12345");
+        jail.set_env("ZAINO_STORAGE.CACHE.CAPACITY", "12345");
         jail.set_env("ZAINO_ENABLE_COOKIE_AUTH", "true");
         jail.set_env("ZAINO_COOKIE_DIR", "/env/cookie/path");
 
@@ -447,12 +447,12 @@ fn test_figment_all_defaults() {
 fn test_figment_invalid_env_var_type() {
     Jail::expect_with(|jail| {
         jail.create_file("test_config.toml", "")?;
-        jail.set_env("ZAINO_MAP_CAPACITY", "not_a_number");
+        jail.set_env("ZAINO_STORAGE.CACHE.CAPACITY", "not_a_number");
         let temp_toml_path = jail.directory().join("test_config.toml");
         let result = load_config(&temp_toml_path);
         assert!(result.is_err());
         if let Err(IndexerError::ConfigError(msg)) = result {
-            assert!(msg.to_lowercase().contains("map_capacity") && msg.contains("invalid type"),
+            assert!(msg.to_lowercase().contains("storage.cache.capacity") && msg.contains("invalid type"),
                     "Error message should mention 'map_capacity' (case-insensitive) and 'invalid type'. Got: {msg}");
         } else {
             panic!("Expected ConfigError, got {result:?}");
