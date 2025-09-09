@@ -31,7 +31,7 @@ pub(crate) async fn spawn_v0_zaino_db(
             },
             ..Default::default()
         },
-        db_version: 1,
+        db_version: 0,
         network: Network::Regtest(ActivationHeights::default()),
 
         no_sync: false,
@@ -211,7 +211,7 @@ async fn load_db_from_file() {
             },
             ..Default::default()
         },
-        db_version: 1,
+        db_version: 0,
         network: Network::Regtest(ActivationHeights::default()),
 
         no_sync: false,
