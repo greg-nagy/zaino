@@ -7,8 +7,8 @@ use zaino_proto::proto::service::{
     TransparentAddressBlockFilter, TxFilter,
 };
 use zaino_state::{
-    BackendType, BlockHash, FetchService, FetchServiceConfig, FetchServiceSubscriber,
-    LightWalletIndexer, StatusType, ZcashIndexer, ZcashService as _,
+    BackendType, FetchService, FetchServiceConfig, FetchServiceSubscriber, LightWalletIndexer,
+    StatusType, ZcashIndexer, ZcashService as _,
 };
 use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind};
@@ -559,11 +559,7 @@ async fn fetch_service_get_latest_block(validator: &ValidatorKind) {
 
     let json_service_get_latest_block = dbg!(BlockId {
         height: json_service_blockchain_info.blocks.0 as u64,
-        hash: BlockHash::from_bytes_in_display_order(
-            &json_service_blockchain_info.best_block_hash.0
-        )
-        .0
-        .to_vec(),
+        hash: json_service_blockchain_info.best_block_hash.0.to_vec(),
     });
 
     assert_eq!(fetch_service_get_latest_block.height, 2);
