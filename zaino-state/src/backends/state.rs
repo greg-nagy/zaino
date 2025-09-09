@@ -251,6 +251,7 @@ impl ZcashService for StateService {
         let mempool_source = ValidatorConnector::State(crate::chain_index::source::State {
             read_state_service: read_state_service.clone(),
             mempool_fetcher: rpc_client.clone(),
+            network: config.network.clone(),
         });
 
         let mempool = Mempool::spawn(mempool_source, None).await?;

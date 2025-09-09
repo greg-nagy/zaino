@@ -12,7 +12,18 @@ use zaino_fetch::jsonrpsee::{
 };
 use zcash_primitives::merkle_tree::read_commitment_tree;
 use zebra_chain::serialization::ZcashDeserialize;
-use zebra_state::{HashOrHeight, ReadResponse, ReadStateService};
+use zebra_state::{HashOrHeight, ReadRequest, ReadResponse, ReadStateService};
+
+macro_rules! expected_read_response {
+    ($response:ident, $expected_variant:ident) => {
+        match $response {
+            ReadResponse::$expected_variant(inner) => inner,
+            unexpected => {
+                unreachable!("Unexpected response from state service: {unexpected:?}")
+            }
+        }
+    };
+}
 
 /// A trait for accessing blockchain data from different backends.
 #[async_trait]
@@ -23,7 +34,7 @@ pub trait BlockchainSource: Clone + Send + Sync + 'static {
         id: HashOrHeight,
     ) -> BlockchainSourceResult<Option<Arc<zebra_chain::block::Block>>>;
 
-    /// Returns the block commitment tree data by hash or height
+    /// Returns the block commitment tree data by hash
     async fn get_commitment_tree_roots(
         &self,
         id: BlockHash,
@@ -31,6 +42,12 @@ pub trait BlockchainSource: Clone + Send + Sync + 'static {
         Option<(zebra_chain::sapling::tree::Root, u64)>,
         Option<(zebra_chain::orchard::tree::Root, u64)>,
     )>;
+
+    /// Returns the block commitment tree data by hash
+    async fn get_treestate(
+        &self,
+        id: BlockHash,
+    ) -> BlockchainSourceResult<(Option<Vec<u8>>, Option<Vec<u8>>)>;
 
     /// Returns the complete list of txids currently in the mempool.
     async fn get_mempool_txids(
@@ -76,6 +93,8 @@ pub struct InvalidData(String);
 
 type BlockchainSourceResult<T> = Result<T, BlockchainSourceError>;
 
+/// ReadStateService based validstor connector.
+///
 /// Currently the Mempool cannot utilise the mempool change endpoint in the ReadStateService,
 /// for this reason the lagacy jsonrpc inteface is used until the Mempool updates required can be implemented.
 ///
@@ -87,6 +106,21 @@ pub struct State {
     pub read_state_service: ReadStateService,
     /// Temporarily used to fetch mempool data.
     pub mempool_fetcher: JsonRpSeeConnector,
+    /// Cureent network type being run.
+    ///
+    /// TODO: use internal network type once lands
+    pub network: zebra_chain::parameters::Network,
+}
+
+/// JsonRPC client based validator connector.
+#[derive(Clone, Debug)]
+pub struct Fetch {
+    /// JsonRPC client
+    pub connector: JsonRpSeeConnector,
+    /// Cureent network type being run.
+    ///
+    /// TODO: use internal network type once lands
+    pub network: zebra_chain::parameters::Network,
 }
 
 /// A connection to a validator.
@@ -97,7 +131,7 @@ pub enum ValidatorConnector {
     /// NOTE: See docs for State struct.
     State(State),
     /// We are connected to a zebrad, zcashd, or other zainod via JsonRpSee
-    Fetch(JsonRpSeeConnector),
+    Fetch(Fetch),
 }
 
 #[async_trait]
@@ -120,8 +154,8 @@ impl BlockchainSource for ValidatorConnector {
                 ),
                 Err(e) => Err(BlockchainSourceError::Unrecoverable(e.to_string())),
             },
-            ValidatorConnector::Fetch(json_rp_see_connector) => {
-                match json_rp_see_connector
+            ValidatorConnector::Fetch(fetch) => {
+                match fetch.connector
                     .get_block(id.to_string(), Some(0))
                     .await
                 {
@@ -142,6 +176,7 @@ impl BlockchainSource for ValidatorConnector {
 
     async fn get_commitment_tree_roots(
         &self,
+        // Sould this be HashOrHeight?
         id: BlockHash,
     ) -> BlockchainSourceResult<(
         Option<(zebra_chain::sapling::tree::Root, u64)>,
@@ -181,8 +216,9 @@ impl BlockchainSource for ValidatorConnector {
                         .map(|tree| (tree.root(), tree.count())),
                 ))
             }
-            ValidatorConnector::Fetch(json_rp_see_connector) => {
-                let tree_responses = json_rp_see_connector
+            ValidatorConnector::Fetch(fetch) => {
+                let tree_responses = fetch
+                    .connector
                     .get_treestate(id.to_string())
                     .await
                     // As MethodError contains a GetTreestateError, which is an enum with no variants,
@@ -255,12 +291,98 @@ impl BlockchainSource for ValidatorConnector {
         }
     }
 
+    /// Returns the Sapling and Orchard treestate by blockhash.
+    async fn get_treestate(
+        &self,
+        // Sould this be HashOrHeight?
+        id: BlockHash,
+    ) -> BlockchainSourceResult<(Option<Vec<u8>>, Option<Vec<u8>>)> {
+        let hash_or_height: HashOrHeight = HashOrHeight::Hash(zebra_chain::block::Hash(id.into()));
+        match self {
+            ValidatorConnector::State(state) => {
+                let mut state = state.clone();
+                let block_header_response = state
+                    .read_state_service
+                    .ready()
+                    .and_then(|service| service.call(ReadRequest::BlockHeader(hash_or_height)))
+                    .await
+                    .unwrap();
+                let (_header, _hash, height) = match block_header_response {
+                    ReadResponse::BlockHeader {
+                        header,
+                        hash,
+                        height,
+                        ..
+                    } => (header, hash, height),
+                    unexpected => {
+                        unreachable!("Unexpected response from state service: {unexpected:?}")
+                    }
+                };
+
+                let sapling = match zebra_chain::parameters::NetworkUpgrade::Sapling
+                    .activation_height(&state.network)
+                {
+                    Some(activation_height) if height >= activation_height => Some(
+                        state
+                            .read_state_service
+                            .ready()
+                            .and_then(|service| {
+                                service.call(ReadRequest::SaplingTree(hash_or_height))
+                            })
+                            .await
+                            .unwrap(),
+                    ),
+                    _ => None,
+                }
+                .and_then(|sap_response| {
+                    expected_read_response!(sap_response, SaplingTree)
+                        .map(|tree| tree.to_rpc_bytes())
+                });
+
+                let orchard = match zebra_chain::parameters::NetworkUpgrade::Nu5
+                    .activation_height(&state.network)
+                {
+                    Some(activation_height) if height >= activation_height => Some(
+                        state
+                            .read_state_service
+                            .ready()
+                            .and_then(|service| {
+                                service.call(ReadRequest::OrchardTree(hash_or_height))
+                            })
+                            .await
+                            .unwrap(),
+                    ),
+                    _ => None,
+                }
+                .and_then(|orch_response| {
+                    expected_read_response!(orch_response, OrchardTree)
+                        .map(|tree| tree.to_rpc_bytes())
+                });
+
+                Ok((sapling, orchard))
+            }
+            ValidatorConnector::Fetch(fetch) => {
+                let treestate = fetch
+                    .connector
+                    .get_treestate(hash_or_height.to_string())
+                    .await
+                    .unwrap();
+
+                let sapling = treestate.sapling.commitments().final_state();
+
+                let orchard = treestate.orchard.commitments().final_state();
+
+                Ok((sapling.clone(), orchard.clone()))
+            }
+        }
+    }
+
     async fn get_mempool_txids(
         &self,
     ) -> BlockchainSourceResult<Option<Vec<zebra_chain::transaction::Hash>>> {
         let mempool_fetcher = match self {
             ValidatorConnector::State(state) => &state.mempool_fetcher,
-            ValidatorConnector::Fetch(json_rp_see_connector) => json_rp_see_connector,
+            ValidatorConnector::Fetch(fetch) => &fetch.connector,
         };
 
         let txid_strings = mempool_fetcher
@@ -293,6 +415,7 @@ impl BlockchainSource for ValidatorConnector {
             ValidatorConnector::State(State {
                 read_state_service,
                 mempool_fetcher,
+                network: _,
             }) => {
                 // Check state for transaction
                 let mut read_state_service = read_state_service.clone();
@@ -355,17 +478,17 @@ impl BlockchainSource for ValidatorConnector {
                     Ok(None)
                 }
             }
-            ValidatorConnector::Fetch(json_rp_see_connector) => {
+            ValidatorConnector::Fetch(fetch) => {
                 let serialized_transaction =
-                    if let GetTransactionResponse::Raw(serialized_transaction) =
-                        json_rp_see_connector
-                            .get_raw_transaction(txid.to_string(), Some(0))
-                            .await
-                            .map_err(|e| {
-                                BlockchainSourceError::Unrecoverable(format!(
-                                    "could not fetch transaction data: {e}"
-                                ))
-                            })?
+                    if let GetTransactionResponse::Raw(serialized_transaction) = fetch
+                        .connector
+                        .get_raw_transaction(txid.to_string(), Some(0))
+                        .await
+                        .map_err(|e| {
+                            BlockchainSourceError::Unrecoverable(format!(
+                                "could not fetch transaction data: {e}"
+                            ))
+                        })?
                     {
                         serialized_transaction
                     } else {
@@ -394,6 +517,7 @@ impl BlockchainSource for ValidatorConnector {
             ValidatorConnector::State(State {
                 read_state_service,
                 mempool_fetcher,
+                network: _,
             }) => {
                 match read_state_service.best_tip() {
                     Some((_height, hash)) => Ok(Some(hash)),
@@ -413,8 +537,9 @@ impl BlockchainSource for ValidatorConnector {
                     }
                 }
             }
-            ValidatorConnector::Fetch(json_rp_see_connector) => Ok(Some(
-                json_rp_see_connector
+            ValidatorConnector::Fetch(fetch) => Ok(Some(
+                fetch
+                    .connector
                     .get_best_blockhash()
                     .await
                     .map_err(|e| {
@@ -439,6 +564,7 @@ impl BlockchainSource for ValidatorConnector {
             ValidatorConnector::State(State {
                 read_state_service,
                 mempool_fetcher: _,
+                network: _,
             }) => {
                 match read_state_service
                     .clone()
@@ -452,7 +578,7 @@ impl BlockchainSource for ValidatorConnector {
                     Err(e) => Err(e),
                 }
             }
-            ValidatorConnector::Fetch(_json_rp_see_connector) => Ok(None),
+            ValidatorConnector::Fetch(_fetch) => Ok(None),
         }
     }
 }
@@ -624,6 +750,16 @@ pub(crate) mod test {
             } else {
                 Ok((None, None))
             }
+        }
+
+        /// Returns the block commitment tree data by hash
+        async fn get_treestate(
+            &self,
+            _id: BlockHash,
+        ) -> BlockchainSourceResult<(Option<Vec<u8>>, Option<Vec<u8>>)> {
+            // This is not currently used in testing,
+            // if we want to implement this here we will need to update the test vectors we store.
+            unimplemented!()
         }
 
         async fn get_mempool_txids(
