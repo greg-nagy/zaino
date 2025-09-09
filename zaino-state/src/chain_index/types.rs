@@ -41,6 +41,29 @@ impl BlockHash {
     }
 }
 
+/// The location of a transaction in the best chain
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum BestChainLocation {
+    /// the block containing the transaction
+    Block(BlockHash, Height),
+    /// If the transaction is in the mempool,
+    /// which matches the snapshot's chaintip
+    Mempool,
+}
+
+/// The location of a transaction not in the best chain
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum NonBestChainLocation {
+    /// the block containing the transaction
+    Block(BlockHash),
+    /// if the transaction is in the mempool
+    /// but the mempool does not match the
+    /// snapshot's chaintip
+    /// This likely means that the provided
+    /// snapshot is out-of-date
+    Mempool,
+}
+
 impl fmt::Display for BlockHash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(&self.encode_hex::<String>())
