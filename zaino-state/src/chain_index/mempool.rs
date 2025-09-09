@@ -577,6 +577,6 @@ impl MempoolSubscriber {
 
     /// Get the chain tip that the mempool is atop
     pub fn mempool_chain_tip(&self) -> BlockHash {
-        self.mempool_chain_tip.borrow().clone()
+        *self.mempool_chain_tip.borrow()
     }
 }
