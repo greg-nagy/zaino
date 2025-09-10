@@ -2213,6 +2213,7 @@ dependencies = [
  "tokio",
  "tracing-subscriber",
  "url",
+ "zaino-common",
  "zaino-fetch",
  "zaino-proto",
  "zaino-state",
@@ -5968,6 +5969,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "zaino-common"
+version = "0.1.2"
+dependencies = [
+ "serde",
+ "thiserror 1.0.69",
+ "zebra-chain 2.0.0",
+ "zingo-infra-services",
+]
+
+[[package]]
 name = "zaino-fetch"
 version = "0.1.2"
 dependencies = [
@@ -6073,6 +6084,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "whoami",
+ "zaino-common",
  "zaino-fetch",
  "zaino-proto",
  "zcash_address 0.9.0",
@@ -6104,6 +6116,7 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "tracing-subscriber",
+ "zaino-common",
  "zaino-state",
  "zaino-testvectors",
  "zainod",
@@ -6111,7 +6124,7 @@ dependencies = [
  "zcash_protocol 0.5.4",
  "zebra-chain 2.0.0",
  "zingo-infra-services",
- "zingo-infra-testutils",
+ "zingo-netutils",
  "zingolib",
 ]
 
@@ -6137,6 +6150,7 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "tracing-subscriber",
+ "zaino-common",
  "zaino-fetch",
  "zaino-serve",
  "zaino-state",
@@ -7127,27 +7141,6 @@ dependencies = [
  "zebra-chain 1.0.0-beta.46",
  "zebra-node-services 1.0.0-beta.46",
  "zebra-rpc 1.0.0-beta.46",
-]
-
-[[package]]
-name = "zingo-infra-testutils"
-version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?rev=7509a6d26c6424b2e22585fabd0bb974bff6bf55#7509a6d26c6424b2e22585fabd0bb974bff6bf55"
-dependencies = [
- "http",
- "portpicker",
- "tempfile",
- "testvectors",
- "tokio",
- "tokio-stream",
- "tonic",
- "tracing-subscriber",
- "zcash_client_backend",
- "zcash_primitives 0.22.1",
- "zcash_protocol 0.5.4",
- "zingo-infra-services",
- "zingo-netutils",
- "zingolib",
 ]
 
 [[package]]

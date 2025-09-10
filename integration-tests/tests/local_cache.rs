@@ -1,4 +1,5 @@
 use core::panic;
+use zaino_common::{DatabaseConfig, StorageConfig};
 use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
 use zaino_state::{
     bench::{BlockCache, BlockCacheConfig, BlockCacheSubscriber},
@@ -74,12 +75,15 @@ async fn create_test_manager_and_block_cache(
     };
 
     let block_cache_config = BlockCacheConfig {
-        map_capacity: None,
-        map_shard_amount: None,
+        storage: StorageConfig {
+            database: DatabaseConfig {
+                path: test_manager.data_dir.clone(),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
         db_version: 1,
-        db_path: test_manager.data_dir.clone(),
-        db_size: None,
-        network,
+        network: network.into(),
         no_sync: zaino_no_sync,
         no_db: zaino_no_db,
     };
