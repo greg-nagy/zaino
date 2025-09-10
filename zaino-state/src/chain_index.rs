@@ -171,6 +171,15 @@ pub trait ChainIndex {
     /// it existed at the moment the snapshot was taken.
     fn snapshot_nonfinalized_state(&self) -> Self::Snapshot;
 
+    /// Returns Some(Height) for the given block hash *if* it is currently in the best chain.
+    ///
+    /// Returns None if the specified block is not in the best chain or is not found.
+    fn get_block_height(
+        &self,
+        nonfinalized_snapshot: &Self::Snapshot,
+        hash: types::BlockHash,
+    ) -> impl std::future::Future<Output = Result<Option<types::Height>, Self::Error>>;
+
     /// Given inclusive start and end heights, stream all blocks
     /// between the given heights.
     /// Returns None if the specified end height
@@ -587,6 +596,25 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
     /// it existed at the moment the snapshot was taken.
     fn snapshot_nonfinalized_state(&self) -> Self::Snapshot {
         self.non_finalized_state.get_snapshot()
+    }
+
+    /// Returns Some(Height) for the given block hash *if* it is currently in the best chain.
+    ///
+    /// Returns None if the specified block is not in the best chain or is not found.
+    ///
+    /// Used for hash based block lookup (random access).
+    async fn get_block_height(
+        &self,
+        nonfinalized_snapshot: &Self::Snapshot,
+        hash: types::BlockHash,
+    ) -> Result<Option<types::Height>, Self::Error> {
+        match nonfinalized_snapshot.blocks.get(&hash).cloned() {
+            Some(block) => Ok(block.index().height()),
+            None => match self.finalized_state.get_block_height(hash).await {
+                Ok(height) => Ok(height),
+                Err(_e) => Err(ChainIndexError::database_hole(hash)),
+            },
+        }
     }
 
     /// Given inclusive start and end heights, stream all blocks
