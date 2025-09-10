@@ -23,7 +23,6 @@ zebra-chain = { workspace = true }
 
 # Zingo-infra
 zingo-infra-services = { workspace = true }
-zingo-infra-testutils = { workspace = true }
 
 # ZingoLib
 zingolib = { workspace = true }
@@ -31,7 +30,11 @@ testvectors = { workspace = true }
 
 # Tracing
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["fmt", "env-filter", "time"] }
+tracing-subscriber = { workspace = true, features = [
+    "fmt",
+    "env-filter",
+    "time",
+] }
 tracing-futures = { workspace = true }
 
 # Miscellaneous
@@ -54,3 +57,5 @@ once_cell = { workspace = true }
 proptest = { workspace = true }
 lazy_static = "1.5.0"
 
+[dev-dependencies]
+zingo-netutils = { git = "https://github.com/zingolabs/zingolib.git", tag = "2.0.0-beta2" }
