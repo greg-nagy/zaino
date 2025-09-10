@@ -725,11 +725,19 @@ impl Drop for TestManager {
 #[cfg(test)]
 mod launch_testmanager {
 
+    use zcash_client_backend::proto::service::compact_tx_streamer_client::CompactTxStreamerClient;
+    use zingo_netutils::{GetClientError, GrpcConnector, UnderlyingService};
+
     use super::*;
 
-    mod zcashd {
+    /// Builds a client for creating RPC requests to the indexer/light-node
+    async fn build_client(
+        uri: http::Uri,
+    ) -> Result<CompactTxStreamerClient<UnderlyingService>, GetClientError> {
+        GrpcConnector::new(uri).get_client().await
+    }
 
-        use zingo_infra_testutils::client::build_client;
+    mod zcashd {
 
         use super::*;
 
@@ -906,10 +914,10 @@ mod launch_testmanager {
     }
 
     mod zebrad {
+
         use super::*;
 
         mod fetch_service {
-            use zingo_infra_testutils::client::build_client;
 
             use super::*;
 
@@ -1199,7 +1207,6 @@ mod launch_testmanager {
         }
 
         mod state_service {
-            use zingo_infra_testutils::client::build_client;
 
             use super::*;
 
