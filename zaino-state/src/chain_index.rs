@@ -13,6 +13,7 @@
 
 use crate::error::{ChainIndexError, ChainIndexErrorKind, FinalisedStateError};
 use crate::{AtomicStatus, StatusType, SyncError};
+use std::collections::HashSet;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use futures::{FutureExt, Stream};
@@ -161,7 +162,7 @@ mod tests;
 /// 3. Call `NodeBackedChainIndex::new(source, config).await`
 pub trait ChainIndex {
     /// A snapshot of the nonfinalized state, needed for atomic access
-    type Snapshot;
+    type Snapshot: NonFinalizedSnapshot;
 
     /// How it can fail
     type Error;
@@ -829,12 +830,39 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
     }
 }
 
+impl<T> NonFinalizedSnapshot for Arc<T>
+where
+    T: NonFinalizedSnapshot,
+{
+    fn get_chainblock_by_hash(&self, target_hash: &types::BlockHash) -> Option<&ChainBlock> {
+        self.as_ref().get_chainblock_by_hash(target_hash)
+    }
+
+    fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&ChainBlock> {
+        self.as_ref().get_chainblock_by_height(target_height)
+    }
+
+    fn best_chaintip(&self) -> (types::Height, types::BlockHash) {
+        self.as_ref().best_chaintip()
+    }
+
+    fn nonbest_chaintips(&self) -> HashSet<types::BlockHash> {
+        self.as_ref().nonbest_chaintips()
+    }
+}
+
 /// A snapshot of the non-finalized state, for consistent queries
 pub trait NonFinalizedSnapshot {
     /// Hash -> block
     fn get_chainblock_by_hash(&self, target_hash: &types::BlockHash) -> Option<&ChainBlock>;
     /// Height -> block
     fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&ChainBlock>;
+    /// Get the tip of the best chain, according to the snapshot
+    fn best_chaintip(&self) -> (types::Height, types::BlockHash);
+    /// Get all hashes of non-best chaintips
+    ///
+    /// Note that nonbest chain support is currently experimental
+    fn nonbest_chaintips(&self) -> HashSet<types::BlockHash>;
 }
 
 impl NonFinalizedSnapshot for NonfinalizedBlockCacheSnapshot {
@@ -855,5 +883,28 @@ impl NonFinalizedSnapshot for NonfinalizedBlockCacheSnapshot {
                 None
             }
         })
+    }
+
+    fn best_chaintip(&self) -> (types::Height, types::BlockHash) {
+        self.best_tip
+    }
+
+    fn nonbest_chaintips(&self) -> HashSet<types::BlockHash> {
+        self.blocks
+            .keys()
+            .filter_map(|hash| {
+                if self
+                    .blocks
+                    .values()
+                    .find(|block| block.index().parent_hash() == hash)
+                    .is_none()
+                {
+                    Some(hash)
+                } else {
+                    None
+                }
+            })
+            .copied()
+            .collect()
     }
 }
