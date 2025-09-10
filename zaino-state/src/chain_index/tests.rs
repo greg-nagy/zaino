@@ -140,17 +140,24 @@ mod mockchain_tests {
             .into_iter()
             .flat_map(|block| block.3.transactions.into_iter())
         {
-            let zaino_transaction = index_reader
+            let (transaction, branch_id) = index_reader
                 .get_raw_transaction(
                     &nonfinalized_snapshot,
                     &TransactionHash::from(expected_transaction.hash()),
                 )
                 .await
                 .unwrap()
-                .unwrap()
+                .unwrap();
+            let zaino_transaction = transaction
                 .zcash_deserialize_into::<zebra_chain::transaction::Transaction>()
                 .unwrap();
-            assert_eq!(expected_transaction.as_ref(), &zaino_transaction)
+            assert_eq!(expected_transaction.as_ref(), &zaino_transaction);
+            assert_eq!(
+                branch_id,
+                zebra_chain::parameters::NetworkUpgrade::Nu6
+                    .branch_id()
+                    .map(u32::from)
+            );
         }
     }
 
@@ -235,17 +242,24 @@ mod mockchain_tests {
 
         let nonfinalized_snapshot = index_reader.snapshot_nonfinalized_state();
         for expected_transaction in mempool_transactions.into_iter() {
-            let zaino_transaction = index_reader
+            let (transaction, branch_id) = index_reader
                 .get_raw_transaction(
                     &nonfinalized_snapshot,
                     &TransactionHash::from(expected_transaction.hash()),
                 )
                 .await
                 .unwrap()
-                .unwrap()
+                .unwrap();
+            let zaino_transaction = transaction
                 .zcash_deserialize_into::<zebra_chain::transaction::Transaction>()
                 .unwrap();
-            assert_eq!(expected_transaction.as_ref(), &zaino_transaction)
+            assert_eq!(expected_transaction.as_ref(), &zaino_transaction);
+            assert_eq!(
+                branch_id,
+                zebra_chain::parameters::NetworkUpgrade::Nu6
+                    .branch_id()
+                    .map(u32::from)
+            );
         }
     }
 
