@@ -845,10 +845,6 @@ where
     fn best_chaintip(&self) -> (types::Height, types::BlockHash) {
         self.as_ref().best_chaintip()
     }
-
-    fn nonbest_chaintips(&self) -> HashSet<types::BlockHash> {
-        self.as_ref().nonbest_chaintips()
-    }
 }
 
 /// A snapshot of the non-finalized state, for consistent queries
@@ -859,10 +855,6 @@ pub trait NonFinalizedSnapshot {
     fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&ChainBlock>;
     /// Get the tip of the best chain, according to the snapshot
     fn best_chaintip(&self) -> (types::Height, types::BlockHash);
-    /// Get all hashes of non-best chaintips
-    ///
-    /// Note that nonbest chain support is currently experimental
-    fn nonbest_chaintips(&self) -> HashSet<types::BlockHash>;
 }
 
 impl NonFinalizedSnapshot for NonfinalizedBlockCacheSnapshot {
@@ -887,24 +879,5 @@ impl NonFinalizedSnapshot for NonfinalizedBlockCacheSnapshot {
 
     fn best_chaintip(&self) -> (types::Height, types::BlockHash) {
         self.best_tip
-    }
-
-    fn nonbest_chaintips(&self) -> HashSet<types::BlockHash> {
-        self.blocks
-            .keys()
-            .filter_map(|hash| {
-                if self
-                    .blocks
-                    .values()
-                    .find(|block| block.index().parent_hash() == hash)
-                    .is_none()
-                {
-                    Some(hash)
-                } else {
-                    None
-                }
-            })
-            .copied()
-            .collect()
     }
 }
