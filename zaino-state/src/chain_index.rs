@@ -13,7 +13,6 @@
 
 use crate::error::{ChainIndexError, ChainIndexErrorKind, FinalisedStateError};
 use crate::{AtomicStatus, StatusType, SyncError};
-use std::collections::HashSet;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use futures::{FutureExt, Stream};
