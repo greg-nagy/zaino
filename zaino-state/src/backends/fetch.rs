@@ -108,10 +108,7 @@ impl ZcashService for FetchService {
                 FetchServiceError::BlockCacheError(BlockCacheError::Custom(e.to_string()))
             })?;
 
-        let mempool_source = ValidatorConnector::Fetch(crate::chain_index::source::Fetch {
-            connector: fetcher.clone(),
-            network: config.network.to_zebra_network(),
-        });
+        let mempool_source = ValidatorConnector::Fetch(fetcher.clone());
 
         let mempool = Mempool::spawn(mempool_source, None).await.map_err(|e| {
             FetchServiceError::BlockCacheError(BlockCacheError::Custom(e.to_string()))

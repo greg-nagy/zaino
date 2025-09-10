@@ -6,6 +6,7 @@ use crate::chain_index::types::{BlockHash, TransactionHash};
 use async_trait::async_trait;
 use futures::{future::join, TryFutureExt as _};
 use tower::{Service, ServiceExt as _};
+use zaino_common::Network;
 use zaino_fetch::jsonrpsee::{
     connector::{JsonRpSeeConnector, RpcRequestError},
     response::{GetBlockError, GetBlockResponse, GetTransactionResponse, GetTreestateResponse},
@@ -107,31 +108,20 @@ pub struct State {
     /// Temporarily used to fetch mempool data.
     pub mempool_fetcher: JsonRpSeeConnector,
     /// Cureent network type being run.
-    ///
-    /// TODO: use internal network type once lands
-    pub network: zebra_chain::parameters::Network,
-}
-
-/// JsonRPC client based validator connector.
-#[derive(Clone, Debug)]
-pub struct Fetch {
-    /// JsonRPC client
-    pub connector: JsonRpSeeConnector,
-    /// Cureent network type being run.
-    ///
-    /// TODO: use internal network type once lands
-    pub network: zebra_chain::parameters::Network,
+    pub network: Network,
 }
 
 /// A connection to a validator.
 #[derive(Clone, Debug)]
+// TODO: Explore whether State should be Boxed.
+#[allow(clippy::large_enum_variant)]
 pub enum ValidatorConnector {
     /// The connection is via direct read access to a zebrad's data file
     ///
     /// NOTE: See docs for State struct.
     State(State),
-    /// We are connected to a zebrad, zcashd, or other zainod via JsonRpSee
-    Fetch(Fetch),
+    /// We are connected to a zebrad, zcashd, or other zainod via JsonRpc ("JsonRpSee")
+    Fetch(JsonRpSeeConnector),
 }
 
 #[async_trait]
@@ -155,7 +145,7 @@ impl BlockchainSource for ValidatorConnector {
                 Err(e) => Err(BlockchainSourceError::Unrecoverable(e.to_string())),
             },
             ValidatorConnector::Fetch(fetch) => {
-                match fetch.connector
+                match fetch
                     .get_block(id.to_string(), Some(0))
                     .await
                 {
@@ -218,7 +208,6 @@ impl BlockchainSource for ValidatorConnector {
             }
             ValidatorConnector::Fetch(fetch) => {
                 let tree_responses = fetch
-                    .connector
                     .get_treestate(id.to_string())
                     .await
                     // As MethodError contains a GetTreestateError, which is an enum with no variants,
@@ -306,7 +295,12 @@ impl BlockchainSource for ValidatorConnector {
                     .ready()
                     .and_then(|service| service.call(ReadRequest::BlockHeader(hash_or_height)))
                     .await
-                    .unwrap();
+                    .map_err(|_e| {
+                        BlockchainSourceError::Unrecoverable(
+                            InvalidData(format!("could not fetch header of block {id}"))
+                                .to_string(),
+                        )
+                    })?;
                 let (_header, _hash, height) = match block_header_response {
                     ReadResponse::BlockHeader {
                         header,
@@ -320,7 +314,7 @@ impl BlockchainSource for ValidatorConnector {
                 };
 
                 let sapling = match zebra_chain::parameters::NetworkUpgrade::Sapling
-                    .activation_height(&state.network)
+                    .activation_height(&state.network.to_zebra_network())
                 {
                     Some(activation_height) if height >= activation_height => Some(
                         state
@@ -330,7 +324,14 @@ impl BlockchainSource for ValidatorConnector {
                                 service.call(ReadRequest::SaplingTree(hash_or_height))
                             })
                             .await
-                            .unwrap(),
+                            .map_err(|_e| {
+                                BlockchainSourceError::Unrecoverable(
+                                    InvalidData(format!(
+                                        "could not fetch sapling treestate of block {id}"
+                                    ))
+                                    .to_string(),
+                                )
+                            })?,
                     ),
                     _ => None,
                 }
@@ -340,7 +341,7 @@ impl BlockchainSource for ValidatorConnector {
                 });
 
                 let orchard = match zebra_chain::parameters::NetworkUpgrade::Nu5
-                    .activation_height(&state.network)
+                    .activation_height(&state.network.to_zebra_network())
                 {
                     Some(activation_height) if height >= activation_height => Some(
                         state
@@ -350,7 +351,14 @@ impl BlockchainSource for ValidatorConnector {
                                 service.call(ReadRequest::OrchardTree(hash_or_height))
                             })
                             .await
-                            .unwrap(),
+                            .map_err(|_e| {
+                                BlockchainSourceError::Unrecoverable(
+                                    InvalidData(format!(
+                                        "could not fetch orchard treestate of block {id}"
+                                    ))
+                                    .to_string(),
+                                )
+                            })?,
                     ),
                     _ => None,
                 }
@@ -363,10 +371,14 @@ impl BlockchainSource for ValidatorConnector {
             }
             ValidatorConnector::Fetch(fetch) => {
                 let treestate = fetch
-                    .connector
                     .get_treestate(hash_or_height.to_string())
                     .await
-                    .unwrap();
+                    .map_err(|_e| {
+                        BlockchainSourceError::Unrecoverable(
+                            InvalidData(format!("could not fetch treestate of block {id}"))
+                                .to_string(),
+                        )
+                    })?;
 
                 let sapling = treestate.sapling.commitments().final_state();
 
@@ -382,7 +394,7 @@ impl BlockchainSource for ValidatorConnector {
     ) -> BlockchainSourceResult<Option<Vec<zebra_chain::transaction::Hash>>> {
         let mempool_fetcher = match self {
             ValidatorConnector::State(state) => &state.mempool_fetcher,
-            ValidatorConnector::Fetch(fetch) => &fetch.connector,
+            ValidatorConnector::Fetch(fetch) => fetch,
         };
 
         let txid_strings = mempool_fetcher
@@ -481,7 +493,6 @@ impl BlockchainSource for ValidatorConnector {
             ValidatorConnector::Fetch(fetch) => {
                 let serialized_transaction =
                     if let GetTransactionResponse::Raw(serialized_transaction) = fetch
-                        .connector
                         .get_raw_transaction(txid.to_string(), Some(0))
                         .await
                         .map_err(|e| {
@@ -539,7 +550,6 @@ impl BlockchainSource for ValidatorConnector {
             }
             ValidatorConnector::Fetch(fetch) => Ok(Some(
                 fetch
-                    .connector
                     .get_best_blockhash()
                     .await
                     .map_err(|e| {
@@ -572,6 +582,7 @@ impl BlockchainSource for ValidatorConnector {
                     .await
                 {
                     Ok(ReadResponse::NonFinalizedBlocksListener(listener)) => {
+                        // TODO: Explore whether this unwrap is actually safe, replace with expect is so.
                         Ok(Some(listener.unwrap()))
                     }
                     Ok(_) => unreachable!(),
