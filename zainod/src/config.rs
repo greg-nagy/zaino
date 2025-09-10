@@ -15,7 +15,7 @@ use serde::{
     de::{self, Deserializer},
     Deserialize, Serialize,
 };
-#[cfg(feature = "disable_tls_unencrypted_traffic_mode")]
+#[cfg(feature = "no_tls_use_unencrypted_traffic")]
 use tracing::warn;
 use tracing::{error, info};
 use zaino_common::{
@@ -164,9 +164,9 @@ impl IndexerConfig {
             }
         }
 
-        #[cfg(not(feature = "disable_tls_unencrypted_traffic_mode"))]
+        #[cfg(not(feature = "no_tls_use_unencrypted_traffic"))]
         let grpc_addr = fetch_socket_addr_from_hostname(&self.grpc_listen_address.to_string())?;
-        #[cfg(feature = "disable_tls_unencrypted_traffic_mode")]
+        #[cfg(feature = "no_tls_use_unencrypted_traffic")]
         let _ = fetch_socket_addr_from_hostname(&self.grpc_listen_address.to_string())?;
 
         let validator_addr =
@@ -179,7 +179,7 @@ impl IndexerConfig {
             ));
         }
 
-        #[cfg(not(feature = "disable_tls_unencrypted_traffic_mode"))]
+        #[cfg(not(feature = "no_tls_use_unencrypted_traffic"))]
         {
             // Ensure TLS is used when connecting to external addresses.
             if !is_private_listen_addr(&grpc_addr) && !self.grpc_tls {
@@ -196,9 +196,11 @@ impl IndexerConfig {
             ));
             }
         }
-        #[cfg(feature = "disable_tls_unencrypted_traffic_mode")]
+        #[cfg(feature = "no_tls_use_unencrypted_traffic")]
         {
-            warn!("Zaino built using disable_tls_unencrypted_traffic_mode feature, proceed with caution.");
+            warn!(
+                "Zaino built using no_tls_use_unencrypted_traffic feature, proceed with caution."
+            );
         }
 
         // Check gRPC and JsonRPC server are not listening on the same address.
@@ -325,7 +327,7 @@ pub(crate) fn is_private_listen_addr(addr: &SocketAddr) -> bool {
 /// Validates that the configured `address` is a loopback address.
 ///
 /// Returns `Ok(BindAddress)` if valid.
-#[cfg_attr(feature = "disable_tls_unencrypted_traffic_mode", allow(dead_code))]
+#[cfg_attr(feature = "no_tls_use_unencrypted_traffic", allow(dead_code))]
 pub(crate) fn is_loopback_listen_addr(addr: &SocketAddr) -> bool {
     let ip = addr.ip();
     match ip {
