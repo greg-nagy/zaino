@@ -196,6 +196,7 @@ pub trait ChainIndex {
 
     /// given a transaction id, returns the transaction, along with
     /// its consensus branch ID if available
+    #[allow(clippy::type_complexity)]
     fn get_raw_transaction(
         &self,
         snapshot: &Self::Snapshot,
@@ -678,17 +679,14 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
                 .blocks
                 .iter()
                 .find(|(hash, _block)| **hash == self.mempool.mempool_chain_tip())
-                .map(|(_hash, block)| block.height())
-                .flatten();
-            let mempool_branch_id = mempool_height
-                .map(|height| {
-                    ConsensusBranchId::current(
-                        &self.non_finalized_state.network,
-                        zebra_chain::block::Height::from(height + 1),
-                    )
-                    .map(u32::from)
-                })
-                .flatten();
+                .and_then(|(_hash, block)| block.height());
+            let mempool_branch_id = mempool_height.and_then(|height| {
+                ConsensusBranchId::current(
+                    &self.non_finalized_state.network,
+                    zebra_chain::block::Height::from(height + 1),
+                )
+                .map(u32::from)
+            });
 
             return Ok(Some((bytes, mempool_branch_id)));
         }
@@ -715,13 +713,10 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
             .await
             .map_err(ChainIndexError::backing_validator)?
             .ok_or_else(|| ChainIndexError::database_hole(block.index().hash()))?;
-        let block_consensus_branch_id = full_block
-            .coinbase_height()
-            .map(|height| {
-                ConsensusBranchId::current(&self.non_finalized_state.network, dbg!(height))
-                    .map(u32::from)
-            })
-            .flatten();
+        let block_consensus_branch_id = full_block.coinbase_height().and_then(|height| {
+            ConsensusBranchId::current(&self.non_finalized_state.network, dbg!(height))
+                .map(u32::from)
+        });
         dbg!(block_consensus_branch_id);
         full_block
             .transactions
