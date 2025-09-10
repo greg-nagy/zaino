@@ -44,7 +44,7 @@ pub trait BlockchainSource: Clone + Send + Sync + 'static {
         Option<(zebra_chain::orchard::tree::Root, u64)>,
     )>;
 
-    /// Returns the block commitment tree data by hash
+    /// Returns the sapling and orchard treestate by hash
     async fn get_treestate(
         &self,
         id: BlockHash,
@@ -94,7 +94,7 @@ pub struct InvalidData(String);
 
 type BlockchainSourceResult<T> = Result<T, BlockchainSourceError>;
 
-/// ReadStateService based validstor connector.
+/// ReadStateService based validator connector.
 ///
 /// Currently the Mempool cannot utilise the mempool change endpoint in the ReadStateService,
 /// for this reason the lagacy jsonrpc inteface is used until the Mempool updates required can be implemented.
@@ -107,7 +107,7 @@ pub struct State {
     pub read_state_service: ReadStateService,
     /// Temporarily used to fetch mempool data.
     pub mempool_fetcher: JsonRpSeeConnector,
-    /// Cureent network type being run.
+    /// Current network type being run.
     pub network: Network,
 }
 
@@ -582,7 +582,7 @@ impl BlockchainSource for ValidatorConnector {
                     .await
                 {
                     Ok(ReadResponse::NonFinalizedBlocksListener(listener)) => {
-                        // TODO: Explore whether this unwrap is actually safe, replace with expect is so.
+                        // TODO: Explore whether this unwrap is actually safe, replace with expect if so.
                         Ok(Some(listener.unwrap()))
                     }
                     Ok(_) => unreachable!(),
@@ -763,7 +763,7 @@ pub(crate) mod test {
             }
         }
 
-        /// Returns the block commitment tree data by hash
+        /// Returns the sapling and orchard treestate by hash
         async fn get_treestate(
             &self,
             _id: BlockHash,
