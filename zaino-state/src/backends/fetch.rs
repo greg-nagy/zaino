@@ -251,7 +251,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// method: post
     /// tags: blockchain
     async fn get_difficulty(&self) -> Result<f64, Self::Error> {
-        Ok(self.fetcher.get_difficulty().await?.0)
+        Ok(self.fetcher.get_difficulty().await?.difficulty)
     }
 
     /// Returns the total balance of a provided `addresses` in an [`AddressBalance`] instance.

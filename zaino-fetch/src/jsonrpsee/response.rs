@@ -223,7 +223,9 @@ impl ResponseToError for GetBlockchainInfoResponse {
 
 /// Response to a `getdifficulty` RPC request.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct GetDifficultyResponse(pub f64);
+pub struct GetDifficultyResponse {
+    pub difficulty: f64,
+}
 
 fn default_header() -> Height {
     Height(0)
