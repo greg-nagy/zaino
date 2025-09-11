@@ -186,6 +186,11 @@ impl FetchServiceSubscriber {
 
         mempool_status.combine(block_cache_status)
     }
+
+    /// Returns the network type running.
+    pub fn network(&self) -> zaino_common::Network {
+        self.config.network
+    }
 }
 
 #[async_trait]

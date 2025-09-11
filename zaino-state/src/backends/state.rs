@@ -845,6 +845,11 @@ impl StateServiceSubscriber {
             ))),
         }
     }
+
+    /// Returns the network type running.
+    pub fn network(&self) -> zaino_common::Network {
+        self.config.network
+    }
 }
 
 #[async_trait]

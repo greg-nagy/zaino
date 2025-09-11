@@ -26,6 +26,7 @@ futures.workspace = true
 zcash_primitives = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
 tempfile.workspace = true
+tower = { workspace = true, features = ["buffer", "util"] }
 
 # Runtime
 tokio = { workspace = true }
