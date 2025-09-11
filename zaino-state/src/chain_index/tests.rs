@@ -136,10 +136,13 @@ mod mockchain_tests {
         let (blocks, _indexer, index_reader, _mockchain) =
             load_test_vectors_and_sync_chain_index(false).await;
         let nonfinalized_snapshot = index_reader.snapshot_nonfinalized_state();
-        for expected_transaction in blocks
-            .into_iter()
-            .flat_map(|block| block.3.transactions.into_iter())
-        {
+        for (expected_transaction, height) in blocks.into_iter().flat_map(|block| {
+            block
+                .3
+                .transactions
+                .into_iter()
+                .map(move |transaction| (transaction, block.0))
+        }) {
             let (transaction, branch_id) = index_reader
                 .get_raw_transaction(
                     &nonfinalized_snapshot,
@@ -154,9 +157,13 @@ mod mockchain_tests {
             assert_eq!(expected_transaction.as_ref(), &zaino_transaction);
             assert_eq!(
                 branch_id,
-                zebra_chain::parameters::NetworkUpgrade::Nu6
-                    .branch_id()
-                    .map(u32::from)
+                if height == 0 {
+                    None
+                } else {
+                    zebra_chain::parameters::NetworkUpgrade::Nu6
+                        .branch_id()
+                        .map(u32::from)
+                }
             );
         }
     }
