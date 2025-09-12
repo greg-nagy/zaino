@@ -191,7 +191,7 @@ pub(crate) fn build_mockchain_source(
         block_treestates.push((sapling_treestate, orchard_treestate));
     }
 
-    MockchainSource::new(zebra_blocks, block_roots, block_hashes)
+    MockchainSource::new(zebra_blocks, block_roots, block_treestates, block_hashes)
 }
 
 #[allow(clippy::type_complexity)]
@@ -236,6 +236,7 @@ pub(crate) fn build_active_mockchain_source(
     MockchainSource::new_with_active_height(
         zebra_blocks,
         block_roots,
+        block_treestates,
         block_hashes,
         loaded_chain_height,
     )

@@ -611,6 +611,7 @@ pub(crate) mod test {
     pub(crate) struct MockchainSource {
         blocks: Vec<Arc<Block>>,
         roots: Vec<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>,
+        treestates: Vec<(Vec<u8>, Vec<u8>)>,
         hashes: Vec<BlockHash>,
         active_chain_height: Arc<AtomicU32>,
     }
@@ -622,10 +623,13 @@ pub(crate) mod test {
         pub(crate) fn new(
             blocks: Vec<Arc<Block>>,
             roots: Vec<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>,
+            treestates: Vec<(Vec<u8>, Vec<u8>)>,
             hashes: Vec<BlockHash>,
         ) -> Self {
             assert!(
-                blocks.len() == roots.len() && roots.len() == hashes.len(),
+                blocks.len() == roots.len()
+                    && roots.len() == hashes.len()
+                    && hashes.len() == treestates.len(),
                 "All input vectors must be the same length"
             );
 
@@ -634,6 +638,7 @@ pub(crate) mod test {
             Self {
                 blocks,
                 roots,
+                treestates,
                 hashes,
                 active_chain_height: Arc::new(AtomicU32::new(tip_height)),
             }
@@ -651,10 +656,16 @@ pub(crate) mod test {
         pub(crate) fn new_with_active_height(
             blocks: Vec<Arc<Block>>,
             roots: Vec<(Option<(sapling::Root, u64)>, Option<(orchard::Root, u64)>)>,
+            treestates: Vec<(Vec<u8>, Vec<u8>)>,
             hashes: Vec<BlockHash>,
             active_chain_height: u32,
         ) -> Self {
-            assert!(blocks.len() == roots.len() && roots.len() == hashes.len());
+            assert!(
+                blocks.len() == roots.len()
+                    && roots.len() == hashes.len()
+                    && hashes.len() == treestates.len(),
+                "All input vectors must be the same length"
+            );
 
             // len() returns one-indexed length, height is zero-indexed.
             let max_height = blocks.len().saturating_sub(1) as u32;
@@ -666,6 +677,7 @@ pub(crate) mod test {
             Self {
                 blocks,
                 roots,
+                treestates,
                 hashes,
                 active_chain_height: Arc::new(AtomicU32::new(active_chain_height)),
             }
@@ -766,11 +778,20 @@ pub(crate) mod test {
         /// Returns the sapling and orchard treestate by hash
         async fn get_treestate(
             &self,
-            _id: BlockHash,
+            id: BlockHash,
         ) -> BlockchainSourceResult<(Option<Vec<u8>>, Option<Vec<u8>>)> {
-            // This is not currently used in testing,
-            // if we want to implement this here we will need to update the test vectors we store.
-            unimplemented!()
+            let active_chain_height = self.active_height() as usize; // serve up to active tip
+
+            if let Some(height) = self.hashes.iter().position(|h| h == &id) {
+                if height <= active_chain_height {
+                    let (sapling_state, orchard_state) = &self.treestates[height];
+                    Ok((Some(sapling_state.clone()), Some(orchard_state.clone())))
+                } else {
+                    Ok((None, None))
+                }
+            } else {
+                Ok((None, None))
+            }
         }
 
         async fn get_mempool_txids(
