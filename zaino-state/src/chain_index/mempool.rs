@@ -19,7 +19,10 @@ use zebra_chain::{block::Hash, transaction::SerializedTransaction};
 ///
 /// TODO: Update to hold zebra_chain::Transaction::Hash ( or internal version )
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
-pub struct MempoolKey(pub String);
+// TODO currently txid (as string) - see above TODO, could be stronger type
+pub struct MempoolKey {
+    pub txid: String,
+}
 
 /// Mempool value.
 ///
@@ -251,7 +254,9 @@ impl<T: BlockchainSource> Mempool<T> {
                 })?;
 
             transactions.push((
-                MempoolKey(txid.to_string()),
+                MempoolKey {
+                    txid: txid.to_string(),
+                },
                 MempoolValue(Arc::new(transaction.into())),
             ));
         }
@@ -292,8 +297,8 @@ impl<T: BlockchainSource> Mempool<T> {
             // payload bytes are exact (we store SerializedTransaction)
             bytes = bytes.saturating_add(Self::tx_serialized_len_bytes(&entry.value().0));
 
-            // heap used by the key String (txid)
-            key_heap_bytes = key_heap_bytes.saturating_add(entry.key().0.capacity() as u64);
+            // heap used by the key txid (String)
+            key_heap_bytes = key_heap_bytes.saturating_add(entry.key().txid.capacity() as u64);
         }
 
         let usage = bytes.saturating_add(key_heap_bytes);
@@ -364,7 +369,7 @@ impl MempoolSubscriber {
 
         let mempool_txids: HashSet<String> = mempool_tx
             .iter()
-            .map(|(mempool_key, _)| mempool_key.0.clone())
+            .map(|(mempool_key, _)| mempool_key.txid.clone())
             .collect();
 
         let mut txids_to_exclude: HashSet<MempoolKey> = HashSet::new();
@@ -383,7 +388,9 @@ impl MempoolSubscriber {
                 .collect();
 
             if matching_txids.len() == 1 {
-                txids_to_exclude.insert(MempoolKey(matching_txids[0].clone()));
+                txids_to_exclude.insert(MempoolKey {
+                    txid: matching_txids[0].clone(),
+                });
             }
         }
 
@@ -512,7 +519,7 @@ impl MempoolSubscriber {
             bytes = bytes.saturating_add(mempool_value.0.as_ref().as_ref().len() as u64);
 
             // heap used by the key String (txid)
-            key_heap_bytes = key_heap_bytes.saturating_add(mempool_key.0.capacity() as u64);
+            key_heap_bytes = key_heap_bytes.saturating_add(mempool_key.txid.capacity() as u64);
         }
 
         let usage: u64 = bytes.saturating_add(key_heap_bytes);

@@ -414,7 +414,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_mempool()
             .await
             .into_iter()
-            .map(|(key, _)| key.0)
+            .map(|(key, _)| key.txid)
             .collect())
     }
 
@@ -1098,10 +1098,10 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             let timeout = timeout(
                 time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
-                    for (txid, serialized_transaction) in
+                    for (mempool_key, serialized_transaction) in
                         mempool.get_filtered_mempool(exclude_txids).await
                     {
-                        let txid_bytes = match hex::decode(txid.0) {
+                        let txid_bytes = match hex::decode(mempool_key.txid) {
                             Ok(bytes) => bytes,
                             Err(error) => {
                                 if channel_tx

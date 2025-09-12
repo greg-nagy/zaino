@@ -673,7 +673,9 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
     ) -> Result<Option<Vec<u8>>, Self::Error> {
         if let Some(mempool_tx) = self
             .mempool
-            .get_transaction(&mempool::MempoolKey(txid.to_string()))
+            .get_transaction(&mempool::MempoolKey {
+                txid: txid.to_string(),
+            })
             .await
         {
             let bytes = mempool_tx.0.as_ref().as_ref().to_vec();
@@ -737,7 +739,9 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
                 .map(|block| (*block.hash(), block.height()))
                 .collect(),
             self.mempool
-                .contains_txid(&mempool::MempoolKey(txid.to_string()))
+                .contains_txid(&mempool::MempoolKey {
+                    txid: txid.to_string(),
+                })
                 .await,
         ))
     }

@@ -1083,7 +1083,7 @@ impl ZcashIndexer for StateServiceSubscriber {
             .get_mempool()
             .await
             .into_iter()
-            .map(|(key, _)| key.0)
+            .map(|(key, _)| key.txid)
             .collect())
     }
 
@@ -1301,14 +1301,18 @@ impl ZcashIndexer for StateServiceSubscriber {
         // First check if transaction is in mempool as this is quick.
         match self
             .mempool
-            .contains_txid(&MempoolKey(txid.to_string()))
+            .contains_txid(&MempoolKey {
+                txid: txid.to_string(),
+            })
             .await
         {
             // Fetch trasaction from mempool.
             true => {
                 match self
                     .mempool
-                    .get_transaction(&MempoolKey(txid.to_string()))
+                    .get_transaction(&MempoolKey {
+                        txid: txid.to_string(),
+                    })
                     .await
                 {
                     Some(tx) => {
@@ -1813,10 +1817,10 @@ impl LightWalletIndexer for StateServiceSubscriber {
             let timeout = timeout(
                 time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
-                    for (txid, serialized_transaction) in
+                    for (mempool_key, serialized_transaction) in
                         mempool.get_filtered_mempool(exclude_txids).await
                     {
-                        let txid_bytes = match hex::decode(txid.0) {
+                        let txid_bytes = match hex::decode(mempool_key.txid) {
                             Ok(bytes) => bytes,
                             Err(error) => {
                                 if channel_tx
