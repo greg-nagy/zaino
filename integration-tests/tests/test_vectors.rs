@@ -8,6 +8,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::io::BufWriter;
 use std::path::Path;
+use std::sync::Arc;
 use tower::{Service, ServiceExt as _};
 use zaino_common::network::ActivationHeights;
 use zaino_common::DatabaseConfig;
@@ -134,7 +135,7 @@ async fn create_test_manager_and_services(
 }
 
 #[tokio::test]
-#[ignore = "Not a test! Used to build test vector data for zaino_state::chain_index unit tests."]
+// #[ignore = "Not a test! Used to build test vector data for zaino_state::chain_index unit tests."]
 async fn create_200_block_regtest_chain_vectors() {
     let (mut test_manager, _state_service, state_service_subscriber) =
         create_test_manager_and_services(&ValidatorKind::Zebrad, None, true, true, None).await;
@@ -452,7 +453,9 @@ async fn create_200_block_regtest_chain_vectors() {
                             .await
                             .unwrap(),
                     ),
-                    _ => None,
+                    _ => Some(zebra_state::ReadResponse::SaplingTree(Some(Arc::new(
+                        zebra_chain::sapling::tree::NoteCommitmentTree::default(),
+                    )))),
                 }
                 .and_then(|sap_response| {
                     expected_read_response!(sap_response, SaplingTree)
@@ -473,7 +476,9 @@ async fn create_200_block_regtest_chain_vectors() {
                             .await
                             .unwrap(),
                     ),
-                    _ => None,
+                    _ => Some(zebra_state::ReadResponse::OrchardTree(Some(Arc::new(
+                        zebra_chain::orchard::tree::NoteCommitmentTree::default(),
+                    )))),
                 }
                 .and_then(|orch_response| {
                     expected_read_response!(orch_response, OrchardTree)

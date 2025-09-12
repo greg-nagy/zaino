@@ -22,7 +22,6 @@ mod mockchain_tests {
     use tokio::time::{sleep, Duration};
     use tokio_stream::StreamExt as _;
     use zaino_common::{network::ActivationHeights, DatabaseConfig, Network, StorageConfig};
-    use zaino_proto::proto::compact_formats::CompactBlock;
     use zebra_chain::serialization::ZcashDeserializeInto;
 
     use crate::{
@@ -35,7 +34,6 @@ mod mockchain_tests {
             types::TransactionHash,
             ChainIndex, NodeBackedChainIndex, NodeBackedChainIndexSubscriber,
         },
-        ChainBlock,
     };
 
     async fn load_test_vectors_and_sync_chain_index(
@@ -43,8 +41,6 @@ mod mockchain_tests {
     ) -> (
         Vec<(
             u32,
-            ChainBlock,
-            CompactBlock,
             zebra_chain::block::Block,
             (
                 zebra_chain::sapling::tree::Root,
@@ -52,6 +48,7 @@ mod mockchain_tests {
                 zebra_chain::orchard::tree::Root,
                 u64,
             ),
+            (Vec<u8>, Vec<u8>),
         )>,
         NodeBackedChainIndex<MockchainSource>,
         NodeBackedChainIndexSubscriber<MockchainSource>,
@@ -126,7 +123,7 @@ mod mockchain_tests {
                 .zcash_deserialize_into::<zebra_chain::block::Block>()
                 .unwrap();
 
-            let expected_block = &blocks[i].3;
+            let expected_block = &blocks[i].1;
             assert_eq!(&parsed_block, expected_block);
         }
     }
@@ -138,7 +135,7 @@ mod mockchain_tests {
         let nonfinalized_snapshot = index_reader.snapshot_nonfinalized_state();
         for expected_transaction in blocks
             .into_iter()
-            .flat_map(|block| block.3.transactions.into_iter())
+            .flat_map(|block| block.1.transactions.into_iter())
         {
             let zaino_transaction = index_reader
                 .get_raw_transaction(
@@ -163,11 +160,11 @@ mod mockchain_tests {
         for (expected_transaction, block_hash, block_height) in
             blocks.into_iter().flat_map(|block| {
                 block
-                    .3
+                    .1
                     .transactions
                     .iter()
                     .cloned()
-                    .map(|transaction| (transaction, block.3.hash(), block.3.coinbase_height()))
+                    .map(|transaction| (transaction, block.1.hash(), block.1.coinbase_height()))
                     .collect::<Vec<_>>()
                     .into_iter()
             })
@@ -218,7 +215,7 @@ mod mockchain_tests {
             load_test_vectors_and_sync_chain_index(true).await;
         let block_data: Vec<zebra_chain::block::Block> = blocks
             .iter()
-            .map(|(_height, _chain_block, _compact_block, zebra_block, _roots)| zebra_block.clone())
+            .map(|(_height, zebra_block, _roots, _treestates)| zebra_block.clone())
             .collect();
 
         sleep(Duration::from_millis(2000)).await;
@@ -251,7 +248,7 @@ mod mockchain_tests {
             load_test_vectors_and_sync_chain_index(true).await;
         let block_data: Vec<zebra_chain::block::Block> = blocks
             .iter()
-            .map(|(_height, _chain_block, _compact_block, zebra_block, _roots)| zebra_block.clone())
+            .map(|(_height, zebra_block, _roots, _treestates)| zebra_block.clone())
             .collect();
 
         sleep(Duration::from_millis(2000)).await;
@@ -284,7 +281,7 @@ mod mockchain_tests {
             load_test_vectors_and_sync_chain_index(true).await;
         let block_data: Vec<zebra_chain::block::Block> = blocks
             .iter()
-            .map(|(_height, _chain_block, _compact_block, zebra_block, _roots)| zebra_block.clone())
+            .map(|(_height, zebra_block, _roots, _treestates)| zebra_block.clone())
             .collect();
 
         sleep(Duration::from_millis(2000)).await;
@@ -324,7 +321,7 @@ mod mockchain_tests {
             load_test_vectors_and_sync_chain_index(true).await;
         let block_data: Vec<zebra_chain::block::Block> = blocks
             .iter()
-            .map(|(_height, _chain_block, _compact_block, zebra_block, _roots)| zebra_block.clone())
+            .map(|(_height, zebra_block, _roots, _treestates)| zebra_block.clone())
             .collect();
 
         sleep(Duration::from_millis(2000)).await;
@@ -383,7 +380,7 @@ mod mockchain_tests {
 
         let block_data: Vec<zebra_chain::block::Block> = blocks
             .iter()
-            .map(|(_height, _chain_block, _compact_block, zebra_block, _roots)| zebra_block.clone())
+            .map(|(_height, zebra_block, _roots, _treestates)| zebra_block.clone())
             .collect();
 
         sleep(Duration::from_millis(2000)).await;

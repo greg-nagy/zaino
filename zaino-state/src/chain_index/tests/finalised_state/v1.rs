@@ -5,7 +5,6 @@ use tempfile::TempDir;
 
 use zaino_common::network::ActivationHeights;
 use zaino_common::{DatabaseConfig, Network, StorageConfig};
-use zaino_proto::proto::compact_formats::CompactBlock;
 use zebra_rpc::methods::GetAddressUtxos;
 
 use crate::bench::BlockCacheConfig;
@@ -47,8 +46,6 @@ pub(crate) async fn spawn_v1_zaino_db(
 pub(crate) async fn load_vectors_and_spawn_and_sync_v1_zaino_db() -> (
     Vec<(
         u32,
-        ChainBlock,
-        CompactBlock,
         zebra_chain::block::Block,
         (
             zebra_chain::sapling::tree::Root,
@@ -56,6 +53,7 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v1_zaino_db() -> (
             zebra_chain::orchard::tree::Root,
             u64,
         ),
+        (Vec<u8>, Vec<u8>),
     )>,
     (Vec<String>, Vec<GetAddressUtxos>, u64),
     (Vec<String>, Vec<GetAddressUtxos>, u64),
@@ -74,10 +72,9 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v1_zaino_db() -> (
 
     for (
         _h,
-        _chain_block,
-        _compact_block,
         zebra_block,
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+        (_sapling_treestate, _orchard_treestate),
     ) in blocks.clone()
     {
         let chain_block = ChainBlock::try_from((
@@ -115,8 +112,6 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v1_zaino_db() -> (
 pub(crate) async fn load_vectors_v1db_and_reader() -> (
     Vec<(
         u32,
-        ChainBlock,
-        CompactBlock,
         zebra_chain::block::Block,
         (
             zebra_chain::sapling::tree::Root,
@@ -124,6 +119,7 @@ pub(crate) async fn load_vectors_v1db_and_reader() -> (
             zebra_chain::orchard::tree::Root,
             u64,
         ),
+        (Vec<u8>, Vec<u8>),
     )>,
     (Vec<String>, Vec<GetAddressUtxos>, u64),
     (Vec<String>, Vec<GetAddressUtxos>, u64),
@@ -235,10 +231,9 @@ async fn load_db_from_file() {
 
             for (
                 _h,
-                _chain_block,
-                _compact_block,
                 zebra_block,
                 (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+                (_sapling_treestate, _orchard_treestate),
             ) in blocks_clone
             {
                 let chain_block = ChainBlock::try_from((
@@ -319,8 +314,25 @@ async fn try_write_invalid_block() {
     dbg!(zaino_db.status());
     dbg!(zaino_db.db_height().await.unwrap());
 
-    let (height, mut chain_block, _compact_block, _zebra_block, _block_roots) =
-        blocks.last().unwrap().clone();
+    let (
+        height,
+        zebra_block,
+        (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+        _roots,
+    ) = blocks.last().unwrap().clone();
+
+    // NOTE: Currently using default here.
+    let parent_chain_work = ChainWork::from_u256(0.into());
+    let mut chain_block = ChainBlock::try_from((
+        &zebra_block,
+        sapling_root,
+        sapling_root_size as u32,
+        orchard_root,
+        orchard_root_size as u32,
+        &parent_chain_work,
+        &zaino_common::Network::Regtest(ActivationHeights::default()).to_zebra_network(),
+    ))
+    .unwrap();
 
     chain_block.index.height = Some(crate::Height(height + 1));
     dbg!(chain_block.index.height);
@@ -344,8 +356,7 @@ async fn try_delete_block_with_invalid_height() {
     dbg!(zaino_db.status());
     dbg!(zaino_db.db_height().await.unwrap());
 
-    let (height, _chain_block, _compact_block, _zebra_block, _block_roots) =
-        blocks.last().unwrap().clone();
+    let (height, _zebra_block, _block_roots, _treestates) = blocks.last().unwrap().clone();
 
     let delete_height = height - 1;
 
@@ -366,7 +377,7 @@ async fn create_db_reader() {
     let (blocks, _faucet, _recipient, _db_dir, zaino_db, db_reader) =
         load_vectors_v1db_and_reader().await;
 
-    let (data_height, _, _, _, _) = blocks.last().unwrap();
+    let (data_height, _blocks, _roots, _treestates) = blocks.last().unwrap();
     let db_height = dbg!(zaino_db.db_height().await.unwrap()).unwrap();
     let db_reader_height = dbg!(db_reader.db_height().await.unwrap()).unwrap();
 
@@ -387,10 +398,9 @@ async fn get_chain_blocks() {
 
     for (
         height,
-        _chain_block,
-        _compact_block,
         zebra_block,
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+        (_sapling_treestate, _orchard_treestate),
     ) in blocks.iter()
     {
         let chain_block = ChainBlock::try_from((
@@ -437,10 +447,9 @@ async fn get_compact_blocks() {
 
     for (
         height,
-        _chain_block,
-        _compact_block,
         zebra_block,
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+        (_sapling_treestate, _orchard_treestate),
     ) in blocks.iter()
     {
         let chain_block = ChainBlock::try_from((
@@ -498,10 +507,9 @@ async fn get_faucet_txids() {
 
     for (
         height,
-        _chain_block,
-        _compact_block,
         zebra_block,
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+        (_sapling_treestate, _orchard_treestate),
     ) in blocks.iter()
     {
         let chain_block = ChainBlock::try_from((
@@ -596,10 +604,9 @@ async fn get_recipient_txids() {
 
     for (
         height,
-        _chain_block,
-        _compact_block,
         zebra_block,
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+        (_sapling_treestate, _orchard_treestate),
     ) in blocks.iter()
     {
         let chain_block = ChainBlock::try_from((
@@ -822,10 +829,9 @@ async fn check_faucet_spent_map() {
 
     for (
         _height,
-        _chain_block,
-        _compact_block,
         zebra_block,
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+        (_sapling_treestate, _orchard_treestate),
     ) in blocks.iter()
     {
         let chain_block = ChainBlock::try_from((
@@ -896,17 +902,39 @@ async fn check_faucet_spent_map() {
         );
         match spender_option {
             Some(spender_index) => {
-                let spender_tx =
-                    blocks
-                        .iter()
-                        .find_map(|(_h, chain_block, _cb, _zebra_block, _block_roots)| {
-                            chain_block.transactions().iter().find(|tx| {
+                let spender_tx = blocks.iter().find_map(
+                    |(
+                        _h,
+                        zebra_block,
+                        (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+                        _treestates,
+                    )| {
+                        // NOTE: Currently using default here.
+                        let parent_chain_work = ChainWork::from_u256(0.into());
+                        let chain_block = ChainBlock::try_from((
+                            zebra_block,
+                            *sapling_root,
+                            *sapling_root_size as u32,
+                            *orchard_root,
+                            *orchard_root_size as u32,
+                            &parent_chain_work,
+                            &zaino_common::Network::Regtest(ActivationHeights::default())
+                                .to_zebra_network(),
+                        ))
+                        .unwrap();
+
+                        chain_block
+                            .transactions()
+                            .iter()
+                            .find(|tx| {
                                 let (block_height, tx_idx) =
                                     (spender_index.block_height(), spender_index.tx_index());
                                 chain_block.index().height() == Some(Height(block_height))
                                     && tx.index() == tx_idx as u64
                             })
-                        });
+                            .cloned()
+                    },
+                );
                 assert!(
                     spender_tx.is_some(),
                     "Spender transaction not found in blocks!"
@@ -958,10 +986,9 @@ async fn check_recipient_spent_map() {
 
     for (
         _height,
-        _chain_block,
-        _compact_block,
         zebra_block,
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+        (_sapling_treestate, _orchard_treestate),
     ) in blocks.iter()
     {
         let chain_block = ChainBlock::try_from((
@@ -1032,17 +1059,39 @@ async fn check_recipient_spent_map() {
         );
         match spender_option {
             Some(spender_index) => {
-                let spender_tx =
-                    blocks
-                        .iter()
-                        .find_map(|(_h, chain_block, _cb, _zebra_block, _block_roots)| {
-                            chain_block.transactions().iter().find(|tx| {
+                let spender_tx = blocks.iter().find_map(
+                    |(
+                        _h,
+                        zebra_block,
+                        (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+                        _treestates,
+                    )| {
+                        // NOTE: Currently using default here.
+                        let parent_chain_work = ChainWork::from_u256(0.into());
+                        let chain_block = ChainBlock::try_from((
+                            zebra_block,
+                            *sapling_root,
+                            *sapling_root_size as u32,
+                            *orchard_root,
+                            *orchard_root_size as u32,
+                            &parent_chain_work,
+                            &zaino_common::Network::Regtest(ActivationHeights::default())
+                                .to_zebra_network(),
+                        ))
+                        .unwrap();
+
+                        chain_block
+                            .transactions()
+                            .iter()
+                            .find(|tx| {
                                 let (block_height, tx_idx) =
                                     (spender_index.block_height(), spender_index.tx_index());
                                 chain_block.index().height() == Some(Height(block_height))
                                     && tx.index() == tx_idx as u64
                             })
-                        });
+                            .cloned()
+                    },
+                );
                 assert!(
                     spender_tx.is_some(),
                     "Spender transaction not found in blocks!"

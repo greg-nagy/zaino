@@ -5,7 +5,6 @@ use tempfile::TempDir;
 
 use zaino_common::network::ActivationHeights;
 use zaino_common::{DatabaseConfig, Network, StorageConfig};
-use zaino_proto::proto::compact_formats::CompactBlock;
 use zebra_rpc::methods::GetAddressUtxos;
 
 use crate::bench::BlockCacheConfig;
@@ -46,8 +45,6 @@ pub(crate) async fn spawn_v0_zaino_db(
 pub(crate) async fn load_vectors_and_spawn_and_sync_v0_zaino_db() -> (
     Vec<(
         u32,
-        ChainBlock,
-        CompactBlock,
         zebra_chain::block::Block,
         (
             zebra_chain::sapling::tree::Root,
@@ -55,6 +52,7 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v0_zaino_db() -> (
             zebra_chain::orchard::tree::Root,
             u64,
         ),
+        (Vec<u8>, Vec<u8>),
     )>,
     (Vec<String>, Vec<GetAddressUtxos>, u64),
     (Vec<String>, Vec<GetAddressUtxos>, u64),
@@ -71,10 +69,9 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v0_zaino_db() -> (
 
     for (
         _h,
-        _chain_block,
-        _compact_block,
         zebra_block,
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+        (_sapling_treestate, _orchard_treestate),
     ) in blocks.clone()
     {
         let chain_block = ChainBlock::try_from((
@@ -112,8 +109,6 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v0_zaino_db() -> (
 pub(crate) async fn load_vectors_v0db_and_reader() -> (
     Vec<(
         u32,
-        ChainBlock,
-        CompactBlock,
         zebra_chain::block::Block,
         (
             zebra_chain::sapling::tree::Root,
@@ -121,6 +116,7 @@ pub(crate) async fn load_vectors_v0db_and_reader() -> (
             zebra_chain::orchard::tree::Root,
             u64,
         ),
+        (Vec<u8>, Vec<u8>),
     )>,
     (Vec<String>, Vec<GetAddressUtxos>, u64),
     (Vec<String>, Vec<GetAddressUtxos>, u64),
@@ -232,10 +228,9 @@ async fn load_db_from_file() {
 
             for (
                 _h,
-                _chain_block,
-                _compact_block,
                 zebra_block,
                 (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+                (_sapling_treestate, _orchard_treestate),
             ) in blocks_clone
             {
                 let chain_block = ChainBlock::try_from((
@@ -312,7 +307,7 @@ async fn create_db_reader() {
     let (blocks, _faucet, _recipient, _db_dir, zaino_db, db_reader) =
         load_vectors_v0db_and_reader().await;
 
-    let (data_height, _, _, _, _) = blocks.last().unwrap();
+    let (data_height, _blocks, _roots, _treestates) = blocks.last().unwrap();
     let db_height = dbg!(zaino_db.db_height().await.unwrap()).unwrap();
     let db_reader_height = dbg!(db_reader.db_height().await.unwrap()).unwrap();
 
@@ -331,10 +326,9 @@ async fn get_compact_blocks() {
 
     for (
         height,
-        _chain_block,
-        _compact_block,
         zebra_block,
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
+        (_sapling_treestate, _orchard_treestate),
     ) in blocks.iter()
     {
         let chain_block = ChainBlock::try_from((

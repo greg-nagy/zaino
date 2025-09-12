@@ -29,7 +29,7 @@ async fn spawn_mempool_and_mockchain() -> (
 
     let block_data = blocks
         .iter()
-        .map(|(_height, _chain_block, _compact_block, zebra_block, _roots)| zebra_block.clone())
+        .map(|(_height, zebra_block, _roots, _treestates)| zebra_block.clone())
         .collect();
 
     (mempool, subscriber, mockchain, block_data)
