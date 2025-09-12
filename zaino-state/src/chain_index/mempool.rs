@@ -19,8 +19,8 @@ use zebra_chain::{block::Hash, transaction::SerializedTransaction};
 ///
 /// TODO: Update to hold zebra_chain::Transaction::Hash ( or internal version )
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
-// TODO currently txid (as string) - see above TODO, could be stronger type
 pub struct MempoolKey {
+    /// currently txid (as string) - see above TODO, could be stronger type
     pub txid: String,
 }
 

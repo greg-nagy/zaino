@@ -224,6 +224,7 @@ impl ResponseToError for GetBlockchainInfoResponse {
 /// Response to a `getdifficulty` RPC request.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GetDifficultyResponse {
+    /// the proof-of-work difficulty as a multiple of the minimum difficulty.
     pub difficulty: f64,
 }
 
