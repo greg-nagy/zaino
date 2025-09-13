@@ -463,20 +463,24 @@ impl MempoolSubscriber {
                             return Ok(());
                         }
                         StatusType::Closing => {
-                            return Err(MempoolError::StatusError(StatusError(
-                                StatusType::Closing,
-                            )));
+                            return Err(MempoolError::StatusError(StatusError {
+                                server_status: StatusType::Closing,
+                            }));
                         }
                         StatusType::RecoverableError => {
                             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                             continue;
                         }
                         status => {
-                            return Err(MempoolError::StatusError(StatusError(status)));
+                            return Err(MempoolError::StatusError(StatusError {
+                                server_status: status,
+                            }));
                         }
                     }
                     if subscriber.status.load() == StatusType::Closing as usize {
-                        return Err(MempoolError::StatusError(StatusError(StatusType::Closing)));
+                        return Err(MempoolError::StatusError(StatusError {
+                            server_status: StatusType::Closing,
+                        }));
                     }
                 }
             }
@@ -490,7 +494,9 @@ impl MempoolSubscriber {
                     }
                     _ => {
                         let _ = channel_tx
-                            .send(Err(StatusError(StatusType::RecoverableError)))
+                            .send(Err(StatusError {
+                                server_status: StatusType::RecoverableError,
+                            }))
                             .await;
                     }
                 }
@@ -581,7 +587,9 @@ impl MempoolSubscriber {
                 Ok((StatusType::Syncing, self.get_mempool_and_update_seen()))
             }
             StatusType::Closing => Ok((StatusType::Closing, Vec::new())),
-            status => Err(MempoolError::StatusError(StatusError(status))),
+            status => Err(MempoolError::StatusError(StatusError {
+                server_status: status,
+            })),
         }
     }
 

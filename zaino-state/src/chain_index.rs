@@ -827,7 +827,9 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
                     tokio::sync::mpsc::channel::<Result<Vec<u8>, ChainIndexError>>(1);
                 let _ = out_tx.try_send(Err(ChainIndexError::child_process_status_error(
                     "mempool",
-                    crate::error::StatusError(crate::StatusType::RecoverableError),
+                    crate::error::StatusError {
+                        server_status: crate::StatusType::RecoverableError,
+                    },
                 )));
                 Some(tokio_stream::wrappers::ReceiverStream::new(out_rx))
             }
