@@ -336,7 +336,9 @@ pub struct StateServiceSubscriber {
 
 /// A subscriber to any chaintip updates
 #[derive(Clone)]
-pub struct ChainTipSubscriber(zebra_state::ChainTipChange);
+pub struct ChainTipSubscriber {
+    monitor: zebra_state::ChainTipChange,
+}
 
 impl ChainTipSubscriber {
     /// Waits until the tip hash has changed (relative to the last time this method
@@ -344,7 +346,7 @@ impl ChainTipSubscriber {
     pub async fn next_tip_hash(
         &mut self,
     ) -> Result<zebra_chain::block::Hash, tokio::sync::watch::error::RecvError> {
-        self.0
+        self.monitor
             .wait_for_tip_change()
             .await
             .map(|tip| tip.best_tip_hash())
@@ -358,7 +360,9 @@ impl ChainTipSubscriber {
 impl StateServiceSubscriber {
     /// Gets a Subscriber to any updates to the latest chain tip
     pub fn chaintip_update_subscriber(&self) -> ChainTipSubscriber {
-        ChainTipSubscriber(self.chain_tip_change.clone())
+        ChainTipSubscriber {
+            monitor: self.chain_tip_change.clone(),
+        }
     }
     /// Returns the requested block header by hash or height, as a [`GetBlockHeader`] JSON string.
     /// If the block is not in Zebra's state,
