@@ -1310,7 +1310,7 @@ mod zebrad {
 
             let expected_bytes: u64 = entries
                 .iter()
-                .map(|(_, v)| v.0.as_ref().as_ref().len() as u64)
+                .map(|(_, v)| v.serialized_tx.as_ref().as_ref().len() as u64)
                 .sum();
 
             let expected_key_heap_bytes: u64 =
@@ -1326,8 +1326,9 @@ mod zebrad {
 
             // Optional: when exactly one tx, its serialized length must equal `bytes`
             if info.size == 1 {
+                let (_, mem_value) = entries[0].clone();
                 assert_eq!(
-                    entries[0].1 .0.as_ref().as_ref().len() as u64,
+                    mem_value.serialized_tx.as_ref().as_ref().len() as u64,
                     expected_bytes
                 );
             }
