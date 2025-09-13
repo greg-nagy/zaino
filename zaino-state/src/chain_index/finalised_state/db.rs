@@ -9,14 +9,14 @@ use v1::DbV1;
 use crate::{
     chain_index::{
         finalised_state::capability::{
-            BlockCoreExt, BlockShieldedExt, BlockTransparentExt, ChainBlockExt, CompactBlockExt,
+            BlockCoreExt, BlockShieldedExt, BlockTransparentExt, IndexedBlockExt, CompactBlockExt,
             DbCore, DbMetadata, DbRead, DbWrite, TransparentHistExt,
         },
         types::TransactionHash,
     },
     config::BlockCacheConfig,
     error::FinalisedStateError,
-    AddrScript, BlockHash, BlockHeaderData, ChainBlock, CommitmentTreeData, Height,
+    AddrScript, BlockHash, BlockHeaderData, IndexedBlock, CommitmentTreeData, Height,
     OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType,
     TransparentCompactTx, TransparentTxList, TxLocation, TxidList,
 };
@@ -141,7 +141,7 @@ impl DbRead for DbBackend {
 
 #[async_trait]
 impl DbWrite for DbBackend {
-    async fn write_block(&self, block: ChainBlock) -> Result<(), FinalisedStateError> {
+    async fn write_block(&self, block: IndexedBlock) -> Result<(), FinalisedStateError> {
         match self {
             Self::V0(db) => db.write_block(block).await,
             Self::V1(db) => db.write_block(block).await,
@@ -155,7 +155,7 @@ impl DbWrite for DbBackend {
         }
     }
 
-    async fn delete_block(&self, block: &ChainBlock) -> Result<(), FinalisedStateError> {
+    async fn delete_block(&self, block: &IndexedBlock) -> Result<(), FinalisedStateError> {
         match self {
             Self::V0(db) => db.delete_block(block).await,
             Self::V1(db) => db.delete_block(block).await,
@@ -364,11 +364,11 @@ impl CompactBlockExt for DbBackend {
 }
 
 #[async_trait]
-impl ChainBlockExt for DbBackend {
+impl IndexedBlockExt for DbBackend {
     async fn get_chain_block(
         &self,
         height: Height,
-    ) -> Result<Option<ChainBlock>, FinalisedStateError> {
+    ) -> Result<Option<IndexedBlock>, FinalisedStateError> {
         match self {
             Self::V1(db) => db.get_chain_block(height).await,
             _ => Err(FinalisedStateError::FeatureUnavailable("chain_block")),

@@ -22,7 +22,7 @@ use crate::{
     chain_index::{source::BlockchainSourceError, types::GENESIS_HEIGHT},
     config::BlockCacheConfig,
     error::FinalisedStateError,
-    BlockHash, ChainBlock, ChainWork, Height, StatusType,
+    BlockHash, IndexedBlock, ChainWork, Height, StatusType,
 };
 
 use std::{sync::Arc, time::Duration};
@@ -198,7 +198,7 @@ impl ZainoDB {
 
     // ***** Db Core Write *****
 
-    /// Sync the database to the given height using the given ChainBlockSourceInterface.
+    /// Sync the database to the given height using the given IndexedBlockSourceInterface.
     pub(crate) async fn sync_to_height<T>(
         &self,
         height: Height,
@@ -271,7 +271,7 @@ impl ZainoDB {
                     }
                 };
 
-            let chain_block = match ChainBlock::try_from((
+            let chain_block = match IndexedBlock::try_from((
                 block.as_ref(),
                 sapling_root,
                 sapling_size as u32,
@@ -301,7 +301,7 @@ impl ZainoDB {
     /// Writes a block to the database.
     ///
     /// This **MUST** be the *next* block in the chain (db_tip_height + 1).
-    pub(crate) async fn write_block(&self, b: ChainBlock) -> Result<(), FinalisedStateError> {
+    pub(crate) async fn write_block(&self, b: IndexedBlock) -> Result<(), FinalisedStateError> {
         self.db.write_block(b).await
     }
 
@@ -322,7 +322,7 @@ impl ZainoDB {
     /// Deletes a given block from the database.
     ///
     /// This **MUST** be the *top* block in the db.
-    pub(crate) async fn delete_block(&self, b: &ChainBlock) -> Result<(), FinalisedStateError> {
+    pub(crate) async fn delete_block(&self, b: &IndexedBlock) -> Result<(), FinalisedStateError> {
         self.db.delete_block(b).await
     }
 

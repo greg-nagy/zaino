@@ -21,7 +21,7 @@ use zaino_state::write_u32_le;
 use zaino_state::write_u64_le;
 use zaino_state::CompactSize;
 use zaino_state::ZainoVersionedSerialise;
-use zaino_state::{BackendType, ChainBlock, ChainWork};
+use zaino_state::{BackendType, IndexedBlock, ChainWork};
 use zaino_state::{
     StateService, StateServiceConfig, StateServiceSubscriber, ZcashIndexer, ZcashService as _,
 };
@@ -402,7 +402,7 @@ async fn create_200_block_regtest_chain_vectors() {
                 )
                 .unwrap();
 
-                let chain_block = ChainBlock::try_from((
+                let chain_block = IndexedBlock::try_from((
                     full_block.clone(),
                     parent_chain_work,
                     sapling_root,
@@ -512,7 +512,7 @@ async fn create_200_block_regtest_chain_vectors() {
         assert_eq!(
             chain_orig.to_bytes().unwrap(),
             chain_new.to_bytes().unwrap(),
-            "ChainBlock serialisation mismatch at height {h_orig}"
+            "IndexedBlock serialisation mismatch at height {h_orig}"
         );
         let mut buf1 = Vec::new();
         let mut buf2 = Vec::new();
@@ -553,7 +553,7 @@ pub fn write_vectors_to_file<P: AsRef<Path>>(
     base_dir: P,
     block_data: &[(
         u32,
-        ChainBlock,
+        IndexedBlock,
         CompactBlock,
         zebra_chain::block::Block,
         (
@@ -626,7 +626,7 @@ pub fn read_vectors_from_file<P: AsRef<Path>>(
 ) -> io::Result<(
     Vec<(
         u32,
-        ChainBlock,
+        IndexedBlock,
         CompactBlock,
         zebra_chain::block::Block,
         (
@@ -642,7 +642,7 @@ pub fn read_vectors_from_file<P: AsRef<Path>>(
     let base = base_dir.as_ref();
 
     // chain_blocks.dat
-    let mut chain_blocks = Vec::<(u32, ChainBlock)>::new();
+    let mut chain_blocks = Vec::<(u32, IndexedBlock)>::new();
     {
         let mut r = BufReader::new(File::open(base.join("chain_blocks.dat"))?);
         loop {
@@ -654,14 +654,14 @@ pub fn read_vectors_from_file<P: AsRef<Path>>(
             let len: usize = CompactSize::read_t(&mut r)?;
             let mut buf = vec![0u8; len];
             r.read_exact(&mut buf)?;
-            let chain = ChainBlock::from_bytes(&buf)?; // <── new
+            let chain = IndexedBlock::from_bytes(&buf)?; // <── new
             chain_blocks.push((height, chain));
         }
     }
 
     // compact_blocks.dat
     let mut compact_blocks =
-        Vec::<(u32, ChainBlock, CompactBlock)>::with_capacity(chain_blocks.len());
+        Vec::<(u32, IndexedBlock, CompactBlock)>::with_capacity(chain_blocks.len());
     {
         let mut r = BufReader::new(File::open(base.join("compact_blocks.dat"))?);
         for (h1, chain) in chain_blocks {
@@ -669,7 +669,7 @@ pub fn read_vectors_from_file<P: AsRef<Path>>(
             if h1 != h2 {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
-                    "height mismatch between ChainBlock and CompactBlock",
+                    "height mismatch between IndexedBlock and CompactBlock",
                 ));
             }
             let len: usize = CompactSize::read_t(&mut r)?;
@@ -683,7 +683,7 @@ pub fn read_vectors_from_file<P: AsRef<Path>>(
 
     // zebra_blocks.dat
     let mut full_blocks =
-        Vec::<(u32, ChainBlock, CompactBlock, zebra_chain::block::Block)>::with_capacity(
+        Vec::<(u32, IndexedBlock, CompactBlock, zebra_chain::block::Block)>::with_capacity(
             compact_blocks.len(),
         );
     {

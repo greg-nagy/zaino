@@ -12,7 +12,7 @@ use crate::{
     chain_index::{source::BlockchainSource, types::GENESIS_HEIGHT},
     config::BlockCacheConfig,
     error::FinalisedStateError,
-    BlockHash, ChainBlock, ChainWork, Height,
+    BlockHash, IndexedBlock, ChainWork, Height,
 };
 
 use async_trait::async_trait;
@@ -187,7 +187,7 @@ impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
                     ))
                             })?;
 
-                        let chain_block = ChainBlock::try_from((
+                        let chain_block = IndexedBlock::try_from((
                             block.as_ref(),
                             sapling_root,
                             sapling_root_size as u32,

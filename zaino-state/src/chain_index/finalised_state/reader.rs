@@ -8,14 +8,14 @@ use crate::{
         types::{AddrEventBytes, TransactionHash},
     },
     error::FinalisedStateError,
-    AddrScript, BlockHash, BlockHeaderData, ChainBlock, CommitmentTreeData, Height,
+    AddrScript, BlockHash, BlockHeaderData, IndexedBlock, CommitmentTreeData, Height,
     OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType,
     TransparentCompactTx, TransparentTxList, TxLocation, TxidList,
 };
 
 use super::{
     capability::{
-        BlockCoreExt, BlockShieldedExt, BlockTransparentExt, ChainBlockExt, CompactBlockExt,
+        BlockCoreExt, BlockShieldedExt, BlockTransparentExt, IndexedBlockExt, CompactBlockExt,
         DbMetadata, TransparentHistExt,
     },
     db::DbBackend,
@@ -380,16 +380,16 @@ impl DbReader {
             .await
     }
 
-    // ***** ChainBlock Ext *****
+    // ***** IndexedBlock Ext *****
 
-    /// Returns the ChainBlock for the given Height.
+    /// Returns the IndexedBlock for the given Height.
     ///
     /// TODO: Add separate range fetch method!
     pub(crate) async fn get_chain_block(
         &self,
         height: Height,
-    ) -> Result<Option<ChainBlock>, FinalisedStateError> {
-        self.db(CapabilityRequest::ChainBlockExt)?
+    ) -> Result<Option<IndexedBlock>, FinalisedStateError> {
+        self.db(CapabilityRequest::IndexedBlockExt)?
             .get_chain_block(height)
             .await
     }
