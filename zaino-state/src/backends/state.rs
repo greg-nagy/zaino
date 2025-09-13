@@ -1316,7 +1316,7 @@ impl ZcashIndexer for StateServiceSubscriber {
                     .await
                 {
                     Some(tx) => {
-                        let serialized = tx.as_ref().0.as_ref().clone();
+                        let serialized = tx.as_ref().serialized_tx.as_ref().clone();
 
                         match verbose {
                             // Return an object view, matching the chain path semantics.
@@ -1817,7 +1817,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
             let timeout = timeout(
                 time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
-                    for (mempool_key, serialized_transaction) in
+                    for (mempool_key, mempool_value) in
                         mempool.get_filtered_mempool(exclude_txids).await
                     {
                         let txid_bytes = match hex::decode(mempool_key.txid) {
@@ -1835,7 +1835,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
                             }
                         };
                         match <FullTransaction as ParseFromSlice>::parse_from_slice(
-                            serialized_transaction.0.as_ref().as_ref(),
+                            mempool_value.serialized_tx.as_ref().as_ref(),
                             Some(vec![txid_bytes]),
                             None,
                         ) {
@@ -1927,7 +1927,11 @@ impl LightWalletIndexer for StateServiceSubscriber {
                             Ok((_mempool_key, mempool_value)) => {
                                 if channel_tx
                                     .send(Ok(RawTransaction {
-                                        data: mempool_value.0.as_ref().as_ref().to_vec(),
+                                        data: mempool_value
+                                            .serialized_tx
+                                            .as_ref()
+                                            .as_ref()
+                                            .to_vec(),
                                         height: mempool_height as u64,
                                     }))
                                     .await

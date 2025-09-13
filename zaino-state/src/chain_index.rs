@@ -678,7 +678,7 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
             })
             .await
         {
-            let bytes = mempool_tx.0.as_ref().as_ref().to_vec();
+            let bytes = mempool_tx.serialized_tx.as_ref().as_ref().to_vec();
             return Ok(Some(bytes));
         }
 
@@ -766,7 +766,7 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
         // Transform to the Vec<Vec<u8>> that the trait requires.
         let bytes: Vec<Vec<u8>> = pairs
             .into_iter()
-            .map(|(_, v)| v.0.as_ref().as_ref().to_vec())
+            .map(|(_, v)| v.serialized_tx.as_ref().as_ref().to_vec())
             .collect();
 
         Ok(bytes)
@@ -796,7 +796,9 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
                     while let Some(item) = in_stream.next().await {
                         match item {
                             Ok((_key, value)) => {
-                                let _ = out_tx.send(Ok(value.0.as_ref().as_ref().to_vec())).await;
+                                let _ = out_tx
+                                    .send(Ok(value.serialized_tx.as_ref().as_ref().to_vec()))
+                                    .await;
                             }
                             Err(e) => {
                                 let _ = out_tx

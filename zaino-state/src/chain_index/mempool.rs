@@ -28,7 +28,11 @@ pub struct MempoolKey {
 ///
 /// Holds zebra_chain::transaction::SerializedTransaction.
 #[derive(Debug, Clone, PartialEq)]
-pub struct MempoolValue(pub Arc<SerializedTransaction>);
+pub struct MempoolValue {
+    /// Stores bytes that are guaranteed to be deserializable into a [`Transaction`].
+    /// Sorts in lexicographic order of the transaction's serialized data.
+    pub serialized_tx: Arc<SerializedTransaction>,
+}
 
 /// Zcash mempool, uses dashmap for efficient serving of mempool tx.
 #[derive(Debug)]
@@ -257,7 +261,9 @@ impl<T: BlockchainSource> Mempool<T> {
                 MempoolKey {
                     txid: txid.to_string(),
                 },
-                MempoolValue(Arc::new(transaction.into())),
+                MempoolValue {
+                    serialized_tx: Arc::new(transaction.into()),
+                },
             ));
         }
 
@@ -295,7 +301,8 @@ impl<T: BlockchainSource> Mempool<T> {
 
         for entry in map.iter() {
             // payload bytes are exact (we store SerializedTransaction)
-            bytes = bytes.saturating_add(Self::tx_serialized_len_bytes(&entry.value().0));
+            bytes =
+                bytes.saturating_add(Self::tx_serialized_len_bytes(&entry.value().serialized_tx));
 
             // heap used by the key txid (String)
             key_heap_bytes = key_heap_bytes.saturating_add(entry.key().txid.capacity() as u64);
@@ -516,7 +523,8 @@ impl MempoolSubscriber {
 
         for (mempool_key, mempool_value) in mempool_transactions.iter() {
             // payload bytes are exact (we store SerializedTransaction)
-            bytes = bytes.saturating_add(mempool_value.0.as_ref().as_ref().len() as u64);
+            bytes =
+                bytes.saturating_add(mempool_value.serialized_tx.as_ref().as_ref().len() as u64);
 
             // heap used by the key String (txid)
             key_heap_bytes = key_heap_bytes.saturating_add(mempool_key.txid.capacity() as u64);
