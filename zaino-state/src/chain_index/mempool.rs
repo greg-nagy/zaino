@@ -29,7 +29,7 @@ pub struct MempoolKey {
 /// Holds zebra_chain::transaction::SerializedTransaction.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MempoolValue {
-    /// Stores bytes that are guaranteed to be deserializable into a [`Transaction`].
+    /// Stores bytes that are guaranteed to be deserializable into a Transaction (zebra_chain enum).
     /// Sorts in lexicographic order of the transaction's serialized data.
     pub serialized_tx: Arc<SerializedTransaction>,
 }
