@@ -1314,7 +1314,7 @@ mod zebrad {
                 .sum();
 
             let expected_key_heap_bytes: u64 =
-                entries.iter().map(|(k, _)| k.0.capacity() as u64).sum();
+                entries.iter().map(|(k, _)| k.txid.capacity() as u64).sum();
 
             let expected_usage = expected_bytes.saturating_add(expected_key_heap_bytes);
 

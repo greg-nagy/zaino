@@ -301,7 +301,10 @@ pub async fn test_get_mempool_info(validator: &ValidatorKind) {
         .sum();
 
     // Key heap bytes: sum of txid String capacities
-    let expected_key_heap_bytes: u64 = entries.iter().map(|(key, _)| key.0.capacity() as u64).sum();
+    let expected_key_heap_bytes: u64 = entries
+        .iter()
+        .map(|(key, _)| key.txid.capacity() as u64)
+        .sum();
 
     let expected_usage = expected_bytes.saturating_add(expected_key_heap_bytes);
 
@@ -594,7 +597,10 @@ async fn assert_fetch_service_difficulty_matches_rpc(validator: &ValidatorKind) 
 
     let rpc_difficulty_response = jsonrpc_client.get_difficulty().await.unwrap();
 
-    assert_eq!(fetch_service_get_difficulty, rpc_difficulty_response.0);
+    assert_eq!(
+        fetch_service_get_difficulty,
+        rpc_difficulty_response.difficulty
+    );
 }
 
 async fn fetch_service_get_block(validator: &ValidatorKind) {
