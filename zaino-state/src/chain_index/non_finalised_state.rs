@@ -603,9 +603,8 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
 
         let best_tip = blocks.iter().fold(snapshot.best_tip, |acc, (hash, block)| {
             match block.index().height() {
-                //                Some(height) if height > acc.0 => (height, (*hash)),
-                Some(height) if height > acc.height => BestTip {
-                    height: height,
+                Some(working_height) if working_height > acc.height => BestTip {
+                    height: working_height,
                     blockhash: *hash,
                 },
                 _ => acc,
