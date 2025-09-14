@@ -38,6 +38,12 @@ pub struct NonFinalizedState<Source: BlockchainSource> {
     >,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BestTip {
+    pub height: Height,
+    pub blockhash: BlockHash,
+}
+
 #[derive(Debug)]
 /// A snapshot of the nonfinalized state as it existed when this was created.
 pub struct NonfinalizedBlockCacheSnapshot {
@@ -50,7 +56,8 @@ pub struct NonfinalizedBlockCacheSnapshot {
     pub heights_to_hashes: HashMap<Height, BlockHash>,
     // Do we need height here?
     /// The highest known block
-    pub best_tip: (Height, BlockHash),
+    //pub best_tip: (Height, BlockHash),
+    pub best_tip: BestTip,
 }
 
 #[derive(Debug)]
@@ -308,16 +315,19 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 }
             }
         };
-        let height = chainblock
+        let working_height = chainblock
             .height()
             .ok_or(InitError::InitalBlockMissingHeight)?;
-        let best_tip = (height, chainblock.index().hash);
+        let best_tip = BestTip {
+            height: working_height,
+            blockhash: chainblock.index().hash,
+        };
 
         let mut blocks = HashMap::new();
         let mut heights_to_hashes = HashMap::new();
         let hash = chainblock.index().hash;
         blocks.insert(hash, chainblock);
-        heights_to_hashes.insert(height, hash);
+        heights_to_hashes.insert(working_height, hash);
 
         let current = ArcSwap::new(Arc::new(NonfinalizedBlockCacheSnapshot {
             blocks,
@@ -356,7 +366,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         while let Some(block) = self
             .source
             .get_block(HashOrHeight::Height(zebra_chain::block::Height(
-                u32::from(best_tip.0) + 1,
+                u32::from(best_tip.height) + 1,
             )))
             .await
             .map_err(|e| {
@@ -368,32 +378,38 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         {
             // If this block is next in the chain, we sync it as normal
             let parent_hash = BlockHash::from(block.header.previous_block_hash);
-            if parent_hash == best_tip.1 {
+            if parent_hash == best_tip.blockhash {
                 let prev_block = match new_blocks.last() {
                     Some(block) => block,
-                    None => initial_state.blocks.get(&best_tip.1).ok_or_else(|| {
-                        SyncError::ReorgFailure(format!(
-                            "found blocks {:?}, expected block {:?}",
-                            initial_state
-                                .blocks
-                                .values()
-                                .map(|block| (block.index().hash(), block.index().height()))
-                                .collect::<Vec<_>>(),
-                            best_tip
-                        ))
-                    })?,
+                    None => initial_state
+                        .blocks
+                        .get(&best_tip.blockhash)
+                        .ok_or_else(|| {
+                            SyncError::ReorgFailure(format!(
+                                "found blocks {:?}, expected block {:?}",
+                                initial_state
+                                    .blocks
+                                    .values()
+                                    .map(|block| (block.index().hash(), block.index().height()))
+                                    .collect::<Vec<_>>(),
+                                best_tip
+                            ))
+                        })?,
                 };
                 let chainblock = self.block_to_chainblock(prev_block, &block).await?;
                 info!(
                     "syncing block {} at height {}",
                     &chainblock.index().hash(),
-                    best_tip.0 + 1
+                    best_tip.height + 1
                 );
-                best_tip = (best_tip.0 + 1, *chainblock.hash());
+                best_tip = BestTip {
+                    height: best_tip.height + 1,
+                    blockhash: *chainblock.hash(),
+                };
                 new_blocks.push(chainblock.clone());
             } else {
-                info!("Reorg detected at height {}", best_tip.0 + 1);
-                let mut next_height_down = best_tip.0 - 1;
+                info!("Reorg detected at height {}", best_tip.height + 1);
+                let mut next_height_down = best_tip.height - 1;
                 // If not, there's been a reorg, and we need to adjust our best-tip
                 let prev_hash = loop {
                     if next_height_down == Height(0) {
@@ -414,7 +430,10 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                     }
                 };
 
-                best_tip = (next_height_down, *prev_hash);
+                best_tip = BestTip {
+                    height: next_height_down,
+                    blockhash: *prev_hash,
+                };
                 // We can't calculate things like chainwork until we
                 // know the parent block
                 // this is done separately, after we've updated with the

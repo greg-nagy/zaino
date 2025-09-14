@@ -11,6 +11,7 @@
 //!     - b. Build trasparent tx indexes efficiently
 //!   - NOTE: Full transaction and block data is served from the backend finalizer.
 
+use crate::chain_index::non_finalised_state::BestTip;
 use crate::error::{ChainIndexError, ChainIndexErrorKind, FinalisedStateError};
 use crate::{AtomicStatus, StatusType, SyncError};
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -458,7 +459,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
                 // Sync fs to chain tip - 100.
                 {
                     let snapshot = nfs.get_snapshot();
-                    while snapshot.best_tip.0 .0
+                    while snapshot.best_tip.height.0
                         > (fs
                             .to_reader()
                             .db_height()
@@ -603,8 +604,8 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
         start: types::Height,
         end: std::option::Option<types::Height>,
     ) -> Option<impl Stream<Item = Result<Vec<u8>, Self::Error>>> {
-        let end = end.unwrap_or(nonfinalized_snapshot.best_tip.0);
-        if end <= nonfinalized_snapshot.best_tip.0 {
+        let end = end.unwrap_or(nonfinalized_snapshot.best_tip.height);
+        if end <= nonfinalized_snapshot.best_tip.height {
             Some(
                 futures::stream::iter((start.0)..=(end.0)).then(move |height| async move {
                     match self
@@ -780,7 +781,7 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
         &self,
         snapshot: &Self::Snapshot,
     ) -> Option<impl futures::Stream<Item = Result<Vec<u8>, Self::Error>>> {
-        let expected_chain_tip = snapshot.best_tip.1;
+        let expected_chain_tip = snapshot.best_tip.blockhash;
         let mut subscriber = self.mempool.clone();
 
         match subscriber
@@ -849,7 +850,7 @@ where
         self.as_ref().get_chainblock_by_height(target_height)
     }
 
-    fn best_chaintip(&self) -> (types::Height, types::BlockHash) {
+    fn best_chaintip(&self) -> BestTip {
         self.as_ref().best_chaintip()
     }
 }
@@ -861,7 +862,7 @@ pub trait NonFinalizedSnapshot {
     /// Height -> block
     fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&ChainBlock>;
     /// Get the tip of the best chain, according to the snapshot
-    fn best_chaintip(&self) -> (types::Height, types::BlockHash);
+    fn best_chaintip(&self) -> BestTip;
 }
 
 impl NonFinalizedSnapshot for NonfinalizedBlockCacheSnapshot {
@@ -884,7 +885,7 @@ impl NonFinalizedSnapshot for NonfinalizedBlockCacheSnapshot {
         })
     }
 
-    fn best_chaintip(&self) -> (types::Height, types::BlockHash) {
+    fn best_chaintip(&self) -> BestTip {
         self.best_tip
     }
 }
