@@ -627,20 +627,28 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
 
             // Log chain tip change
             if new_best_tip != stale_best_tip {
-                if new_best_tip.0 > stale_best_tip.0 {
+                if new_best_tip.height > stale_best_tip.height {
                     info!(
                         "non-finalized tip advanced: Height: {} -> {}, Hash: {} -> {}",
-                        stale_best_tip.0, new_best_tip.0, stale_best_tip.1, new_best_tip.1,
+                        stale_best_tip.height,
+                        new_best_tip.height,
+                        stale_best_tip.blockhash,
+                        new_best_tip.blockhash,
                     );
-                } else if new_best_tip.0 == stale_best_tip.0 && new_best_tip.1 != stale_best_tip.1 {
+                } else if new_best_tip.height == stale_best_tip.height
+                    && new_best_tip.blockhash != stale_best_tip.blockhash
+                {
                     info!(
                         "non-finalized tip reorg at height {}: Hash: {} -> {}",
-                        new_best_tip.0, stale_best_tip.1, new_best_tip.1,
+                        new_best_tip.height, stale_best_tip.blockhash, new_best_tip.blockhash,
                     );
-                } else if new_best_tip.0 < stale_best_tip.0 {
+                } else if new_best_tip.height < stale_best_tip.height {
                     info!(
                         "non-finalized tip rollback from height {} to {}, Hash: {} -> {}",
-                        stale_best_tip.0, new_best_tip.0, stale_best_tip.1, new_best_tip.1,
+                        stale_best_tip.height,
+                        new_best_tip.height,
+                        stale_best_tip.blockhash,
+                        new_best_tip.blockhash,
                     );
                 }
             }
