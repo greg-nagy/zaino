@@ -38,7 +38,6 @@ impl AtomicStatus {
     }
 
     /// Sets the value held in the AtomicStatus
-    // TODO do we need to have status be usize here? why not strong types?
     pub fn store(&self, status: usize) {
         self.counter.store(status, Ordering::SeqCst);
     }
