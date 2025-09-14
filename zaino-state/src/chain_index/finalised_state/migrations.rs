@@ -12,7 +12,7 @@ use crate::{
     chain_index::{source::BlockchainSource, types::GENESIS_HEIGHT},
     config::BlockCacheConfig,
     error::FinalisedStateError,
-    BlockHash, IndexedBlock, ChainWork, Height,
+    BlockHash, ChainWork, Height, IndexedBlock,
 };
 
 use async_trait::async_trait;

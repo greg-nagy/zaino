@@ -8,15 +8,15 @@ use crate::{
         types::{AddrEventBytes, TransactionHash},
     },
     error::FinalisedStateError,
-    AddrScript, BlockHash, BlockHeaderData, IndexedBlock, CommitmentTreeData, Height,
+    AddrScript, BlockHash, BlockHeaderData, CommitmentTreeData, Height, IndexedBlock,
     OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType,
     TransparentCompactTx, TransparentTxList, TxLocation, TxidList,
 };
 
 use super::{
     capability::{
-        BlockCoreExt, BlockShieldedExt, BlockTransparentExt, IndexedBlockExt, CompactBlockExt,
-        DbMetadata, TransparentHistExt,
+        BlockCoreExt, BlockShieldedExt, BlockTransparentExt, CompactBlockExt, DbMetadata,
+        IndexedBlockExt, TransparentHistExt,
     },
     db::DbBackend,
     ZainoDB,

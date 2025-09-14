@@ -11,7 +11,7 @@ use super::{
 
 use crate::{
     chain_index::finalised_state::capability::CapabilityRequest, error::FinalisedStateError,
-    BlockHash, IndexedBlock, Height, StatusType,
+    BlockHash, Height, IndexedBlock, StatusType,
 };
 
 use arc_swap::{ArcSwap, ArcSwapOption};

@@ -2,10 +2,9 @@ use super::{finalised_state::ZainoDB, source::BlockchainSource};
 use crate::{
     chain_index::types::{self, BlockHash, Height, TransactionHash, GENESIS_HEIGHT},
     error::FinalisedStateError,
-    BlockData, BlockIndex, IndexedBlock, ChainWork, CommitmentTreeData, CommitmentTreeRoots,
-    CommitmentTreeSizes, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
-    CompactTxData, OrchardCompactTx, SaplingCompactTx, TransparentCompactTx, TxInCompact,
-    TxOutCompact,
+    BlockData, BlockIndex, ChainWork, CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes,
+    CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactTxData, IndexedBlock,
+    OrchardCompactTx, SaplingCompactTx, TransparentCompactTx, TxInCompact, TxOutCompact,
 };
 use arc_swap::ArcSwap;
 use futures::lock::Mutex;
@@ -534,7 +533,10 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
     }
 
     /// Stage a block
-    fn stage(&self, block: IndexedBlock) -> Result<(), Box<mpsc::error::TrySendError<IndexedBlock>>> {
+    fn stage(
+        &self,
+        block: IndexedBlock,
+    ) -> Result<(), Box<mpsc::error::TrySendError<IndexedBlock>>> {
         self.staging_sender.try_send(block).map_err(Box::new)
     }
 

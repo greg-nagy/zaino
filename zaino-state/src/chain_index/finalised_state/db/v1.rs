@@ -4,8 +4,8 @@ use crate::{
     chain_index::{
         finalised_state::{
             capability::{
-                BlockCoreExt, BlockShieldedExt, BlockTransparentExt, IndexedBlockExt,
-                CompactBlockExt, DbCore, DbMetadata, DbRead, DbVersion, DbWrite, MigrationStatus,
+                BlockCoreExt, BlockShieldedExt, BlockTransparentExt, CompactBlockExt, DbCore,
+                DbMetadata, DbRead, DbVersion, DbWrite, IndexedBlockExt, MigrationStatus,
                 TransparentHistExt,
             },
             entry::{StoredEntryFixed, StoredEntryVar},
@@ -14,10 +14,10 @@ use crate::{
     },
     config::BlockCacheConfig,
     error::FinalisedStateError,
-    AddrHistRecord, AddrScript, AtomicStatus, BlockHash, BlockHeaderData, IndexedBlock,
-    CommitmentTreeData, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
-    CompactSize, CompactTxData, FixedEncodedLen as _, Height, OrchardCompactTx, OrchardTxList,
-    Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
+    AddrHistRecord, AddrScript, AtomicStatus, BlockHash, BlockHeaderData, CommitmentTreeData,
+    CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactSize, CompactTxData,
+    FixedEncodedLen as _, Height, IndexedBlock, OrchardCompactTx, OrchardTxList, Outpoint,
+    SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
     TxInCompact, TxLocation, TxOutCompact, TxidList, ZainoVersionedSerialise as _,
 };
 
@@ -1303,7 +1303,10 @@ impl DbV1 {
     /// NOTE: LMDB database errors are propageted as these show serious database errors,
     /// all other errors are returned as `IncorrectBlock`, if this error is returned the block requested
     /// should be fetched from the validator and this method called with the correct data.
-    pub(crate) async fn delete_block(&self, block: &IndexedBlock) -> Result<(), FinalisedStateError> {
+    pub(crate) async fn delete_block(
+        &self,
+        block: &IndexedBlock,
+    ) -> Result<(), FinalisedStateError> {
         // Check block height and hash
         let block_height = block
             .index()

@@ -9,14 +9,14 @@ use v1::DbV1;
 use crate::{
     chain_index::{
         finalised_state::capability::{
-            BlockCoreExt, BlockShieldedExt, BlockTransparentExt, IndexedBlockExt, CompactBlockExt,
-            DbCore, DbMetadata, DbRead, DbWrite, TransparentHistExt,
+            BlockCoreExt, BlockShieldedExt, BlockTransparentExt, CompactBlockExt, DbCore,
+            DbMetadata, DbRead, DbWrite, IndexedBlockExt, TransparentHistExt,
         },
         types::TransactionHash,
     },
     config::BlockCacheConfig,
     error::FinalisedStateError,
-    AddrScript, BlockHash, BlockHeaderData, IndexedBlock, CommitmentTreeData, Height,
+    AddrScript, BlockHash, BlockHeaderData, CommitmentTreeData, Height, IndexedBlock,
     OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType,
     TransparentCompactTx, TransparentTxList, TxLocation, TxidList,
 };

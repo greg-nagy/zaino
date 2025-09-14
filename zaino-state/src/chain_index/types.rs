@@ -1445,7 +1445,12 @@ impl
             Some(height),
         );
 
-        Ok(IndexedBlock::new(index, block_data, tx, commitment_tree_data))
+        Ok(IndexedBlock::new(
+            index,
+            block_data,
+            tx,
+            commitment_tree_data,
+        ))
     }
 }
 

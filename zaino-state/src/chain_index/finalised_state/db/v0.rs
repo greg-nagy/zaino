@@ -15,7 +15,7 @@ use crate::{
     config::BlockCacheConfig,
     error::FinalisedStateError,
     status::{AtomicStatus, StatusType},
-    IndexedBlock, Height,
+    Height, IndexedBlock,
 };
 
 use zaino_proto::proto::compact_formats::CompactBlock;
@@ -545,7 +545,10 @@ impl DbV0 {
     /// NOTE: LMDB database errors are propageted as these show serious database errors,
     /// all other errors are returned as `IncorrectBlock`, if this error is returned the block requested
     /// should be fetched from the validator and this method called with the correct data.
-    pub(crate) async fn delete_block(&self, block: &IndexedBlock) -> Result<(), FinalisedStateError> {
+    pub(crate) async fn delete_block(
+        &self,
+        block: &IndexedBlock,
+    ) -> Result<(), FinalisedStateError> {
         let zebra_height: ZebraHeight = block
             .index()
             .height()

@@ -16,7 +16,7 @@ use crate::chain_index::tests::init_tracing;
 use crate::chain_index::tests::vectors::{build_mockchain_source, load_test_vectors};
 use crate::chain_index::types::TransactionHash;
 use crate::error::FinalisedStateError;
-use crate::{AddrScript, IndexedBlock, ChainWork, Height, Outpoint};
+use crate::{AddrScript, ChainWork, Height, IndexedBlock, Outpoint};
 
 pub(crate) async fn spawn_v1_zaino_db(
     source: MockchainSource,

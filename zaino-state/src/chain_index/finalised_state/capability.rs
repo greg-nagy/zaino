@@ -6,9 +6,10 @@ use crate::{
     chain_index::types::{AddrEventBytes, TransactionHash},
     error::FinalisedStateError,
     read_fixed_le, read_u32_le, read_u8, version, write_fixed_le, write_u32_le, write_u8,
-    AddrScript, BlockHash, BlockHeaderData, IndexedBlock, CommitmentTreeData, FixedEncodedLen,
-    Height, OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, StatusType,
-    TransparentCompactTx, TransparentTxList, TxLocation, TxidList, ZainoVersionedSerialise,
+    AddrScript, BlockHash, BlockHeaderData, CommitmentTreeData, FixedEncodedLen, Height,
+    IndexedBlock, OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList,
+    StatusType, TransparentCompactTx, TransparentTxList, TxLocation, TxidList,
+    ZainoVersionedSerialise,
 };
 
 use async_trait::async_trait;

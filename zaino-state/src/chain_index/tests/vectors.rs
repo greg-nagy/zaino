@@ -12,7 +12,7 @@ use zaino_proto::proto::compact_formats::CompactBlock;
 use zebra_rpc::methods::GetAddressUtxos;
 
 use crate::chain_index::source::test::MockchainSource;
-use crate::{read_u32_le, read_u64_le, IndexedBlock, CompactSize, ZainoVersionedSerialise as _};
+use crate::{read_u32_le, read_u64_le, CompactSize, IndexedBlock, ZainoVersionedSerialise as _};
 
 /// Reads test data from file.
 #[allow(clippy::type_complexity)]

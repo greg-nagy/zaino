@@ -22,7 +22,7 @@ use crate::{
     chain_index::{source::BlockchainSourceError, types::GENESIS_HEIGHT},
     config::BlockCacheConfig,
     error::FinalisedStateError,
-    BlockHash, IndexedBlock, ChainWork, Height, StatusType,
+    BlockHash, ChainWork, Height, IndexedBlock, StatusType,
 };
 
 use std::{sync::Arc, time::Duration};
