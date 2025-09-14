@@ -39,8 +39,11 @@ pub struct NonFinalizedState<Source: BlockchainSource> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+/// created for NonfinalizedBlockCacheSnapshot best_tip field for naming fields
 pub struct BestTip {
+    /// from chain_index types
     pub height: Height,
+    /// from chain_index types
     pub blockhash: BlockHash,
 }
 
@@ -56,7 +59,8 @@ pub struct NonfinalizedBlockCacheSnapshot {
     pub heights_to_hashes: HashMap<Height, BlockHash>,
     // Do we need height here?
     /// The highest known block
-    //pub best_tip: (Height, BlockHash),
+    // best_tip is a BestTip, which contains
+    // a Height, and a BlockHash as named fields.
     pub best_tip: BestTip,
 }
 
@@ -599,7 +603,11 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
 
         let best_tip = blocks.iter().fold(snapshot.best_tip, |acc, (hash, block)| {
             match block.index().height() {
-                Some(height) if height > acc.0 => (height, (*hash)),
+                //                Some(height) if height > acc.0 => (height, (*hash)),
+                Some(height) if height > acc.height => BestTip {
+                    height: height,
+                    blockhash: *hash,
+                },
                 _ => acc,
             }
         });
