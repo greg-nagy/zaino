@@ -1481,21 +1481,20 @@ impl ZcashIndexer for StateServiceSubscriber {
 
         Ok(utxos
             .utxos()
-            .map(|utxo| {
-                assert!(utxo.2 > &last_output_location);
-                last_output_location = *utxo.2;
-                // What an odd argument order for new
-                // at least they are all different types, so they can't be
-                // supplied in the wrong order
-                GetAddressUtxos::new(
-                    utxo.0,
-                    *utxo.1,
-                    utxo.2.output_index(),
-                    utxo.3.lock_script.clone(),
-                    u64::from(utxo.3.value()),
-                    utxo.2.height(),
-                )
-            })
+            .map(
+                |(utxo_address, utxo_hash, utxo_output_location, utxo_transparent_output)| {
+                    assert!(utxo_output_location > &last_output_location);
+                    last_output_location = *utxo_output_location;
+                    GetAddressUtxos::new(
+                        utxo_address,
+                        *utxo_hash,
+                        utxo_output_location.output_index(),
+                        utxo_transparent_output.lock_script.clone(),
+                        u64::from(utxo_transparent_output.value()),
+                        utxo_output_location.height(),
+                    )
+                },
+            )
             .collect())
     }
 
