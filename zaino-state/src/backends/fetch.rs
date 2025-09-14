@@ -1351,7 +1351,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         let mut address_utxos: Vec<GetAddressUtxosReply> = Vec::new();
         let mut entries: u32 = 0;
         for utxo in utxos {
-            let (address, txid, output_index, script, satoshis, height) = utxo.into_parts();
+            let (address, tx_hash, output_index, script, satoshis, height) = utxo.into_parts();
             if (height.0 as u64) < request.start_height {
                 continue;
             }
@@ -1377,7 +1377,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             };
             let utxo_reply = GetAddressUtxosReply {
                 address: address.to_string(),
-                txid: txid.0.to_vec(),
+                txid: tx_hash.0.to_vec(),
                 index: checked_index,
                 script: script.as_raw_bytes().to_vec(),
                 value_zat: checked_satoshis,
