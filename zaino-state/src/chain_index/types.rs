@@ -57,9 +57,9 @@ pub enum BestChainLocation {
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum NonBestChainLocation {
     /// the block containing the transaction
-    Block(BlockHash),
     // TODO: in this case, returning a consensus branch
     // ID would be useful
+    Block(BlockHash),
     /// if the transaction is in the mempool
     /// but the mempool does not match the
     /// snapshot's chaintip, return the target height if known
