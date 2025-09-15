@@ -46,9 +46,11 @@ impl BlockHash {
 pub enum BestChainLocation {
     /// the block containing the transaction
     Block(BlockHash, Height),
-    /// If the transaction is in the mempool,
-    /// which matches the snapshot's chaintip
-    Mempool,
+    /// If the transaction is in the mempool and the mempool
+    /// matches the snapshot's chaintip
+    /// Return the target height, which is known to be a block above
+    /// the provided snapshot's chaintip and is returned for convenience
+    Mempool(Height),
 }
 
 /// The location of a transaction not in the best chain
@@ -56,12 +58,15 @@ pub enum BestChainLocation {
 pub enum NonBestChainLocation {
     /// the block containing the transaction
     Block(BlockHash),
+    // TODO: in this case, returning a consensus branch
+    // ID would be useful
     /// if the transaction is in the mempool
     /// but the mempool does not match the
-    /// snapshot's chaintip
+    /// snapshot's chaintip, return the target height if known
+    ///
     /// This likely means that the provided
     /// snapshot is out-of-date
-    Mempool,
+    Mempool(Option<Height>),
 }
 
 impl TryFrom<&ChainBlock> for NonBestChainLocation {

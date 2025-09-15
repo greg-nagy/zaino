@@ -279,7 +279,9 @@ mod mockchain_tests {
                 .unwrap();
             assert_eq!(
                 transaction_status_best_chain,
-                Some(BestChainLocation::Mempool)
+                Some(BestChainLocation::Mempool(
+                    crate::chain_index::types::Height(mempool_height as u32)
+                ))
             );
             assert!(transaction_status_nonbest_chain.is_empty());
         }

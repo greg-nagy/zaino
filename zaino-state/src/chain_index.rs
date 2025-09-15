@@ -738,7 +738,8 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
             .contains_txid(&mempool::MempoolKey(txid.to_string()))
             .await;
         if in_mempool {
-            if self.mempool.mempool_chain_tip() == snapshot.best_tip.1 {
+            let mempool_tip = self.mempool.mempool_chain_tip();
+            if mempool_tip == snapshot.best_tip.1 {
                 if best_chain_block.is_some() {
                     return Err(ChainIndexError {
                         kind: ChainIndexErrorKind::InvalidSnapshot,
@@ -748,10 +749,23 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
                         source: None,
                     });
                 } else {
-                    best_chain_block = Some(BestChainLocation::Mempool);
+                    best_chain_block = Some(BestChainLocation::Mempool(snapshot.best_tip.0 + 1));
                 }
             } else {
-                non_best_chain_blocks.insert(NonBestChainLocation::Mempool);
+                let target_height = self
+                    .non_finalized_state
+                    .get_snapshot()
+                    .blocks
+                    .iter()
+                    .find_map(|(hash, block)| {
+                        if *hash == mempool_tip {
+                            Some(block.height().map(|height| height + 1))
+                        } else {
+                            None
+                        }
+                    })
+                    .flatten();
+                non_best_chain_blocks.insert(NonBestChainLocation::Mempool(target_height));
             }
         }
 
