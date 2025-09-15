@@ -378,6 +378,7 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
             .inner_ref()
             .get_difficulty()
             .await
+            .map(|ok| ok.difficulty)
             .map_err(|e| {
                 ErrorObjectOwned::owned(
                     ErrorCode::InvalidParams.code(),
