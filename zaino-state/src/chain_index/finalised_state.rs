@@ -198,7 +198,7 @@ impl ZainoDB {
 
     // ***** Db Core Write *****
 
-    /// Sync the database to the given height using the given IndexedBlockSourceInterface.
+    /// Sync the database to the given height using the given BlockchainSource.
     pub(crate) async fn sync_to_height<T>(
         &self,
         height: Height,
