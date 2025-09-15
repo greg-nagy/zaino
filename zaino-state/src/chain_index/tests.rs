@@ -35,7 +35,7 @@ mod mockchain_tests {
             types::TransactionHash,
             ChainIndex, NodeBackedChainIndex, NodeBackedChainIndexSubscriber,
         },
-        ChainBlock,
+        IndexedBlock,
     };
 
     async fn load_test_vectors_and_sync_chain_index(
@@ -43,7 +43,7 @@ mod mockchain_tests {
     ) -> (
         Vec<(
             u32,
-            ChainBlock,
+            IndexedBlock,
             CompactBlock,
             zebra_chain::block::Block,
             (

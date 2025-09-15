@@ -20,7 +20,7 @@ use non_finalised_state::NonfinalizedBlockCacheSnapshot;
 use source::{BlockchainSource, ValidatorConnector};
 use tokio_stream::StreamExt;
 use tracing::info;
-use types::ChainBlock;
+use types::IndexedBlock;
 pub use zebra_chain::parameters::Network as ZebraNetwork;
 use zebra_chain::serialization::ZcashSerialize;
 use zebra_state::HashOrHeight;
@@ -545,7 +545,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndexSubscriber<Source> {
         &'self_lt self,
         snapshot: &'snapshot NonfinalizedBlockCacheSnapshot,
         txid: [u8; 32],
-    ) -> Result<impl Iterator<Item = ChainBlock> + use<'iter, Source>, FinalisedStateError>
+    ) -> Result<impl Iterator<Item = IndexedBlock> + use<'iter, Source>, FinalisedStateError>
     where
         'snapshot: 'iter,
         'self_lt: 'iter,
@@ -833,11 +833,11 @@ impl<T> NonFinalizedSnapshot for Arc<T>
 where
     T: NonFinalizedSnapshot,
 {
-    fn get_chainblock_by_hash(&self, target_hash: &types::BlockHash) -> Option<&ChainBlock> {
+    fn get_chainblock_by_hash(&self, target_hash: &types::BlockHash) -> Option<&IndexedBlock> {
         self.as_ref().get_chainblock_by_hash(target_hash)
     }
 
-    fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&ChainBlock> {
+    fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&IndexedBlock> {
         self.as_ref().get_chainblock_by_height(target_height)
     }
 
@@ -849,15 +849,15 @@ where
 /// A snapshot of the non-finalized state, for consistent queries
 pub trait NonFinalizedSnapshot {
     /// Hash -> block
-    fn get_chainblock_by_hash(&self, target_hash: &types::BlockHash) -> Option<&ChainBlock>;
+    fn get_chainblock_by_hash(&self, target_hash: &types::BlockHash) -> Option<&IndexedBlock>;
     /// Height -> block
-    fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&ChainBlock>;
+    fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&IndexedBlock>;
     /// Get the tip of the best chain, according to the snapshot
     fn best_chaintip(&self) -> (types::Height, types::BlockHash);
 }
 
 impl NonFinalizedSnapshot for NonfinalizedBlockCacheSnapshot {
-    fn get_chainblock_by_hash(&self, target_hash: &types::BlockHash) -> Option<&ChainBlock> {
+    fn get_chainblock_by_hash(&self, target_hash: &types::BlockHash) -> Option<&IndexedBlock> {
         self.blocks.iter().find_map(|(hash, chainblock)| {
             if hash == target_hash {
                 Some(chainblock)
@@ -866,7 +866,7 @@ impl NonFinalizedSnapshot for NonfinalizedBlockCacheSnapshot {
             }
         })
     }
-    fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&ChainBlock> {
+    fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&IndexedBlock> {
         self.heights_to_hashes.iter().find_map(|(height, hash)| {
             if height == target_height {
                 self.get_chainblock_by_hash(hash)
