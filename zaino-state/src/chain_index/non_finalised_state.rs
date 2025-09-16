@@ -2,10 +2,9 @@ use super::{finalised_state::ZainoDB, source::BlockchainSource};
 use crate::{
     chain_index::types::{self, BlockHash, Height, TransactionHash, GENESIS_HEIGHT},
     error::FinalisedStateError,
-    BlockData, BlockIndex, ChainBlock, ChainWork, CommitmentTreeData, CommitmentTreeRoots,
-    CommitmentTreeSizes, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
-    CompactTxData, OrchardCompactTx, SaplingCompactTx, TransparentCompactTx, TxInCompact,
-    TxOutCompact,
+    BlockData, BlockIndex, ChainWork, CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes,
+    CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactTxData, IndexedBlock,
+    OrchardCompactTx, SaplingCompactTx, TransparentCompactTx, TxInCompact, TxOutCompact,
 };
 use arc_swap::ArcSwap;
 use futures::lock::Mutex;
@@ -21,8 +20,8 @@ pub struct NonFinalizedState<Source: BlockchainSource> {
     /// We need access to the validator's best block hash, as well
     /// as a source of blocks
     pub(super) source: Source,
-    staged: Mutex<mpsc::Receiver<ChainBlock>>,
-    staging_sender: mpsc::Sender<ChainBlock>,
+    staged: Mutex<mpsc::Receiver<IndexedBlock>>,
+    staging_sender: mpsc::Sender<IndexedBlock>,
     /// This lock should not be exposed to consumers. Rather,
     /// clone the Arc and offer that. This means we can overwrite the arc
     /// without interfering with readers, who will hold a stale copy
@@ -54,7 +53,7 @@ pub struct NonfinalizedBlockCacheSnapshot {
     /// this includes all blocks on-chain, as well as
     /// all blocks known to have been on-chain before being
     /// removed by a reorg. Blocks reorged away have no height.
-    pub blocks: HashMap<BlockHash, ChainBlock>,
+    pub blocks: HashMap<BlockHash, IndexedBlock>,
     /// hashes indexed by height
     pub heights_to_hashes: HashMap<Height, BlockHash>,
     // Do we need height here?
@@ -143,7 +142,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
     pub async fn initialize(
         source: Source,
         network: Network,
-        start_block: Option<ChainBlock>,
+        start_block: Option<IndexedBlock>,
     ) -> Result<Self, InitError> {
         // TODO: Consider arbitrary buffer length
         info!("Initialising non-finalised state.");
@@ -311,7 +310,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 let commitment_tree_data =
                     CommitmentTreeData::new(commitment_tree_roots, commitment_tree_size);
 
-                ChainBlock {
+                IndexedBlock {
                     index,
                     data,
                     transactions,
@@ -425,7 +424,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                         .blocks
                         .values()
                         .find(|block| block.height() == Some(next_height_down))
-                        .map(ChainBlock::hash)
+                        .map(IndexedBlock::hash)
                     {
                         Some(hash) => break hash,
                         // There is a hole in our database.
@@ -539,7 +538,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
 
     async fn sync_stage_update_loop(
         &self,
-        block: ChainBlock,
+        block: IndexedBlock,
         finalized_db: Arc<ZainoDB>,
     ) -> Result<(), UpdateError> {
         if let Err(e) = self.stage(block.clone()) {
@@ -557,13 +556,16 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
     }
 
     /// Stage a block
-    fn stage(&self, block: ChainBlock) -> Result<(), Box<mpsc::error::TrySendError<ChainBlock>>> {
+    fn stage(
+        &self,
+        block: IndexedBlock,
+    ) -> Result<(), Box<mpsc::error::TrySendError<IndexedBlock>>> {
         self.staging_sender.try_send(block).map_err(Box::new)
     }
 
     /// Add all blocks from the staging area, and save a new cache snapshot, trimming block below the finalised tip.
     async fn update(&self, finalized_db: Arc<ZainoDB>) -> Result<(), UpdateError> {
-        let mut new = HashMap::<BlockHash, ChainBlock>::new();
+        let mut new = HashMap::<BlockHash, IndexedBlock>::new();
         let mut staged = self.staged.lock().await;
         loop {
             match staged.try_recv() {
@@ -672,9 +674,9 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
 
     async fn block_to_chainblock(
         &self,
-        prev_block: &ChainBlock,
+        prev_block: &IndexedBlock,
         block: &zebra_chain::block::Block,
-    ) -> Result<ChainBlock, SyncError> {
+    ) -> Result<IndexedBlock, SyncError> {
         let (sapling_root_and_len, orchard_root_and_len) = self
             .source
             .get_commitment_tree_roots(block.hash().into())
@@ -689,7 +691,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
             orchard_root_and_len.unwrap_or_default(),
         );
 
-        ChainBlock::try_from((
+        IndexedBlock::try_from((
             block,
             sapling_root,
             sapling_size as u32,
