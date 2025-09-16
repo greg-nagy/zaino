@@ -702,9 +702,8 @@ mod zcashd {
             const BLOCK_LIMIT: i32 = 10;
 
             for _ in 0..BLOCK_LIMIT {
-                let zcashd_difficulty =
-                    zcashd_subscriber.get_difficulty().await.unwrap().difficulty;
-                let zaino_difficulty = zaino_subscriber.get_difficulty().await.unwrap().difficulty;
+                let zcashd_difficulty = zcashd_subscriber.get_difficulty().await.unwrap();
+                let zaino_difficulty = zaino_subscriber.get_difficulty().await.unwrap();
 
                 assert_eq!(zcashd_difficulty, zaino_difficulty);
 

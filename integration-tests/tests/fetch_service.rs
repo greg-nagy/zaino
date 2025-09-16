@@ -578,11 +578,7 @@ async fn assert_fetch_service_difficulty_matches_rpc(validator: &ValidatorKind) 
     let (test_manager, _fetch_service, fetch_service_subscriber) =
         create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
 
-    let fetch_service_get_difficulty = fetch_service_subscriber
-        .get_difficulty()
-        .await
-        .unwrap()
-        .difficulty;
+    let fetch_service_get_difficulty = fetch_service_subscriber.get_difficulty().await.unwrap();
 
     let jsonrpc_client = JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
@@ -599,9 +595,8 @@ async fn assert_fetch_service_difficulty_matches_rpc(validator: &ValidatorKind) 
     )
     .unwrap();
 
-    let rpc_difficulty_response = jsonrpc_client.get_difficulty().await.unwrap().difficulty;
-
-    assert_eq!(fetch_service_get_difficulty, rpc_difficulty_response);
+    let rpc_difficulty_response = jsonrpc_client.get_difficulty().await.unwrap();
+    assert_eq!(fetch_service_get_difficulty, rpc_difficulty_response.0);
 }
 
 async fn fetch_service_get_block(validator: &ValidatorKind) {

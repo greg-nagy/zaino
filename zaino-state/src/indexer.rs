@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use tokio::{sync::mpsc, time::timeout};
 use tracing::warn;
-use zaino_fetch::jsonrpsee::response::{GetDifficultyResponse, GetMempoolInfoResponse};
+use zaino_fetch::jsonrpsee::response::GetMempoolInfoResponse;
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
     service::{
@@ -170,7 +170,7 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// zcashd reference: [`getdifficulty`](https://zcash.github.io/rpc/getdifficulty.html)
     /// method: post
     /// tags: blockchain
-    async fn get_difficulty(&self) -> Result<GetDifficultyResponse, Self::Error>;
+    async fn get_difficulty(&self) -> Result<f64, Self::Error>;
 
     /// Returns details on the active state of the TX memory pool.
     ///

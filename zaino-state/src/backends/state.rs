@@ -26,7 +26,7 @@ use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
-        response::{GetDifficultyResponse, GetMempoolInfoResponse, GetSubtreesResponse},
+        response::{GetMempoolInfoResponse, GetSubtreesResponse},
     },
 };
 use zaino_proto::proto::{
@@ -864,14 +864,13 @@ impl ZcashIndexer for StateServiceSubscriber {
             .map_err(|e| StateServiceError::Custom(e.to_string()))
     }
 
-    async fn get_difficulty(&self) -> Result<GetDifficultyResponse, Self::Error> {
+    async fn get_difficulty(&self) -> Result<f64, Self::Error> {
         chain_tip_difficulty(
             self.config.network.to_zebra_network(),
             self.read_state_service.clone(),
             false,
         )
         .await
-        .map(|diff| GetDifficultyResponse { difficulty: diff })
         .map_err(|e| {
             StateServiceError::RpcError(RpcError::new_from_errorobject(
                 e,

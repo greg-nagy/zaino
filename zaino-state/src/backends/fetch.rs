@@ -22,7 +22,7 @@ use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
-        response::{GetDifficultyResponse, GetMempoolInfoResponse},
+        response::GetMempoolInfoResponse,
     },
 };
 
@@ -250,8 +250,8 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// zcashd reference: [`getdifficulty`](https://zcash.github.io/rpc/getdifficulty.html)
     /// method: post
     /// tags: blockchain
-    async fn get_difficulty(&self) -> Result<GetDifficultyResponse, Self::Error> {
-        Ok(self.fetcher.get_difficulty().await?)
+    async fn get_difficulty(&self) -> Result<f64, Self::Error> {
+        Ok(self.fetcher.get_difficulty().await?.0)
     }
 
     /// Returns the total balance of a provided `addresses` in an [`AddressBalance`] instance.
