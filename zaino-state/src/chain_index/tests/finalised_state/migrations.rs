@@ -2,6 +2,8 @@
 
 use std::path::PathBuf;
 use tempfile::TempDir;
+use zaino_common::network::ActivationHeights;
+use zaino_common::{DatabaseConfig, Network, StorageConfig};
 
 use crate::bench::BlockCacheConfig;
 use crate::chain_index::finalised_state::capability::{DbCore as _, DbWrite as _};
@@ -9,7 +11,7 @@ use crate::chain_index::finalised_state::db::DbBackend;
 use crate::chain_index::finalised_state::ZainoDB;
 use crate::chain_index::tests::init_tracing;
 use crate::chain_index::tests::vectors::{build_mockchain_source, load_test_vectors};
-use crate::{ChainBlock, ChainWork};
+use crate::{ChainWork, IndexedBlock};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn v0_to_v1_full() {
@@ -21,51 +23,30 @@ async fn v0_to_v1_full() {
     let db_path: PathBuf = temp_dir.path().to_path_buf();
 
     let v0_config = BlockCacheConfig {
-        map_capacity: None,
-        map_shard_amount: None,
-        db_version: 0,
-        db_path: db_path.clone(),
-        db_size: None,
-        network: zebra_chain::parameters::Network::new_regtest(
-            zebra_chain::parameters::testnet::ConfiguredActivationHeights {
-                before_overwinter: Some(1),
-                overwinter: Some(1),
-                sapling: Some(1),
-                blossom: Some(1),
-                heartwood: Some(1),
-                canopy: Some(1),
-                nu5: Some(1),
-                nu6: Some(1),
-                // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
-                nu6_1: None,
-                nu7: None,
+        storage: StorageConfig {
+            database: DatabaseConfig {
+                path: db_path.clone(),
+                ..Default::default()
             },
-        ),
+            ..Default::default()
+        },
+        db_version: 0,
+        network: Network::Regtest(ActivationHeights::default()),
+
         no_sync: false,
         no_db: false,
     };
-
     let v1_config = BlockCacheConfig {
-        map_capacity: None,
-        map_shard_amount: None,
-        db_version: 1,
-        db_path: db_path.clone(),
-        db_size: None,
-        network: zebra_chain::parameters::Network::new_regtest(
-            zebra_chain::parameters::testnet::ConfiguredActivationHeights {
-                before_overwinter: Some(1),
-                overwinter: Some(1),
-                sapling: Some(1),
-                blossom: Some(1),
-                heartwood: Some(1),
-                canopy: Some(1),
-                nu5: Some(1),
-                nu6: Some(1),
-                // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
-                nu6_1: None,
-                nu7: None,
+        storage: StorageConfig {
+            database: DatabaseConfig {
+                path: db_path,
+                ..Default::default()
             },
-        ),
+            ..Default::default()
+        },
+        db_version: 1,
+        network: Network::Regtest(ActivationHeights::default()),
+
         no_sync: false,
         no_db: false,
     };
@@ -103,51 +84,30 @@ async fn v0_to_v1_interrupted() {
     let db_path: PathBuf = temp_dir.path().to_path_buf();
 
     let v0_config = BlockCacheConfig {
-        map_capacity: None,
-        map_shard_amount: None,
-        db_version: 0,
-        db_path: db_path.clone(),
-        db_size: None,
-        network: zebra_chain::parameters::Network::new_regtest(
-            zebra_chain::parameters::testnet::ConfiguredActivationHeights {
-                before_overwinter: Some(1),
-                overwinter: Some(1),
-                sapling: Some(1),
-                blossom: Some(1),
-                heartwood: Some(1),
-                canopy: Some(1),
-                nu5: Some(1),
-                nu6: Some(1),
-                // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
-                nu6_1: None,
-                nu7: None,
+        storage: StorageConfig {
+            database: DatabaseConfig {
+                path: db_path.clone(),
+                ..Default::default()
             },
-        ),
+            ..Default::default()
+        },
+        db_version: 0,
+        network: Network::Regtest(ActivationHeights::default()),
+
         no_sync: false,
         no_db: false,
     };
-
     let v1_config = BlockCacheConfig {
-        map_capacity: None,
-        map_shard_amount: None,
-        db_version: 1,
-        db_path: db_path.clone(),
-        db_size: None,
-        network: zebra_chain::parameters::Network::new_regtest(
-            zebra_chain::parameters::testnet::ConfiguredActivationHeights {
-                before_overwinter: Some(1),
-                overwinter: Some(1),
-                sapling: Some(1),
-                blossom: Some(1),
-                heartwood: Some(1),
-                canopy: Some(1),
-                nu5: Some(1),
-                nu6: Some(1),
-                // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
-                nu6_1: None,
-                nu7: None,
+        storage: StorageConfig {
+            database: DatabaseConfig {
+                path: db_path,
+                ..Default::default()
             },
-        ),
+            ..Default::default()
+        },
+        db_version: 1,
+        network: Network::Regtest(ActivationHeights::default()),
+
         no_sync: false,
         no_db: false,
     };
@@ -181,7 +141,7 @@ async fn v0_to_v1_interrupted() {
             break;
         }
 
-        let chain_block = ChainBlock::try_from((
+        let chain_block = IndexedBlock::try_from((
             &zebra_block,
             sapling_root,
             sapling_root_size as u32,
@@ -233,51 +193,30 @@ async fn v0_to_v1_partial() {
     let db_path: PathBuf = temp_dir.path().to_path_buf();
 
     let v0_config = BlockCacheConfig {
-        map_capacity: None,
-        map_shard_amount: None,
-        db_version: 0,
-        db_path: db_path.clone(),
-        db_size: None,
-        network: zebra_chain::parameters::Network::new_regtest(
-            zebra_chain::parameters::testnet::ConfiguredActivationHeights {
-                before_overwinter: Some(1),
-                overwinter: Some(1),
-                sapling: Some(1),
-                blossom: Some(1),
-                heartwood: Some(1),
-                canopy: Some(1),
-                nu5: Some(1),
-                nu6: Some(1),
-                // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
-                nu6_1: None,
-                nu7: None,
+        storage: StorageConfig {
+            database: DatabaseConfig {
+                path: db_path.clone(),
+                ..Default::default()
             },
-        ),
+            ..Default::default()
+        },
+        db_version: 0,
+        network: Network::Regtest(ActivationHeights::default()),
+
         no_sync: false,
         no_db: false,
     };
-
     let v1_config = BlockCacheConfig {
-        map_capacity: None,
-        map_shard_amount: None,
-        db_version: 1,
-        db_path: db_path.clone(),
-        db_size: None,
-        network: zebra_chain::parameters::Network::new_regtest(
-            zebra_chain::parameters::testnet::ConfiguredActivationHeights {
-                before_overwinter: Some(1),
-                overwinter: Some(1),
-                sapling: Some(1),
-                blossom: Some(1),
-                heartwood: Some(1),
-                canopy: Some(1),
-                nu5: Some(1),
-                nu6: Some(1),
-                // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
-                nu6_1: None,
-                nu7: None,
+        storage: StorageConfig {
+            database: DatabaseConfig {
+                path: db_path,
+                ..Default::default()
             },
-        ),
+            ..Default::default()
+        },
+        db_version: 1,
+        network: Network::Regtest(ActivationHeights::default()),
+
         no_sync: false,
         no_db: false,
     };
@@ -309,7 +248,7 @@ async fn v0_to_v1_partial() {
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
     ) in blocks.clone()
     {
-        let chain_block = ChainBlock::try_from((
+        let chain_block = IndexedBlock::try_from((
             &zebra_block,
             sapling_root,
             sapling_root_size as u32,

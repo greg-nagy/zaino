@@ -8,6 +8,10 @@ use std::fs::File;
 use std::io::BufReader;
 use std::io::BufWriter;
 use std::path::Path;
+use zaino_common::network::ActivationHeights;
+use zaino_common::DatabaseConfig;
+use zaino_common::ServiceConfig;
+use zaino_common::StorageConfig;
 use zaino_fetch::chain::transaction::FullTransaction;
 use zaino_fetch::chain::utils::ParseFromSlice;
 use zaino_proto::proto::compact_formats::CompactBlock;
@@ -17,7 +21,7 @@ use zaino_state::write_u32_le;
 use zaino_state::write_u64_le;
 use zaino_state::CompactSize;
 use zaino_state::ZainoVersionedSerialise;
-use zaino_state::{BackendType, ChainBlock, ChainWork};
+use zaino_state::{BackendType, ChainWork, IndexedBlock};
 use zaino_state::{
     StateService, StateServiceConfig, StateServiceSubscriber, ZcashIndexer, ZcashService as _,
 };
@@ -26,7 +30,6 @@ use zaino_testutils::services;
 use zaino_testutils::test_vectors::transactions::get_test_vectors;
 use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind};
-use zebra_chain::parameters::Network;
 use zebra_chain::serialization::{ZcashDeserialize, ZcashSerialize};
 use zebra_rpc::methods::GetAddressUtxos;
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetBlockTransaction};
@@ -53,33 +56,19 @@ async fn create_test_manager_and_services(
     .await
     .unwrap();
 
-    let (network_type, _zaino_sync_bool) = match network {
+    let (network_type, zaino_sync_bool) = match network {
         Some(services::network::Network::Mainnet) => {
             println!("Waiting for validator to spawn..");
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-            (Network::Mainnet, false)
+            (zaino_common::Network::Mainnet, false)
         }
         Some(services::network::Network::Testnet) => {
             println!("Waiting for validator to spawn..");
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-            (Network::new_default_testnet(), false)
+            (zaino_common::Network::Testnet, false)
         }
         _ => (
-            Network::new_regtest(
-                zebra_chain::parameters::testnet::ConfiguredActivationHeights {
-                    before_overwinter: Some(1),
-                    overwinter: Some(1),
-                    sapling: Some(1),
-                    blossom: Some(1),
-                    heartwood: Some(1),
-                    canopy: Some(1),
-                    nu5: Some(1),
-                    nu6: Some(1),
-                    // TODO: What is network upgrade 6.1? What does a minor version NU mean?
-                    nu6_1: None,
-                    nu7: None,
-                },
-            ),
+            zaino_common::Network::Regtest(ActivationHeights::default()),
             true,
         ),
     };
@@ -105,19 +94,21 @@ async fn create_test_manager_and_services(
         None,
         None,
         None,
-        None,
-        None,
-        None,
-        None,
-        test_manager
-            .local_net
-            .data_dir()
-            .path()
-            .to_path_buf()
-            .join("zaino"),
-        None,
+        ServiceConfig::default(),
+        StorageConfig {
+            database: DatabaseConfig {
+                path: test_manager
+                    .local_net
+                    .data_dir()
+                    .path()
+                    .to_path_buf()
+                    .join("zaino"),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
         network_type,
-        true,
+        zaino_sync_bool,
         true,
     ))
     .await
@@ -411,7 +402,7 @@ async fn create_200_block_regtest_chain_vectors() {
                 )
                 .unwrap();
 
-                let chain_block = ChainBlock::try_from((
+                let chain_block = IndexedBlock::try_from((
                     full_block.clone(),
                     parent_chain_work,
                     sapling_root,
@@ -521,7 +512,7 @@ async fn create_200_block_regtest_chain_vectors() {
         assert_eq!(
             chain_orig.to_bytes().unwrap(),
             chain_new.to_bytes().unwrap(),
-            "ChainBlock serialisation mismatch at height {h_orig}"
+            "IndexedBlock serialisation mismatch at height {h_orig}"
         );
         let mut buf1 = Vec::new();
         let mut buf2 = Vec::new();
@@ -562,7 +553,7 @@ pub fn write_vectors_to_file<P: AsRef<Path>>(
     base_dir: P,
     block_data: &[(
         u32,
-        ChainBlock,
+        IndexedBlock,
         CompactBlock,
         zebra_chain::block::Block,
         (
@@ -635,7 +626,7 @@ pub fn read_vectors_from_file<P: AsRef<Path>>(
 ) -> io::Result<(
     Vec<(
         u32,
-        ChainBlock,
+        IndexedBlock,
         CompactBlock,
         zebra_chain::block::Block,
         (
@@ -651,7 +642,7 @@ pub fn read_vectors_from_file<P: AsRef<Path>>(
     let base = base_dir.as_ref();
 
     // chain_blocks.dat
-    let mut chain_blocks = Vec::<(u32, ChainBlock)>::new();
+    let mut chain_blocks = Vec::<(u32, IndexedBlock)>::new();
     {
         let mut r = BufReader::new(File::open(base.join("chain_blocks.dat"))?);
         loop {
@@ -663,14 +654,14 @@ pub fn read_vectors_from_file<P: AsRef<Path>>(
             let len: usize = CompactSize::read_t(&mut r)?;
             let mut buf = vec![0u8; len];
             r.read_exact(&mut buf)?;
-            let chain = ChainBlock::from_bytes(&buf)?; // <── new
+            let chain = IndexedBlock::from_bytes(&buf)?; // <── new
             chain_blocks.push((height, chain));
         }
     }
 
     // compact_blocks.dat
     let mut compact_blocks =
-        Vec::<(u32, ChainBlock, CompactBlock)>::with_capacity(chain_blocks.len());
+        Vec::<(u32, IndexedBlock, CompactBlock)>::with_capacity(chain_blocks.len());
     {
         let mut r = BufReader::new(File::open(base.join("compact_blocks.dat"))?);
         for (h1, chain) in chain_blocks {
@@ -678,7 +669,7 @@ pub fn read_vectors_from_file<P: AsRef<Path>>(
             if h1 != h2 {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
-                    "height mismatch between ChainBlock and CompactBlock",
+                    "height mismatch between IndexedBlock and CompactBlock",
                 ));
             }
             let len: usize = CompactSize::read_t(&mut r)?;
@@ -692,7 +683,7 @@ pub fn read_vectors_from_file<P: AsRef<Path>>(
 
     // zebra_blocks.dat
     let mut full_blocks =
-        Vec::<(u32, ChainBlock, CompactBlock, zebra_chain::block::Block)>::with_capacity(
+        Vec::<(u32, IndexedBlock, CompactBlock, zebra_chain::block::Block)>::with_capacity(
             compact_blocks.len(),
         );
     {
