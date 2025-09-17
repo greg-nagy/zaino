@@ -3,6 +3,7 @@
 //! Held here to ensure serialisation consistency for ZainoDB.
 
 pub mod commitment;
+pub mod primitives;
 
 use core2::io::{self, Read, Write};
 use hex::{FromHex, ToHex};
@@ -20,10 +21,8 @@ use super::encoding::{
 };
 
 // Re-export types from submodules
-pub use commitment::{
-    CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes,
-    TreeSize, TreeSizeError, SproutTreeSize, SaplingTreeSize, OrchardTreeSize
-};
+pub use commitment::{CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes};
+pub use primitives::{TreeSize, TreeSizeError, SproutTreeSize, SaplingTreeSize, OrchardTreeSize};
 
 // *** Key Objects ***
 
