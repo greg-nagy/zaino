@@ -1,9 +1,35 @@
-//! Holds chain and block structs used internally by the ChainIndex.
+//! Type definitions for the chain index.
+//! 
+//! This module is currently in transition from a large monolithic file to well-organized
+//! submodules. The organized types have been moved to focused modules:
 //!
-//! Held here to ensure serialisation consistency for ZainoDB.
+//! ## Organized Modules
+//! - [`primitives`] - Foundational types (hashes, heights, tree sizes, etc.)
+//! - [`commitment`] - Commitment tree data structures and utilities
+//!
+//! ## Planned Module Organization
+//! The remaining types in this file will be migrated to:
+//! - `block.rs` - Block-related structures (BlockIndex, BlockData, IndexedBlock)
+//! - `transaction.rs` - Transaction types (CompactTxData, TransparentCompactTx, etc.)
+//! - `address.rs` - Address and UTXO types (AddrScript, Outpoint, etc.)
+//! - `shielded.rs` - Shielded pool types (SaplingCompactTx, OrchardCompactTx, etc.)
+
+// =============================================================================
+// MODULE ORGANIZATION
+// =============================================================================
 
 pub mod commitment;
 pub mod primitives;
+
+// Re-export types from organized submodules
+pub use commitment::{CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes};
+pub use primitives::{TreeSize, TreeSizeError, SproutTreeSize, SaplingTreeSize, OrchardTreeSize};
+
+// =============================================================================
+// IMPORTS FOR LEGACY TYPES
+// =============================================================================
+// These imports support the types below that haven't been migrated yet.
+// They should be moved to the appropriate submodules along with their types.
 
 use core2::io::{self, Read, Write};
 use hex::{FromHex, ToHex};
@@ -20,11 +46,11 @@ use super::encoding::{
     FixedEncodedLen,
 };
 
-// Re-export types from submodules
-pub use commitment::{CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes};
-pub use primitives::{TreeSize, TreeSizeError, SproutTreeSize, SaplingTreeSize, OrchardTreeSize};
-
-// *** Key Objects ***
+// =============================================================================
+// LEGACY TYPES AWAITING MIGRATION
+// =============================================================================
+// The types below should be extracted to their appropriate modules.
+// Each section should be migrated as a complete unit to maintain clean git history.
 
 /// Block hash (SHA256d hash of the block header).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
