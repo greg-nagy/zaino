@@ -148,7 +148,7 @@ impl NonFinalisedState {
             }
 
             loop {
-                if non_finalised_state.status.load() == StatusType::Closing as usize {
+                if non_finalised_state.status.load() == StatusType::Closing {
                     non_finalised_state.update_status_and_notify(StatusType::Closing);
                     return;
                 }

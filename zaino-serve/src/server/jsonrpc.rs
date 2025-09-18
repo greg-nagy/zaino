@@ -119,7 +119,7 @@ impl JsonRpcServer {
 
     /// Sets the servers to close gracefully.
     pub async fn close(&mut self) {
-        self.status.store(StatusType::Closing as usize);
+        self.status.store(StatusType::Closing);
 
         if let Some(dir) = &self.cookie_dir {
             if let Err(e) = remove_from_disk(dir) {

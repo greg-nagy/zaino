@@ -74,7 +74,7 @@ impl TonicServer {
 
     /// Sets the servers to close gracefully.
     pub async fn close(&mut self) {
-        self.status.store(StatusType::Closing as usize);
+        self.status.store(StatusType::Closing);
 
         if let Some(handle) = self.server_handle.take() {
             let _ = handle.await;

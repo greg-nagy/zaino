@@ -4,6 +4,7 @@ use std::{
     fmt,
     sync::{
         //atomic::{AtomicUsize, Ordering},
+        atomic::AtomicUsize,
         Arc,
         Mutex,
     },
@@ -22,23 +23,20 @@ use std::{
 ///   TODO: Refine error code spec.
 #[derive(Debug, Clone)]
 pub struct AtomicStatus {
-    counter: Arc<Mutex<StatusType>>,
+    counter: Arc<AtomicUsize>,
 }
 
 impl AtomicStatus {
     /// Creates a new AtomicStatus
     pub fn new(status: StatusType) -> Self {
         Self {
-            counter: Arc::new(Mutex::new(status)),
+            counter: Arc::new(AtomicUsize::new(status.into())),
         }
     }
 
     /// Loads the value held in the AtomicStatus
     pub fn load(&self) -> StatusType {
-        self.counter
-            .lock()
-            .expect("AtomicStatus counter to lock and then unwrap")
-            .clone()
+        StatusType::from(self)
     }
 
     /*
@@ -50,10 +48,8 @@ impl AtomicStatus {
 
     /// Sets the value held in the AtomicStatus
     pub fn store(&self, status: StatusType) {
-        *self
-            .counter
-            .lock()
-            .expect("AtomicStatus counter to lock and then unwrap") = status;
+        self.counter
+            .store(status.into(), std::sync::atomic::Ordering::SeqCst);
     }
 }
 
