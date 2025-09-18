@@ -297,11 +297,14 @@ pub async fn test_get_mempool_info(validator: &ValidatorKind) {
     // Bytes: sum of SerializedTransaction lengths
     let expected_bytes: u64 = entries
         .iter()
-        .map(|(_, value)| value.0.as_ref().as_ref().len() as u64)
+        .map(|(_, value)| value.serialized_tx.as_ref().as_ref().len() as u64)
         .sum();
 
     // Key heap bytes: sum of txid String capacities
-    let expected_key_heap_bytes: u64 = entries.iter().map(|(key, _)| key.0.capacity() as u64).sum();
+    let expected_key_heap_bytes: u64 = entries
+        .iter()
+        .map(|(key, _)| key.txid.capacity() as u64)
+        .sum();
 
     let expected_usage = expected_bytes.saturating_add(expected_key_heap_bytes);
 
@@ -593,7 +596,6 @@ async fn assert_fetch_service_difficulty_matches_rpc(validator: &ValidatorKind) 
     .unwrap();
 
     let rpc_difficulty_response = jsonrpc_client.get_difficulty().await.unwrap();
-
     assert_eq!(fetch_service_get_difficulty, rpc_difficulty_response.0);
 }
 
