@@ -1,4 +1,3 @@
-# dummy change to trigger ci. will revert inmediately
 # Workspace Members are in dependency order, do not change this without prior consideration.
 [workspace]
 members = [
