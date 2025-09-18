@@ -402,7 +402,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
             non_finalized_state: std::sync::Arc::new(non_finalized_state),
             finalized_db,
             sync_loop_handle: None,
-            status: AtomicStatus::new(StatusType::Spawning as u16),
+            status: AtomicStatus::new(StatusType::Spawning),
         };
         chain_index.sync_loop_handle = Some(chain_index.start_sync_loop());
         Ok(chain_index)
@@ -425,7 +425,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
     pub async fn shutdown(&self) -> Result<(), FinalisedStateError> {
         self.finalized_db.shutdown().await?;
         self.mempool.close();
-        self.status.store(StatusType::Closing as usize);
+        self.status.store(StatusType::Closing);
         Ok(())
     }
 
@@ -436,7 +436,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
         let combined_status = StatusType::from(self.status.load())
             .combine(finalized_status)
             .combine(mempool_status);
-        self.status.store(combined_status as usize);
+        self.status.store(combined_status);
         combined_status
     }
 
@@ -447,11 +447,11 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
         let status = self.status.clone();
         tokio::task::spawn(async move {
             loop {
-                if status.load() == StatusType::Closing as usize {
+                if status.load() == StatusType::Closing {
                     break;
                 }
 
-                status.store(StatusType::Syncing as usize);
+                status.store(StatusType::Syncing);
                 // Sync nfs to chain tip, trimming blocks to finalized tip.
                 nfs.sync(fs.clone()).await?;
 
@@ -490,7 +490,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
                             .map_err(|_e| SyncError::CompetingSyncProcess)?;
                     }
                 }
-                status.store(StatusType::Ready as usize);
+                status.store(StatusType::Ready);
                 // TODO: configure sleep duration?
                 tokio::time::sleep(Duration::from_millis(500)).await
                 // TODO: Check for shutdown signal.
@@ -521,7 +521,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndexSubscriber<Source> {
         let combined_status = StatusType::from(self.status.load())
             .combine(finalized_status)
             .combine(mempool_status);
-        self.status.store(combined_status as usize);
+        self.status.store(combined_status);
         combined_status
     }
 

@@ -152,7 +152,7 @@ impl DbCore for DbV1 {
     }
 
     async fn shutdown(&self) -> Result<(), FinalisedStateError> {
-        self.status.store(StatusType::Closing as usize);
+        self.status.store(StatusType::Closing);
 
         if let Some(handle) = &self.db_handler {
             let timeout = tokio::time::sleep(Duration::from_secs(5));
@@ -545,7 +545,7 @@ impl DbV1 {
 
     /// Try graceful shutdown, fall back to abort after a timeout.
     pub(crate) async fn close(&mut self) -> Result<(), FinalisedStateError> {
-        self.status.store(StatusType::Closing as usize);
+        self.status.store(StatusType::Closing);
 
         if let Some(mut handle) = self.db_handler.take() {
             let timeout = tokio::time::sleep(Duration::from_secs(5));
@@ -587,7 +587,7 @@ impl DbV1 {
 
         loop {
             ticker.tick().await;
-            if self.status.load() == StatusType::Ready as usize {
+            if self.status.load() == StatusType::Ready {
                 break;
             }
         }
@@ -658,7 +658,7 @@ impl DbV1 {
 
                 loop {
                     // Check for closing status.
-                    if zaino_db.status.load() == StatusType::Closing as usize {
+                    if zaino_db.status.load() == StatusType::Closing {
                         break;
                     }
                     // try to validate the next consecutive block.
@@ -1201,7 +1201,7 @@ impl DbV1 {
             Ok(_) => {
                 tokio::task::block_in_place(|| self.env.sync(true))
                     .map_err(|e| FinalisedStateError::Custom(format!("LMDB sync failed: {e}")))?;
-                self.status.store(StatusType::Ready.into());
+                self.status.store(StatusType::Ready);
 
                 info!(
                     "Successfully committed block {} at height {} to ZainoDB.",
@@ -1220,7 +1220,7 @@ impl DbV1 {
                 let _ = self.delete_block(&block).await;
                 tokio::task::block_in_place(|| self.env.sync(true))
                     .map_err(|e| FinalisedStateError::Custom(format!("LMDB sync failed: {e}")))?;
-                self.status.store(StatusType::RecoverableError.into());
+                self.status.store(StatusType::RecoverableError);
                 Err(FinalisedStateError::InvalidBlock {
                     height: block_height.0,
                     hash: block_hash,

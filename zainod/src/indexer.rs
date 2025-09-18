@@ -176,12 +176,12 @@ where
     async fn close(&mut self) {
         if let Some(mut json_server) = self.json_server.take() {
             json_server.close().await;
-            json_server.status.store(StatusType::Offline.into());
+            json_server.status.store(StatusType::Offline);
         }
 
         if let Some(mut server) = self.server.take() {
             server.close().await;
-            server.status.store(StatusType::Offline.into());
+            server.status.store(StatusType::Offline);
         }
 
         if let Some(service) = self.service.take() {
@@ -211,11 +211,12 @@ where
             server_status = StatusType::combine(server_status, json_status);
         }
 
-        StatusType::combine(service_status, server_status) as u16
+        StatusType::combine(service_status, server_status)
     }
 
     /// Returns the current StatusType of the indexer.
     pub async fn status(&self) -> StatusType {
+        // TODO status_int is on the hit list
         StatusType::from(self.status_int().await as usize)
     }
 

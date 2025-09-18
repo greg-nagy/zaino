@@ -3,8 +3,9 @@
 use std::{
     fmt,
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        //atomic::{AtomicUsize, Ordering},
         Arc,
+        Mutex,
     },
 };
 
@@ -21,30 +22,38 @@ use std::{
 ///   TODO: Refine error code spec.
 #[derive(Debug, Clone)]
 pub struct AtomicStatus {
-    counter: Arc<AtomicUsize>,
+    counter: Arc<Mutex<StatusType>>,
 }
 
 impl AtomicStatus {
     /// Creates a new AtomicStatus
-    pub fn new(status: u16) -> Self {
+    pub fn new(status: StatusType) -> Self {
         Self {
-            counter: Arc::new(AtomicUsize::new(status as usize)),
+            counter: Arc::new(Mutex::new(status)),
         }
     }
 
     /// Loads the value held in the AtomicStatus
-    pub fn load(&self) -> usize {
-        self.counter().load(Ordering::SeqCst)
+    pub fn load(&self) -> StatusType {
+        self.counter
+            .lock()
+            .expect("AtomicStatus counter to lock and then unwrap")
+            .clone()
     }
 
+    /*
     /// Getter for the counter field
-    pub fn counter(&self) -> &Arc<AtomicUsize> {
+    pub fn counter(&self) -> &Arc<StatusType> {
         &self.counter
     }
+    */
 
     /// Sets the value held in the AtomicStatus
-    pub fn store(&self, status: usize) {
-        self.counter.store(status, Ordering::SeqCst);
+    pub fn store(&self, status: StatusType) {
+        *self
+            .counter
+            .lock()
+            .expect("AtomicStatus counter to lock and then unwrap") = status;
     }
 }
 
@@ -72,6 +81,7 @@ pub enum StatusType {
     CriticalError = 7,
 }
 
+/*
 impl From<usize> for StatusType {
     fn from(value: usize) -> Self {
         match value {
@@ -86,6 +96,7 @@ impl From<usize> for StatusType {
         }
     }
 }
+*/
 
 impl From<StatusType> for usize {
     fn from(status: StatusType) -> Self {
@@ -95,13 +106,15 @@ impl From<StatusType> for usize {
 
 impl From<AtomicStatus> for StatusType {
     fn from(status: AtomicStatus) -> Self {
-        status.load().into()
+        //status.load().into()
+        status.load()
     }
 }
 
 impl From<&AtomicStatus> for StatusType {
     fn from(status: &AtomicStatus) -> Self {
-        status.load().into()
+        //status.load().into()
+        status.load()
     }
 }
 
