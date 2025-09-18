@@ -4,7 +4,7 @@ use std::{
     fmt,
     sync::{
         //atomic::{AtomicUsize, Ordering},
-        atomic::AtomicUsize,
+        atomic::{AtomicUsize, Ordering},
         Arc,
         Mutex,
     },
@@ -36,7 +36,7 @@ impl AtomicStatus {
 
     /// Loads the value held in the AtomicStatus
     pub fn load(&self) -> StatusType {
-        StatusType::from(self)
+        StatusType::from(self.counter.load(Ordering::SeqCst))
     }
 
     /*
@@ -77,7 +77,6 @@ pub enum StatusType {
     CriticalError = 7,
 }
 
-/*
 impl From<usize> for StatusType {
     fn from(value: usize) -> Self {
         match value {
@@ -92,7 +91,6 @@ impl From<usize> for StatusType {
         }
     }
 }
-*/
 
 impl From<StatusType> for usize {
     fn from(status: StatusType) -> Self {
@@ -100,6 +98,7 @@ impl From<StatusType> for usize {
     }
 }
 
+/*
 impl From<AtomicStatus> for StatusType {
     fn from(status: AtomicStatus) -> Self {
         //status.load().into()
@@ -113,6 +112,7 @@ impl From<&AtomicStatus> for StatusType {
         status.load()
     }
 }
+*/
 
 impl From<StatusType> for u16 {
     fn from(status: StatusType) -> Self {
