@@ -6,7 +6,7 @@ use std::{
         //atomic::{AtomicUsize, Ordering},
         atomic::{AtomicUsize, Ordering},
         Arc,
-        Mutex,
+        //      Mutex,
     },
 };
 
@@ -112,13 +112,13 @@ impl From<&AtomicStatus> for StatusType {
         status.load()
     }
 }
-*/
 
 impl From<StatusType> for u16 {
     fn from(status: StatusType) -> Self {
         status as u16
     }
 }
+*/
 
 impl fmt::Display for StatusType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
