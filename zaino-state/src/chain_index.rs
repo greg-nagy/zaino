@@ -11,6 +11,7 @@
 //!     - b. Build trasparent tx indexes efficiently
 //!   - NOTE: Full transaction and block data is served from the backend finalizer.
 
+use crate::chain_index::non_finalised_state::BestTip;
 use crate::chain_index::types::{BestChainLocation, NonBestChainLocation};
 use crate::error::{ChainIndexError, ChainIndexErrorKind, FinalisedStateError};
 use crate::{AtomicStatus, StatusType, SyncError};
@@ -22,7 +23,7 @@ use non_finalised_state::NonfinalizedBlockCacheSnapshot;
 use source::{BlockchainSource, ValidatorConnector};
 use tokio_stream::StreamExt;
 use tracing::info;
-use types::ChainBlock;
+use types::IndexedBlock;
 pub use zebra_chain::parameters::Network as ZebraNetwork;
 use zebra_chain::serialization::ZcashSerialize;
 use zebra_state::HashOrHeight;
@@ -163,7 +164,7 @@ mod tests;
 /// 3. Call `NodeBackedChainIndex::new(source, config).await`
 pub trait ChainIndex {
     /// A snapshot of the nonfinalized state, needed for atomic access
-    type Snapshot;
+    type Snapshot: NonFinalizedSnapshot;
 
     /// How it can fail
     type Error;
@@ -454,7 +455,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
                 // Sync fs to chain tip - 100.
                 {
                     let snapshot = nfs.get_snapshot();
-                    while snapshot.best_tip.0 .0
+                    while snapshot.best_tip.height.0
                         > (fs
                             .to_reader()
                             .db_height()
@@ -541,7 +542,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndexSubscriber<Source> {
         &'self_lt self,
         snapshot: &'snapshot NonfinalizedBlockCacheSnapshot,
         txid: [u8; 32],
-    ) -> Result<impl Iterator<Item = ChainBlock> + use<'iter, Source>, FinalisedStateError>
+    ) -> Result<impl Iterator<Item = IndexedBlock> + use<'iter, Source>, FinalisedStateError>
     where
         'snapshot: 'iter,
         'self_lt: 'iter,
@@ -599,8 +600,8 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
         start: types::Height,
         end: std::option::Option<types::Height>,
     ) -> Option<impl Stream<Item = Result<Vec<u8>, Self::Error>>> {
-        let end = end.unwrap_or(nonfinalized_snapshot.best_tip.0);
-        if end <= nonfinalized_snapshot.best_tip.0 {
+        let end = end.unwrap_or(nonfinalized_snapshot.best_tip.height);
+        if end <= nonfinalized_snapshot.best_tip.height {
             Some(
                 futures::stream::iter((start.0)..=(end.0)).then(move |height| async move {
                     match self
@@ -669,10 +670,12 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
     ) -> Result<Option<Vec<u8>>, Self::Error> {
         if let Some(mempool_tx) = self
             .mempool
-            .get_transaction(&mempool::MempoolKey(txid.to_string()))
+            .get_transaction(&mempool::MempoolKey {
+                txid: txid.to_string(),
+            })
             .await
         {
-            let bytes = mempool_tx.0.as_ref().as_ref().to_vec();
+            let bytes = mempool_tx.serialized_tx.as_ref().as_ref().to_vec();
             return Ok(Some(bytes));
         }
 
@@ -735,11 +738,13 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
                 .collect();
         let in_mempool = self
             .mempool
-            .contains_txid(&mempool::MempoolKey(txid.to_string()))
+            .contains_txid(&mempool::MempoolKey {
+                txid: txid.to_string(),
+            })
             .await;
         if in_mempool {
-            let mempool_tip = self.mempool.mempool_chain_tip();
-            if mempool_tip == snapshot.best_tip.1 {
+            let mempool_tip_hash = self.mempool.mempool_chain_tip();
+            if mempool_tip_hash == snapshot.best_tip.blockhash {
                 if best_chain_block.is_some() {
                     return Err(ChainIndexError {
                         kind: ChainIndexErrorKind::InvalidSnapshot,
@@ -749,7 +754,8 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
                         source: None,
                     });
                 } else {
-                    best_chain_block = Some(BestChainLocation::Mempool(snapshot.best_tip.0 + 1));
+                    best_chain_block =
+                        Some(BestChainLocation::Mempool(snapshot.best_tip.height + 1));
                 }
             } else {
                 let target_height = self
@@ -758,7 +764,7 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
                     .blocks
                     .iter()
                     .find_map(|(hash, block)| {
-                        if *hash == mempool_tip {
+                        if *hash == mempool_tip_hash {
                             Some(block.height().map(|height| height + 1))
                         } else {
                             None
@@ -792,7 +798,7 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
         // Transform to the Vec<Vec<u8>> that the trait requires.
         let bytes: Vec<Vec<u8>> = pairs
             .into_iter()
-            .map(|(_, v)| v.0.as_ref().as_ref().to_vec())
+            .map(|(_, v)| v.serialized_tx.as_ref().as_ref().to_vec())
             .collect();
 
         Ok(bytes)
@@ -806,7 +812,7 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
         &self,
         snapshot: &Self::Snapshot,
     ) -> Option<impl futures::Stream<Item = Result<Vec<u8>, Self::Error>>> {
-        let expected_chain_tip = snapshot.best_tip.1;
+        let expected_chain_tip = snapshot.best_tip.blockhash;
         let mut subscriber = self.mempool.clone();
 
         match subscriber
@@ -822,7 +828,9 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
                     while let Some(item) = in_stream.next().await {
                         match item {
                             Ok((_key, value)) => {
-                                let _ = out_tx.send(Ok(value.0.as_ref().as_ref().to_vec())).await;
+                                let _ = out_tx
+                                    .send(Ok(value.serialized_tx.as_ref().as_ref().to_vec()))
+                                    .await;
                             }
                             Err(e) => {
                                 let _ = out_tx
@@ -851,7 +859,9 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
                     tokio::sync::mpsc::channel::<Result<Vec<u8>, ChainIndexError>>(1);
                 let _ = out_tx.try_send(Err(ChainIndexError::child_process_status_error(
                     "mempool",
-                    crate::error::StatusError(crate::StatusType::RecoverableError),
+                    crate::error::StatusError {
+                        server_status: crate::StatusType::RecoverableError,
+                    },
                 )));
                 Some(tokio_stream::wrappers::ReceiverStream::new(out_rx))
             }
@@ -859,16 +869,35 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
     }
 }
 
+impl<T> NonFinalizedSnapshot for Arc<T>
+where
+    T: NonFinalizedSnapshot,
+{
+    fn get_chainblock_by_hash(&self, target_hash: &types::BlockHash) -> Option<&IndexedBlock> {
+        self.as_ref().get_chainblock_by_hash(target_hash)
+    }
+
+    fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&IndexedBlock> {
+        self.as_ref().get_chainblock_by_height(target_height)
+    }
+
+    fn best_chaintip(&self) -> BestTip {
+        self.as_ref().best_chaintip()
+    }
+}
+
 /// A snapshot of the non-finalized state, for consistent queries
 pub trait NonFinalizedSnapshot {
     /// Hash -> block
-    fn get_chainblock_by_hash(&self, target_hash: &types::BlockHash) -> Option<&ChainBlock>;
+    fn get_chainblock_by_hash(&self, target_hash: &types::BlockHash) -> Option<&IndexedBlock>;
     /// Height -> block
-    fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&ChainBlock>;
+    fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&IndexedBlock>;
+    /// Get the tip of the best chain, according to the snapshot
+    fn best_chaintip(&self) -> BestTip;
 }
 
 impl NonFinalizedSnapshot for NonfinalizedBlockCacheSnapshot {
-    fn get_chainblock_by_hash(&self, target_hash: &types::BlockHash) -> Option<&ChainBlock> {
+    fn get_chainblock_by_hash(&self, target_hash: &types::BlockHash) -> Option<&IndexedBlock> {
         self.blocks.iter().find_map(|(hash, chainblock)| {
             if hash == target_hash {
                 Some(chainblock)
@@ -877,7 +906,7 @@ impl NonFinalizedSnapshot for NonfinalizedBlockCacheSnapshot {
             }
         })
     }
-    fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&ChainBlock> {
+    fn get_chainblock_by_height(&self, target_height: &types::Height) -> Option<&IndexedBlock> {
         self.heights_to_hashes.iter().find_map(|(height, hash)| {
             if height == target_height {
                 self.get_chainblock_by_hash(hash)
@@ -885,5 +914,9 @@ impl NonFinalizedSnapshot for NonfinalizedBlockCacheSnapshot {
                 None
             }
         })
+    }
+
+    fn best_chaintip(&self) -> BestTip {
+        self.best_tip
     }
 }

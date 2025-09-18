@@ -69,20 +69,20 @@ pub enum NonBestChainLocation {
     Mempool(Option<Height>),
 }
 
-impl TryFrom<&ChainBlock> for NonBestChainLocation {
+impl TryFrom<&IndexedBlock> for NonBestChainLocation {
     type Error = ();
 
-    fn try_from(value: &ChainBlock) -> Result<Self, Self::Error> {
+    fn try_from(value: &IndexedBlock) -> Result<Self, Self::Error> {
         match value.height() {
             Some(_) => Err(()),
             None => Ok(NonBestChainLocation::Block(*value.hash())),
         }
     }
 }
-impl TryFrom<&ChainBlock> for BestChainLocation {
+impl TryFrom<&IndexedBlock> for BestChainLocation {
     type Error = ();
 
-    fn try_from(value: &ChainBlock) -> Result<Self, Self::Error> {
+    fn try_from(value: &IndexedBlock) -> Result<Self, Self::Error> {
         match value.height() {
             None => Err(()),
             Some(height) => Ok(BestChainLocation::Block(*value.hash(), height)),
@@ -1244,7 +1244,7 @@ impl FixedEncodedLen for CommitmentTreeSizes {
 /// Provides efficient indexing for blockchain state queries and updates.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub struct ChainBlock {
+pub struct IndexedBlock {
     /// Metadata and indexing information for this block.
     pub(super) index: BlockIndex,
     /// Essential header and metadata information for the block.
@@ -1256,8 +1256,8 @@ pub struct ChainBlock {
     pub(super) commitment_tree_data: CommitmentTreeData,
 }
 
-impl ChainBlock {
-    /// Creates a new `ChainBlock`.
+impl IndexedBlock {
+    /// Creates a new `IndexedBlock`.
     pub fn new(
         index: BlockIndex,
         data: BlockData,
@@ -1317,7 +1317,7 @@ impl ChainBlock {
         self.data.work()
     }
 
-    /// Converts this `ChainBlock` into a CompactBlock protobuf message using proto v4 format.
+    /// Converts this `IndexedBlock` into a CompactBlock protobuf message using proto v4 format.
     pub fn to_compact_block(&self) -> zaino_proto::proto::compact_formats::CompactBlock {
         // NOTE: Returns u64::MAX if the block is not in the best chain.
         let height: u64 = self.height().map(|h| h.0.into()).unwrap_or(u64::MAX);
@@ -1381,7 +1381,7 @@ impl
         [u8; 32],
         u32,
         u32,
-    )> for ChainBlock
+    )> for IndexedBlock
 {
     type Error = String;
 
@@ -1494,7 +1494,12 @@ impl
             Some(height),
         );
 
-        Ok(ChainBlock::new(index, block_data, tx, commitment_tree_data))
+        Ok(IndexedBlock::new(
+            index,
+            block_data,
+            tx,
+            commitment_tree_data,
+        ))
     }
 }
 
@@ -1507,7 +1512,7 @@ impl
         u32,
         &ChainWork,
         &zebra_chain::parameters::Network,
-    )> for ChainBlock
+    )> for IndexedBlock
 {
     // TODO: update error type.
     type Error = String;
@@ -1679,7 +1684,7 @@ impl
         let commitment_tree_data =
             CommitmentTreeData::new(commitment_tree_roots, commitment_tree_size);
 
-        let chainblock = ChainBlock {
+        let chainblock = IndexedBlock {
             index,
             data,
             transactions,
@@ -1690,7 +1695,7 @@ impl
     }
 }
 
-impl ZainoVersionedSerialise for ChainBlock {
+impl ZainoVersionedSerialise for IndexedBlock {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, mut w: &mut W) -> io::Result<()> {
@@ -1711,7 +1716,7 @@ impl ZainoVersionedSerialise for ChainBlock {
         let tx = read_vec(&mut r, |r| CompactTxData::deserialize(r))?;
         let ctd = CommitmentTreeData::deserialize(&mut r)?;
 
-        Ok(ChainBlock::new(index, data, tx, ctd))
+        Ok(IndexedBlock::new(index, data, tx, ctd))
     }
 }
 

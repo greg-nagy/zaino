@@ -4,8 +4,8 @@ use crate::{
     chain_index::{
         finalised_state::{
             capability::{
-                BlockCoreExt, BlockShieldedExt, BlockTransparentExt, ChainBlockExt,
-                CompactBlockExt, DbCore, DbMetadata, DbRead, DbVersion, DbWrite, MigrationStatus,
+                BlockCoreExt, BlockShieldedExt, BlockTransparentExt, CompactBlockExt, DbCore,
+                DbMetadata, DbRead, DbVersion, DbWrite, IndexedBlockExt, MigrationStatus,
                 TransparentHistExt,
             },
             entry::{StoredEntryFixed, StoredEntryVar},
@@ -14,10 +14,10 @@ use crate::{
     },
     config::BlockCacheConfig,
     error::FinalisedStateError,
-    AddrHistRecord, AddrScript, AtomicStatus, BlockHash, BlockHeaderData, ChainBlock,
-    CommitmentTreeData, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
-    CompactSize, CompactTxData, FixedEncodedLen as _, Height, OrchardCompactTx, OrchardTxList,
-    Outpoint, SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
+    AddrHistRecord, AddrScript, AtomicStatus, BlockHash, BlockHeaderData, CommitmentTreeData,
+    CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactSize, CompactTxData,
+    FixedEncodedLen as _, Height, IndexedBlock, OrchardCompactTx, OrchardTxList, Outpoint,
+    SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
     TxInCompact, TxLocation, TxOutCompact, TxidList, ZainoVersionedSerialise as _,
 };
 
@@ -128,7 +128,7 @@ impl DbRead for DbV1 {
 
 #[async_trait]
 impl DbWrite for DbV1 {
-    async fn write_block(&self, block: ChainBlock) -> Result<(), FinalisedStateError> {
+    async fn write_block(&self, block: IndexedBlock) -> Result<(), FinalisedStateError> {
         self.write_block(block).await
     }
 
@@ -136,7 +136,7 @@ impl DbWrite for DbV1 {
         self.delete_block_at_height(height).await
     }
 
-    async fn delete_block(&self, block: &ChainBlock) -> Result<(), FinalisedStateError> {
+    async fn delete_block(&self, block: &IndexedBlock) -> Result<(), FinalisedStateError> {
         self.delete_block(block).await
     }
 
@@ -310,11 +310,11 @@ impl CompactBlockExt for DbV1 {
 }
 
 #[async_trait]
-impl ChainBlockExt for DbV1 {
+impl IndexedBlockExt for DbV1 {
     async fn get_chain_block(
         &self,
         height: Height,
-    ) -> Result<Option<ChainBlock>, FinalisedStateError> {
+    ) -> Result<Option<IndexedBlock>, FinalisedStateError> {
         self.get_chain_block(height).await
     }
 }
@@ -838,8 +838,8 @@ impl DbV1 {
     // *** DB write / delete methods ***
     // These should only ever be used in a single DB control task.
 
-    /// Writes a given (finalised) [`ChainBlock`] to ZainoDB.
-    pub(crate) async fn write_block(&self, block: ChainBlock) -> Result<(), FinalisedStateError> {
+    /// Writes a given (finalised) [`IndexedBlock`] to ZainoDB.
+    pub(crate) async fn write_block(&self, block: IndexedBlock) -> Result<(), FinalisedStateError> {
         self.status.store(StatusType::Syncing.into());
         let block_hash = *block.index().hash();
         let block_hash_bytes = block_hash.to_bytes()?;
@@ -1292,9 +1292,9 @@ impl DbV1 {
 
     /// This is used as a backup when delete_block_at_height fails.
     ///
-    /// Takes a ChainBlock as input and ensures all data from this block is wiped from the database.
+    /// Takes a IndexedBlock as input and ensures all data from this block is wiped from the database.
     ///
-    /// The ChainBlock ir required to ensure that Outputs spent at this block height are re-marked as unspent.
+    /// The IndexedBlock ir required to ensure that Outputs spent at this block height are re-marked as unspent.
     ///
     /// WARNING: No checks are made that this block is at the top of the finalised state, and validated tip is not updated.
     /// This enables use for correcting corrupt data within the database but it is left to the user to ensure safe use.
@@ -1303,7 +1303,10 @@ impl DbV1 {
     /// NOTE: LMDB database errors are propageted as these show serious database errors,
     /// all other errors are returned as `IncorrectBlock`, if this error is returned the block requested
     /// should be fetched from the validator and this method called with the correct data.
-    pub(crate) async fn delete_block(&self, block: &ChainBlock) -> Result<(), FinalisedStateError> {
+    pub(crate) async fn delete_block(
+        &self,
+        block: &IndexedBlock,
+    ) -> Result<(), FinalisedStateError> {
         // Check block height and hash
         let block_height = block
             .index()
@@ -2814,13 +2817,13 @@ impl DbV1 {
         })
     }
 
-    /// Returns the ChainBlock for the given Height.
+    /// Returns the IndexedBlock for the given Height.
     ///
     /// TODO: Add separate range fetch method!
     async fn get_chain_block(
         &self,
         height: Height,
-    ) -> Result<Option<ChainBlock>, FinalisedStateError> {
+    ) -> Result<Option<IndexedBlock>, FinalisedStateError> {
         let validated_height = match self
             .resolve_validated_hash_or_height(HashOrHeight::Height(height.into()))
             .await
@@ -2951,8 +2954,8 @@ impl DbV1 {
                 })?
                 .inner();
 
-            // Construct ChainBlock
-            Ok(Some(ChainBlock::new(
+            // Construct IndexedBlock
+            Ok(Some(IndexedBlock::new(
                 *header.index(),
                 *header.data(),
                 txs,

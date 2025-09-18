@@ -35,7 +35,7 @@ mod mockchain_tests {
             types::{BestChainLocation, TransactionHash},
             ChainIndex, NodeBackedChainIndex, NodeBackedChainIndexSubscriber,
         },
-        ChainBlock,
+        IndexedBlock,
     };
 
     async fn load_test_vectors_and_sync_chain_index(
@@ -43,7 +43,7 @@ mod mockchain_tests {
     ) -> (
         Vec<(
             u32,
-            ChainBlock,
+            IndexedBlock,
             CompactBlock,
             zebra_chain::block::Block,
             (
@@ -197,9 +197,9 @@ mod mockchain_tests {
         let (_blocks, _indexer, index_reader, mockchain) =
             load_test_vectors_and_sync_chain_index(true).await;
 
-        let indexer_tip = dbg!(index_reader.snapshot_nonfinalized_state().best_tip)
-            .0
-             .0;
+        let indexer_tip = dbg!(&index_reader.snapshot_nonfinalized_state().best_tip)
+            .height
+            .0;
         let active_mockchain_tip = dbg!(mockchain.active_height());
         assert_eq!(active_mockchain_tip, indexer_tip);
 
@@ -209,9 +209,9 @@ mod mockchain_tests {
         }
         sleep(Duration::from_millis(2000)).await;
 
-        let indexer_tip = dbg!(index_reader.snapshot_nonfinalized_state().best_tip)
-            .0
-             .0;
+        let indexer_tip = dbg!(&index_reader.snapshot_nonfinalized_state().best_tip)
+            .height
+            .0;
         let active_mockchain_tip = dbg!(mockchain.active_height());
         assert_eq!(active_mockchain_tip, indexer_tip);
     }
