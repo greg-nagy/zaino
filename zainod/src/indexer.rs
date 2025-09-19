@@ -191,7 +191,7 @@ where
     }
 
     /// Returns the indexers current status usize, caliculates from internal statuses.
-    async fn status_int(&self) -> u16 {
+    async fn status_int(&self) -> usize {
         let service_status = match &self.service {
             Some(service) => service.inner_ref().status().await,
             None => return 7,
@@ -211,12 +211,11 @@ where
             server_status = StatusType::combine(server_status, json_status);
         }
 
-        StatusType::combine(service_status, server_status)
+        usize::from(StatusType::combine(service_status, server_status))
     }
 
     /// Returns the current StatusType of the indexer.
     pub async fn status(&self) -> StatusType {
-        // TODO status_int is on the hit list
         StatusType::from(self.status_int().await as usize)
     }
 
