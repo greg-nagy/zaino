@@ -21,25 +21,25 @@ use std::{
 ///   TODO: Refine error code spec.
 #[derive(Debug, Clone)]
 pub struct AtomicStatus {
-    counter: Arc<AtomicUsize>,
+    inner: Arc<AtomicUsize>,
 }
 
 impl AtomicStatus {
     /// Creates a new AtomicStatus
     pub fn new(status: StatusType) -> Self {
         Self {
-            counter: Arc::new(AtomicUsize::new(status.into())),
+            inner: Arc::new(AtomicUsize::new(status.into())),
         }
     }
 
     /// Loads the value held in the AtomicStatus
     pub fn load(&self) -> StatusType {
-        StatusType::from(self.counter.load(Ordering::SeqCst))
+        StatusType::from(self.inner.load(Ordering::SeqCst))
     }
 
     /// Sets the value held in the AtomicStatus
     pub fn store(&self, status: StatusType) {
-        self.counter
+        self.inner
             .store(status.into(), std::sync::atomic::Ordering::SeqCst);
     }
 }
