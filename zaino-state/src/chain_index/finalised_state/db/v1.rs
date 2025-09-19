@@ -530,7 +530,7 @@ impl DbV1 {
             validated_tip: Arc::new(AtomicU32::new(0)),
             validated_set: DashSet::new(),
             db_handler: None,
-            status: AtomicStatus::new(StatusType::Spawning.into()),
+            status: AtomicStatus::new(StatusType::Spawning),
             config: config.clone(),
         };
 
@@ -627,7 +627,7 @@ impl DbV1 {
             let zaino_db = zaino_db;
             async move {
                 // *** initial validation ***
-                zaino_db.status.store(StatusType::Syncing.into());
+                zaino_db.status.store(StatusType::Syncing);
                 let (r1, r2, r3) = tokio::join!(
                     zaino_db.initial_spent_scan(),
                     zaino_db.initial_address_history_scan(),
@@ -641,7 +641,7 @@ impl DbV1 {
                 ] {
                     if let Err(e) = result {
                         error!("initial {desc} failed: {e}");
-                        zaino_db.status.store(StatusType::CriticalError.into());
+                        zaino_db.status.store(StatusType::CriticalError);
                         // TODO: Handle error better? - Return invalid block error from validate?
                         return;
                     }
@@ -651,7 +651,7 @@ impl DbV1 {
                     "initial validation complete – tip={}",
                     zaino_db.validated_tip.load(Ordering::Relaxed)
                 );
-                zaino_db.status.store(StatusType::Ready.into());
+                zaino_db.status.store(StatusType::Ready);
 
                 // *** steady-state loop ***
                 let mut maintenance = interval(Duration::from_secs(60));
@@ -840,7 +840,7 @@ impl DbV1 {
 
     /// Writes a given (finalised) [`IndexedBlock`] to ZainoDB.
     pub(crate) async fn write_block(&self, block: IndexedBlock) -> Result<(), FinalisedStateError> {
-        self.status.store(StatusType::Syncing.into());
+        self.status.store(StatusType::Syncing);
         let block_hash = *block.index().hash();
         let block_hash_bytes = block_hash.to_bytes()?;
         let block_height = block.index().height().ok_or(FinalisedStateError::Custom(
