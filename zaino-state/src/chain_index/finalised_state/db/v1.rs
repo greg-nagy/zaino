@@ -575,7 +575,7 @@ impl DbV1 {
 
     /// Returns the status of ZainoDB.
     pub(crate) fn status(&self) -> StatusType {
-        (&self.status).into()
+        self.status.load()
     }
 
     /// Awaits until the DB returns a Ready status.
