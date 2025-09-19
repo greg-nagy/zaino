@@ -4,8 +4,8 @@
 //! submodules. The organized types have been moved to focused modules:
 //!
 //! ## Organized Modules
-//! - [`primitives`] - Foundational types (hashes, heights, tree sizes, etc.)
-//! - [`commitment`] - Commitment tree data structures and utilities
+//! - [`types::primitives`] - Foundational types (hashes, heights, tree sizes, etc.)
+//! - [`types::commitment`] - Commitment tree data structures and utilities
 //!
 //! ## Planned Module Organization
 //! The remaining types in this file will be migrated to:
