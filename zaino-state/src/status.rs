@@ -20,22 +20,26 @@ use std::{
 /// - [>=7: Critical-Error].
 ///   TODO: Refine error code spec.
 #[derive(Debug, Clone)]
-pub struct AtomicStatus(Arc<AtomicUsize>);
+pub struct AtomicStatus {
+    counter: Arc<AtomicUsize>,
+}
 
 impl AtomicStatus {
     /// Creates a new AtomicStatus
     pub fn new(status: u16) -> Self {
-        Self(Arc::new(AtomicUsize::new(status as usize)))
+        Self {
+            counter: Arc::new(AtomicUsize::new(status as usize)),
+        }
     }
 
     /// Loads the value held in the AtomicStatus
     pub fn load(&self) -> usize {
-        self.0.load(Ordering::SeqCst)
+        self.counter.load(Ordering::SeqCst)
     }
 
     /// Sets the value held in the AtomicStatus
     pub fn store(&self, status: usize) {
-        self.0.store(status, Ordering::SeqCst);
+        self.counter.store(status, Ordering::SeqCst);
     }
 }
 

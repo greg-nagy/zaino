@@ -336,7 +336,9 @@ pub struct StateServiceSubscriber {
 
 /// A subscriber to any chaintip updates
 #[derive(Clone)]
-pub struct ChainTipSubscriber(zebra_state::ChainTipChange);
+pub struct ChainTipSubscriber {
+    monitor: zebra_state::ChainTipChange,
+}
 
 impl ChainTipSubscriber {
     /// Waits until the tip hash has changed (relative to the last time this method
@@ -344,7 +346,7 @@ impl ChainTipSubscriber {
     pub async fn next_tip_hash(
         &mut self,
     ) -> Result<zebra_chain::block::Hash, tokio::sync::watch::error::RecvError> {
-        self.0
+        self.monitor
             .wait_for_tip_change()
             .await
             .map(|tip| tip.best_tip_hash())
@@ -358,7 +360,9 @@ impl ChainTipSubscriber {
 impl StateServiceSubscriber {
     /// Gets a Subscriber to any updates to the latest chain tip
     pub fn chaintip_update_subscriber(&self) -> ChainTipSubscriber {
-        ChainTipSubscriber(self.chain_tip_change.clone())
+        ChainTipSubscriber {
+            monitor: self.chain_tip_change.clone(),
+        }
     }
     /// Returns the requested block header by hash or height, as a [`GetBlockHeader`] JSON string.
     /// If the block is not in Zebra's state,
@@ -1083,7 +1087,7 @@ impl ZcashIndexer for StateServiceSubscriber {
             .get_mempool()
             .await
             .into_iter()
-            .map(|(key, _)| key.0)
+            .map(|(key, _)| key.txid)
             .collect())
     }
 
@@ -1301,18 +1305,22 @@ impl ZcashIndexer for StateServiceSubscriber {
         // First check if transaction is in mempool as this is quick.
         match self
             .mempool
-            .contains_txid(&MempoolKey(txid.to_string()))
+            .contains_txid(&MempoolKey {
+                txid: txid.to_string(),
+            })
             .await
         {
             // Fetch trasaction from mempool.
             true => {
                 match self
                     .mempool
-                    .get_transaction(&MempoolKey(txid.to_string()))
+                    .get_transaction(&MempoolKey {
+                        txid: txid.to_string(),
+                    })
                     .await
                 {
                     Some(tx) => {
-                        let serialized = tx.as_ref().0.as_ref().clone();
+                        let serialized = tx.as_ref().serialized_tx.as_ref().clone();
 
                         match verbose {
                             // Return an object view, matching the chain path semantics.
@@ -1473,21 +1481,20 @@ impl ZcashIndexer for StateServiceSubscriber {
 
         Ok(utxos
             .utxos()
-            .map(|utxo| {
-                assert!(utxo.2 > &last_output_location);
-                last_output_location = *utxo.2;
-                // What an odd argument order for new
-                // at least they are all different types, so they can't be
-                // supplied in the wrong order
-                GetAddressUtxos::new(
-                    utxo.0,
-                    *utxo.1,
-                    utxo.2.output_index(),
-                    utxo.3.lock_script.clone(),
-                    u64::from(utxo.3.value()),
-                    utxo.2.height(),
-                )
-            })
+            .map(
+                |(utxo_address, utxo_hash, utxo_output_location, utxo_transparent_output)| {
+                    assert!(utxo_output_location > &last_output_location);
+                    last_output_location = *utxo_output_location;
+                    GetAddressUtxos::new(
+                        utxo_address,
+                        *utxo_hash,
+                        utxo_output_location.output_index(),
+                        utxo_transparent_output.lock_script.clone(),
+                        u64::from(utxo_transparent_output.value()),
+                        utxo_output_location.height(),
+                    )
+                },
+            )
             .collect())
     }
 
@@ -1813,10 +1820,10 @@ impl LightWalletIndexer for StateServiceSubscriber {
             let timeout = timeout(
                 time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
-                    for (txid, serialized_transaction) in
+                    for (mempool_key, mempool_value) in
                         mempool.get_filtered_mempool(exclude_txids).await
                     {
-                        let txid_bytes = match hex::decode(txid.0) {
+                        let txid_bytes = match hex::decode(mempool_key.txid) {
                             Ok(bytes) => bytes,
                             Err(error) => {
                                 if channel_tx
@@ -1831,7 +1838,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
                             }
                         };
                         match <FullTransaction as ParseFromSlice>::parse_from_slice(
-                            serialized_transaction.0.as_ref().as_ref(),
+                            mempool_value.serialized_tx.as_ref().as_ref(),
                             Some(vec![txid_bytes]),
                             None,
                         ) {
@@ -1923,7 +1930,11 @@ impl LightWalletIndexer for StateServiceSubscriber {
                             Ok((_mempool_key, mempool_value)) => {
                                 if channel_tx
                                     .send(Ok(RawTransaction {
-                                        data: mempool_value.0.as_ref().as_ref().to_vec(),
+                                        data: mempool_value
+                                            .serialized_tx
+                                            .as_ref()
+                                            .as_ref()
+                                            .to_vec(),
                                         height: mempool_height as u64,
                                     }))
                                     .await

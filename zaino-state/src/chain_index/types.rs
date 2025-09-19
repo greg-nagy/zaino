@@ -637,11 +637,6 @@ impl BlockIndex {
     pub fn height(&self) -> Option<Height> {
         self.height
     }
-
-    /// Returns true if this block is part of the best chain.
-    pub fn is_on_best_chain(&self) -> bool {
-        self.height.is_some()
-    }
 }
 
 impl ZainoVersionedSerialise for BlockIndex {
@@ -1251,11 +1246,6 @@ impl IndexedBlock {
     /// Returns the block height if available.
     pub fn height(&self) -> Option<Height> {
         self.index.height()
-    }
-
-    /// Returns true if this block is part of the best chain.
-    pub fn is_on_best_chain(&self) -> bool {
-        self.index.is_on_best_chain()
     }
 
     /// Returns the cumulative chainwork.

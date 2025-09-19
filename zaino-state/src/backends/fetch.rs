@@ -414,7 +414,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_mempool()
             .await
             .into_iter()
-            .map(|(key, _)| key.0)
+            .map(|(key, _)| key.txid)
             .collect())
     }
 
@@ -1098,10 +1098,10 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             let timeout = timeout(
                 time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
-                    for (txid, serialized_transaction) in
+                    for (mempool_key, mempool_value) in
                         mempool.get_filtered_mempool(exclude_txids).await
                     {
-                        let txid_bytes = match hex::decode(txid.0) {
+                        let txid_bytes = match hex::decode(mempool_key.txid) {
                             Ok(bytes) => bytes,
                             Err(error) => {
                                 if channel_tx
@@ -1116,7 +1116,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                             }
                         };
                         match <FullTransaction as ParseFromSlice>::parse_from_slice(
-                            serialized_transaction.0.as_ref().as_ref(),
+                            mempool_value.serialized_tx.as_ref().as_ref(),
                             Some(vec![txid_bytes]),
                             None,
                         ) {
@@ -1208,7 +1208,11 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                             Ok((_mempool_key, mempool_value)) => {
                                 if channel_tx
                                     .send(Ok(RawTransaction {
-                                        data: mempool_value.0.as_ref().as_ref().to_vec(),
+                                        data: mempool_value
+                                            .serialized_tx
+                                            .as_ref()
+                                            .as_ref()
+                                            .to_vec(),
                                         height: mempool_height as u64,
                                     }))
                                     .await
@@ -1347,7 +1351,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         let mut address_utxos: Vec<GetAddressUtxosReply> = Vec::new();
         let mut entries: u32 = 0;
         for utxo in utxos {
-            let (address, txid, output_index, script, satoshis, height) = utxo.into_parts();
+            let (address, tx_hash, output_index, script, satoshis, height) = utxo.into_parts();
             if (height.0 as u64) < request.start_height {
                 continue;
             }
@@ -1373,7 +1377,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             };
             let utxo_reply = GetAddressUtxosReply {
                 address: address.to_string(),
-                txid: txid.0.to_vec(),
+                txid: tx_hash.0.to_vec(),
                 index: checked_index,
                 script: script.as_raw_bytes().to_vec(),
                 value_zat: checked_satoshis,
@@ -1403,7 +1407,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                 async {
                     let mut entries: u32 = 0;
                     for utxo in utxos {
-                        let (address, txid, output_index, script, satoshis, height) =
+                        let (address, tx_hash, output_index, script, satoshis, height) =
                             utxo.into_parts();
                         if (height.0 as u64) < request.start_height {
                             continue;
@@ -1436,7 +1440,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                         };
                         let utxo_reply = GetAddressUtxosReply {
                             address: address.to_string(),
-                            txid: txid.0.to_vec(),
+                            txid: tx_hash.0.to_vec(),
                             index: checked_index,
                             script: script.as_raw_bytes().to_vec(),
                             value_zat: checked_satoshis,
