@@ -12,9 +12,11 @@
 //!   - NOTE: Full transaction and block data is served from the backend finalizer.
 
 use crate::chain_index::non_finalised_state::BestTip;
+use crate::chain_index::types::{BestChainLocation, NonBestChainLocation};
 use crate::error::{ChainIndexError, ChainIndexErrorKind, FinalisedStateError};
 use crate::{AtomicStatus, StatusType, SyncError};
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::collections::HashSet;
+use std::{sync::Arc, time::Duration};
 
 use futures::{FutureExt, Stream};
 use non_finalised_state::NonfinalizedBlockCacheSnapshot;
@@ -210,13 +212,7 @@ pub trait ChainIndex {
         snapshot: &Self::Snapshot,
         txid: &types::TransactionHash,
     ) -> impl std::future::Future<
-        Output = Result<
-            (
-                std::collections::HashMap<types::BlockHash, Option<types::Height>>,
-                bool,
-            ),
-            Self::Error,
-        >,
+        Output = Result<(Option<BestChainLocation>, HashSet<NonBestChainLocation>), Self::Error>,
     >;
 
     /// Returns all transactions currently in the mempool, filtered by `exclude_list`.
@@ -719,32 +715,67 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
     }
 
     /// Given a transaction ID, returns all known blocks containing this transaction
-    /// At most one of these blocks will be on the best chain
     ///
-    /// Also returns a bool representing whether the transaction is *currently* in the mempool.
-    /// This is not currently tied to the given snapshot but rather uses the live mempool.
+    /// If the transaction is in the mempool, it will be in the BestChainLocation
+    /// if the mempool and snapshot are up-to-date, and the NonBestChainLocation set
+    /// if the snapshot is out-of-date compared to the mempool
     async fn get_transaction_status(
         &self,
         snapshot: &Self::Snapshot,
         txid: &types::TransactionHash,
-    ) -> Result<
-        (
-            HashMap<types::BlockHash, std::option::Option<types::Height>>,
-            bool,
-        ),
-        ChainIndexError,
-    > {
-        Ok((
-            self.blocks_containing_transaction(snapshot, txid.0)
-                .await?
-                .map(|block| (*block.hash(), block.height()))
-                .collect(),
-            self.mempool
-                .contains_txid(&mempool::MempoolKey {
-                    txid: txid.to_string(),
-                })
-                .await,
-        ))
+    ) -> Result<(Option<BestChainLocation>, HashSet<NonBestChainLocation>), ChainIndexError> {
+        let blocks_containing_transaction = self
+            .blocks_containing_transaction(snapshot, txid.0)
+            .await?
+            .collect::<Vec<_>>();
+        let mut best_chain_block = blocks_containing_transaction
+            .iter()
+            .find_map(|block| BestChainLocation::try_from(block).ok());
+        let mut non_best_chain_blocks: HashSet<NonBestChainLocation> =
+            blocks_containing_transaction
+                .iter()
+                .filter_map(|block| NonBestChainLocation::try_from(block).ok())
+                .collect();
+        let in_mempool = self
+            .mempool
+            .contains_txid(&mempool::MempoolKey {
+                txid: txid.to_string(),
+            })
+            .await;
+        if in_mempool {
+            let mempool_tip_hash = self.mempool.mempool_chain_tip();
+            if mempool_tip_hash == snapshot.best_tip.blockhash {
+                if best_chain_block.is_some() {
+                    return Err(ChainIndexError {
+                        kind: ChainIndexErrorKind::InvalidSnapshot,
+                        message:
+                            "Best chain and up-to-date mempool both contain the same transaction"
+                                .to_string(),
+                        source: None,
+                    });
+                } else {
+                    best_chain_block =
+                        Some(BestChainLocation::Mempool(snapshot.best_tip.height + 1));
+                }
+            } else {
+                let target_height = self
+                    .non_finalized_state
+                    .get_snapshot()
+                    .blocks
+                    .iter()
+                    .find_map(|(hash, block)| {
+                        if *hash == mempool_tip_hash {
+                            Some(block.height().map(|height| height + 1))
+                        } else {
+                            None
+                        }
+                    })
+                    .flatten();
+                non_best_chain_blocks.insert(NonBestChainLocation::Mempool(target_height));
+            }
+        }
+
+        Ok((best_chain_block, non_best_chain_blocks))
     }
 
     /// Returns all transactions currently in the mempool, filtered by `exclude_list`.

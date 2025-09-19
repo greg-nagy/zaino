@@ -57,8 +57,9 @@ mod chain_query_interface {
             BlockCacheConfig,
         },
         chain_index::{
-            source::ValidatorConnector, types::TransactionHash, NodeBackedChainIndex,
-            NodeBackedChainIndexSubscriber,
+            source::ValidatorConnector,
+            types::{BestChainLocation, TransactionHash},
+            NodeBackedChainIndex, NodeBackedChainIndexSubscriber,
         },
         Height, StateService, StateServiceConfig, ZcashService as _,
     };
@@ -313,13 +314,15 @@ mod chain_query_interface {
                 .iter()
                 .map(|txdata| (txdata.txid().0, block.height(), block.hash()))
         }) {
-            let (transaction_status_blocks, _transaction_mempool_status) = indexer
+            let (transaction_status_best_chain, transaction_status_nonbest_chain) = indexer
                 .get_transaction_status(&snapshot, &TransactionHash(txid))
                 .await
                 .unwrap();
-            assert_eq!(1, transaction_status_blocks.len());
-            assert_eq!(transaction_status_blocks.keys().next().unwrap(), block_hash);
-            assert_eq!(transaction_status_blocks.values().next().unwrap(), &height)
+            assert_eq!(
+                transaction_status_best_chain.unwrap(),
+                BestChainLocation::Block(*block_hash, height.unwrap())
+            );
+            assert!(transaction_status_nonbest_chain.is_empty());
         }
     }
 

@@ -597,4 +597,9 @@ impl MempoolSubscriber {
     fn clear_seen(&mut self) {
         self.seen_txids.clear();
     }
+
+    /// Get the chain tip that the mempool is atop
+    pub fn mempool_chain_tip(&self) -> BlockHash {
+        *self.mempool_chain_tip.borrow()
+    }
 }
