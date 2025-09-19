@@ -9,7 +9,7 @@
 //!
 //! ## Planned Migrations
 //! The following types should be extracted from types.rs:
-//! - Block and transaction hashes  
+//! - Block and transaction hashes
 //! - Block heights and chain work
 //! - Basic indexing primitives
 
