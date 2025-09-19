@@ -16,7 +16,4 @@
 pub mod tree_size;
 
 // Re-export tree size types
-pub use tree_size::{
-    TreeSize, TreeSizeError, 
-    SproutTreeSize, SaplingTreeSize, OrchardTreeSize
-};
+pub use tree_size::{OrchardTreeSize, SaplingTreeSize, SproutTreeSize, TreeSize, TreeSizeError};

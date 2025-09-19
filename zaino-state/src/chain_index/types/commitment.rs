@@ -12,9 +12,7 @@ use crate::chain_index::encoding::{
     read_fixed_le, version, write_fixed_le, ZainoVersionedSerialise,
 };
 
-use super::super::encoding::{
-    read_u32_le, write_u32_le, FixedEncodedLen,
-};
+use super::super::encoding::{read_u32_le, write_u32_le, FixedEncodedLen};
 
 /// Holds commitment tree metadata (roots and sizes) for a block.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -1,5 +1,5 @@
 //! Type definitions for the chain index.
-//! 
+//!
 //! This module is currently in transition from a large monolithic file to well-organized
 //! submodules. The organized types have been moved to focused modules:
 //!
@@ -23,7 +23,7 @@ pub mod primitives;
 
 // Re-export types from organized submodules
 pub use commitment::{CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes};
-pub use primitives::{TreeSize, TreeSizeError, SproutTreeSize, SaplingTreeSize, OrchardTreeSize};
+pub use primitives::{OrchardTreeSize, SaplingTreeSize, SproutTreeSize, TreeSize, TreeSizeError};
 
 // =============================================================================
 // IMPORTS FOR LEGACY TYPES
