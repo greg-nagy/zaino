@@ -803,7 +803,8 @@ pub(crate) mod test {
                 self.blocks[mempool_height]
                     .transactions
                     .iter()
-                    .map(|transaction| transaction.hash())
+                    .filter(|tx| !tx.is_coinbase()) // <-- exclude coinbase
+                    .map(|tx| tx.hash())
                     .collect::<Vec<_>>()
             } else {
                 Vec::new()

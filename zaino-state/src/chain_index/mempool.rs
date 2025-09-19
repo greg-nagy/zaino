@@ -419,6 +419,29 @@ impl MempoolSubscriber {
 
         let streamer_handle = tokio::spawn(async move {
             let mempool_result: Result<(), MempoolError> = async {
+                // {
+                //     // Send initial mempool state.
+                //     let initial: Vec<(MempoolKey, MempoolValue)> =
+                //         subscriber.subscriber.get_filtered_state(&HashSet::new());
+
+                //     for (mempool_key, mempool_value) in initial {
+                //         loop {
+                //             match channel_tx
+                //                 .try_send(Ok((mempool_key.clone(), mempool_value.clone())))
+                //             {
+                //                 Ok(_) => break,
+                //                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                //                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                //                     continue;
+                //                 }
+                //                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                //                     return Ok(());
+                //                 }
+                //             }
+                //         }
+                //     }
+                // }
+
                 loop {
                     let (mempool_status, mempool_updates) = subscriber
                         .wait_on_mempool_updates(expected_chain_tip)

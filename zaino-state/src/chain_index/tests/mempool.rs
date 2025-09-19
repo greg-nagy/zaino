@@ -214,9 +214,21 @@ async fn get_mempool_info() {
     sleep(Duration::from_millis(2000)).await;
 
     let mempool_index = (active_chain_height as usize) + 1;
-    let mempool_transactions = block_data
+
+    // 1) Take the “next block” as a mempool proxy, but:
+    //    - exclude coinbase
+    //    - dedupe by txid (mempool is keyed by txid)
+    let mut seen = std::collections::HashSet::new();
+    let mempool_transactions: Vec<_> = block_data
         .get(mempool_index)
-        .map(|b| b.transactions.clone())
+        .map(|b| {
+            b.transactions
+                .iter()
+                .filter(|tx| !tx.is_coinbase())
+                .filter(|tx| seen.insert(tx.hash())) // returns true only on first insert
+                .cloned()
+                .collect::<Vec<_>>()
+        })
         .unwrap_or_default();
     for transaction in mempool_transactions.clone().into_iter() {
         dbg!(&transaction.hash());
