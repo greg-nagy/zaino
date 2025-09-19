@@ -9,10 +9,12 @@
 2) Add `zaino/test_binaries/bins` to `$PATH` or to `$TEST_BINARIES_DIR`
 3) Run `cargo nextest run`
 
+The expected versions of these binaries is detailed in the file ``.env.testing-artifacts`.
+
 ## Cargo Make
 Another method to work with tests is using `cargo make`, a Rust task runner and build tool.
 This can be installed by running `cargo install --force cargo-make` which will install cargo-make in your ~/.cargo/bin.
-From that point you will have two executables available: `cargo-make` (invoked with `cargo make` and `makers` which is invoked directly and not as a cargo plugin.
+From that point you will have two executables available: `cargo-make` (invoked with `cargo make`) and `makers` which is invoked directly and not as a cargo plugin.
 
 `cargo make help`
 will print a help output.
