@@ -520,7 +520,9 @@ impl<Source: BlockchainSource> NodeBackedChainIndexSubscriber<Source> {
     pub fn status(&self) -> StatusType {
         let finalized_status = self.finalized_state.status();
         let mempool_status = self.mempool.status();
-        let combined_status = StatusType::from(self.status.load())
+        let combined_status = self
+            .status
+            .load()
             .combine(finalized_status)
             .combine(mempool_status);
         self.status.store(combined_status);
