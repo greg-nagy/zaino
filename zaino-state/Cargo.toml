@@ -13,7 +13,7 @@ version = { workspace = true }
 bench = []
 
 [dependencies]
-zaino-common = { path = "../zaino-common" }
+zaino-common = { workspace = true }
 zaino-fetch = { workspace = true }
 zaino-proto = { workspace = true }
 
@@ -59,11 +59,11 @@ sha2 = { workspace = true }
 byteorder = { workspace = true }
 core2 = { workspace = true }
 bs58 = { workspace = true }
-nonempty = "0.11.0"
-arc-swap = "1.7.1"
+nonempty = { workspace = true }
+arc-swap = { workspace = true }
 reqwest.workspace = true
 bitflags = { workspace = true }
-derive_more = { version = "2.0.1", features = ["from"] }
+derive_more = { workspace = true, features = ["from"] }
 
 [dev-dependencies]
 zingo-infra-services = { workspace = true }
@@ -73,4 +73,4 @@ once_cell = { workspace = true }
 
 [build-dependencies]
 whoami = { workspace = true }
-cargo-lock = "10.1.0"
+cargo-lock = { workspace = true }
