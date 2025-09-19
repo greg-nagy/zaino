@@ -9,7 +9,6 @@ license = { workspace = true }
 version = { workspace = true }
 
 [dependencies]
-zainod = { workspace = true }
 zaino-state = { workspace = true, features = ["bench"] }
 zaino-testvectors.workspace = true
 zaino-common.workspace = true
@@ -18,44 +17,25 @@ zaino-common.workspace = true
 zcash_protocol = "0.5.4"
 zcash_client_backend = { workspace = true, features = ["lightwalletd-tonic"] }
 
-# Zebra
-zebra-chain = { workspace = true }
-
 # Zingo-infra
 zingo-infra-services = { workspace = true }
 
 # ZingoLib
 zingolib = { workspace = true }
 testvectors = { workspace = true }
-
-# Tracing
-tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = [
     "fmt",
     "env-filter",
     "time",
 ] }
-tracing-futures = { workspace = true }
 
 # Miscellaneous
 tokio = { workspace = true }
 tonic = { workspace = true }
 http = { workspace = true }
-ctrlc = { workspace = true }
 tempfile = { workspace = true }
 portpicker = { workspace = true }
 once_cell = { workspace = true }
-
-# We don't need this as a direct dependency.
-# Rather, we need to pin this version of proptest.
-# if we don't, cargo update will update to the semver-compatible
-# version 1.7, which depends on rand-0.9.1.
-# This causes compiler errors in incrementalmerkletree, due a conflict
-# with its rand version of 0.8.5.
-# TODO: Investigate whether proptest has violated semver guarentees with
-# its rand version update.
-proptest = { workspace = true }
-lazy_static = { workspace = true }
 
 [dev-dependencies]
 zingo-netutils = { workspace = true }
