@@ -32,7 +32,7 @@ mod mockchain_tests {
             tests::vectors::{
                 build_active_mockchain_source, build_mockchain_source, load_test_vectors,
             },
-            types::TransactionHash,
+            types::{BestChainLocation, TransactionHash},
             ChainIndex, NodeBackedChainIndex, NodeBackedChainIndexSubscriber,
         },
         IndexedBlock,
@@ -174,17 +174,21 @@ mod mockchain_tests {
         {
             let expected_txid = expected_transaction.hash();
 
-            let (tx_status_blocks, _tx_mempool_status) = index_reader
+            let (transaction_status_best_chain, transaction_status_nonbest_chain) = index_reader
                 .get_transaction_status(
                     &nonfinalized_snapshot,
                     &TransactionHash::from(expected_txid),
                 )
                 .await
                 .unwrap();
-            assert_eq!(tx_status_blocks.len(), 1);
-            let (hash, height) = tx_status_blocks.iter().next().unwrap();
-            assert_eq!(hash.0, block_hash.0);
-            assert_eq!(height.unwrap().0, block_height.unwrap().0);
+            assert_eq!(
+                transaction_status_best_chain.unwrap(),
+                BestChainLocation::Block(
+                    crate::BlockHash(block_hash.0),
+                    crate::Height(block_height.unwrap().0)
+                )
+            );
+            assert!(transaction_status_nonbest_chain.is_empty());
         }
     }
 
@@ -266,15 +270,20 @@ mod mockchain_tests {
         for expected_transaction in mempool_transactions.into_iter() {
             let expected_txid = expected_transaction.hash();
 
-            let (tx_status_blocks, tx_mempool_status) = index_reader
+            let (transaction_status_best_chain, transaction_status_nonbest_chain) = index_reader
                 .get_transaction_status(
                     &nonfinalized_snapshot,
                     &TransactionHash::from(expected_txid),
                 )
                 .await
                 .unwrap();
-            assert!(tx_status_blocks.is_empty());
-            assert!(tx_mempool_status);
+            assert_eq!(
+                transaction_status_best_chain,
+                Some(BestChainLocation::Mempool(
+                    crate::chain_index::types::Height(mempool_height as u32)
+                ))
+            );
+            assert!(transaction_status_nonbest_chain.is_empty());
         }
     }
 
