@@ -62,7 +62,7 @@ impl NonFinalisedState {
             ),
             sync_task_handle: None,
             block_sender,
-            status: AtomicStatus::new(StatusType::Spawning.into()),
+            status: AtomicStatus::new(StatusType::Spawning),
             config,
         };
 
@@ -136,7 +136,7 @@ impl NonFinalisedState {
                 match non_finalised_state.fetcher.get_blockchain_info().await {
                     Ok(chain_info) => {
                         best_block_hash = chain_info.best_block_hash;
-                        non_finalised_state.status.store(StatusType::Ready.into());
+                        non_finalised_state.status.store(StatusType::Ready);
                         break;
                     }
                     Err(e) => {
@@ -167,7 +167,7 @@ impl NonFinalisedState {
 
                 if check_block_hash != best_block_hash {
                     best_block_hash = check_block_hash;
-                    non_finalised_state.status.store(StatusType::Syncing.into());
+                    non_finalised_state.status.store(StatusType::Syncing);
                     non_finalised_state
                         .heights_to_hashes
                         .notify(non_finalised_state.status.load());
