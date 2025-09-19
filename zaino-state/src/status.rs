@@ -3,10 +3,8 @@
 use std::{
     fmt,
     sync::{
-        //atomic::{AtomicUsize, Ordering},
         atomic::{AtomicUsize, Ordering},
         Arc,
-        //      Mutex,
     },
 };
 
@@ -38,13 +36,6 @@ impl AtomicStatus {
     pub fn load(&self) -> StatusType {
         StatusType::from(self.counter.load(Ordering::SeqCst))
     }
-
-    /*
-    /// Getter for the counter field
-    pub fn counter(&self) -> &Arc<StatusType> {
-        &self.counter
-    }
-    */
 
     /// Sets the value held in the AtomicStatus
     pub fn store(&self, status: StatusType) {
