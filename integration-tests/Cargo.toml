@@ -39,4 +39,4 @@ tracing-subscriber = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
-anyhow = "1.0"
+anyhow = { workspace = true }

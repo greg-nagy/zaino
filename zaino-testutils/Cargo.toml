@@ -16,7 +16,7 @@ zaino-common.workspace = true
 
 # Librustzcash
 zcash_protocol = "0.5.4"
-zcash_client_backend = { version = "0.18.0", features = ["lightwalletd-tonic"] }
+zcash_client_backend = { workspace = true, features = ["lightwalletd-tonic"] }
 
 # Zebra
 zebra-chain = { workspace = true }
@@ -55,7 +55,7 @@ once_cell = { workspace = true }
 # TODO: Investigate whether proptest has violated semver guarentees with
 # its rand version update.
 proptest = { workspace = true }
-lazy_static = "1.5.0"
+lazy_static = { workspace = true }
 
 [dev-dependencies]
-zingo-netutils = { git = "https://github.com/zingolabs/zingolib.git", tag = "2.0.0-beta2" }
+zingo-netutils = { workspace = true }
