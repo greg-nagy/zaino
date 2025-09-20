@@ -1,6 +1,8 @@
 [package]
 name = "integration-tests"
 description = "Crate containing Zaino's integration-tests."
+publish = false
+
 authors = { workspace = true }
 repository = { workspace = true }
 homepage = { workspace = true }
