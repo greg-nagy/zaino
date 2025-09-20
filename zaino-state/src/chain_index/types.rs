@@ -74,6 +74,55 @@ impl BlockHash {
     }
 }
 
+/// The location of a transaction in the best chain
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum BestChainLocation {
+    /// the block containing the transaction
+    Block(BlockHash, Height),
+    /// If the transaction is in the mempool and the mempool
+    /// matches the snapshot's chaintip
+    /// Return the target height, which is known to be a block above
+    /// the provided snapshot's chaintip and is returned for convenience
+    Mempool(Height),
+}
+
+/// The location of a transaction not in the best chain
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum NonBestChainLocation {
+    /// the block containing the transaction
+    // TODO: in this case, returning a consensus branch
+    // ID would be useful
+    Block(BlockHash),
+    /// if the transaction is in the mempool
+    /// but the mempool does not match the
+    /// snapshot's chaintip, return the target height if known
+    ///
+    /// This likely means that the provided
+    /// snapshot is out-of-date
+    Mempool(Option<Height>),
+}
+
+impl TryFrom<&IndexedBlock> for NonBestChainLocation {
+    type Error = ();
+
+    fn try_from(value: &IndexedBlock) -> Result<Self, Self::Error> {
+        match value.height() {
+            Some(_) => Err(()),
+            None => Ok(NonBestChainLocation::Block(*value.hash())),
+        }
+    }
+}
+impl TryFrom<&IndexedBlock> for BestChainLocation {
+    type Error = ();
+
+    fn try_from(value: &IndexedBlock) -> Result<Self, Self::Error> {
+        match value.height() {
+            None => Err(()),
+            Some(height) => Ok(BestChainLocation::Block(*value.hash(), height)),
+        }
+    }
+}
+
 impl fmt::Display for BlockHash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(&self.encode_hex::<String>())
@@ -670,11 +719,6 @@ impl BlockIndex {
     pub fn height(&self) -> Option<Height> {
         self.height
     }
-
-    /// Returns true if this block is part of the best chain.
-    pub fn is_on_best_chain(&self) -> bool {
-        self.height.is_some()
-    }
 }
 
 impl ZainoVersionedSerialise for BlockIndex {
@@ -1121,11 +1165,6 @@ impl IndexedBlock {
     /// Returns the block height if available.
     pub fn height(&self) -> Option<Height> {
         self.index.height()
-    }
-
-    /// Returns true if this block is part of the best chain.
-    pub fn is_on_best_chain(&self) -> bool {
-        self.index.is_on_best_chain()
     }
 
     /// Returns the cumulative chainwork.

@@ -21,7 +21,7 @@ path = "src/lib.rs"
 no_tls_use_unencrypted_traffic = []
 
 [dependencies]
-zaino-common = { path = "../zaino-common" }
+zaino-common = { workspace = true }
 zaino-fetch = { workspace = true }
 zaino-state = { workspace = true }
 zaino-serve = { workspace = true }
