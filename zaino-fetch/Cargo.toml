@@ -11,13 +11,9 @@ version = { workspace = true }
 [dependencies]
 zaino-proto = { workspace = true }
 
-# Librustzcash
-zcash_protocol = { workspace = true }
-
 # Zebra
 zebra-chain = { workspace = true }
 zebra-rpc = { workspace = true }
-zebra-state = { workspace = true }
 
 # Tracing
 tracing = { workspace = true }
