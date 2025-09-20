@@ -357,7 +357,7 @@ mod chain_query_interface {
             let chain_height =
                 Height::try_from(state_service.read_state_service().best_tip().unwrap().0 .0)
                     .unwrap();
-            let indexer_height = indexer.snapshot_nonfinalized_state().best_tip.0;
+            let indexer_height = indexer.snapshot_nonfinalized_state().best_tip.height;
             assert_eq!(chain_height, indexer_height);
         }
 
@@ -367,7 +367,7 @@ mod chain_query_interface {
 
         let snapshot = indexer.snapshot_nonfinalized_state();
         let chain_height = state_service.read_state_service().best_tip().unwrap().0 .0;
-        let indexer_height = snapshot.best_tip.0;
+        let indexer_height = snapshot.best_tip.height;
         assert_eq!(Height::try_from(chain_height).unwrap(), indexer_height);
 
         let finalised_start = Height::try_from(chain_height - 150).unwrap();

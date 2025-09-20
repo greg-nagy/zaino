@@ -19,13 +19,20 @@ use zebra_chain::{block::Hash, transaction::SerializedTransaction};
 ///
 /// TODO: Update to hold zebra_chain::Transaction::Hash ( or internal version )
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
-pub struct MempoolKey(pub String);
+pub struct MempoolKey {
+    /// currently txid (as string) - see above TODO, could be stronger type
+    pub txid: String,
+}
 
 /// Mempool value.
 ///
 /// Holds zebra_chain::transaction::SerializedTransaction.
 #[derive(Debug, Clone, PartialEq)]
-pub struct MempoolValue(pub Arc<SerializedTransaction>);
+pub struct MempoolValue {
+    /// Stores bytes that are guaranteed to be deserializable into a Transaction (zebra_chain enum).
+    /// Sorts in lexicographic order of the transaction's serialized data.
+    pub serialized_tx: Arc<SerializedTransaction>,
+}
 
 /// Zcash mempool, uses dashmap for efficient serving of mempool tx.
 #[derive(Debug)]
@@ -251,8 +258,12 @@ impl<T: BlockchainSource> Mempool<T> {
                 })?;
 
             transactions.push((
-                MempoolKey(txid.to_string()),
-                MempoolValue(Arc::new(transaction.into())),
+                MempoolKey {
+                    txid: txid.to_string(),
+                },
+                MempoolValue {
+                    serialized_tx: Arc::new(transaction.into()),
+                },
             ));
         }
 
@@ -290,10 +301,11 @@ impl<T: BlockchainSource> Mempool<T> {
 
         for entry in map.iter() {
             // payload bytes are exact (we store SerializedTransaction)
-            bytes = bytes.saturating_add(Self::tx_serialized_len_bytes(&entry.value().0));
+            bytes =
+                bytes.saturating_add(Self::tx_serialized_len_bytes(&entry.value().serialized_tx));
 
-            // heap used by the key String (txid)
-            key_heap_bytes = key_heap_bytes.saturating_add(entry.key().0.capacity() as u64);
+            // heap used by the key txid (String)
+            key_heap_bytes = key_heap_bytes.saturating_add(entry.key().txid.capacity() as u64);
         }
 
         let usage = bytes.saturating_add(key_heap_bytes);
@@ -364,7 +376,7 @@ impl MempoolSubscriber {
 
         let mempool_txids: HashSet<String> = mempool_tx
             .iter()
-            .map(|(mempool_key, _)| mempool_key.0.clone())
+            .map(|(mempool_key, _)| mempool_key.txid.clone())
             .collect();
 
         let mut txids_to_exclude: HashSet<MempoolKey> = HashSet::new();
@@ -383,7 +395,9 @@ impl MempoolSubscriber {
                 .collect();
 
             if matching_txids.len() == 1 {
-                txids_to_exclude.insert(MempoolKey(matching_txids[0].clone()));
+                txids_to_exclude.insert(MempoolKey {
+                    txid: matching_txids[0].clone(),
+                });
             }
         }
 
@@ -449,20 +463,24 @@ impl MempoolSubscriber {
                             return Ok(());
                         }
                         StatusType::Closing => {
-                            return Err(MempoolError::StatusError(StatusError(
-                                StatusType::Closing,
-                            )));
+                            return Err(MempoolError::StatusError(StatusError {
+                                server_status: StatusType::Closing,
+                            }));
                         }
                         StatusType::RecoverableError => {
                             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                             continue;
                         }
                         status => {
-                            return Err(MempoolError::StatusError(StatusError(status)));
+                            return Err(MempoolError::StatusError(StatusError {
+                                server_status: status,
+                            }));
                         }
                     }
                     if subscriber.status.load() == StatusType::Closing as usize {
-                        return Err(MempoolError::StatusError(StatusError(StatusType::Closing)));
+                        return Err(MempoolError::StatusError(StatusError {
+                            server_status: StatusType::Closing,
+                        }));
                     }
                 }
             }
@@ -476,7 +494,9 @@ impl MempoolSubscriber {
                     }
                     _ => {
                         let _ = channel_tx
-                            .send(Err(StatusError(StatusType::RecoverableError)))
+                            .send(Err(StatusError {
+                                server_status: StatusType::RecoverableError,
+                            }))
                             .await;
                     }
                 }
@@ -509,10 +529,11 @@ impl MempoolSubscriber {
 
         for (mempool_key, mempool_value) in mempool_transactions.iter() {
             // payload bytes are exact (we store SerializedTransaction)
-            bytes = bytes.saturating_add(mempool_value.0.as_ref().as_ref().len() as u64);
+            bytes =
+                bytes.saturating_add(mempool_value.serialized_tx.as_ref().as_ref().len() as u64);
 
             // heap used by the key String (txid)
-            key_heap_bytes = key_heap_bytes.saturating_add(mempool_key.0.capacity() as u64);
+            key_heap_bytes = key_heap_bytes.saturating_add(mempool_key.txid.capacity() as u64);
         }
 
         let usage: u64 = bytes.saturating_add(key_heap_bytes);
@@ -566,7 +587,9 @@ impl MempoolSubscriber {
                 Ok((StatusType::Syncing, self.get_mempool_and_update_seen()))
             }
             StatusType::Closing => Ok((StatusType::Closing, Vec::new())),
-            status => Err(MempoolError::StatusError(StatusError(status))),
+            status => Err(MempoolError::StatusError(StatusError {
+                server_status: status,
+            })),
         }
     }
 

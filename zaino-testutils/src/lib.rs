@@ -484,7 +484,7 @@ impl TestManager {
         // Launch Zingolib Lightclients:
         let clients = if enable_clients {
             let lightclient_dir = tempfile::tempdir().unwrap();
-            let lightclients = build_lightclients(
+            let (lightclient_faucet, lightclient_recipient) = build_lightclients(
                 lightclient_dir.path().to_path_buf(),
                 zaino_grpc_listen_address
                     .expect("Error launching zingo lightclients. `enable_zaino` is None.")
@@ -493,8 +493,8 @@ impl TestManager {
             .await;
             Some(Clients {
                 lightclient_dir,
-                faucet: lightclients.0,
-                recipient: lightclients.1,
+                faucet: lightclient_faucet,
+                recipient: lightclient_recipient,
             })
         } else {
             None
@@ -667,7 +667,7 @@ impl TestManager {
         // Launch Zingolib Lightclients:
         let clients = if enable_clients {
             let lightclient_dir = tempfile::tempdir().unwrap();
-            let lightclients = build_lightclients(
+            let (lightclient_faucet, lightclient_recipient) = build_lightclients(
                 lightclient_dir.path().to_path_buf(),
                 zaino_grpc_listen_address
                     .expect("Error launching zingo lightclients. `enable_zaino` is None.")
@@ -676,8 +676,8 @@ impl TestManager {
             .await;
             Some(Clients {
                 lightclient_dir,
-                faucet: lightclients.0,
-                recipient: lightclients.1,
+                faucet: lightclient_faucet,
+                recipient: lightclient_recipient,
             })
         } else {
             None

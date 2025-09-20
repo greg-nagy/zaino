@@ -12,7 +12,7 @@ use zaino_proto::proto::compact_formats::CompactBlock;
 use zebra_rpc::methods::GetAddressUtxos;
 
 use crate::chain_index::source::test::MockchainSource;
-use crate::{read_u32_le, read_u64_le, ChainBlock, CompactSize, ZainoVersionedSerialise as _};
+use crate::{read_u32_le, read_u64_le, CompactSize, IndexedBlock, ZainoVersionedSerialise as _};
 
 /// Reads test data from file.
 #[allow(clippy::type_complexity)]
@@ -21,7 +21,7 @@ fn read_vectors_from_file<P: AsRef<Path>>(
 ) -> io::Result<(
     Vec<(
         u32,
-        ChainBlock,
+        IndexedBlock,
         CompactBlock,
         zebra_chain::block::Block,
         (
@@ -37,7 +37,7 @@ fn read_vectors_from_file<P: AsRef<Path>>(
     let base = base_dir.as_ref();
 
     // chain_blocks.dat
-    let mut chain_blocks = Vec::<(u32, ChainBlock)>::new();
+    let mut chain_blocks = Vec::<(u32, IndexedBlock)>::new();
     {
         let mut r = BufReader::new(File::open(base.join("chain_blocks.dat"))?);
         loop {
@@ -49,14 +49,14 @@ fn read_vectors_from_file<P: AsRef<Path>>(
             let len: usize = CompactSize::read_t(&mut r)?;
             let mut buf = vec![0u8; len];
             r.read_exact(&mut buf)?;
-            let chain = ChainBlock::from_bytes(&buf)?; // <── new
+            let chain = IndexedBlock::from_bytes(&buf)?; // <── new
             chain_blocks.push((height, chain));
         }
     }
 
     // compact_blocks.dat
     let mut compact_blocks =
-        Vec::<(u32, ChainBlock, CompactBlock)>::with_capacity(chain_blocks.len());
+        Vec::<(u32, IndexedBlock, CompactBlock)>::with_capacity(chain_blocks.len());
     {
         let mut r = BufReader::new(File::open(base.join("compact_blocks.dat"))?);
         for (h1, chain) in chain_blocks {
@@ -64,7 +64,7 @@ fn read_vectors_from_file<P: AsRef<Path>>(
             if h1 != h2 {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
-                    "height mismatch between ChainBlock and CompactBlock",
+                    "height mismatch between IndexedBlock and CompactBlock",
                 ));
             }
             let len: usize = CompactSize::read_t(&mut r)?;
@@ -78,7 +78,7 @@ fn read_vectors_from_file<P: AsRef<Path>>(
 
     // zebra_blocks.dat
     let mut full_blocks =
-        Vec::<(u32, ChainBlock, CompactBlock, zebra_chain::block::Block)>::with_capacity(
+        Vec::<(u32, IndexedBlock, CompactBlock, zebra_chain::block::Block)>::with_capacity(
             compact_blocks.len(),
         );
     {
@@ -150,7 +150,7 @@ fn read_vectors_from_file<P: AsRef<Path>>(
     Ok((full_data, faucet, recipient))
 }
 
-// TODO: Remove ChainBlocks and Compact blocks as they are no longer used,
+// TODO: Remove IndexedBlocks and Compact blocks as they are no longer used,
 // `zebra_chain::block::block`s are used as the single source of block data.
 //
 // TODO: Create seperate load methods for block_data and transparent_wallet_data.
@@ -158,7 +158,7 @@ fn read_vectors_from_file<P: AsRef<Path>>(
 pub(crate) fn load_test_vectors() -> io::Result<(
     Vec<(
         u32,
-        ChainBlock,
+        IndexedBlock,
         CompactBlock,
         zebra_chain::block::Block,
         (
@@ -186,7 +186,7 @@ pub(crate) fn build_mockchain_source(
     // but is more simple to pass all test block data here.
     blockchain_data: Vec<(
         u32,
-        ChainBlock,
+        IndexedBlock,
         CompactBlock,
         zebra_chain::block::Block,
         (
@@ -244,7 +244,7 @@ pub(crate) fn build_active_mockchain_source(
     // but is more simple to pass all test block data here.
     blockchain_data: Vec<(
         u32,
-        ChainBlock,
+        IndexedBlock,
         CompactBlock,
         zebra_chain::block::Block,
         (
@@ -329,12 +329,12 @@ async fn vectors_can_be_loaded_and_deserialised() {
             "Block hash check failed at height {height}"
         );
 
-        // ChainBlock round trip check.
+        // IndexedBlock round trip check.
         let bytes = chain_block.to_bytes().unwrap();
-        let reparsed = ChainBlock::from_bytes(&bytes).unwrap();
+        let reparsed = IndexedBlock::from_bytes(&bytes).unwrap();
         assert_eq!(
             chain_block, &reparsed,
-            "ChainBlock round-trip failed at height {height}"
+            "IndexedBlock round-trip failed at height {height}"
         );
     }
 

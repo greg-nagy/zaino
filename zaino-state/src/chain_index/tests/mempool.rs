@@ -49,29 +49,24 @@ async fn get_mempool() {
             .get(mempool_index)
             .map(|b| b.transactions.clone())
             .unwrap_or_default();
-        for transaction in mempool_transactions.clone().into_iter() {
-            dbg!(&transaction.hash());
-        }
 
         let subscriber_tx = subscriber.get_mempool().await;
-        for (hash, _tx) in subscriber_tx.iter() {
-            dbg!(&hash.0);
-        }
 
         for transaction in mempool_transactions.into_iter() {
             let transaction_hash = dbg!(transaction.hash());
 
             let (subscriber_tx_hash, subscriber_tx) = subscriber_tx
                 .iter()
-                .find(|(k, _)| k.0 == transaction_hash.to_string())
-                .map(|(MempoolKey(h), MempoolValue(tx))| {
-                    (
-                        zebra_chain::transaction::Hash::from_str(h).unwrap(),
-                        tx.clone(),
-                    )
-                })
+                .find(|(k, _)| k.txid == transaction_hash.to_string())
+                .map(
+                    |(MempoolKey { txid: s }, MempoolValue { serialized_tx: tx })| {
+                        (
+                            zebra_chain::transaction::Hash::from_str(s).unwrap(),
+                            tx.clone(),
+                        )
+                    },
+                )
                 .unwrap();
-            dbg!(&subscriber_tx_hash);
 
             let subscriber_transaction = zebra_chain::transaction::Transaction::zcash_deserialize(
                 Cursor::new(subscriber_tx.as_ref()),
@@ -105,9 +100,6 @@ async fn get_filtered_mempool() {
         .get(mempool_index)
         .map(|b| b.transactions.clone())
         .unwrap_or_default();
-    for transaction in mempool_transactions.clone().into_iter() {
-        dbg!(&transaction.hash());
-    }
 
     let exclude_hash = mempool_transactions[0].hash();
     // Reverse format to client type.
@@ -119,14 +111,10 @@ async fn get_filtered_mempool() {
         .rev()
         .map(|chunk| chunk.iter().collect::<String>())
         .collect();
-    dbg!(&client_exclude_txid);
 
     let subscriber_tx = subscriber
         .get_filtered_mempool(vec![client_exclude_txid])
         .await;
-    for (hash, _tx) in subscriber_tx.iter() {
-        dbg!(&hash.0);
-    }
 
     println!("Checking transactions..");
 
@@ -136,27 +124,30 @@ async fn get_filtered_mempool() {
             // check tx is *not* in mempool transactions
             let maybe_subscriber_tx = subscriber_tx
                 .iter()
-                .find(|(k, _)| k.0 == transaction_hash.to_string())
-                .map(|(MempoolKey(h), MempoolValue(tx))| {
-                    (
-                        zebra_chain::transaction::Hash::from_str(h).unwrap(),
-                        tx.clone(),
-                    )
-                });
+                .find(|(k, _)| k.txid == transaction_hash.to_string())
+                .map(
+                    |(MempoolKey { txid: s }, MempoolValue { serialized_tx: tx })| {
+                        (
+                            zebra_chain::transaction::Hash::from_str(s).unwrap(),
+                            tx.clone(),
+                        )
+                    },
+                );
 
             assert!(maybe_subscriber_tx.is_none());
         } else {
             let (subscriber_tx_hash, subscriber_tx) = subscriber_tx
                 .iter()
-                .find(|(k, _)| k.0 == transaction_hash.to_string())
-                .map(|(MempoolKey(h), MempoolValue(tx))| {
-                    (
-                        zebra_chain::transaction::Hash::from_str(h).unwrap(),
-                        tx.clone(),
-                    )
-                })
+                .find(|(k, _)| k.txid == transaction_hash.to_string())
+                .map(
+                    |(MempoolKey { txid: s }, MempoolValue { serialized_tx: tx })| {
+                        (
+                            zebra_chain::transaction::Hash::from_str(s).unwrap(),
+                            tx.clone(),
+                        )
+                    },
+                )
                 .unwrap();
-            dbg!(&subscriber_tx_hash);
 
             let subscriber_transaction = zebra_chain::transaction::Transaction::zcash_deserialize(
                 Cursor::new(subscriber_tx.as_ref()),
@@ -183,17 +174,16 @@ async fn get_mempool_transaction() {
         .get(mempool_index)
         .map(|b| b.transactions.clone())
         .unwrap_or_default();
-    for transaction in mempool_transactions.clone().into_iter() {
-        dbg!(&transaction.hash());
-    }
 
     let target_hash = mempool_transactions[0].hash();
 
     let subscriber_tx = subscriber
-        .get_transaction(&MempoolKey(target_hash.to_string()))
+        .get_transaction(&MempoolKey {
+            txid: target_hash.to_string(),
+        })
         .await
         .unwrap()
-        .0
+        .serialized_tx
         .clone();
 
     let subscriber_transaction = zebra_chain::transaction::Transaction::zcash_deserialize(
@@ -218,9 +208,6 @@ async fn get_mempool_info() {
         .get(mempool_index)
         .map(|b| b.transactions.clone())
         .unwrap_or_default();
-    for transaction in mempool_transactions.clone().into_iter() {
-        dbg!(&transaction.hash());
-    }
 
     let subscriber_mempool_info = subscriber.get_mempool_info().await.unwrap();
 
@@ -282,7 +269,7 @@ async fn get_mempool_stream() {
     timeout(collect_deadline, async {
         while received.len() < expected_count {
             match rx.recv().await {
-                Some(Ok((MempoolKey(k), MempoolValue(v)))) => {
+                Some(Ok((MempoolKey { txid: k }, MempoolValue { serialized_tx: v }))) => {
                     received.insert(k, v.as_ref().as_ref().to_vec());
                 }
                 Some(Err(e)) => panic!("stream yielded error: {e:?}"),

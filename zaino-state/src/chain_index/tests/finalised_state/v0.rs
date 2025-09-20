@@ -15,7 +15,7 @@ use crate::chain_index::source::test::MockchainSource;
 use crate::chain_index::tests::init_tracing;
 use crate::chain_index::tests::vectors::{build_mockchain_source, load_test_vectors};
 use crate::error::FinalisedStateError;
-use crate::{ChainBlock, ChainWork, Height};
+use crate::{ChainWork, Height, IndexedBlock};
 
 pub(crate) async fn spawn_v0_zaino_db(
     source: MockchainSource,
@@ -46,7 +46,7 @@ pub(crate) async fn spawn_v0_zaino_db(
 pub(crate) async fn load_vectors_and_spawn_and_sync_v0_zaino_db() -> (
     Vec<(
         u32,
-        ChainBlock,
+        IndexedBlock,
         CompactBlock,
         zebra_chain::block::Block,
         (
@@ -77,7 +77,7 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v0_zaino_db() -> (
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
     ) in blocks.clone()
     {
-        let chain_block = ChainBlock::try_from((
+        let chain_block = IndexedBlock::try_from((
             &zebra_block,
             sapling_root,
             sapling_root_size as u32,
@@ -112,7 +112,7 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v0_zaino_db() -> (
 pub(crate) async fn load_vectors_v0db_and_reader() -> (
     Vec<(
         u32,
-        ChainBlock,
+        IndexedBlock,
         CompactBlock,
         zebra_chain::block::Block,
         (
@@ -238,7 +238,7 @@ async fn load_db_from_file() {
                 (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
             ) in blocks_clone
             {
-                let chain_block = ChainBlock::try_from((
+                let chain_block = IndexedBlock::try_from((
                     &zebra_block,
                     sapling_root,
                     sapling_root_size as u32,
@@ -337,7 +337,7 @@ async fn get_compact_blocks() {
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
     ) in blocks.iter()
     {
-        let chain_block = ChainBlock::try_from((
+        let chain_block = IndexedBlock::try_from((
             zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
