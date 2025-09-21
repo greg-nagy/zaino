@@ -89,28 +89,6 @@ impl From<StatusType> for usize {
     }
 }
 
-/*
-impl From<AtomicStatus> for StatusType {
-    fn from(status: AtomicStatus) -> Self {
-        //status.load().into()
-        status.load()
-    }
-}
-
-impl From<&AtomicStatus> for StatusType {
-    fn from(status: &AtomicStatus) -> Self {
-        //status.load().into()
-        status.load()
-    }
-}
-
-impl From<StatusType> for u16 {
-    fn from(status: StatusType) -> Self {
-        status as u16
-    }
-}
-*/
-
 impl fmt::Display for StatusType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let status_str = match self {
