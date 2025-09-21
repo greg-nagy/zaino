@@ -20,9 +20,6 @@ zaino-state = { workspace = true, features = ["bench"] }
 zebra-chain.workspace = true
 zebra-state.workspace = true
 zebra-rpc.workspace = true
-zingolib = { git = "https://github.com/zingolabs/zingolib.git", tag = "2.0.0-beta2", features = [
-    "test-elevation",
-] }
 
 core2 = { workspace = true }
 prost = { workspace = true }
