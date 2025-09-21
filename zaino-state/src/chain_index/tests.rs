@@ -32,7 +32,7 @@ mod mockchain_tests {
             tests::vectors::{
                 build_active_mockchain_source, build_mockchain_source, load_test_vectors,
             },
-            types::TransactionHash,
+            types::{BestChainLocation, TransactionHash},
             ChainIndex, NodeBackedChainIndex, NodeBackedChainIndexSubscriber,
         },
         IndexedBlock,
@@ -136,21 +136,35 @@ mod mockchain_tests {
         let (blocks, _indexer, index_reader, _mockchain) =
             load_test_vectors_and_sync_chain_index(false).await;
         let nonfinalized_snapshot = index_reader.snapshot_nonfinalized_state();
-        for expected_transaction in blocks
-            .into_iter()
-            .flat_map(|block| block.3.transactions.into_iter())
-        {
-            let zaino_transaction = index_reader
+        for (expected_transaction, height) in blocks.into_iter().flat_map(|block| {
+            block
+                .3
+                .transactions
+                .into_iter()
+                .map(move |transaction| (transaction, block.0))
+        }) {
+            let (transaction, branch_id) = index_reader
                 .get_raw_transaction(
                     &nonfinalized_snapshot,
                     &TransactionHash::from(expected_transaction.hash()),
                 )
                 .await
                 .unwrap()
-                .unwrap()
+                .unwrap();
+            let zaino_transaction = transaction
                 .zcash_deserialize_into::<zebra_chain::transaction::Transaction>()
                 .unwrap();
-            assert_eq!(expected_transaction.as_ref(), &zaino_transaction)
+            assert_eq!(expected_transaction.as_ref(), &zaino_transaction);
+            assert_eq!(
+                branch_id,
+                if height == 0 {
+                    None
+                } else {
+                    zebra_chain::parameters::NetworkUpgrade::Nu6
+                        .branch_id()
+                        .map(u32::from)
+                }
+            );
         }
     }
 
@@ -174,17 +188,21 @@ mod mockchain_tests {
         {
             let expected_txid = expected_transaction.hash();
 
-            let (tx_status_blocks, _tx_mempool_status) = index_reader
+            let (transaction_status_best_chain, transaction_status_nonbest_chain) = index_reader
                 .get_transaction_status(
                     &nonfinalized_snapshot,
                     &TransactionHash::from(expected_txid),
                 )
                 .await
                 .unwrap();
-            assert_eq!(tx_status_blocks.len(), 1);
-            let (hash, height) = tx_status_blocks.iter().next().unwrap();
-            assert_eq!(hash.0, block_hash.0);
-            assert_eq!(height.unwrap().0, block_height.unwrap().0);
+            assert_eq!(
+                transaction_status_best_chain.unwrap(),
+                BestChainLocation::Block(
+                    crate::BlockHash(block_hash.0),
+                    crate::Height(block_height.unwrap().0)
+                )
+            );
+            assert!(transaction_status_nonbest_chain.is_empty());
         }
     }
 
@@ -231,17 +249,24 @@ mod mockchain_tests {
 
         let nonfinalized_snapshot = index_reader.snapshot_nonfinalized_state();
         for expected_transaction in mempool_transactions.into_iter() {
-            let zaino_transaction = index_reader
+            let (transaction, branch_id) = index_reader
                 .get_raw_transaction(
                     &nonfinalized_snapshot,
                     &TransactionHash::from(expected_transaction.hash()),
                 )
                 .await
                 .unwrap()
-                .unwrap()
+                .unwrap();
+            let zaino_transaction = transaction
                 .zcash_deserialize_into::<zebra_chain::transaction::Transaction>()
                 .unwrap();
-            assert_eq!(expected_transaction.as_ref(), &zaino_transaction)
+            assert_eq!(expected_transaction.as_ref(), &zaino_transaction);
+            assert_eq!(
+                branch_id,
+                zebra_chain::parameters::NetworkUpgrade::Nu6
+                    .branch_id()
+                    .map(u32::from)
+            );
         }
     }
 
@@ -266,15 +291,20 @@ mod mockchain_tests {
         for expected_transaction in mempool_transactions.into_iter() {
             let expected_txid = expected_transaction.hash();
 
-            let (tx_status_blocks, tx_mempool_status) = index_reader
+            let (transaction_status_best_chain, transaction_status_nonbest_chain) = index_reader
                 .get_transaction_status(
                     &nonfinalized_snapshot,
                     &TransactionHash::from(expected_txid),
                 )
                 .await
                 .unwrap();
-            assert!(tx_status_blocks.is_empty());
-            assert!(tx_mempool_status);
+            assert_eq!(
+                transaction_status_best_chain,
+                Some(BestChainLocation::Mempool(
+                    crate::chain_index::types::Height(mempool_height as u32)
+                ))
+            );
+            assert!(transaction_status_nonbest_chain.is_empty());
         }
     }
 
