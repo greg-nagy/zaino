@@ -24,7 +24,9 @@ zebra-chain = { workspace = true }
 zingo-infra-services = { workspace = true }
 
 # ZingoLib
-zingolib = { workspace = true }
+zingolib = { git = "https://github.com/zingolabs/zingolib.git", tag = "2.0.0-beta2", features = [
+    "test-elevation",
+] }
 testvectors = { workspace = true }
 tracing-subscriber = { workspace = true, features = [
     "fmt",
