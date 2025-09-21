@@ -14,6 +14,7 @@
 use crate::chain_index::non_finalised_state::BestTip;
 use crate::chain_index::types::{BestChainLocation, NonBestChainLocation};
 use crate::error::{ChainIndexError, ChainIndexErrorKind, FinalisedStateError};
+use crate::IndexedBlock;
 use crate::{AtomicStatus, StatusType, SyncError};
 use std::collections::HashSet;
 use std::{sync::Arc, time::Duration};
@@ -23,7 +24,6 @@ use non_finalised_state::NonfinalizedBlockCacheSnapshot;
 use source::{BlockchainSource, ValidatorConnector};
 use tokio_stream::StreamExt;
 use tracing::info;
-use types::ChainBlock;
 use zebra_chain::parameters::ConsensusBranchId;
 pub use zebra_chain::parameters::Network as ZebraNetwork;
 use zebra_chain::serialization::ZcashSerialize;
@@ -677,7 +677,7 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
             })
             .await
         {
-            let bytes = mempool_tx.0.as_ref().as_ref().to_vec();
+            let bytes = mempool_tx.serialized_tx.as_ref().as_ref().to_vec();
             let mempool_height = snapshot
                 .blocks
                 .iter()
