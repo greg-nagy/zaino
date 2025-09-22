@@ -62,7 +62,7 @@ impl NonFinalisedState {
             ),
             sync_task_handle: None,
             block_sender,
-            status: AtomicStatus::new(StatusType::Spawning.into()),
+            status: AtomicStatus::new(StatusType::Spawning),
             config,
         };
 
@@ -136,7 +136,7 @@ impl NonFinalisedState {
                 match non_finalised_state.fetcher.get_blockchain_info().await {
                     Ok(chain_info) => {
                         best_block_hash = chain_info.best_block_hash;
-                        non_finalised_state.status.store(StatusType::Ready.into());
+                        non_finalised_state.status.store(StatusType::Ready);
                         break;
                     }
                     Err(e) => {
@@ -148,7 +148,7 @@ impl NonFinalisedState {
             }
 
             loop {
-                if non_finalised_state.status.load() == StatusType::Closing as usize {
+                if non_finalised_state.status.load() == StatusType::Closing {
                     non_finalised_state.update_status_and_notify(StatusType::Closing);
                     return;
                 }
@@ -167,13 +167,13 @@ impl NonFinalisedState {
 
                 if check_block_hash != best_block_hash {
                     best_block_hash = check_block_hash;
-                    non_finalised_state.status.store(StatusType::Syncing.into());
+                    non_finalised_state.status.store(StatusType::Syncing);
                     non_finalised_state
                         .heights_to_hashes
-                        .notify(non_finalised_state.status.clone().into());
+                        .notify(non_finalised_state.status.load());
                     non_finalised_state
                         .hashes_to_blocks
-                        .notify(non_finalised_state.status.clone().into());
+                        .notify(non_finalised_state.status.load());
                     loop {
                         match non_finalised_state.fill_from_reorg().await {
                             Ok(_) => break,
@@ -192,7 +192,7 @@ impl NonFinalisedState {
                         }
                     }
                 }
-                non_finalised_state.status.store(StatusType::Ready.into());
+                non_finalised_state.status.store(StatusType::Ready);
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
         });
@@ -322,7 +322,7 @@ impl NonFinalisedState {
                                     .await
                                     .is_err()
                                 {
-                                    self.status.store(StatusType::CriticalError.into());
+                                    self.status.store(StatusType::CriticalError);
                                     return Err(NonFinalisedStateError::Critical(
                                         "Critical error in database. Closing NonFinalisedState"
                                             .to_string(),
@@ -373,7 +373,7 @@ impl NonFinalisedState {
             && !self.config.network.to_zebra_network().is_regtest()
             && !self.config.no_sync
         {
-            self.status.store(StatusType::Syncing.into());
+            self.status.store(StatusType::Syncing);
             loop {
                 let blockchain_info = self.fetcher.get_blockchain_info().await.map_err(|e| {
                     NonFinalisedStateError::Custom(format!("Failed to fetch blockchain info: {e}"))
@@ -409,14 +409,14 @@ impl NonFinalisedState {
 
     /// Returns the status of the non-finalised state.
     pub fn status(&self) -> StatusType {
-        self.status.load().into()
+        self.status.load()
     }
 
     /// Updates the status of the non-finalised state and notifies subscribers.
     fn update_status_and_notify(&self, status: StatusType) {
-        self.status.store(status.into());
-        self.heights_to_hashes.notify(self.status.clone().into());
-        self.hashes_to_blocks.notify(self.status.clone().into());
+        self.status.store(status);
+        self.heights_to_hashes.notify(self.status.load());
+        self.hashes_to_blocks.notify(self.status.load());
     }
 
     /// Sets the non-finalised state to close gracefully.
@@ -495,6 +495,6 @@ impl NonFinalisedStateSubscriber {
 
     /// Returns the status of the NonFinalisedState.
     pub fn status(&self) -> StatusType {
-        self.status.load().into()
+        self.status.load()
     }
 }

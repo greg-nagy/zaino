@@ -152,7 +152,7 @@ impl DbCore for DbV1 {
     }
 
     async fn shutdown(&self) -> Result<(), FinalisedStateError> {
-        self.status.store(StatusType::Closing as usize);
+        self.status.store(StatusType::Closing);
 
         if let Some(handle) = &self.db_handler {
             let timeout = tokio::time::sleep(Duration::from_secs(5));
@@ -530,7 +530,7 @@ impl DbV1 {
             validated_tip: Arc::new(AtomicU32::new(0)),
             validated_set: DashSet::new(),
             db_handler: None,
-            status: AtomicStatus::new(StatusType::Spawning.into()),
+            status: AtomicStatus::new(StatusType::Spawning),
             config: config.clone(),
         };
 
@@ -545,7 +545,7 @@ impl DbV1 {
 
     /// Try graceful shutdown, fall back to abort after a timeout.
     pub(crate) async fn close(&mut self) -> Result<(), FinalisedStateError> {
-        self.status.store(StatusType::Closing as usize);
+        self.status.store(StatusType::Closing);
 
         if let Some(mut handle) = self.db_handler.take() {
             let timeout = tokio::time::sleep(Duration::from_secs(5));
@@ -575,7 +575,7 @@ impl DbV1 {
 
     /// Returns the status of ZainoDB.
     pub(crate) fn status(&self) -> StatusType {
-        (&self.status).into()
+        self.status.load()
     }
 
     /// Awaits until the DB returns a Ready status.
@@ -587,7 +587,7 @@ impl DbV1 {
 
         loop {
             ticker.tick().await;
-            if self.status.load() == StatusType::Ready as usize {
+            if self.status.load() == StatusType::Ready {
                 break;
             }
         }
@@ -627,7 +627,7 @@ impl DbV1 {
             let zaino_db = zaino_db;
             async move {
                 // *** initial validation ***
-                zaino_db.status.store(StatusType::Syncing.into());
+                zaino_db.status.store(StatusType::Syncing);
                 let (r1, r2, r3) = tokio::join!(
                     zaino_db.initial_spent_scan(),
                     zaino_db.initial_address_history_scan(),
@@ -641,7 +641,7 @@ impl DbV1 {
                 ] {
                     if let Err(e) = result {
                         error!("initial {desc} failed: {e}");
-                        zaino_db.status.store(StatusType::CriticalError.into());
+                        zaino_db.status.store(StatusType::CriticalError);
                         // TODO: Handle error better? - Return invalid block error from validate?
                         return;
                     }
@@ -651,14 +651,14 @@ impl DbV1 {
                     "initial validation complete – tip={}",
                     zaino_db.validated_tip.load(Ordering::Relaxed)
                 );
-                zaino_db.status.store(StatusType::Ready.into());
+                zaino_db.status.store(StatusType::Ready);
 
                 // *** steady-state loop ***
                 let mut maintenance = interval(Duration::from_secs(60));
 
                 loop {
                     // Check for closing status.
-                    if zaino_db.status.load() == StatusType::Closing as usize {
+                    if zaino_db.status.load() == StatusType::Closing {
                         break;
                     }
                     // try to validate the next consecutive block.
@@ -840,7 +840,7 @@ impl DbV1 {
 
     /// Writes a given (finalised) [`IndexedBlock`] to ZainoDB.
     pub(crate) async fn write_block(&self, block: IndexedBlock) -> Result<(), FinalisedStateError> {
-        self.status.store(StatusType::Syncing.into());
+        self.status.store(StatusType::Syncing);
         let block_hash = *block.index().hash();
         let block_hash_bytes = block_hash.to_bytes()?;
         let block_height = block.index().height().ok_or(FinalisedStateError::Custom(
@@ -1201,7 +1201,7 @@ impl DbV1 {
             Ok(_) => {
                 tokio::task::block_in_place(|| self.env.sync(true))
                     .map_err(|e| FinalisedStateError::Custom(format!("LMDB sync failed: {e}")))?;
-                self.status.store(StatusType::Ready.into());
+                self.status.store(StatusType::Ready);
 
                 info!(
                     "Successfully committed block {} at height {} to ZainoDB.",
@@ -1220,7 +1220,7 @@ impl DbV1 {
                 let _ = self.delete_block(&block).await;
                 tokio::task::block_in_place(|| self.env.sync(true))
                     .map_err(|e| FinalisedStateError::Custom(format!("LMDB sync failed: {e}")))?;
-                self.status.store(StatusType::RecoverableError.into());
+                self.status.store(StatusType::RecoverableError);
                 Err(FinalisedStateError::InvalidBlock {
                     height: block_height.0,
                     hash: block_hash,

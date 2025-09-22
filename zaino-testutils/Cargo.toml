@@ -7,6 +7,7 @@ homepage = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
 version = { workspace = true }
+publish = false
 
 [dependencies]
 zaino-state = { workspace = true, features = ["bench"] }
@@ -24,7 +25,9 @@ zebra-chain = { workspace = true }
 zingo-infra-services = { workspace = true }
 
 # ZingoLib
-zingolib = { workspace = true }
+zingolib = { git = "https://github.com/zingolabs/zingolib.git", tag = "2.0.0-beta2", features = [
+    "test-elevation",
+] }
 testvectors = { workspace = true }
 tracing-subscriber = { workspace = true, features = [
     "fmt",

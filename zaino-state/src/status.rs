@@ -21,25 +21,26 @@ use std::{
 ///   TODO: Refine error code spec.
 #[derive(Debug, Clone)]
 pub struct AtomicStatus {
-    counter: Arc<AtomicUsize>,
+    inner: Arc<AtomicUsize>,
 }
 
 impl AtomicStatus {
     /// Creates a new AtomicStatus
-    pub fn new(status: u16) -> Self {
+    pub fn new(status: StatusType) -> Self {
         Self {
-            counter: Arc::new(AtomicUsize::new(status as usize)),
+            inner: Arc::new(AtomicUsize::new(status.into())),
         }
     }
 
     /// Loads the value held in the AtomicStatus
-    pub fn load(&self) -> usize {
-        self.counter.load(Ordering::SeqCst)
+    pub fn load(&self) -> StatusType {
+        StatusType::from(self.inner.load(Ordering::SeqCst))
     }
 
     /// Sets the value held in the AtomicStatus
-    pub fn store(&self, status: usize) {
-        self.counter.store(status, Ordering::SeqCst);
+    pub fn store(&self, status: StatusType) {
+        self.inner
+            .store(status.into(), std::sync::atomic::Ordering::SeqCst);
     }
 }
 
@@ -85,24 +86,6 @@ impl From<usize> for StatusType {
 impl From<StatusType> for usize {
     fn from(status: StatusType) -> Self {
         status as usize
-    }
-}
-
-impl From<AtomicStatus> for StatusType {
-    fn from(status: AtomicStatus) -> Self {
-        status.load().into()
-    }
-}
-
-impl From<&AtomicStatus> for StatusType {
-    fn from(status: &AtomicStatus) -> Self {
-        status.load().into()
-    }
-}
-
-impl From<StatusType> for u16 {
-    fn from(status: StatusType) -> Self {
-        status as u16
     }
 }
 

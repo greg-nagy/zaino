@@ -89,6 +89,7 @@ impl From<DbV1> for DbBackend {
 impl DbCore for DbBackend {
     fn status(&self) -> StatusType {
         match self {
+            // TODO private
             Self::V0(db) => db.status(),
             Self::V1(db) => db.status(),
         }
