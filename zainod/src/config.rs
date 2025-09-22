@@ -110,7 +110,6 @@ pub struct IndexerConfig {
     /// Disables FinalisedState.
     /// Used for testing.
     pub no_db: bool,
-    /// When enabled Zaino syncs it DB in the background, fetching data from the validator.
 }
 
 impl IndexerConfig {
