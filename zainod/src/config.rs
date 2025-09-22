@@ -111,9 +111,6 @@ pub struct IndexerConfig {
     /// Used for testing.
     pub no_db: bool,
     /// When enabled Zaino syncs it DB in the background, fetching data from the validator.
-    ///
-    /// NOTE: Unimplemented.
-    pub slow_sync: bool,
 }
 
 impl IndexerConfig {
