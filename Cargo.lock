@@ -5924,6 +5924,7 @@ name = "zaino-common"
 version = "0.1.2"
 dependencies = [
  "serde",
+ "thiserror 1.0.69",
  "zebra-chain 2.0.0",
  "zingo-infra-services",
 ]
