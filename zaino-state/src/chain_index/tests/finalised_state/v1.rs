@@ -15,7 +15,7 @@ use crate::chain_index::tests::init_tracing;
 use crate::chain_index::tests::vectors::{build_mockchain_source, load_test_vectors};
 use crate::chain_index::types::TransactionHash;
 use crate::error::FinalisedStateError;
-use crate::{AddrScript, ChainBlock, ChainWork, Height, Outpoint};
+use crate::{AddrScript, ChainWork, Height, IndexedBlock, Outpoint};
 
 pub(crate) async fn spawn_v1_zaino_db(
     source: MockchainSource,
@@ -77,7 +77,7 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v1_zaino_db() -> (
         (_sapling_treestate, _orchard_treestate),
     ) in blocks.clone()
     {
-        let chain_block = ChainBlock::try_from((
+        let chain_block = IndexedBlock::try_from((
             &zebra_block,
             sapling_root,
             sapling_root_size as u32,
@@ -236,7 +236,7 @@ async fn load_db_from_file() {
                 (_sapling_treestate, _orchard_treestate),
             ) in blocks_clone
             {
-                let chain_block = ChainBlock::try_from((
+                let chain_block = IndexedBlock::try_from((
                     &zebra_block,
                     sapling_root,
                     sapling_root_size as u32,
@@ -323,7 +323,7 @@ async fn try_write_invalid_block() {
 
     // NOTE: Currently using default here.
     let parent_chain_work = ChainWork::from_u256(0.into());
-    let mut chain_block = ChainBlock::try_from((
+    let mut chain_block = IndexedBlock::try_from((
         &zebra_block,
         sapling_root,
         sapling_root_size as u32,
@@ -403,7 +403,7 @@ async fn get_chain_blocks() {
         (_sapling_treestate, _orchard_treestate),
     ) in blocks.iter()
     {
-        let chain_block = ChainBlock::try_from((
+        let chain_block = IndexedBlock::try_from((
             zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
@@ -432,7 +432,7 @@ async fn get_chain_blocks() {
 
         let reader_chain_block = db_reader.get_chain_block(Height(*height)).await.unwrap();
         assert_eq!(Some(chain_block), reader_chain_block);
-        println!("ChainBlock at height {height} OK");
+        println!("IndexedBlock at height {height} OK");
     }
 }
 
@@ -452,7 +452,7 @@ async fn get_compact_blocks() {
         (_sapling_treestate, _orchard_treestate),
     ) in blocks.iter()
     {
-        let chain_block = ChainBlock::try_from((
+        let chain_block = IndexedBlock::try_from((
             zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
@@ -512,7 +512,7 @@ async fn get_faucet_txids() {
         (_sapling_treestate, _orchard_treestate),
     ) in blocks.iter()
     {
-        let chain_block = ChainBlock::try_from((
+        let chain_block = IndexedBlock::try_from((
             zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
@@ -609,7 +609,7 @@ async fn get_recipient_txids() {
         (_sapling_treestate, _orchard_treestate),
     ) in blocks.iter()
     {
-        let chain_block = ChainBlock::try_from((
+        let chain_block = IndexedBlock::try_from((
             zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
@@ -834,7 +834,7 @@ async fn check_faucet_spent_map() {
         (_sapling_treestate, _orchard_treestate),
     ) in blocks.iter()
     {
-        let chain_block = ChainBlock::try_from((
+        let chain_block = IndexedBlock::try_from((
             zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
@@ -911,7 +911,7 @@ async fn check_faucet_spent_map() {
                     )| {
                         // NOTE: Currently using default here.
                         let parent_chain_work = ChainWork::from_u256(0.into());
-                        let chain_block = ChainBlock::try_from((
+                        let chain_block = IndexedBlock::try_from((
                             zebra_block,
                             *sapling_root,
                             *sapling_root_size as u32,
@@ -991,7 +991,7 @@ async fn check_recipient_spent_map() {
         (_sapling_treestate, _orchard_treestate),
     ) in blocks.iter()
     {
-        let chain_block = ChainBlock::try_from((
+        let chain_block = IndexedBlock::try_from((
             zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
@@ -1068,7 +1068,7 @@ async fn check_recipient_spent_map() {
                     )| {
                         // NOTE: Currently using default here.
                         let parent_chain_work = ChainWork::from_u256(0.into());
-                        let chain_block = ChainBlock::try_from((
+                        let chain_block = IndexedBlock::try_from((
                             zebra_block,
                             *sapling_root,
                             *sapling_root_size as u32,

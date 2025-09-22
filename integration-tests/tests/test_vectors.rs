@@ -21,7 +21,7 @@ use zaino_state::read_u64_le;
 use zaino_state::write_u32_le;
 use zaino_state::write_u64_le;
 use zaino_state::CompactSize;
-use zaino_state::{BackendType, ChainBlock, ChainWork};
+use zaino_state::{BackendType, ChainWork, IndexedBlock};
 use zaino_state::{
     StateService, StateServiceConfig, StateServiceSubscriber, ZcashIndexer, ZcashService as _,
 };
@@ -493,7 +493,7 @@ async fn create_200_block_regtest_chain_vectors() {
                 )
                 .unwrap();
 
-                let chain_block = ChainBlock::try_from((
+                let chain_block = IndexedBlock::try_from((
                     full_block.clone(),
                     parent_chain_work,
                     sapling_root.0.into(),

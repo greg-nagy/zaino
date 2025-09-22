@@ -11,7 +11,7 @@ use crate::chain_index::finalised_state::db::DbBackend;
 use crate::chain_index::finalised_state::ZainoDB;
 use crate::chain_index::tests::init_tracing;
 use crate::chain_index::tests::vectors::{build_mockchain_source, load_test_vectors};
-use crate::{ChainBlock, ChainWork};
+use crate::{ChainWork, IndexedBlock};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn v0_to_v1_full() {
@@ -63,7 +63,7 @@ async fn v0_to_v1_full() {
         _treestates,
     ) in blocks.clone()
     {
-        let chain_block = ChainBlock::try_from((
+        let chain_block = IndexedBlock::try_from((
             &zebra_block,
             sapling_root,
             sapling_root_size as u32,
@@ -143,7 +143,7 @@ async fn v0_to_v1_interrupted() {
         _treestates,
     ) in blocks.clone()
     {
-        let chain_block = ChainBlock::try_from((
+        let chain_block = IndexedBlock::try_from((
             &zebra_block,
             sapling_root,
             sapling_root_size as u32,
@@ -178,7 +178,7 @@ async fn v0_to_v1_interrupted() {
             break;
         }
 
-        let chain_block = ChainBlock::try_from((
+        let chain_block = IndexedBlock::try_from((
             &zebra_block,
             sapling_root,
             sapling_root_size as u32,
@@ -270,7 +270,7 @@ async fn v0_to_v1_partial() {
         _treestates,
     ) in blocks.clone()
     {
-        let chain_block = ChainBlock::try_from((
+        let chain_block = IndexedBlock::try_from((
             &zebra_block,
             sapling_root,
             sapling_root_size as u32,
@@ -304,7 +304,7 @@ async fn v0_to_v1_partial() {
         _treestates,
     ) in blocks.clone()
     {
-        let chain_block = ChainBlock::try_from((
+        let chain_block = IndexedBlock::try_from((
             &zebra_block,
             sapling_root,
             sapling_root_size as u32,
