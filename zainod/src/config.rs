@@ -258,7 +258,6 @@ impl Default for IndexerConfig {
             network: Network::Testnet,
             no_sync: false,
             no_db: false,
-            slow_sync: false,
         }
     }
 }
