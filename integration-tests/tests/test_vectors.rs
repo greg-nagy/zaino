@@ -135,7 +135,7 @@ async fn create_test_manager_and_services(
 }
 
 #[tokio::test]
-// #[ignore = "Not a test! Used to build test vector data for zaino_state::chain_index unit tests."]
+#[ignore = "Not a test! Used to build test vector data for zaino_state::chain_index unit tests."]
 async fn create_200_block_regtest_chain_vectors() {
     let (mut test_manager, _state_service, state_service_subscriber) =
         create_test_manager_and_services(&ValidatorKind::Zebrad, None, true, true, None).await;
