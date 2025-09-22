@@ -13,10 +13,12 @@ version = { workspace = true }
 zebra-chain = { workspace = true }
 
 # Zingo Infrastructure
-zingo-infra-services = { git = "https://github.com/zingolabs/infrastructure.git", rev = "7509a6d26c6424b2e22585fabd0bb974bff6bf55" }
-
 # Serialization
 serde = { workspace = true, features = ["derive"] }
 
 # Error handling
 thiserror = { workspace = true }
+
+[dev-dependencies]
+zingo-infra-services = { git = "https://github.com/zingolabs/infrastructure.git", rev = "7509a6d26c6424b2e22585fabd0bb974bff6bf55" }
+
