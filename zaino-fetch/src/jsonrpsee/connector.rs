@@ -33,7 +33,7 @@ use crate::jsonrpsee::{
     },
 };
 
-use super::response::GetDifficultyResponse;
+use super::response::{GetDifficultyResponse, GetNetworkSolPsResponse};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RpcRequest<T> {
@@ -692,6 +692,31 @@ impl JsonRpSeeConnector {
     ) -> Result<Vec<GetUtxosResponse>, RpcRequestError<GetUtxosError>> {
         let params = vec![serde_json::json!({ "addresses": addresses })];
         self.send_request("getaddressutxos", params).await
+    }
+
+    /// Returns the estimated network solutions per second based on the last n blocks.
+    ///
+    /// zcashd reference: [`getnetworksolps`](https://zcash.github.io/rpc/getnetworksolps.html)
+    /// method: post
+    /// tags: blockchain
+    ///
+    /// # Parameters
+    ///
+    /// - `blocks`: (number, optional, default=120) Number of blocks, or -1 for blocks over difficulty averaging window.
+    /// - `height`: (number, optional, default=-1) To estimate network speed at the time of a specific block height.
+    pub async fn get_network_sol_ps(
+        &self,
+        blocks: Option<i32>,
+        height: Option<i32>,
+    ) -> Result<GetNetworkSolPsResponse, RpcRequestError<Infallible>> {
+        let mut params = Vec::new();
+        if let Some(b) = blocks {
+            params.push(serde_json::json!(b));
+            if let Some(h) = height {
+                params.push(serde_json::json!(h));
+            }
+        }
+        self.send_request("getnetworksolps", params).await
     }
 }
 
