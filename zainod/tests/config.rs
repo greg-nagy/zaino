@@ -124,7 +124,6 @@ fn test_deserialize_full_valid_config() {
         );
         assert!(!finalized_config.no_sync);
         assert!(!finalized_config.no_db);
-        assert!(!finalized_config.slow_sync);
 
         Ok(())
     });
@@ -167,7 +166,6 @@ fn test_deserialize_optional_fields_missing() {
         );
         assert_eq!(config.no_sync, default_values.no_sync);
         assert_eq!(config.no_db, default_values.no_db);
-        assert_eq!(config.slow_sync, default_values.slow_sync);
         Ok(())
     });
 }
@@ -311,7 +309,6 @@ fn test_deserialize_empty_string_yields_default() {
         );
         assert_eq!(config.no_sync, default_config.no_sync);
         assert_eq!(config.no_db, default_config.no_db);
-        assert_eq!(config.slow_sync, default_config.slow_sync);
         Ok(())
     });
 }
