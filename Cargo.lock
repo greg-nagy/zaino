@@ -8340,7 +8340,6 @@ dependencies = [
  "serde",
  "thiserror 1.0.69",
  "zebra-chain",
- "zingo-infra-services 0.1.0 (git+https://github.com/zingolabs/infrastructure.git?rev=6c8ad003491371c2e387c5f9d3ba35c45286257b)",
 ]
 
 [[package]]
