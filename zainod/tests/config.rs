@@ -29,6 +29,7 @@ fn test_deserialize_full_valid_config() {
         jail.create_dir(zaino_db_dir_name)?;
         jail.create_dir(zebra_db_dir_name)?;
 
+        // TODO we are altering this TOML ... see {cert_file_name} etc
         // Use relative paths in the TOML string
         let toml_str = format!(
             r#"
@@ -38,6 +39,7 @@ fn test_deserialize_full_valid_config() {
             enable_cookie_auth = true
             cookie_dir = "{zaino_cookie_dir_name}"
             grpc_listen_address = "0.0.0.0:9000"
+            //            grpc_tls = Some(GrpcTlsConfig {tls_cert_path: "{cert_file_name}".into(), tls_key_path: "{key_file_name}".into()})
             grpc_tls = true
             tls_cert_path = "{cert_file_name}"
             tls_key_path = "{key_file_name}"
@@ -110,7 +112,7 @@ fn test_deserialize_full_valid_config() {
             finalized_config.grpc_listen_address,
             "0.0.0.0:9000".parse().unwrap()
         );
-        assert!(finalized_config.grpc_tls);
+        assert!(finalized_config.grpc_tls.is_some());
         assert_eq!(finalized_config.validator_user, Some("user".to_string()));
         assert_eq!(
             finalized_config.validator_password,
@@ -396,7 +398,7 @@ fn test_figment_env_override_toml_and_defaults() {
         assert!(config.enable_json_server);
         assert_eq!(config.storage.cache.capacity, 12345);
         assert_eq!(config.cookie_dir, Some(PathBuf::from("/env/cookie/path")));
-        assert_eq!(!config.grpc_tls, true);
+        assert_eq!(config.grpc_tls, None);
         Ok(())
     });
 }

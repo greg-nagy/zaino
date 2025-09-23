@@ -10,8 +10,8 @@ pub mod storage;
 
 // Re-export commonly used types for convenience
 
-// TODO is GrpcClientConfig better? Something else?
-pub use config::GrpcZainoConfig;
+// TODO is GrpcClientConfig a better name? Something else?
+pub use config::GrpcTlsConfig;
 pub use network::Network;
 pub use service::ServiceConfig;
 pub use storage::{CacheConfig, DatabaseConfig, DatabaseSize, StorageConfig};

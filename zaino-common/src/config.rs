@@ -2,14 +2,9 @@
 
 use std::path::PathBuf;
 
-// #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+/// when a Zaino is configured with gRPC tls, it has paths to key and certificate.
 /// gRPC TLS settings
-pub struct GrpcZainoConfig {
-    /// wrapper for TLS config, optional
-    pub grpc_tls: Option<GrpcTlsConfig>,
-}
-
-/// Inner type, when a Zaino is configured with gRPC tls, it has paths to key and certificate.
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct GrpcTlsConfig {
     /// Path to the TLS certificate file.
     pub tls_cert_path: PathBuf,
@@ -17,9 +12,13 @@ pub struct GrpcTlsConfig {
     pub tls_key_path: PathBuf,
 }
 
-impl Default for GrpcZainoConfig {
+// TODO do we need a default?
+impl Default for GrpcTlsConfig {
     fn default() -> Self {
         // TODO may be dangerous as a default.
-        Self { grpc_tls: None }
+        Self {
+            tls_cert_path: "/".into(),
+            tls_key_path: "/".into(),
+        }
     }
 }

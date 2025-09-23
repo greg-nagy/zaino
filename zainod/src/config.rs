@@ -19,7 +19,7 @@ use serde::{
 use tracing::warn;
 use tracing::{error, info};
 use zaino_common::{
-    CacheConfig, DatabaseConfig, DatabaseSize, Network, ServiceConfig, StorageConfig,
+    CacheConfig, DatabaseConfig, DatabaseSize, GrpcTlsConfig, Network, ServiceConfig, StorageConfig,
 };
 use zaino_state::{BackendConfig, FetchServiceConfig, StateServiceConfig};
 
@@ -75,11 +75,13 @@ pub struct IndexerConfig {
     #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     pub grpc_listen_address: SocketAddr,
     /// Enables TLS.
-    pub grpc_tls: bool,
+    pub grpc_tls: Option<GrpcTlsConfig>,
+    /*
     /// Path to the TLS certificate file.
     pub tls_cert_path: Option<String>,
     /// Path to the TLS private key file.
     pub tls_key_path: Option<String>,
+    */
     /// Full node / validator listen port.
     #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     pub validator_listen_address: SocketAddr,
@@ -118,6 +120,7 @@ impl IndexerConfig {
         // Network type is validated at the type level via Network enum.
 
         // Check TLS settings.
+        // TODO refactor below for new gRPC config setup
         if self.grpc_tls {
             if let Some(ref cert_path) = self.tls_cert_path {
                 if !std::path::Path::new(cert_path).exists() {
@@ -178,7 +181,7 @@ impl IndexerConfig {
         #[cfg(not(feature = "no_tls_use_unencrypted_traffic"))]
         {
             // Ensure TLS is used when connecting to external addresses.
-            if !is_private_listen_addr(&grpc_addr) && !self.grpc_tls {
+            if !is_private_listen_addr(&grpc_addr) && self.grpc_tls.is_none() {
                 return Err(IndexerError::ConfigError(
                     "TLS required when connecting to external addresses.".to_string(),
                 ));
@@ -192,6 +195,7 @@ impl IndexerConfig {
             ));
             }
         }
+        // TODO insure this is activated or removed
         #[cfg(feature = "no_tls_use_unencrypted_traffic")]
         {
             warn!(
@@ -237,9 +241,7 @@ impl Default for IndexerConfig {
             enable_cookie_auth: false,
             cookie_dir: None,
             grpc_listen_address: "127.0.0.1:8137".parse().unwrap(),
-            grpc_tls: false,
-            tls_cert_path: None,
-            tls_key_path: None,
+            grpc_tls: None,
             validator_listen_address: "127.0.0.1:18232".parse().unwrap(),
             validator_grpc_listen_address: "127.0.0.1:18230".parse().unwrap(),
             validator_cookie_auth: false,
