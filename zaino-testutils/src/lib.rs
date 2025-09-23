@@ -658,12 +658,6 @@ mod launch_testmanager {
             ))
             .await
             .unwrap();
-            dbg!(grpc_client
-                .get_lightd_info(tonic::Request::new(
-                    zcash_client_backend::proto::service::Empty {},
-                ))
-                .await
-                .unwrap());
             test_manager.close().await;
         }
 
@@ -840,12 +834,6 @@ mod launch_testmanager {
                 ))
                 .await
                 .unwrap();
-                dbg!(grpc_client
-                    .get_lightd_info(tonic::Request::new(
-                        zcash_client_backend::proto::service::Empty {},
-                    ))
-                    .await
-                    .unwrap());
                 test_manager.close().await;
             }
 
@@ -1131,12 +1119,6 @@ mod launch_testmanager {
                 ))
                 .await
                 .unwrap();
-                dbg!(grpc_client
-                    .get_lightd_info(tonic::Request::new(
-                        zcash_client_backend::proto::service::Empty {},
-                    ))
-                    .await
-                    .unwrap());
                 test_manager.close().await;
             }
 
