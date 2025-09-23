@@ -2988,6 +2988,7 @@ dependencies = [
  "zebra-chain",
  "zebra-rpc",
  "zebra-state",
+ "zip32",
 ]
 
 [[package]]
