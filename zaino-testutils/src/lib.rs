@@ -463,7 +463,6 @@ impl TestManager {
                 network: network.into(),
                 no_sync: zaino_no_sync,
                 no_db: zaino_no_db,
-                slow_sync: false,
             };
             let handle = zainodlib::indexer::spawn_indexer(indexer_config)
                 .await
@@ -646,7 +645,6 @@ impl TestManager {
                 network: network.into(),
                 no_sync: zaino_no_sync,
                 no_db: zaino_no_db,
-                slow_sync: false,
             };
             let handle = zainodlib::indexer::spawn_indexer(indexer_config)
                 .await
