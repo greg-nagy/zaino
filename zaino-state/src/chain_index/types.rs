@@ -23,7 +23,6 @@ pub mod primitives;
 
 // Re-export types from organized submodules
 pub use commitment::{CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes};
-pub use primitives::{OrchardTreeSize, SaplingTreeSize, SproutTreeSize, TreeSize, TreeSizeError};
 
 // =============================================================================
 // IMPORTS FOR LEGACY TYPES
