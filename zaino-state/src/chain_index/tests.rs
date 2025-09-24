@@ -505,4 +505,55 @@ mod mockchain_tests {
 
         assert!(mempool_stream.is_none());
     }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn get_block_height() {
+        let (blocks, _indexer, index_reader, _mockchain) =
+            load_test_vectors_and_sync_chain_index(false).await;
+        let nonfinalized_snapshot = index_reader.snapshot_nonfinalized_state();
+
+        // Positive cases: every known best-chain block returns its height
+        for (expected_height, zebra_block, _roots, _treestates) in blocks.iter() {
+            let got = index_reader
+                .get_block_height(
+                    &nonfinalized_snapshot,
+                    crate::BlockHash(zebra_block.hash().0),
+                )
+                .await
+                .unwrap();
+            assert_eq!(got, Some(crate::Height(*expected_height)));
+        }
+
+        // Negative case: an unknown hash returns None
+        let unknown = crate::BlockHash([0u8; 32]);
+        let got = index_reader
+            .get_block_height(&nonfinalized_snapshot, unknown)
+            .await
+            .unwrap();
+        assert_eq!(got, None);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn get_treestate() {
+        let (blocks, _indexer, index_reader, _mockchain) =
+            load_test_vectors_and_sync_chain_index(false).await;
+
+        for (_height, zebra_block, _roots, (expected_sapling_bytes, expected_orchard_bytes)) in
+            blocks.into_iter()
+        {
+            let (sapling_bytes_opt, orchard_bytes_opt) = index_reader
+                .get_treestate(&crate::BlockHash(zebra_block.hash().0))
+                .await
+                .unwrap();
+
+            assert_eq!(
+                sapling_bytes_opt.as_deref(),
+                Some(expected_sapling_bytes.as_slice())
+            );
+            assert_eq!(
+                orchard_bytes_opt.as_deref(),
+                Some(expected_orchard_bytes.as_slice())
+            );
+        }
+    }
 }
