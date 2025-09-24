@@ -7,14 +7,13 @@ use zaino_common::network::ActivationHeights;
 use zaino_common::{DatabaseConfig, Network, StorageConfig};
 use zebra_rpc::methods::GetAddressUtxos;
 
-use crate::bench::BlockCacheConfig;
 use crate::chain_index::finalised_state::reader::DbReader;
 use crate::chain_index::finalised_state::ZainoDB;
 use crate::chain_index::source::test::MockchainSource;
 use crate::chain_index::tests::init_tracing;
 use crate::chain_index::tests::vectors::{build_mockchain_source, load_test_vectors};
 use crate::error::FinalisedStateError;
-use crate::{ChainWork, Height, IndexedBlock};
+use crate::{BlockCacheConfig, ChainWork, Height, IndexedBlock};
 
 pub(crate) async fn spawn_v0_zaino_db(
     source: MockchainSource,

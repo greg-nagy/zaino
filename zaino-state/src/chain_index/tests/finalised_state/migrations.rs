@@ -5,13 +5,12 @@ use tempfile::TempDir;
 use zaino_common::network::ActivationHeights;
 use zaino_common::{DatabaseConfig, Network, StorageConfig};
 
-use crate::bench::BlockCacheConfig;
 use crate::chain_index::finalised_state::capability::{DbCore as _, DbWrite as _};
 use crate::chain_index::finalised_state::db::DbBackend;
 use crate::chain_index::finalised_state::ZainoDB;
 use crate::chain_index::tests::init_tracing;
 use crate::chain_index::tests::vectors::{build_mockchain_source, load_test_vectors};
-use crate::{ChainWork, IndexedBlock};
+use crate::{BlockCacheConfig, ChainWork, IndexedBlock};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn v0_to_v1_full() {
