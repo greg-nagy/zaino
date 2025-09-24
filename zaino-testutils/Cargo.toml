@@ -24,14 +24,14 @@ zcash_client_backend = { workspace = true, features = ["lightwalletd-tonic"] }
 zebra-chain = { workspace = true }
 
 # Zingo-infra
-zingo-infra-services = { git = "https://github.com/zingolabs/infrastructure.git", rev = "6c8ad003491371c2e387c5f9d3ba35c45286257b" }
-zingo_common_components = { git = "https://github.com/zingolabs/infrastructure.git", rev = "6c8ad003491371c2e387c5f9d3ba35c45286257b", features = [ "test" ]}
+zingo-infra-services = { git = "https://github.com/zingolabs/infrastructure.git", rev = "89e0b665967a0dd1950855ad37ce18d9c5a14709" }
+zingo_common_components = { git = "https://github.com/zingolabs/infrastructure.git", rev = "89e0b665967a0dd1950855ad37ce18d9c5a14709", features = [ "test" ]}
+zingo_test_vectors = { git = "https://github.com/zingolabs/infrastructure.git", rev = "89e0b665967a0dd1950855ad37ce18d9c5a14709" }
 
 # ZingoLib
-zingolib = { git = "https://github.com/zingolabs/zingolib.git", rev = "4d43663c35c1f9ca2c03bee0dca27fef3bcd6a1f", features = [
+zingolib = { git = "https://github.com/zingolabs/zingolib.git", rev = "2bd457bc1708fbd3871dd69a6099746d2e41403a", features = [
     "testutils",
 ] }
-testvectors = { workspace = true }
 tracing-subscriber = { workspace = true, features = [
     "fmt",
     "env-filter",
