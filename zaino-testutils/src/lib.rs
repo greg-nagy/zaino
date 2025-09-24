@@ -650,7 +650,7 @@ mod launch_testmanager {
             )
             .await
             .unwrap();
-            let mut grpc_client = build_client(services::network::localhost_uri(
+            let grpc_client = build_client(services::network::localhost_uri(
                 test_manager
                     .zaino_grpc_listen_address
                     .expect("Zaino listen port is not available but zaino is active.")
@@ -826,7 +826,7 @@ mod launch_testmanager {
                 )
                 .await
                 .unwrap();
-                let mut grpc_client = build_client(services::network::localhost_uri(
+                let grpc_client = build_client(services::network::localhost_uri(
                     test_manager
                         .zaino_grpc_listen_address
                         .expect("Zaino listen port not available but zaino is active.")
@@ -1111,7 +1111,7 @@ mod launch_testmanager {
                 )
                 .await
                 .unwrap();
-                let mut grpc_client = build_client(services::network::localhost_uri(
+                let grpc_client = build_client(services::network::localhost_uri(
                     test_manager
                         .zaino_grpc_listen_address
                         .expect("Zaino listen port not available but zaino is active.")
