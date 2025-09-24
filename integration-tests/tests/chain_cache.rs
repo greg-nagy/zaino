@@ -76,7 +76,7 @@ mod chain_query_interface {
         enable_clients: bool,
     ) -> (
         TestManager,
-        StateService,
+        JsonRpSeeConnector,
         NodeBackedChainIndex,
         NodeBackedChainIndexSubscriber,
     ) {
@@ -90,92 +90,123 @@ mod chain_query_interface {
         )
         .await;
 
-        let state_chain_cache_dir = match chain_cache {
-            Some(dir) => dir,
-            None => test_manager.data_dir.clone(),
-        };
-        let network = match test_manager.network.to_string().as_str() {
-            "Regtest" => zebra_chain::parameters::Network::new_regtest(
-                zebra_chain::parameters::testnet::ConfiguredActivationHeights {
-                    before_overwinter: Some(1),
-                    overwinter: Some(1),
-                    sapling: Some(1),
-                    blossom: Some(1),
-                    heartwood: Some(1),
-                    canopy: Some(1),
-                    nu5: Some(1),
-                    nu6: Some(1),
-                    // TODO: What is network upgrade 6.1? What does a minor version NU mean?
-                    nu6_1: None,
-                    nu7: None,
-                },
-            ),
-            "Testnet" => zebra_chain::parameters::Network::new_default_testnet(),
-            "Mainnet" => zebra_chain::parameters::Network::Mainnet,
-            _ => panic!("Incorrect newtork type found."),
-        };
-        let state_service = StateService::spawn(StateServiceConfig::new(
-            zebra_state::Config {
-                cache_dir: state_chain_cache_dir,
-                ephemeral: false,
-                delete_old_database: true,
-                debug_stop_at_height: None,
-                debug_validity_check_interval: None,
-            },
-            test_manager.zebrad_rpc_listen_address,
-            test_manager.zebrad_grpc_listen_address,
-            false,
-            None,
-            None,
-            None,
-            ServiceConfig::default(),
-            StorageConfig {
-                cache: CacheConfig::default(),
-                database: DatabaseConfig {
-                    path: test_manager
-                        .local_net
-                        .data_dir()
-                        .path()
-                        .to_path_buf()
-                        .join("zaino"),
+        match validator {
+            ValidatorKind::Zebrad => {
+                let state_chain_cache_dir = match chain_cache {
+                    Some(dir) => dir,
+                    None => test_manager.data_dir.clone(),
+                };
+                let network = match test_manager.network.to_string().as_str() {
+                    "Regtest" => zebra_chain::parameters::Network::new_regtest(
+                        zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                            before_overwinter: Some(1),
+                            overwinter: Some(1),
+                            sapling: Some(1),
+                            blossom: Some(1),
+                            heartwood: Some(1),
+                            canopy: Some(1),
+                            nu5: Some(1),
+                            nu6: Some(1),
+                            // TODO: What is network upgrade 6.1? What does a minor version NU mean?
+                            nu6_1: None,
+                            nu7: None,
+                        },
+                    ),
+                    "Testnet" => zebra_chain::parameters::Network::new_default_testnet(),
+                    "Mainnet" => zebra_chain::parameters::Network::Mainnet,
+                    _ => panic!("Incorrect newtork type found."),
+                };
+                let state_service = StateService::spawn(StateServiceConfig::new(
+                    zebra_state::Config {
+                        cache_dir: state_chain_cache_dir,
+                        ephemeral: false,
+                        delete_old_database: true,
+                        debug_stop_at_height: None,
+                        debug_validity_check_interval: None,
+                    },
+                    test_manager.zebrad_rpc_listen_address,
+                    test_manager.zebrad_grpc_listen_address,
+                    false,
+                    None,
+                    None,
+                    None,
+                    ServiceConfig::default(),
+                    StorageConfig {
+                        cache: CacheConfig::default(),
+                        database: DatabaseConfig {
+                            path: test_manager
+                                .local_net
+                                .data_dir()
+                                .path()
+                                .to_path_buf()
+                                .join("zaino"),
 
-                    ..Default::default()
-                },
-            },
-            network.into(),
-            true,
-            true,
-        ))
-        .await
-        .unwrap();
-        let temp_dir: TempDir = tempfile::tempdir().unwrap();
-        let db_path: PathBuf = temp_dir.path().to_path_buf();
-        let config = BlockCacheConfig {
-            storage: StorageConfig {
-                database: DatabaseConfig {
-                    path: db_path,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            db_version: 1,
-            network: zaino_common::Network::Regtest(ActivationHeights::default()),
-            no_sync: false,
-            no_db: false,
-        };
-        let chain_index = NodeBackedChainIndex::new(
-            ValidatorConnector::State(chain_index::source::State {
-                read_state_service: state_service.read_state_service().clone(),
-                mempool_fetcher: json_service,
-            }),
-            config,
-        )
-        .await
-        .unwrap();
-        let index_reader = chain_index.subscriber().await;
-        tokio::time::sleep(Duration::from_secs(3)).await;
+                            ..Default::default()
+                        },
+                    },
+                    network.into(),
+                    true,
+                    true,
+                ))
+                .await
+                .unwrap();
+                let temp_dir: TempDir = tempfile::tempdir().unwrap();
+                let db_path: PathBuf = temp_dir.path().to_path_buf();
+                let config = BlockCacheConfig {
+                    storage: StorageConfig {
+                        database: DatabaseConfig {
+                            path: db_path,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                    db_version: 1,
+                    network: zaino_common::Network::Regtest(ActivationHeights::default()),
+                    no_sync: false,
+                    no_db: false,
+                };
+                let chain_index = NodeBackedChainIndex::new(
+                    ValidatorConnector::State(chain_index::source::State {
+                        read_state_service: state_service.read_state_service().clone(),
+                        mempool_fetcher: json_service.clone(),
+                    }),
+                    config,
+                )
+                .await
+                .unwrap();
+                let index_reader = chain_index.subscriber().await;
+                tokio::time::sleep(Duration::from_secs(3)).await;
 
-        (test_manager, state_service, chain_index, index_reader)
+                (test_manager, json_service, chain_index, index_reader)
+            }
+            ValidatorKind::Zcashd => {
+                let temp_dir: TempDir = tempfile::tempdir().unwrap();
+                let db_path: PathBuf = temp_dir.path().to_path_buf();
+                let config = BlockCacheConfig {
+                    storage: StorageConfig {
+                        database: DatabaseConfig {
+                            path: db_path,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                    db_version: 1,
+                    network: zaino_common::Network::Regtest(ActivationHeights::default()),
+                    no_sync: false,
+                    no_db: false,
+                };
+                let chain_index = NodeBackedChainIndex::new(
+                    ValidatorConnector::Fetch(json_service.clone()),
+                    config,
+                )
+                .await
+                .unwrap();
+                let index_reader = chain_index.subscriber().await;
+                tokio::time::sleep(Duration::from_secs(3)).await;
+
+                (test_manager, json_service, chain_index, index_reader)
+            }
+        }
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -353,14 +384,14 @@ mod chain_query_interface {
     }
 
     async fn sync_large_chain(validator: &ValidatorKind) {
-        let (test_manager, state_service, _chain_index, indexer) =
+        let (test_manager, json_service, _chain_index, indexer) =
             create_test_manager_and_chain_index(validator, None, true, false, false, true).await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
         test_manager.generate_blocks_with_delay(5).await;
         {
             let chain_height =
-                Height::try_from(state_service.read_state_service().best_tip().unwrap().0 .0)
+                Height::try_from(json_service.get_blockchain_info().await.unwrap().blocks.0)
                     .unwrap();
             let indexer_height = indexer.snapshot_nonfinalized_state().best_tip.height;
             assert_eq!(chain_height, indexer_height);
@@ -371,7 +402,7 @@ mod chain_query_interface {
         tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
 
         let snapshot = indexer.snapshot_nonfinalized_state();
-        let chain_height = state_service.read_state_service().best_tip().unwrap().0 .0;
+        let chain_height = json_service.get_blockchain_info().await.unwrap().blocks.0;
         let indexer_height = snapshot.best_tip.height;
         assert_eq!(Height::try_from(chain_height).unwrap(), indexer_height);
 
