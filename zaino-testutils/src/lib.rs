@@ -252,13 +252,13 @@ impl zingo_infra_services::validator::Validator for LocalNet {
             zingo_infra_services::validator::Zcashd::load_chain(
                 chain_cache,
                 validator_data_dir,
-                validator_network.into(),
+                validator_network,
             )
         } else if chain_cache.to_string_lossy().contains("zebrad") {
             zingo_infra_services::validator::Zebrad::load_chain(
                 chain_cache,
                 validator_data_dir,
-                validator_network.into(),
+                validator_network,
             )
         } else {
             panic!(
@@ -504,7 +504,7 @@ impl TestManager {
         Ok(Self {
             local_net,
             data_dir,
-            network: network_kind.into(),
+            network: network_kind,
             zebrad_rpc_listen_address,
             zebrad_grpc_listen_address,
             zaino_handle,
