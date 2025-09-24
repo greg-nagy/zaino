@@ -1,7 +1,6 @@
 //! Holds tests for the V1 database.
 
 use std::path::PathBuf;
-use std::str::FromStr;
 use tempfile::TempDir;
 
 use zaino_common::network::ActivationHeights;
@@ -312,7 +311,13 @@ async fn sync_db_from_mockchain() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn load_db_backend_from_file() {
     init_tracing();
-    let db_path = PathBuf::from_str("../vectors/v1_test_db").unwrap();
+
+    let db_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join("chain_index")
+        .join("tests")
+        .join("vectors")
+        .join("v1_test_db");
     let config = BlockCacheConfig {
         storage: StorageConfig {
             database: DatabaseConfig {
