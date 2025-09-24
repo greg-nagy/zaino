@@ -66,6 +66,11 @@ mod mockchain_tests {
             build_mockchain_source(blocks.clone())
         };
 
+        // TODO: the temp_dir is deleted when it goes out of scope
+        // at the end of this function.
+        // Somehow, this isn't breaking the database, but I'm confused
+        // as to how the database works when the directory containing
+        // it is deleted
         let temp_dir: TempDir = tempfile::tempdir().unwrap();
         let db_path: PathBuf = temp_dir.path().to_path_buf();
 
@@ -104,6 +109,18 @@ mod mockchain_tests {
 
         (blocks, indexer, index_reader, source)
     }
+
+    // #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    // #[ignore = "Not a test! Used to build test vector data for zaino_db read tests."]
+    // async fn write_v1_test_db_to_file() {
+    //     let (_block_data, index, _subscriber, _source) =
+    //         load_test_vectors_and_sync_chain_index(false).await;
+    //     let db_file = dbg!(index.finalized_db.cfg.storage.database.path.clone());
+    //     dbg!(std::process::Command::new("cp")
+    //         .args(["-r", db_file.to_str().unwrap(), "./foo"])
+    //         .output()
+    //         .unwrap());
+    // }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_block_range() {

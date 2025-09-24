@@ -1,6 +1,7 @@
 //! Holds tests for the V1 database.
 
 use std::path::PathBuf;
+use std::str::FromStr;
 use tempfile::TempDir;
 
 use zaino_common::network::ActivationHeights;
@@ -8,6 +9,7 @@ use zaino_common::{DatabaseConfig, Network, StorageConfig};
 use zaino_proto::proto::compact_formats::CompactBlock;
 use zebra_rpc::methods::GetAddressUtxos;
 
+use crate::chain_index::finalised_state::db::DbBackend;
 use crate::chain_index::finalised_state::reader::DbReader;
 use crate::chain_index::finalised_state::ZainoDB;
 use crate::chain_index::source::test::MockchainSource;
@@ -198,7 +200,7 @@ async fn delete_blocks_from_db() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn load_db_from_file() {
+async fn sync_db_from_mockchain() {
     init_tracing();
 
     let (blocks, _faucet, _recipient) = load_test_vectors().unwrap();
@@ -305,6 +307,27 @@ async fn load_db_from_file() {
     })
     .join()
     .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn load_db_backend_from_file() {
+    init_tracing();
+    let db_path = PathBuf::from_str("../vectors/v1_test_db").unwrap();
+    let config = BlockCacheConfig {
+        storage: StorageConfig {
+            database: DatabaseConfig {
+                path: db_path,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        db_version: 1,
+        network: Network::Regtest(ActivationHeights::default()),
+
+        no_sync: false,
+        no_db: false,
+    };
+    let finalized_state_backend = DbBackend::spawn_v1(&config).await.unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
