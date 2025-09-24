@@ -47,7 +47,13 @@ async fn get_mempool() {
         let mempool_index = (active_chain_height as usize) + 1;
         let mempool_transactions = block_data
             .get(mempool_index)
-            .map(|b| b.transactions.clone())
+            .map(|b| {
+                b.transactions
+                    .iter()
+                    .filter(|tx| !tx.is_coinbase())
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
             .unwrap_or_default();
 
         let subscriber_tx = subscriber.get_mempool().await;
@@ -170,12 +176,22 @@ async fn get_mempool_transaction() {
     sleep(Duration::from_millis(2000)).await;
 
     let mempool_index = (active_chain_height as usize) + 1;
-    let mempool_transactions = block_data
+
+    let mempool_transactions: Vec<_> = block_data
         .get(mempool_index)
-        .map(|b| b.transactions.clone())
+        .map(|b| {
+            b.transactions
+                .iter()
+                .filter(|tx| !tx.is_coinbase())
+                .cloned()
+                .collect::<Vec<_>>()
+        })
         .unwrap_or_default();
 
-    let target_hash = mempool_transactions[0].hash();
+    let target_transaction = mempool_transactions
+        .first()
+        .expect("expected at least one non-coinbase mempool transaction");
+    let target_hash = target_transaction.hash();
 
     let subscriber_tx = subscriber
         .get_transaction(&MempoolKey {
@@ -266,9 +282,16 @@ async fn get_mempool_stream() {
     sleep(Duration::from_millis(2000)).await;
 
     let mempool_index = (active_chain_height as usize) + 1;
-    let mempool_transactions = block_data
+
+    let mempool_transactions: Vec<_> = block_data
         .get(mempool_index)
-        .map(|b| b.transactions.clone())
+        .map(|b| {
+            b.transactions
+                .iter()
+                .filter(|tx| !tx.is_coinbase())
+                .cloned()
+                .collect::<Vec<_>>()
+        })
         .unwrap_or_default();
 
     let (mut rx, handle) = subscriber.get_mempool_stream(None).await.unwrap();

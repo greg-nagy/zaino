@@ -239,9 +239,16 @@ mod mockchain_tests {
         sleep(Duration::from_millis(2000)).await;
 
         let mempool_height = (dbg!(mockchain.active_height()) as usize) + 1;
-        let mempool_transactions = block_data
+
+        let mempool_transactions: Vec<_> = block_data
             .get(mempool_height)
-            .map(|b| b.transactions.clone())
+            .map(|b| {
+                b.transactions
+                    .iter()
+                    .filter(|tx| !tx.is_coinbase())
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
             .unwrap_or_default();
 
         let nonfinalized_snapshot = index_reader.snapshot_nonfinalized_state();
@@ -279,9 +286,16 @@ mod mockchain_tests {
         sleep(Duration::from_millis(2000)).await;
 
         let mempool_height = (dbg!(mockchain.active_height()) as usize) + 1;
-        let mempool_transactions = block_data
+
+        let mempool_transactions: Vec<_> = block_data
             .get(mempool_height)
-            .map(|b| b.transactions.clone())
+            .map(|b| {
+                b.transactions
+                    .iter()
+                    .filter(|tx| !tx.is_coinbase())
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
             .unwrap_or_default();
 
         let nonfinalized_snapshot = index_reader.snapshot_nonfinalized_state();
@@ -317,9 +331,15 @@ mod mockchain_tests {
         sleep(Duration::from_millis(2000)).await;
 
         let mempool_height = (dbg!(mockchain.active_height()) as usize) + 1;
-        let mut mempool_transactions = block_data
+        let mut mempool_transactions: Vec<_> = block_data
             .get(mempool_height)
-            .map(|b| b.transactions.clone())
+            .map(|b| {
+                b.transactions
+                    .iter()
+                    .filter(|tx| !tx.is_coinbase())
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
             .unwrap_or_default();
         mempool_transactions.sort_by_key(|a| a.hash());
 
@@ -357,9 +377,15 @@ mod mockchain_tests {
         sleep(Duration::from_millis(2000)).await;
 
         let mempool_height = (dbg!(mockchain.active_height()) as usize) + 1;
-        let mut mempool_transactions = block_data
+        let mut mempool_transactions: Vec<_> = block_data
             .get(mempool_height)
-            .map(|b| b.transactions.clone())
+            .map(|b| {
+                b.transactions
+                    .iter()
+                    .filter(|tx| !tx.is_coinbase())
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
             .unwrap_or_default();
         let exclude_tx = mempool_transactions.pop().unwrap();
         dbg!(&exclude_tx.hash());
@@ -416,9 +442,15 @@ mod mockchain_tests {
         sleep(Duration::from_millis(2000)).await;
 
         let next_mempool_height_index = (dbg!(mockchain.active_height()) as usize) + 1;
-        let mut mempool_transactions = block_data
+        let mut mempool_transactions: Vec<_> = block_data
             .get(next_mempool_height_index)
-            .map(|block| block.transactions.clone())
+            .map(|b| {
+                b.transactions
+                    .iter()
+                    .filter(|tx| !tx.is_coinbase())
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
             .unwrap_or_default();
         mempool_transactions.sort_by_key(|transaction| transaction.hash());
 
