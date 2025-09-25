@@ -196,53 +196,37 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         // Set up staging channel for block processing
         let staging_channel = StagingChannel::new(100);
 
-        // Create temporary instance to access helper methods
-        let temp_self = Self {
-            source,
-            staged: staging_channel.receiver,
-            staging_sender: staging_channel.sender,
-            current: ArcSwap::new(Arc::new(NonfinalizedBlockCacheSnapshot {
-                blocks: HashMap::new(),
-                heights_to_hashes: HashMap::new(),
-                best_tip: BestTip {
-                    height: Height(0),
-                    blockhash: BlockHash([0; 32]),
-                },
-            })),
-            network,
-            nfs_change_listener: None,
-        };
-
         // Resolve the initial block (provided or genesis)
-        let initial_block = temp_self.resolve_initial_block(start_block).await?;
+        let initial_block = Self::resolve_initial_block(&source, &network, start_block).await?;
 
         // Create initial snapshot from the block
         let snapshot = NonfinalizedBlockCacheSnapshot::from_initial_block(initial_block)?;
 
         // Set up optional listener
-        let nfs_change_listener = temp_self.setup_listener().await;
+        let nfs_change_listener = Self::setup_listener(&source).await;
 
         Ok(Self {
-            source: temp_self.source,
-            staged: temp_self.staged,
-            staging_sender: temp_self.staging_sender,
+            source,
+            staged: staging_channel.receiver,
+            staging_sender: staging_channel.sender,
             current: ArcSwap::new(Arc::new(snapshot)),
-            network: temp_self.network,
+            network,
             nfs_change_listener,
         })
     }
 
     /// Fetch and parse the genesis block from the blockchain source
-    async fn fetch_genesis_block(&self) -> Result<IndexedBlock, InitError> {
-        let genesis_block = self
-            .source
+    async fn fetch_genesis_block(
+        source: &Source,
+        network: &Network,
+    ) -> Result<IndexedBlock, InitError> {
+        let genesis_block = source
             .get_block(HashOrHeight::Height(zebra_chain::block::Height(0)))
             .await
             .map_err(|e| InitError::InvalidNodeData(Box::new(e)))?
             .ok_or_else(|| InitError::InvalidNodeData(Box::new(MissingGenesisBlock)))?;
 
-        let (sapling_root_and_len, orchard_root_and_len) = self
-            .source
+        let (sapling_root_and_len, orchard_root_and_len) = source
             .get_commitment_tree_roots(genesis_block.hash().into())
             .await
             .map_err(|e| InitError::InvalidNodeData(Box::new(e)))?;
@@ -263,7 +247,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                     .bytes_in_display_order(),
             ),
             block_commitments: match genesis_block
-                .commitment(&self.network)
+                .commitment(network)
                 .map_err(|e| InitError::InvalidNodeData(Box::new(e)))?
             {
                 zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
@@ -404,24 +388,25 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
 
     /// Resolve the initial block - either use provided block or fetch genesis
     async fn resolve_initial_block(
-        &self,
+        source: &Source,
+        network: &Network,
         start_block: Option<IndexedBlock>,
     ) -> Result<IndexedBlock, InitError> {
         match start_block {
             Some(block) => Ok(block),
-            None => self.fetch_genesis_block().await,
+            None => Self::fetch_genesis_block(source, network).await,
         }
     }
 
     /// Set up the optional non-finalized change listener
     async fn setup_listener(
-        &self,
+        source: &Source,
     ) -> Option<
         Mutex<
             tokio::sync::mpsc::Receiver<(zebra_chain::block::Hash, Arc<zebra_chain::block::Block>)>,
         >,
     > {
-        self.source
+        source
             .nonfinalized_listener()
             .await
             .ok()
