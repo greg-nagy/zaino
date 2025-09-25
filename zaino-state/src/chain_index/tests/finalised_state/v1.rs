@@ -322,7 +322,7 @@ async fn load_db_backend_from_file() {
     let config = BlockCacheConfig {
         storage: StorageConfig {
             database: DatabaseConfig {
-                path: db_path,
+                path: db_path.clone(),
                 ..Default::default()
             },
             ..Default::default()
@@ -335,7 +335,7 @@ async fn load_db_backend_from_file() {
     };
     let finalized_state_backend = DbBackend::spawn_v1(&config).await.unwrap();
 
-    for height in 0..100 {
+    for height in 0..=100 {
         dbg!(height);
         let block = finalized_state_backend
             .get_chain_block(Height(height))
@@ -344,6 +344,12 @@ async fn load_db_backend_from_file() {
             .unwrap();
         assert_eq!(block.index.height, Some(Height(height)));
     }
+    assert!(finalized_state_backend
+        .get_chain_block(Height(101))
+        .await
+        .unwrap()
+        .is_none());
+    std::fs::remove_file(db_path.join("regtest").join("v1").join("lock.mdb")).unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
