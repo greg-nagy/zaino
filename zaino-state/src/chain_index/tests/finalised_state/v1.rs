@@ -8,6 +8,7 @@ use zaino_common::{DatabaseConfig, Network, StorageConfig};
 use zaino_proto::proto::compact_formats::CompactBlock;
 use zebra_rpc::methods::GetAddressUtxos;
 
+use crate::chain_index::finalised_state::capability::IndexedBlockExt;
 use crate::chain_index::finalised_state::db::DbBackend;
 use crate::chain_index::finalised_state::reader::DbReader;
 use crate::chain_index::finalised_state::ZainoDB;
@@ -333,6 +334,16 @@ async fn load_db_backend_from_file() {
         no_db: false,
     };
     let finalized_state_backend = DbBackend::spawn_v1(&config).await.unwrap();
+
+    for height in 0..100 {
+        dbg!(height);
+        let block = finalized_state_backend
+            .get_chain_block(Height(height))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(block.index.height, Some(Height(height)));
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
