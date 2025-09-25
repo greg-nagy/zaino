@@ -1,6 +1,6 @@
 use super::{finalised_state::ZainoDB, source::BlockchainSource};
 use crate::{
-    chain_index::types::{self, BlockHash, BlockMetadata, BlockWithMetadata, Height},
+    chain_index::types::{self, BlockHash, BlockMetadata, BlockWithMetadata, Height, TreeRootData},
     error::FinalisedStateError,
     ChainWork, IndexedBlock,
 };
@@ -229,10 +229,10 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
             .await
             .map_err(|e| InitError::InvalidNodeData(Box::new(e)))?;
 
-        let ((sapling_root, sapling_size), (orchard_root, orchard_size)) = (
-            sapling_root_and_len.unwrap_or_default(),
-            orchard_root_and_len.unwrap_or_default(),
-        );
+        let tree_roots = TreeRootData {
+            sapling: sapling_root_and_len,
+            orchard: orchard_root_and_len,
+        };
 
         // For genesis block, chainwork is just the block's own work (no previous blocks)
         let genesis_work = ChainWork::from(U256::from(
@@ -248,19 +248,13 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 .as_u128(),
         ));
 
-        // Use the new BlockWithMetadata interface for better maintainability
-        let metadata = BlockMetadata::new(
-            sapling_root,
-            sapling_size as u32,
-            orchard_root,
-            orchard_size as u32,
-            genesis_work.clone(),
+        Self::create_indexed_block_with_optional_roots(
+            genesis_block.as_ref(),
+            &tree_roots,
+            genesis_work,
             network.clone(),
-        );
-
-        let block_with_metadata = BlockWithMetadata::new(genesis_block.as_ref(), metadata);
-        IndexedBlock::try_from(block_with_metadata)
-            .map_err(|e| InitError::InvalidNodeData(Box::new(InvalidData(e))))
+        )
+        .map_err(|e| InitError::InvalidNodeData(Box::new(InvalidData(e))))
     }
 
     /// Resolve the initial block - either use provided block or fetch genesis
@@ -675,36 +669,89 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         prev_block: &IndexedBlock,
         block: &zebra_chain::block::Block,
     ) -> Result<IndexedBlock, SyncError> {
-        let (sapling_root_and_len, orchard_root_and_len) = self
-            .source
-            .get_commitment_tree_roots(block.hash().into())
+        let tree_roots = self
+            .get_tree_roots_from_source(block.hash().into())
             .await
             .map_err(|e| {
                 SyncError::ZebradConnectionError(NodeConnectionError::UnrecoverableError(Box::new(
-                    e,
+                    InvalidData(format!("{}", e)),
                 )))
             })?;
-        let ((sapling_root, sapling_size), (orchard_root, orchard_size)) = (
-            sapling_root_and_len.unwrap_or_default(),
-            orchard_root_and_len.unwrap_or_default(),
-        );
+
+        Self::create_indexed_block_with_required_roots(
+            block,
+            &tree_roots,
+            prev_block.chainwork().clone(),
+            self.network.clone(),
+        )
+        .map_err(|e| {
+            SyncError::ZebradConnectionError(NodeConnectionError::UnrecoverableError(Box::new(
+                InvalidData(e),
+            )))
+        })
+    }
+
+    /// Get commitment tree roots from the blockchain source
+    async fn get_tree_roots_from_source(
+        &self,
+        block_hash: BlockHash,
+    ) -> Result<TreeRootData, super::source::BlockchainSourceError> {
+        let (sapling_root_and_len, orchard_root_and_len) = self
+            .source
+            .get_commitment_tree_roots(block_hash)
+            .await?;
+
+        Ok(TreeRootData {
+            sapling: sapling_root_and_len,
+            orchard: orchard_root_and_len,
+        })
+    }
+
+    /// Create IndexedBlock with optional tree roots (for genesis/sync cases)
+    fn create_indexed_block_with_optional_roots(
+        block: &zebra_chain::block::Block,
+        tree_roots: &TreeRootData,
+        parent_chainwork: ChainWork,
+        network: Network,
+    ) -> Result<IndexedBlock, String> {
+        let (sapling_root, sapling_size, orchard_root, orchard_size) =
+            tree_roots.clone().extract_with_defaults();
 
         let metadata = BlockMetadata::new(
             sapling_root,
             sapling_size as u32,
             orchard_root,
             orchard_size as u32,
-            prev_block.chainwork().clone(),
-            self.network.clone(),
+            parent_chainwork,
+            network,
         );
 
         let block_with_metadata = BlockWithMetadata::new(block, metadata);
         IndexedBlock::try_from(block_with_metadata)
-            .map_err(|e| {
-                SyncError::ZebradConnectionError(NodeConnectionError::UnrecoverableError(Box::new(
-                    InvalidData(e),
-                )))
-            })
+    }
+
+    /// Create IndexedBlock with required tree roots (for finalized state cases)
+    fn create_indexed_block_with_required_roots(
+        block: &zebra_chain::block::Block,
+        tree_roots: &TreeRootData,
+        parent_chainwork: ChainWork,
+        network: Network,
+    ) -> Result<IndexedBlock, String> {
+        let (sapling_root, sapling_size, orchard_root, orchard_size) =
+            tree_roots.clone().extract_required()
+                .map_err(|e| format!("Missing required tree roots: {}", e))?;
+
+        let metadata = BlockMetadata::new(
+            sapling_root,
+            sapling_size as u32,
+            orchard_root,
+            orchard_size as u32,
+            parent_chainwork,
+            network,
+        );
+
+        let block_with_metadata = BlockWithMetadata::new(block, metadata);
+        IndexedBlock::try_from(block_with_metadata)
     }
 }
 
