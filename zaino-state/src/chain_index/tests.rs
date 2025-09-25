@@ -110,18 +110,6 @@ mod mockchain_tests {
         (blocks, indexer, index_reader, source)
     }
 
-    // #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    // #[ignore = "Not a test! Used to build test vector data for zaino_db read tests."]
-    // async fn write_v1_test_db_to_file() {
-    //     let (_block_data, index, _subscriber, _source) =
-    //         load_test_vectors_and_sync_chain_index(false).await;
-    //     let db_file = dbg!(index.finalized_db.cfg.storage.database.path.clone());
-    //     dbg!(std::process::Command::new("cp")
-    //         .args(["-r", db_file.to_str().unwrap(), "./foo"])
-    //         .output()
-    //         .unwrap());
-    // }
-
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_block_range() {
         let (blocks, _indexer, index_reader, _mockchain) =

@@ -32,7 +32,7 @@ use super::source::BlockchainSource;
 
 pub(crate) struct ZainoDB {
     db: Arc<Router>,
-    pub(crate) cfg: BlockCacheConfig,
+    cfg: BlockCacheConfig,
 }
 
 impl ZainoDB {
