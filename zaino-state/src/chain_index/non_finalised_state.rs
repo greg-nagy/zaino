@@ -292,9 +292,38 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
     /// sync to the top of the chain, trimming to the finalised tip.
     pub(super) async fn sync(&self, finalized_db: Arc<ZainoDB>) -> Result<(), SyncError> {
         let initial_state = self.get_snapshot();
-        let mut new_blocks = Vec::new();
         let mut nonbest_blocks = HashMap::new();
+
+        // Fetch main chain blocks and handle reorgs
+        let new_blocks = self
+            .fetch_main_chain_blocks(&initial_state, &mut nonbest_blocks)
+            .await?;
+
+        // Stage and update new blocks
+        self.stage_new_blocks(new_blocks, &finalized_db).await?;
+
+        // Handle non-finalized change listener
+        self.handle_nfs_change_listener(&mut nonbest_blocks).await?;
+
+        // Update finalized state
+        self.update(finalized_db.clone()).await?;
+
+        // Process non-best chain blocks
+        self.process_nonbest_blocks(nonbest_blocks, &finalized_db)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Fetch main chain blocks and handle reorgs
+    async fn fetch_main_chain_blocks(
+        &self,
+        initial_state: &NonfinalizedBlockCacheSnapshot,
+        nonbest_blocks: &mut HashMap<zebra_chain::block::Hash, Arc<zebra_chain::block::Block>>,
+    ) -> Result<Vec<IndexedBlock>, SyncError> {
+        let mut new_blocks = Vec::new();
         let mut best_tip = initial_state.best_tip;
+
         // currently this only gets main-chain blocks
         // once readstateservice supports serving sidechain data, this
         // must be rewritten to match
@@ -314,9 +343,9 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 )))
             })?
         {
-            // If this block is next in the chain, we sync it as normal
             let parent_hash = BlockHash::from(block.header.previous_block_hash);
             if parent_hash == best_tip.blockhash {
+                // Normal chain progression
                 let prev_block = match new_blocks.last() {
                     Some(block) => block,
                     None => initial_state
@@ -346,40 +375,55 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 };
                 new_blocks.push(chainblock.clone());
             } else {
+                // Handle reorg
                 info!("Reorg detected at height {}", best_tip.height + 1);
-                let mut next_height_down = best_tip.height - 1;
-                // If not, there's been a reorg, and we need to adjust our best-tip
-                let prev_hash = loop {
-                    if next_height_down == Height(0) {
-                        return Err(SyncError::ReorgFailure(
-                            "attempted to reorg below chain genesis".to_string(),
-                        ));
-                    }
-                    match initial_state
-                        .blocks
-                        .values()
-                        .find(|block| block.height() == Some(next_height_down))
-                        .map(IndexedBlock::hash)
-                    {
-                        Some(hash) => break hash,
-                        // There is a hole in our database.
-                        // TODO: An error return may be more appropriate here
-                        None => next_height_down = next_height_down - 1,
-                    }
-                };
-
-                best_tip = BestTip {
-                    height: next_height_down,
-                    blockhash: *prev_hash,
-                };
-                // We can't calculate things like chainwork until we
-                // know the parent block
-                // this is done separately, after we've updated with the
-                // best chain blocks
+                best_tip = self.handle_reorg(initial_state, best_tip)?;
                 nonbest_blocks.insert(block.hash(), block);
             }
         }
 
+        Ok(new_blocks)
+    }
+
+    /// Handle a blockchain reorg by finding the common ancestor
+    fn handle_reorg(
+        &self,
+        initial_state: &NonfinalizedBlockCacheSnapshot,
+        current_tip: BestTip,
+    ) -> Result<BestTip, SyncError> {
+        let mut next_height_down = current_tip.height - 1;
+
+        let prev_hash = loop {
+            if next_height_down == Height(0) {
+                return Err(SyncError::ReorgFailure(
+                    "attempted to reorg below chain genesis".to_string(),
+                ));
+            }
+            match initial_state
+                .blocks
+                .values()
+                .find(|block| block.height() == Some(next_height_down))
+                .map(IndexedBlock::hash)
+            {
+                Some(hash) => break hash,
+                // There is a hole in our database.
+                // TODO: An error return may be more appropriate here
+                None => next_height_down = next_height_down - 1,
+            }
+        };
+
+        Ok(BestTip {
+            height: next_height_down,
+            blockhash: *prev_hash,
+        })
+    }
+
+    /// Stage new blocks and update the cache
+    async fn stage_new_blocks(
+        &self,
+        new_blocks: Vec<IndexedBlock>,
+        finalized_db: &Arc<ZainoDB>,
+    ) -> Result<(), SyncError> {
         for block in new_blocks {
             if let Err(e) = self
                 .sync_stage_update_loop(block, finalized_db.clone())
@@ -388,37 +432,54 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 return Err(e.into());
             }
         }
+        Ok(())
+    }
 
-        if let Some(ref listener) = self.nfs_change_listener {
-            let Some(mut listener) = listener.try_lock() else {
-                warn!("Error fetching non-finalized change listener");
-                return Err(SyncError::CompetingSyncProcess);
-            };
-            loop {
-                match listener.try_recv() {
-                    Ok((hash, block)) => {
-                        if !self
-                            .current
-                            .load()
-                            .blocks
-                            .contains_key(&types::BlockHash(hash.0))
-                        {
-                            nonbest_blocks.insert(block.hash(), block);
-                        }
+    /// Handle non-finalized change listener events
+    async fn handle_nfs_change_listener(
+        &self,
+        nonbest_blocks: &mut HashMap<zebra_chain::block::Hash, Arc<zebra_chain::block::Block>>,
+    ) -> Result<(), SyncError> {
+        let Some(ref listener) = self.nfs_change_listener else {
+            return Ok(());
+        };
+
+        let Some(mut listener) = listener.try_lock() else {
+            warn!("Error fetching non-finalized change listener");
+            return Err(SyncError::CompetingSyncProcess);
+        };
+
+        loop {
+            match listener.try_recv() {
+                Ok((hash, block)) => {
+                    if !self
+                        .current
+                        .load()
+                        .blocks
+                        .contains_key(&types::BlockHash(hash.0))
+                    {
+                        nonbest_blocks.insert(block.hash(), block);
                     }
-                    Err(mpsc::error::TryRecvError::Empty) => break,
-                    Err(e @ mpsc::error::TryRecvError::Disconnected) => {
-                        return Err(SyncError::ZebradConnectionError(
-                            NodeConnectionError::UnrecoverableError(Box::new(e)),
-                        ))
-                    }
+                }
+                Err(mpsc::error::TryRecvError::Empty) => break,
+                Err(e @ mpsc::error::TryRecvError::Disconnected) => {
+                    return Err(SyncError::ZebradConnectionError(
+                        NodeConnectionError::UnrecoverableError(Box::new(e)),
+                    ))
                 }
             }
         }
+        Ok(())
+    }
 
-        self.update(finalized_db.clone()).await?;
-
+    /// Process non-best chain blocks iteratively
+    async fn process_nonbest_blocks(
+        &self,
+        mut nonbest_blocks: HashMap<zebra_chain::block::Hash, Arc<zebra_chain::block::Block>>,
+        finalized_db: &Arc<ZainoDB>,
+    ) -> Result<(), SyncError> {
         let mut nonbest_chainblocks = HashMap::new();
+
         loop {
             let (next_up, later): (Vec<_>, Vec<_>) = nonbest_blocks
                 .into_iter()
