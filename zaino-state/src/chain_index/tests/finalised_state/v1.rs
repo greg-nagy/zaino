@@ -335,13 +335,17 @@ async fn load_db_backend_from_file() {
     };
     let finalized_state_backend = DbBackend::spawn_v1(&config).await.unwrap();
 
+    let mut prev_hash = None;
     for height in 0..=100 {
-        dbg!(height);
         let block = finalized_state_backend
             .get_chain_block(Height(height))
             .await
             .unwrap()
             .unwrap();
+        if let Some(prev_hash) = prev_hash {
+            assert_eq!(prev_hash, block.index().parent_hash);
+        }
+        prev_hash = Some(block.index().hash);
         assert_eq!(block.index.height, Some(Height(height)));
     }
     assert!(finalized_state_backend
