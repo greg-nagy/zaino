@@ -1,6 +1,6 @@
 use super::{finalised_state::ZainoDB, source::BlockchainSource};
 use crate::{
-    chain_index::types::{self, BlockHash, Height},
+    chain_index::types::{self, BlockHash, BlockMetadata, BlockWithMetadata, Height},
     error::FinalisedStateError,
     ChainWork, IndexedBlock,
 };
@@ -248,17 +248,19 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 .as_u128(),
         ));
 
-        // Use the existing TryFrom implementation to convert the block
-        IndexedBlock::try_from((
-            genesis_block.as_ref(),
+        // Use the new BlockWithMetadata interface for better maintainability
+        let metadata = BlockMetadata::new(
             sapling_root,
             sapling_size as u32,
             orchard_root,
             orchard_size as u32,
-            &genesis_work,
-            network,
-        ))
-        .map_err(|e| InitError::InvalidNodeData(Box::new(InvalidData(e))))
+            genesis_work.clone(),
+            network.clone(),
+        );
+
+        let block_with_metadata = BlockWithMetadata::new(genesis_block.as_ref(), metadata);
+        IndexedBlock::try_from(block_with_metadata)
+            .map_err(|e| InitError::InvalidNodeData(Box::new(InvalidData(e))))
     }
 
     /// Resolve the initial block - either use provided block or fetch genesis
@@ -687,20 +689,22 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
             orchard_root_and_len.unwrap_or_default(),
         );
 
-        IndexedBlock::try_from((
-            block,
+        let metadata = BlockMetadata::new(
             sapling_root,
             sapling_size as u32,
             orchard_root,
             orchard_size as u32,
-            prev_block.chainwork(),
-            &self.network,
-        ))
-        .map_err(|e| {
-            SyncError::ZebradConnectionError(NodeConnectionError::UnrecoverableError(Box::new(
-                InvalidData(e),
-            )))
-        })
+            prev_block.chainwork().clone(),
+            self.network.clone(),
+        );
+
+        let block_with_metadata = BlockWithMetadata::new(block, metadata);
+        IndexedBlock::try_from(block_with_metadata)
+            .map_err(|e| {
+                SyncError::ZebradConnectionError(NodeConnectionError::UnrecoverableError(Box::new(
+                    InvalidData(e),
+                )))
+            })
     }
 }
 

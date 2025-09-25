@@ -1620,57 +1620,6 @@ impl TryFrom<BlockWithMetadata<'_>> for IndexedBlock {
     }
 }
 
-// Keep the old tuple-based TryFrom for backward compatibility
-#[deprecated(
-    note = "Use BlockWithMetadata instead of the tuple interface for better maintainability"
-)]
-impl
-    TryFrom<(
-        &zebra_chain::block::Block,
-        zebra_chain::sapling::tree::Root,
-        u32,
-        zebra_chain::orchard::tree::Root,
-        u32,
-        &ChainWork,
-        &zebra_chain::parameters::Network,
-    )> for IndexedBlock
-{
-    // TODO: update error type.
-    type Error = String;
-
-    fn try_from(
-        (
-            block,
-            sapling_root,
-            sapling_root_size,
-            orchard_root,
-            orchard_root_size,
-            parent_chain_work,
-            network,
-        ): (
-            &zebra_chain::block::Block,
-            zebra_chain::sapling::tree::Root,
-            u32,
-            zebra_chain::orchard::tree::Root,
-            u32,
-            &ChainWork,
-            &zebra_chain::parameters::Network,
-        ),
-    ) -> Result<Self, Self::Error> {
-        // Convert to the new intermediate type and delegate
-        let metadata = BlockMetadata::new(
-            sapling_root,
-            sapling_root_size,
-            orchard_root,
-            orchard_root_size,
-            parent_chain_work.clone(),
-            network.clone(),
-        );
-
-        let block_with_metadata = BlockWithMetadata::new(block, metadata);
-        IndexedBlock::try_from(block_with_metadata)
-    }
-}
 
 impl ZainoVersionedSerialise for IndexedBlock {
     const VERSION: u8 = version::V1;
