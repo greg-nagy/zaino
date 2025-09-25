@@ -1,10 +1,8 @@
 use super::{finalised_state::ZainoDB, source::BlockchainSource};
 use crate::{
-    chain_index::types::{self, BlockHash, Height, TransactionHash, GENESIS_HEIGHT},
+    chain_index::types::{self, BlockHash, Height},
     error::FinalisedStateError,
-    BlockData, BlockIndex, ChainWork, CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes,
-    CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactTxData, IndexedBlock,
-    OrchardCompactTx, SaplingCompactTx, TransparentCompactTx, TxInCompact, TxOutCompact,
+    ChainWork, IndexedBlock,
 };
 use arc_swap::ArcSwap;
 use futures::lock::Mutex;
@@ -215,8 +213,8 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         })
     }
 
-    /// Fetch and parse the genesis block from the blockchain source
-    async fn fetch_genesis_block(
+    /// Fetch the genesis block and convert it to IndexedBlock
+    async fn get_genesis_indexed_block(
         source: &Source,
         network: &Network,
     ) -> Result<IndexedBlock, InitError> {
@@ -236,154 +234,31 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
             orchard_root_and_len.unwrap_or_default(),
         );
 
-        let data = BlockData {
-            version: genesis_block.header.version,
-            time: genesis_block.header.time.timestamp(),
-            merkle_root: genesis_block.header.merkle_root.0,
-            bits: u32::from_be_bytes(
-                genesis_block
-                    .header
-                    .difficulty_threshold
-                    .bytes_in_display_order(),
-            ),
-            block_commitments: match genesis_block
-                .commitment(network)
-                .map_err(|e| InitError::InvalidNodeData(Box::new(e)))?
-            {
-                zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
-                zebra_chain::block::Commitment::FinalSaplingRoot(root) => root.into(),
-                zebra_chain::block::Commitment::ChainHistoryActivationReserved => [0; 32],
-                zebra_chain::block::Commitment::ChainHistoryRoot(chain_history_mmr_root_hash) => {
-                    chain_history_mmr_root_hash.bytes_in_serialized_order()
-                }
-                zebra_chain::block::Commitment::ChainHistoryBlockTxAuthCommitment(
-                    chain_history_block_tx_auth_commitment_hash,
-                ) => chain_history_block_tx_auth_commitment_hash.bytes_in_serialized_order(),
-            },
-            nonce: *genesis_block.header.nonce,
-            solution: genesis_block.header.solution.into(),
-        };
-
-        let mut transactions = Vec::new();
-        for (i, trnsctn) in genesis_block.transactions.iter().enumerate() {
-            let transparent = TransparentCompactTx::new(
-                trnsctn
-                    .inputs()
-                    .iter()
-                    .filter_map(|input| {
-                        input
-                            .outpoint()
-                            .map(|outpoint| TxInCompact::new(outpoint.hash.0, outpoint.index))
-                    })
-                    .collect(),
-                trnsctn
-                    .outputs()
-                    .iter()
-                    .filter_map(|output| {
-                        TxOutCompact::try_from((
-                            u64::from(output.value),
-                            output.lock_script.as_raw_bytes(),
-                        ))
-                        .ok()
-                    })
-                    .collect(),
-            );
-
-            let sapling = SaplingCompactTx::new(
-                Some(i64::from(trnsctn.sapling_value_balance().sapling_amount())),
-                trnsctn
-                    .sapling_nullifiers()
-                    .map(|nf| CompactSaplingSpend::new(*nf.0))
-                    .collect(),
-                trnsctn
-                    .sapling_outputs()
-                    .map(|output| {
-                        CompactSaplingOutput::new(
-                            output.cm_u.to_bytes(),
-                            <[u8; 32]>::from(output.ephemeral_key),
-                            // This unwrap is unnecessary, but to remove it one would need to write
-                            // a new array of [input[0], input[1]..] and enumerate all 52 elements
-                            //
-                            // This would be uglier than the unwrap
-                            <[u8; 580]>::from(output.enc_ciphertext)[..52]
-                                .try_into()
-                                .unwrap(),
-                        )
-                    })
-                    .collect(),
-            );
-            let orchard = OrchardCompactTx::new(
-                Some(i64::from(trnsctn.orchard_value_balance().orchard_amount())),
-                trnsctn
-                    .orchard_actions()
-                    .map(|action| {
-                        CompactOrchardAction::new(
-                            <[u8; 32]>::from(action.nullifier),
-                            <[u8; 32]>::from(action.cm_x),
-                            <[u8; 32]>::from(action.ephemeral_key),
-                            // This unwrap is unnecessary, but to remove it one would need to write
-                            // a new array of [input[0], input[1]..] and enumerate all 52 elements
-                            //
-                            // This would be uglier than the unwrap
-                            <[u8; 580]>::from(action.enc_ciphertext)[..52]
-                                .try_into()
-                                .unwrap(),
-                        )
-                    })
-                    .collect(),
-            );
-
-            let txdata = CompactTxData::new(
-                i as u64,
-                TransactionHash(trnsctn.hash().0),
-                transparent,
-                sapling,
-                orchard,
-            );
-            transactions.push(txdata);
-        }
-
-        let height = Some(GENESIS_HEIGHT);
-        let hash = BlockHash::from(genesis_block.hash());
-        let parent_hash = BlockHash::from(genesis_block.header.previous_block_hash);
-        let chainwork = ChainWork::from(U256::from(
+        // For genesis block, chainwork is just the block's own work (no previous blocks)
+        let genesis_work = ChainWork::from(U256::from(
             genesis_block
                 .header
                 .difficulty_threshold
                 .to_work()
                 .ok_or_else(|| {
                     InitError::InvalidNodeData(Box::new(InvalidData(format!(
-                        "Invalid work field of block {hash} {height:?}"
+                        "Invalid work field of genesis block"
                     ))))
                 })?
                 .as_u128(),
         ));
 
-        let index = BlockIndex {
-            hash,
-            parent_hash,
-            chainwork,
-            height,
-        };
-
-        //TODO: Is a default (zero) root correct?
-        let commitment_tree_roots = CommitmentTreeRoots::new(
-            <[u8; 32]>::from(sapling_root),
-            <[u8; 32]>::from(orchard_root),
-        );
-
-        let commitment_tree_size =
-            CommitmentTreeSizes::new(sapling_size as u32, orchard_size as u32);
-
-        let commitment_tree_data =
-            CommitmentTreeData::new(commitment_tree_roots, commitment_tree_size);
-
-        Ok(IndexedBlock {
-            index,
-            data,
-            transactions,
-            commitment_tree_data,
-        })
+        // Use the existing TryFrom implementation to convert the block
+        IndexedBlock::try_from((
+            genesis_block.as_ref(),
+            sapling_root,
+            sapling_size as u32,
+            orchard_root,
+            orchard_size as u32,
+            &genesis_work,
+            network,
+        ))
+        .map_err(|e| InitError::InvalidNodeData(Box::new(InvalidData(e))))
     }
 
     /// Resolve the initial block - either use provided block or fetch genesis
@@ -394,7 +269,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
     ) -> Result<IndexedBlock, InitError> {
         match start_block {
             Some(block) => Ok(block),
-            None => Self::fetch_genesis_block(source, network).await,
+            None => Self::get_genesis_indexed_block(source, network).await,
         }
     }
 

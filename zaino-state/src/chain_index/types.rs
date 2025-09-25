@@ -872,6 +872,21 @@ impl BlockData {
         }
     }
 
+    /// Convert zebra block commitment to 32-byte array
+    pub fn commitment_to_bytes(commitment: zebra_chain::block::Commitment) -> [u8; 32] {
+        match commitment {
+            zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
+            zebra_chain::block::Commitment::FinalSaplingRoot(root) => root.into(),
+            zebra_chain::block::Commitment::ChainHistoryActivationReserved => [0; 32],
+            zebra_chain::block::Commitment::ChainHistoryRoot(chain_history_mmr_root_hash) => {
+                chain_history_mmr_root_hash.bytes_in_serialized_order()
+            }
+            zebra_chain::block::Commitment::ChainHistoryBlockTxAuthCommitment(
+                chain_history_block_tx_auth_commitment_hash,
+            ) => chain_history_block_tx_auth_commitment_hash.bytes_in_serialized_order(),
+        }
+    }
+
     /// Returns block Version.
     pub fn version(&self) -> u32 {
         self.version
@@ -1400,20 +1415,11 @@ impl
             time: block.header.time.timestamp(),
             merkle_root: block.header.merkle_root.0,
             bits: u32::from_be_bytes(block.header.difficulty_threshold.bytes_in_display_order()),
-            block_commitments: match block
-                .commitment(network)
-                .map_err(|_| "Block commitment could not be computed".to_string())?
-            {
-                zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
-                zebra_chain::block::Commitment::FinalSaplingRoot(root) => root.into(),
-                zebra_chain::block::Commitment::ChainHistoryActivationReserved => [0; 32],
-                zebra_chain::block::Commitment::ChainHistoryRoot(chain_history_mmr_root_hash) => {
-                    chain_history_mmr_root_hash.bytes_in_serialized_order()
-                }
-                zebra_chain::block::Commitment::ChainHistoryBlockTxAuthCommitment(
-                    chain_history_block_tx_auth_commitment_hash,
-                ) => chain_history_block_tx_auth_commitment_hash.bytes_in_serialized_order(),
-            },
+            block_commitments: BlockData::commitment_to_bytes(
+                block
+                    .commitment(network)
+                    .map_err(|_| "Block commitment could not be computed".to_string())?,
+            ),
 
             nonce: *block.header.nonce,
             solution: block.header.solution.into(),
