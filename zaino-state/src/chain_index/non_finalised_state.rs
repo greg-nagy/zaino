@@ -399,7 +399,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                             ))
                         })?,
                 };
-                let chainblock = self.block_to_chainblock(prev_block, &block).await?;
+                let chainblock = dbg!(self.block_to_chainblock(prev_block, &block).await)?;
                 info!(
                     "syncing block {} at height {}",
                     &chainblock.index().hash(),
