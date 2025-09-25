@@ -696,10 +696,8 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         &self,
         block_hash: BlockHash,
     ) -> Result<TreeRootData, super::source::BlockchainSourceError> {
-        let (sapling_root_and_len, orchard_root_and_len) = self
-            .source
-            .get_commitment_tree_roots(block_hash)
-            .await?;
+        let (sapling_root_and_len, orchard_root_and_len) =
+            self.source.get_commitment_tree_roots(block_hash).await?;
 
         Ok(TreeRootData {
             sapling: sapling_root_and_len,
@@ -737,9 +735,10 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         parent_chainwork: ChainWork,
         network: Network,
     ) -> Result<IndexedBlock, String> {
-        let (sapling_root, sapling_size, orchard_root, orchard_size) =
-            tree_roots.clone().extract_required()
-                .map_err(|e| format!("Missing required tree roots: {}", e))?;
+        let (sapling_root, sapling_size, orchard_root, orchard_size) = tree_roots
+            .clone()
+            .extract_required()
+            .map_err(|e| format!("Missing required tree roots: {}", e))?;
 
         let metadata = BlockMetadata::new(
             sapling_root,

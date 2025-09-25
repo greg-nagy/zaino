@@ -197,10 +197,12 @@ impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
                         );
 
                         let block_with_metadata = BlockWithMetadata::new(block.as_ref(), metadata);
-                        let chain_block = IndexedBlock::try_from(block_with_metadata)
-                        .map_err(|_| {
-                            FinalisedStateError::Custom("Failed to build chain block".to_string())
-                        })?;
+                        let chain_block =
+                            IndexedBlock::try_from(block_with_metadata).map_err(|_| {
+                                FinalisedStateError::Custom(
+                                    "Failed to build chain block".to_string(),
+                                )
+                            })?;
 
                         parent_chain_work = *chain_block.chainwork();
 

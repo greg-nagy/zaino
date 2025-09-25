@@ -1377,6 +1377,60 @@ impl
     }
 }
 
+/// Tree root data from blockchain source
+#[derive(Debug, Clone)]
+pub struct TreeRootData {
+    /// Sapling tree root and size
+    pub sapling: Option<(zebra_chain::sapling::tree::Root, u64)>,
+    /// Orchard tree root and size
+    pub orchard: Option<(zebra_chain::orchard::tree::Root, u64)>,
+}
+
+impl TreeRootData {
+    /// Create new tree root data
+    pub fn new(
+        sapling: Option<(zebra_chain::sapling::tree::Root, u64)>,
+        orchard: Option<(zebra_chain::orchard::tree::Root, u64)>,
+    ) -> Self {
+        Self { sapling, orchard }
+    }
+
+    /// Extract with defaults for genesis/sync use case
+    pub fn extract_with_defaults(
+        self,
+    ) -> (
+        zebra_chain::sapling::tree::Root,
+        u64,
+        zebra_chain::orchard::tree::Root,
+        u64,
+    ) {
+        let (sapling_root, sapling_size) = self.sapling.unwrap_or_default();
+        let (orchard_root, orchard_size) = self.orchard.unwrap_or_default();
+        (sapling_root, sapling_size, orchard_root, orchard_size)
+    }
+
+    /// Extract with required validation for finalized state use case
+    pub fn extract_required(
+        self,
+    ) -> Result<
+        (
+            zebra_chain::sapling::tree::Root,
+            u64,
+            zebra_chain::orchard::tree::Root,
+            u64,
+        ),
+        String,
+    > {
+        let (sapling_root, sapling_size) = self
+            .sapling
+            .ok_or_else(|| "Missing sapling tree roots".to_string())?;
+        let (orchard_root, orchard_size) = self
+            .orchard
+            .ok_or_else(|| "Missing orchard tree roots".to_string())?;
+        Ok((sapling_root, sapling_size, orchard_root, orchard_size))
+    }
+}
+
 /// Intermediate type to hold block metadata separate from the block itself
 #[derive(Debug, Clone)]
 pub struct BlockMetadata {
@@ -1459,13 +1513,8 @@ impl<'a> BlockWithMetadata<'a> {
             let sapling = self.extract_sapling_data(txn);
             let orchard = self.extract_orchard_data(txn);
 
-            let txdata = CompactTxData::new(
-                i as u64,
-                txn.hash().into(),
-                transparent,
-                sapling,
-                orchard,
-            );
+            let txdata =
+                CompactTxData::new(i as u64, txn.hash().into(), transparent, sapling, orchard);
             transactions.push(txdata);
         }
 
@@ -1473,7 +1522,10 @@ impl<'a> BlockWithMetadata<'a> {
     }
 
     /// Extract transparent transaction data (inputs and outputs)
-    fn extract_transparent_data(&self, txn: &zebra_chain::transaction::Transaction) -> Result<TransparentCompactTx, String> {
+    fn extract_transparent_data(
+        &self,
+        txn: &zebra_chain::transaction::Transaction,
+    ) -> Result<TransparentCompactTx, String> {
         let inputs: Vec<TxInCompact> = txn
             .inputs()
             .iter()
@@ -1506,7 +1558,10 @@ impl<'a> BlockWithMetadata<'a> {
     }
 
     /// Extract sapling transaction data
-    fn extract_sapling_data(&self, txn: &zebra_chain::transaction::Transaction) -> SaplingCompactTx {
+    fn extract_sapling_data(
+        &self,
+        txn: &zebra_chain::transaction::Transaction,
+    ) -> SaplingCompactTx {
         let sapling_value = {
             let val = txn.sapling_value_balance().sapling_amount();
             if val == 0 {
@@ -1537,7 +1592,10 @@ impl<'a> BlockWithMetadata<'a> {
     }
 
     /// Extract orchard transaction data
-    fn extract_orchard_data(&self, txn: &zebra_chain::transaction::Transaction) -> OrchardCompactTx {
+    fn extract_orchard_data(
+        &self,
+        txn: &zebra_chain::transaction::Transaction,
+    ) -> OrchardCompactTx {
         let orchard_value = {
             let val = txn.orchard_value_balance().orchard_amount();
             if val == 0 {
@@ -1575,7 +1633,10 @@ impl<'a> BlockWithMetadata<'a> {
         let block_work = block.header.difficulty_threshold.to_work().ok_or_else(|| {
             "Failed to calculate block work from difficulty threshold".to_string()
         })?;
-        let chainwork = self.metadata.parent_chainwork.add(&ChainWork::from(U256::from(block_work.as_u128())));
+        let chainwork = self
+            .metadata
+            .parent_chainwork
+            .add(&ChainWork::from(U256::from(block_work.as_u128())));
 
         Ok(BlockIndex {
             hash,
@@ -1592,10 +1653,8 @@ impl<'a> BlockWithMetadata<'a> {
             <[u8; 32]>::from(self.metadata.orchard_root),
         );
 
-        let commitment_tree_size = CommitmentTreeSizes::new(
-            self.metadata.sapling_size,
-            self.metadata.orchard_size,
-        );
+        let commitment_tree_size =
+            CommitmentTreeSizes::new(self.metadata.sapling_size, self.metadata.orchard_size);
 
         CommitmentTreeData::new(commitment_tree_roots, commitment_tree_size)
     }
@@ -1619,7 +1678,6 @@ impl TryFrom<BlockWithMetadata<'_>> for IndexedBlock {
         })
     }
 }
-
 
 impl ZainoVersionedSerialise for IndexedBlock {
     const VERSION: u8 = version::V1;
