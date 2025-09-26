@@ -10,7 +10,7 @@ async fn create_test_manager_and_connector(
     zaino_no_db: bool,
     enable_clients: bool,
 ) -> (TestManager, JsonRpSeeConnector) {
-    let test_manager = TestManager::launch(
+    let test_manager = TestManager::launch_with_default_activation_heights(
         validator,
         &BackendType::Fetch,
         None,

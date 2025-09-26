@@ -357,6 +357,7 @@ impl TestManager {
         validator: &ValidatorKind,
         backend: &BackendType,
         network: Option<NetworkKind>,
+        activation_heights: Option<ActivationHeights>,
         chain_cache: Option<PathBuf>,
         enable_zaino: bool,
         enable_zaino_jsonrpc_server: bool,
@@ -378,7 +379,7 @@ impl TestManager {
             .with_target(true)
             .try_init();
 
-        let activation_heights = ActivationHeights::default();
+        let activation_heights = activation_heights.unwrap_or_default();
         let network_kind = network.unwrap_or(NetworkKind::Regtest);
         let zaino_network_kind =
             Network::from_network_kind_and_activation_heights(&network_kind, &activation_heights);
@@ -517,6 +518,38 @@ impl TestManager {
         })
     }
 
+    // I didnt respec every test invocation of this function to take an extra none.
+    // I didnt copy-paste the entire function.
+    /// Helper function to support default test case.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn launch_with_default_activation_heights(
+        validator: &ValidatorKind,
+        backend: &BackendType,
+        network: Option<NetworkKind>,
+        chain_cache: Option<PathBuf>,
+        enable_zaino: bool,
+        enable_zaino_jsonrpc_server: bool,
+        enable_zaino_jsonrpc_server_cookie_auth: bool,
+        zaino_no_sync: bool,
+        zaino_no_db: bool,
+        enable_clients: bool,
+    ) -> Result<Self, std::io::Error> {
+        Self::launch(
+            validator,
+            backend,
+            network,
+            None,
+            chain_cache,
+            enable_zaino,
+            enable_zaino_jsonrpc_server,
+            enable_zaino_jsonrpc_server_cookie_auth,
+            zaino_no_sync,
+            zaino_no_db,
+            enable_clients,
+        )
+        .await
+    }
+
     /// Generates `blocks` regtest blocks.
     /// Adds a delay between blocks to allow zaino / zebra to catch up with test.
     pub async fn generate_blocks_with_delay(&self, blocks: u32) {
@@ -563,7 +596,7 @@ mod launch_testmanager {
 
         #[tokio::test]
         pub(crate) async fn basic() {
-            let mut test_manager = TestManager::launch(
+            let mut test_manager = TestManager::launch_with_default_activation_heights(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
@@ -586,7 +619,7 @@ mod launch_testmanager {
 
         #[tokio::test]
         pub(crate) async fn generate_blocks() {
-            let mut test_manager = TestManager::launch(
+            let mut test_manager = TestManager::launch_with_default_activation_heights(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
@@ -615,7 +648,7 @@ mod launch_testmanager {
         #[ignore = "chain cache needs development"]
         #[tokio::test]
         pub(crate) async fn with_chain() {
-            let mut test_manager = TestManager::launch(
+            let mut test_manager = TestManager::launch_with_default_activation_heights(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
@@ -638,7 +671,7 @@ mod launch_testmanager {
 
         #[tokio::test]
         pub(crate) async fn zaino() {
-            let mut test_manager = TestManager::launch(
+            let mut test_manager = TestManager::launch_with_default_activation_heights(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
@@ -665,7 +698,7 @@ mod launch_testmanager {
 
         #[tokio::test]
         pub(crate) async fn zaino_clients() {
-            let mut test_manager = TestManager::launch(
+            let mut test_manager = TestManager::launch_with_default_activation_heights(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
@@ -693,7 +726,7 @@ mod launch_testmanager {
         /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
         #[tokio::test]
         pub(crate) async fn zaino_clients_receive_mining_reward() {
-            let mut test_manager = TestManager::launch(
+            let mut test_manager = TestManager::launch_with_default_activation_heights(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
@@ -739,7 +772,7 @@ mod launch_testmanager {
 
             #[tokio::test]
             pub(crate) async fn basic() {
-                let mut test_manager = TestManager::launch(
+                let mut test_manager = TestManager::launch_with_default_activation_heights(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
@@ -762,7 +795,7 @@ mod launch_testmanager {
 
             #[tokio::test]
             pub(crate) async fn generate_blocks() {
-                let mut test_manager = TestManager::launch(
+                let mut test_manager = TestManager::launch_with_default_activation_heights(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
@@ -791,7 +824,7 @@ mod launch_testmanager {
             #[ignore = "chain cache needs development"]
             #[tokio::test]
             pub(crate) async fn with_chain() {
-                let mut test_manager = TestManager::launch(
+                let mut test_manager = TestManager::launch_with_default_activation_heights(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
@@ -814,7 +847,7 @@ mod launch_testmanager {
 
             #[tokio::test]
             pub(crate) async fn zaino() {
-                let mut test_manager = TestManager::launch(
+                let mut test_manager = TestManager::launch_with_default_activation_heights(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
@@ -841,7 +874,7 @@ mod launch_testmanager {
 
             #[tokio::test]
             pub(crate) async fn zaino_clients() {
-                let mut test_manager = TestManager::launch(
+                let mut test_manager = TestManager::launch_with_default_activation_heights(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
@@ -869,7 +902,7 @@ mod launch_testmanager {
             /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
             #[tokio::test]
             pub(crate) async fn zaino_clients_receive_mining_reward() {
-                let mut test_manager = TestManager::launch(
+                let mut test_manager = TestManager::launch_with_default_activation_heights(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
@@ -908,7 +941,7 @@ mod launch_testmanager {
 
             #[tokio::test]
             pub(crate) async fn zaino_clients_receive_mining_reward_and_send() {
-                let mut test_manager = TestManager::launch(
+                let mut test_manager = TestManager::launch_with_default_activation_heights(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
@@ -992,7 +1025,7 @@ mod launch_testmanager {
             #[ignore = "requires fully synced testnet."]
             #[tokio::test]
             pub(crate) async fn zaino_testnet() {
-                let mut test_manager = TestManager::launch(
+                let mut test_manager = TestManager::launch_with_default_activation_heights(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     Some(NetworkKind::Testnet),
@@ -1024,7 +1057,7 @@ mod launch_testmanager {
 
             #[tokio::test]
             pub(crate) async fn basic() {
-                let mut test_manager = TestManager::launch(
+                let mut test_manager = TestManager::launch_with_default_activation_heights(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
@@ -1047,7 +1080,7 @@ mod launch_testmanager {
 
             #[tokio::test]
             pub(crate) async fn generate_blocks() {
-                let mut test_manager = TestManager::launch(
+                let mut test_manager = TestManager::launch_with_default_activation_heights(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
@@ -1076,7 +1109,7 @@ mod launch_testmanager {
             #[ignore = "chain cache needs development"]
             #[tokio::test]
             pub(crate) async fn with_chain() {
-                let mut test_manager = TestManager::launch(
+                let mut test_manager = TestManager::launch_with_default_activation_heights(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
@@ -1099,7 +1132,7 @@ mod launch_testmanager {
 
             #[tokio::test]
             pub(crate) async fn zaino() {
-                let mut test_manager = TestManager::launch(
+                let mut test_manager = TestManager::launch_with_default_activation_heights(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
@@ -1126,7 +1159,7 @@ mod launch_testmanager {
 
             #[tokio::test]
             pub(crate) async fn zaino_clients() {
-                let mut test_manager = TestManager::launch(
+                let mut test_manager = TestManager::launch_with_default_activation_heights(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
@@ -1155,7 +1188,7 @@ mod launch_testmanager {
             #[ignore = "Bug in zingolib 1.0 sync, reinstate on zinglib 2.0 upgrade."]
             #[tokio::test]
             pub(crate) async fn zaino_clients_receive_mining_reward() {
-                let mut test_manager = TestManager::launch(
+                let mut test_manager = TestManager::launch_with_default_activation_heights(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
@@ -1196,7 +1229,7 @@ mod launch_testmanager {
             #[ignore = "Bug in zingolib 1.0 sync, reinstate on zinglib 2.0 upgrade."]
             #[tokio::test]
             pub(crate) async fn zaino_clients_receive_mining_reward_and_send() {
-                let mut test_manager = TestManager::launch(
+                let mut test_manager = TestManager::launch_with_default_activation_heights(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
@@ -1278,7 +1311,7 @@ mod launch_testmanager {
             #[ignore = "requires fully synced testnet."]
             #[tokio::test]
             pub(crate) async fn zaino_testnet() {
-                let mut test_manager = TestManager::launch(
+                let mut test_manager = TestManager::launch_with_default_activation_heights(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     Some(NetworkKind::Testnet),
