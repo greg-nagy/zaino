@@ -271,9 +271,10 @@ impl zcash_local_net::validator::Validator for LocalNet {
     }
 }
 
-/// Holds zingo lightclients for wallet-2-validator tests.
-// used to hold a tempdir, but it was used elsewhere instead
+/// Holds zingo lightclients along with their TempDir for wallet-2-validator tests.
 pub struct Clients {
+    /// Lightclient TempDir location.
+    pub lightclient_dir: TempDir,
     /// Faucet (zingolib lightclient).
     ///
     /// Mining rewards are received by this client for use in tests.
@@ -326,7 +327,7 @@ fn make_uri(indexer_port: portpicker::Port) -> http::Uri {
 // NOTE: this should be migrated to zingolib when LocalNet replaces regtest manager in zingoilb::testutils
 /// Builds faucet (miner) and recipient lightclients for local network integration testing
 async fn build_lightclients(
-    lightclient_dir: TempDir,
+    lightclient_dir: PathBuf,
     indexer_port: portpicker::Port,
 ) -> (LightClient, LightClient) {
     let activation_heights =
@@ -490,13 +491,14 @@ impl TestManager {
         let clients = if enable_clients {
             let lightclient_dir = tempfile::tempdir().unwrap();
             let (lightclient_faucet, lightclient_recipient) = build_lightclients(
-                lightclient_dir,
+                lightclient_dir.path().to_path_buf(),
                 zaino_grpc_listen_address
                     .expect("Error launching zingo lightclients. `enable_zaino` is None.")
                     .port(),
             )
             .await;
             Some(Clients {
+                lightclient_dir,
                 faucet: lightclient_faucet,
                 recipient: lightclient_recipient,
             })
