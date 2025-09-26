@@ -62,7 +62,7 @@ derive_more = { workspace = true, features = ["from"] }
 
 
 [dev-dependencies]
-zingo-infra-services = { git = "https://github.com/zingolabs/infrastructure.git", rev = "6c8ad003491371c2e387c5f9d3ba35c45286257b" }
+zcash_local_net = { git = "https://github.com/zingolabs/infrastructure.git", rev = "c53ae95cd4bcdc17121a4cb2566c07dba5a7b9a5" }
 tempfile = { workspace = true }
 tracing-subscriber = { workspace = true }
 once_cell = { workspace = true }

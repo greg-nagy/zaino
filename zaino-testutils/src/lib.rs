@@ -20,10 +20,10 @@ use zaino_common::{
 };
 use zaino_state::BackendType;
 use zainodlib::config::default_ephemeral_cookie_path;
-use zebra_chain::parameters::NetworkKind;
-pub use zingo_infra_services as services;
-pub use zingo_infra_services::validator::Validator;
-use zingo_infra_services::validator::{ZcashdConfig, ZebradConfig};
+pub use zcash_local_net as services;
+pub use zcash_local_net::validator::Validator;
+use zcash_local_net::validator::{ZcashdConfig, ZebradConfig};
+use zebra_chain::parameters::{testnet::ConfiguredActivationHeights, NetworkKind};
 use zingo_test_vectors::seeds;
 pub use zingolib::get_base_address_macro;
 pub use zingolib::lightclient::LightClient;
@@ -86,7 +86,7 @@ pub enum ValidatorConfig {
     /// Zcashd Config.
     ZcashdConfig(ZcashdConfig),
     /// Zebrad Config.
-    ZebradConfig(zingo_infra_services::validator::ZebradConfig),
+    ZebradConfig(zcash_local_net::validator::ZebradConfig),
 }
 
 /// Available zcash-local-net configurations.
@@ -97,23 +97,23 @@ pub enum ValidatorConfig {
 pub enum LocalNet {
     /// Zcash-local-net backed by Zcashd.
     Zcashd(
-        zingo_infra_services::LocalNet<
-            zingo_infra_services::indexer::Empty,
-            zingo_infra_services::validator::Zcashd,
+        zcash_local_net::LocalNet<
+            zcash_local_net::indexer::Empty,
+            zcash_local_net::validator::Zcashd,
         >,
     ),
     /// Zcash-local-net backed by Zebrad.
     Zebrad(
-        zingo_infra_services::LocalNet<
-            zingo_infra_services::indexer::Empty,
-            zingo_infra_services::validator::Zebrad,
+        zcash_local_net::LocalNet<
+            zcash_local_net::indexer::Empty,
+            zcash_local_net::validator::Zebrad,
         >,
     ),
 }
 
-impl zingo_infra_services::validator::Validator for LocalNet {
+impl zcash_local_net::validator::Validator for LocalNet {
     const CONFIG_FILENAME: &str = "";
-    const PROCESS: zingo_infra_services::Process = zingo_infra_services::Process::Empty; // todo
+    const PROCESS: zcash_local_net::Process = zcash_local_net::Process::Empty; // todo
 
     type Config = ValidatorConfig;
 
@@ -121,38 +121,40 @@ impl zingo_infra_services::validator::Validator for LocalNet {
         todo!()
     }
 
-    fn activation_heights(&self) -> zcash_protocol::local_consensus::LocalNetwork {
+    fn get_activation_heights(
+        &self,
+    ) -> zebra_chain::parameters::testnet::ConfiguredActivationHeights {
         // Return the activation heights for the network
         // This depends on which validator is running (zcashd or zebrad)
         match self {
-            LocalNet::Zcashd(net) => net.validator().activation_heights(),
-            LocalNet::Zebrad(net) => net.validator().activation_heights(),
+            LocalNet::Zcashd(net) => net.validator().get_activation_heights(),
+            LocalNet::Zebrad(net) => net.validator().get_activation_heights(),
         }
     }
 
     #[allow(clippy::manual_async_fn)]
     fn launch(
         config: Self::Config,
-    ) -> impl std::future::Future<Output = Result<Self, zingo_infra_services::error::LaunchError>> + Send
+    ) -> impl std::future::Future<Output = Result<Self, zcash_local_net::error::LaunchError>> + Send
     {
         async move {
             match config {
                 ValidatorConfig::ZcashdConfig(cfg) => {
-                    let net = zingo_infra_services::LocalNet::<
-                        zingo_infra_services::indexer::Empty,
-                        zingo_infra_services::validator::Zcashd,
+                    let net = zcash_local_net::LocalNet::<
+                        zcash_local_net::indexer::Empty,
+                        zcash_local_net::validator::Zcashd,
                     >::launch(
-                        zingo_infra_services::indexer::EmptyConfig {}, cfg
+                        zcash_local_net::indexer::EmptyConfig {}, cfg
                     )
                     .await;
                     Ok(LocalNet::Zcashd(net))
                 }
                 ValidatorConfig::ZebradConfig(cfg) => {
-                    let net = zingo_infra_services::LocalNet::<
-                        zingo_infra_services::indexer::Empty,
-                        zingo_infra_services::validator::Zebrad,
+                    let net = zcash_local_net::LocalNet::<
+                        zcash_local_net::indexer::Empty,
+                        zcash_local_net::validator::Zebrad,
                     >::launch(
-                        zingo_infra_services::indexer::EmptyConfig {}, cfg
+                        zcash_local_net::indexer::EmptyConfig {}, cfg
                     )
                     .await;
                     Ok(LocalNet::Zebrad(net))
@@ -249,13 +251,13 @@ impl zingo_infra_services::validator::Validator for LocalNet {
         validator_network: NetworkKind,
     ) -> PathBuf {
         if chain_cache.to_string_lossy().contains("zcashd") {
-            zingo_infra_services::validator::Zcashd::load_chain(
+            zcash_local_net::validator::Zcashd::load_chain(
                 chain_cache,
                 validator_data_dir,
                 validator_network,
             )
         } else if chain_cache.to_string_lossy().contains("zebrad") {
-            zingo_infra_services::validator::Zebrad::load_chain(
+            zcash_local_net::validator::Zebrad::load_chain(
                 chain_cache,
                 validator_data_dir,
                 validator_network,
