@@ -1,6 +1,6 @@
 //! Type definitions for the chain index.
 //!
-//! MODULE RULES: This rules must **always** be followed with no exeptions.
+//! MODULE RULES: These rules must **always** be followed with no exeptions.
 //! - structs in this module must never use external types as fields directly,
 //!   instead fundamental data should be saved into the struct, and from / into
 //!   (or appropriate getters / setters) should be implemented.
