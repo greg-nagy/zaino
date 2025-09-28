@@ -18,9 +18,6 @@ use super::error::ServerError;
 /// gRPC TLS settings
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct GrpcTls {
-    /// Path to the TLS certificate file.
-    // TODO maybe these need to be options because of GrpcConfig type...?
-    // or.. I need to just load THAT type in here.
     /// Path to the TLS certificate file in PEM format.
     pub tls_cert_path: PathBuf,
     /// Path to the TLS private key file in PEM format.
@@ -54,7 +51,6 @@ pub struct GrpcConfig {
 impl GrpcConfig {
     /// If TLS is enabled, reads the certificate and key files and returns a valid
     /// `ServerTlsConfig`. If TLS is not enabled, returns `Ok(None)`.
-    // TODO now this return type is wrong, it used to get an Option<&str> IIUC
     pub async fn get_valid_tls(&self) -> Result<Option<ServerTlsConfig>, ServerError> {
         match self.tls.clone() {
             Some(t) => {
