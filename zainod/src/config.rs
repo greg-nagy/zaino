@@ -75,6 +75,7 @@ pub struct IndexerConfig {
     #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     pub grpc_listen_address: SocketAddr,
     /// Enables TLS.
+    // TODO: in zaino-serve/src/server/config there is GrpcConfig
     pub grpc_tls: Option<GrpcTlsConfig>,
     /*
     /// Path to the TLS certificate file.

@@ -7,6 +7,8 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct GrpcTlsConfig {
     /// Path to the TLS certificate file.
+    // TODO maybe these need to be options because of GrpcConfig type...?
+    // or.. I need to just load THAT type in here.
     pub tls_cert_path: PathBuf,
     /// Path to the TLS private key file.
     pub tls_key_path: PathBuf,

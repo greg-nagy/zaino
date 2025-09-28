@@ -74,6 +74,7 @@ where
     IndexerError: From<<Service::Subscriber as ZcashIndexer>::Error>,
 {
     /// Spawns a new Indexer server.
+    // TODO rename (sounds too much like spawn indexer)
     pub async fn spawn_inner(
         service_config: Service::Config,
         indexer_config: IndexerConfig,
