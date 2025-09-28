@@ -1,5 +1,10 @@
 //! Server configuration data.
 
+use serde::{
+    de::{self, Deserializer},
+    Deserialize, Serialize,
+};
+
 use std::{net::SocketAddr, path::PathBuf};
 
 use tonic::transport::{Identity, ServerTlsConfig};
@@ -7,8 +12,10 @@ use tonic::transport::{Identity, ServerTlsConfig};
 use super::error::ServerError;
 
 /// Configuration data for Zaino's gRPC server.
+// TODO : this is probably what we want to mess with.
 pub struct GrpcConfig {
     /// gRPC server bind addr.
+    #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     pub grpc_listen_address: SocketAddr,
     /// Enables TLS.
     pub tls: bool,

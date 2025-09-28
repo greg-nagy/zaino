@@ -5,6 +5,8 @@ use std::path::PathBuf;
 /// when a Zaino is configured with gRPC tls, it has paths to key and certificate.
 /// gRPC TLS settings
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+// TODO there is a GrpcConfig that covers tls in zaino-serve/src/server/config.rs
+// I feel like this might want to just become 're-eliminated'
 pub struct GrpcTlsConfig {
     /// Path to the TLS certificate file.
     // TODO maybe these need to be options because of GrpcConfig type...?

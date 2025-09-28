@@ -21,6 +21,7 @@ use tracing::{error, info};
 use zaino_common::{
     CacheConfig, DatabaseConfig, DatabaseSize, GrpcTlsConfig, Network, ServiceConfig, StorageConfig,
 };
+use zaino_serve::server::config::GrpcConfig;
 use zaino_state::{BackendConfig, FetchServiceConfig, StateServiceConfig};
 
 use crate::error::IndexerError;
@@ -71,11 +72,12 @@ pub struct IndexerConfig {
     pub enable_cookie_auth: bool,
     /// Directory to store authentication cookie file.
     pub cookie_dir: Option<PathBuf>,
+    // TODO: convert all to GrpcConfig
+    pub grpc_settings: GrpcConfig,
     /// gRPC server bind addr.
     #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     pub grpc_listen_address: SocketAddr,
     /// Enables TLS.
-    // TODO: in zaino-serve/src/server/config there is GrpcConfig
     pub grpc_tls: Option<GrpcTlsConfig>,
     /*
     /// Path to the TLS certificate file.

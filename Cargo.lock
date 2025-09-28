@@ -5970,6 +5970,7 @@ version = "0.1.2"
 dependencies = [
  "futures",
  "jsonrpsee",
+ "serde",
  "thiserror 1.0.69",
  "tokio",
  "tonic",
