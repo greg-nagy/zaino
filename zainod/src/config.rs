@@ -75,10 +75,10 @@ pub struct IndexerConfig {
     // TODO: convert all to GrpcConfig
     pub grpc_settings: GrpcConfig,
     /// gRPC server bind addr.
-    #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
-    pub grpc_listen_address: SocketAddr,
+    // #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
+    // pub grpc_listen_address: SocketAddr,
     /// Enables TLS.
-    pub grpc_tls: Option<GrpcTlsConfig>,
+    // pub grpc_tls: Option<GrpcTlsConfig>,
     /*
     /// Path to the TLS certificate file.
     pub tls_cert_path: Option<String>,
