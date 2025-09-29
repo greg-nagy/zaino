@@ -1,13 +1,5 @@
 //! Server configuration data.
 
-/*
-use serde::{
-    // de::{self, Deserializer},
-    Deserialize,
-    Serialize,
-};
-*/
-
 use std::{net::SocketAddr, path::PathBuf};
 
 use tonic::transport::{Identity, ServerTlsConfig};
@@ -24,21 +16,7 @@ pub struct GrpcTls {
     pub key_path: PathBuf,
 }
 
-/*
-// TODO do we need a default?
-impl Default for GrpcTlsSettings {
-    fn default() -> Self {
-        // TODO may be dangerous as a default.
-        Self {
-            tls_cert_path: "/".into(),
-            tls_key_path: "/".into(),
-        }
-    }
-}
-*/
-
 /// Configuration data for Zaino's gRPC server.
-// TODO add debug clone and serialise
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct GrpcConfig {
     /// gRPC server bind addr.
@@ -53,8 +31,6 @@ pub struct GrpcConfig {
 impl GrpcConfig {
     /// If TLS is enabled, reads the certificate and key files and returns a valid
     /// `ServerTlsConfig`. If TLS is not enabled, returns `Ok(None)`.
-    // TODO seemingly only used in one place,
-    // when starting gRPC Tonic server
     // TODO : redundant?
     pub async fn get_valid_tls(&self) -> Result<Option<ServerTlsConfig>, ServerError> {
         match self.tls.clone() {

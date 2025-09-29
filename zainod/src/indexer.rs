@@ -81,19 +81,6 @@ where
     ) -> Result<tokio::task::JoinHandle<Result<(), IndexerError>>, IndexerError> {
         let service = IndexerService::<Service>::spawn(service_config).await?;
 
-        // let read_state_service = IndexerService::<StateService>::spawn(StateServiceConfig::new(
-        //     todo!("add zebra config to indexerconfig"),
-        //     config.validator_listen_address,
-        //     config.validator_cookie_auth,
-        //     config.validator_cookie_path,
-        //     config.validator_user,
-        //     config.validator_password,
-        //     None,
-        //     None,
-        //     config.get_network()?,
-        // ))
-        // .await?;
-
         let json_server = match indexer_config.enable_json_server {
             true => Some(
                 JsonRpcServer::spawn(
@@ -114,7 +101,6 @@ where
             service.inner_ref().get_subscriber(),
             GrpcConfig {
                 listen_address: indexer_config.grpc_settings.listen_address,
-                // TODO indexer_config is passed in with spawn_inner
                 tls: indexer_config.grpc_settings.tls,
             },
         )
