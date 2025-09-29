@@ -60,10 +60,10 @@ pub async fn spawn_indexer(
     );
     match BackendConfig::try_from(config.clone()) {
         Ok(BackendConfig::State(state_service_config)) => {
-            Indexer::<StateService>::spawn_inner(state_service_config, config).await
+            Indexer::<StateService>::launch_inner(state_service_config, config).await
         }
         Ok(BackendConfig::Fetch(fetch_service_config)) => {
-            Indexer::<FetchService>::spawn_inner(fetch_service_config, config).await
+            Indexer::<FetchService>::launch_inner(fetch_service_config, config).await
         }
         Err(e) => Err(e),
     }
@@ -74,8 +74,7 @@ where
     IndexerError: From<<Service::Subscriber as ZcashIndexer>::Error>,
 {
     /// Spawns a new Indexer server.
-    // TODO rename (sounds too much like spawn indexer)
-    pub async fn spawn_inner(
+    pub async fn launch_inner(
         service_config: Service::Config,
         indexer_config: IndexerConfig,
     ) -> Result<tokio::task::JoinHandle<Result<(), IndexerError>>, IndexerError> {
