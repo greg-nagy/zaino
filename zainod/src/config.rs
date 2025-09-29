@@ -19,7 +19,7 @@ use serde::{
 use tracing::warn;
 use tracing::{error, info};
 use zaino_common::{
-    CacheConfig, DatabaseConfig, DatabaseSize, GrpcTlsConfig, Network, ServiceConfig, StorageConfig,
+    CacheConfig, DatabaseConfig, DatabaseSize, Network, ServiceConfig, StorageConfig,
 };
 use zaino_serve::server::config::GrpcConfig;
 use zaino_state::{BackendConfig, FetchServiceConfig, StateServiceConfig};
@@ -72,9 +72,8 @@ pub struct IndexerConfig {
     pub enable_cookie_auth: bool,
     /// Directory to store authentication cookie file.
     pub cookie_dir: Option<PathBuf>,
-    // TODO: convert all to GrpcConfig
+    /// gRPC server settings including listen addr, tls key and cert.
     pub grpc_settings: GrpcConfig,
-    /// gRPC server bind addr.
     // #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     // pub grpc_listen_address: SocketAddr,
     /// Enables TLS.
@@ -123,30 +122,32 @@ impl IndexerConfig {
         // Network type is validated at the type level via Network enum.
 
         // Check TLS settings.
-        // TODO refactor below for new gRPC config setup
-        if self.grpc_tls {
-            if let Some(ref cert_path) = self.tls_cert_path {
-                if !std::path::Path::new(cert_path).exists() {
-                    return Err(IndexerError::ConfigError(format!(
-                        "TLS is enabled, but certificate path '{cert_path}' does not exist."
-                    )));
-                }
-            } else {
-                return Err(IndexerError::ConfigError(
-                    "TLS is enabled, but no certificate path is provided.".to_string(),
-                ));
+        if self.grpc_settings.tls.is_some() {
+            // then check if cert path exists or return error
+            let c_path = &self
+                .grpc_settings
+                .tls
+                .as_ref()
+                .expect("to be Some")
+                .cert_path;
+            if !std::path::Path::new(&c_path).exists() {
+                return Err(IndexerError::ConfigError(format!(
+                    "TLS is enabled, but certificate path {:?} does not exist.",
+                    c_path
+                )));
             }
 
-            if let Some(ref key_path) = self.tls_key_path {
-                if !std::path::Path::new(key_path).exists() {
-                    return Err(IndexerError::ConfigError(format!(
-                        "TLS is enabled, but key path '{key_path}' does not exist."
-                    )));
-                }
-            } else {
-                return Err(IndexerError::ConfigError(
-                    "TLS is enabled, but no key path is provided.".to_string(),
-                ));
+            let k_path = &self
+                .grpc_settings
+                .tls
+                .as_ref()
+                .expect("to be Some")
+                .key_path;
+            if !std::path::Path::new(&k_path).exists() {
+                return Err(IndexerError::ConfigError(format!(
+                    "TLS is enabled, but key path {:?} does not exist.",
+                    k_path
+                )));
             }
         }
 
@@ -167,9 +168,10 @@ impl IndexerConfig {
         }
 
         #[cfg(not(feature = "no_tls_use_unencrypted_traffic"))]
-        let grpc_addr = fetch_socket_addr_from_hostname(&self.grpc_listen_address.to_string())?;
-        #[cfg(feature = "no_tls_use_unencrypted_traffic")]
-        let _ = fetch_socket_addr_from_hostname(&self.grpc_listen_address.to_string())?;
+        let grpc_addr =
+            fetch_socket_addr_from_hostname(&self.grpc_settings.listen_address.to_string())?;
+        // #[cfg(feature = "no_tls_use_unencrypted_traffic")]
+        // let _ = fetch_socket_addr_from_hostname(&self.grpc_listen_address.to_string())?;
 
         let validator_addr =
             fetch_socket_addr_from_hostname(&self.validator_listen_address.to_string())?;
@@ -184,7 +186,7 @@ impl IndexerConfig {
         #[cfg(not(feature = "no_tls_use_unencrypted_traffic"))]
         {
             // Ensure TLS is used when connecting to external addresses.
-            if !is_private_listen_addr(&grpc_addr) && self.grpc_tls.is_none() {
+            if !is_private_listen_addr(&grpc_addr) && self.grpc_settings.tls.is_none() {
                 return Err(IndexerError::ConfigError(
                     "TLS required when connecting to external addresses.".to_string(),
                 ));
@@ -207,7 +209,7 @@ impl IndexerConfig {
         }
 
         // Check gRPC and JsonRPC server are not listening on the same address.
-        if self.json_rpc_listen_address == self.grpc_listen_address {
+        if self.json_rpc_listen_address == self.grpc_settings.listen_address {
             return Err(IndexerError::ConfigError(
                 "gRPC server and JsonRPC server must listen on different addresses.".to_string(),
             ));
@@ -243,8 +245,10 @@ impl Default for IndexerConfig {
             json_rpc_listen_address: "127.0.0.1:8237".parse().unwrap(),
             enable_cookie_auth: false,
             cookie_dir: None,
-            grpc_listen_address: "127.0.0.1:8137".parse().unwrap(),
-            grpc_tls: None,
+            grpc_settings: GrpcConfig {
+                listen_address: "127.0.0.1:8137".parse().unwrap(),
+                tls: None,
+            },
             validator_listen_address: "127.0.0.1:18232".parse().unwrap(),
             validator_grpc_listen_address: "127.0.0.1:18230".parse().unwrap(),
             validator_cookie_auth: false,
