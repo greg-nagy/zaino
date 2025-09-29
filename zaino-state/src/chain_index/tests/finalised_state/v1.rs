@@ -15,7 +15,10 @@ use crate::chain_index::tests::init_tracing;
 use crate::chain_index::tests::vectors::{build_mockchain_source, load_test_vectors};
 use crate::chain_index::types::TransactionHash;
 use crate::error::FinalisedStateError;
-use crate::{AddrScript, BlockCacheConfig, BlockMetadata, BlockWithMetadata, ChainWork, Height, IndexedBlock, Outpoint};
+use crate::{
+    AddrScript, BlockCacheConfig, BlockMetadata, BlockWithMetadata, ChainWork, Height,
+    IndexedBlock, Outpoint,
+};
 
 pub(crate) async fn spawn_v1_zaino_db(
     source: MockchainSource,
@@ -101,8 +104,10 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v1_zaino_db() -> (
                     nu7: None,
                 },
             ),
-        ))
+        )
         .unwrap();
+
+        let chain_block = BlockWithMetadata::new(&zebra_block, metadata);
 
         parent_chain_work = *chain_block.index().chainwork();
 
@@ -262,8 +267,10 @@ async fn load_db_from_file() {
                             nu7: None,
                         },
                     ),
-                ))
+                )
                 .unwrap();
+
+                let chain_block = BlockWithMetadata::new(&zebra_block, metadata);
 
                 parent_chain_work = *chain_block.index().chainwork();
 
@@ -414,8 +421,10 @@ async fn get_chain_blocks() {
                     nu7: None,
                 },
             ),
-        ))
+        )
         .unwrap();
+
+        let chain_block = BlockWithMetadata::new(zebra_block, metadata);
 
         parent_chain_work = *chain_block.index().chainwork();
 
@@ -464,8 +473,10 @@ async fn get_compact_blocks() {
                     nu7: None,
                 },
             ),
-        ))
+        )
         .unwrap();
+
+        let chain_block = BlockWithMetadata::new(zebra_block, metadata);
         let compact_block = chain_block.to_compact_block();
 
         parent_chain_work = *chain_block.index().chainwork();
@@ -525,8 +536,10 @@ async fn get_faucet_txids() {
                     nu7: None,
                 },
             ),
-        ))
+        )
         .unwrap();
+
+        let chain_block = BlockWithMetadata::new(zebra_block, metadata);
 
         parent_chain_work = *chain_block.index().chainwork();
 
@@ -623,8 +636,10 @@ async fn get_recipient_txids() {
                     nu7: None,
                 },
             ),
-        ))
+        )
         .unwrap();
+
+        let chain_block = BlockWithMetadata::new(zebra_block, metadata);
 
         parent_chain_work = *chain_block.index().chainwork();
 
@@ -849,8 +864,10 @@ async fn check_faucet_spent_map() {
                     nu7: None,
                 },
             ),
-        ))
+        )
         .unwrap();
+
+        let chain_block = BlockWithMetadata::new(zebra_block, metadata);
 
         parent_chain_work = *chain_block.index().chainwork();
 
@@ -985,8 +1002,10 @@ async fn check_recipient_spent_map() {
                     nu7: None,
                 },
             ),
-        ))
+        )
         .unwrap();
+
+        let chain_block = BlockWithMetadata::new(zebra_block, metadata);
 
         parent_chain_work = *chain_block.index().chainwork();
 
