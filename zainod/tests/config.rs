@@ -38,11 +38,7 @@ fn test_deserialize_full_valid_config() {
             json_rpc_listen_address = "127.0.0.1:8000"
             enable_cookie_auth = true
             cookie_dir = "{zaino_cookie_dir_name}"
-            grpc_listen_address = "0.0.0.0:9000"
-            //            grpc_tls = Some(GrpcTlsConfig {tls_cert_path: "{cert_file_name}".into(), tls_key_path: "{key_file_name}".into()})
-            grpc_tls = true
-            tls_cert_path = "{cert_file_name}"
-            tls_key_path = "{key_file_name}"
+            grpc_settings: = {{ listen_address = "0.0.0.0:9000", tls = {{cert_path: "{cert_file_name}".into(), key_path: "{key_file_name}"}} }}
             validator_listen_address = "192.168.1.10:18232"
             validator_cookie_auth = true
             validator_cookie_path = "{validator_cookie_file_name}"
@@ -88,12 +84,22 @@ fn test_deserialize_full_valid_config() {
             Some(PathBuf::from(zaino_cookie_dir_name))
         );
         assert_eq!(
-            finalized_config.tls_cert_path,
-            Some(cert_file_name.to_string())
+            finalized_config
+                .clone()
+                .grpc_settings
+                .tls
+                .expect("tls to be Some in finalized conifg")
+                .cert_path,
+            PathBuf::from(cert_file_name)
         );
         assert_eq!(
-            finalized_config.tls_key_path,
-            Some(key_file_name.to_string())
+            finalized_config
+                .clone()
+                .grpc_settings
+                .tls
+                .expect("tls to be Some in finalized_conifg")
+                .key_path,
+            PathBuf::from(key_file_name)
         );
         assert_eq!(
             finalized_config.validator_cookie_path,
@@ -109,10 +115,10 @@ fn test_deserialize_full_valid_config() {
         );
         assert_eq!(finalized_config.network, Network::Mainnet);
         assert_eq!(
-            finalized_config.grpc_listen_address,
+            finalized_config.grpc_settings.listen_address,
             "0.0.0.0:9000".parse().unwrap()
         );
-        assert!(finalized_config.grpc_tls.is_some());
+        assert!(finalized_config.grpc_settings.tls.is_some());
         assert_eq!(finalized_config.validator_user, Some("user".to_string()));
         assert_eq!(
             finalized_config.validator_password,
@@ -398,7 +404,7 @@ fn test_figment_env_override_toml_and_defaults() {
         assert!(config.enable_json_server);
         assert_eq!(config.storage.cache.capacity, 12345);
         assert_eq!(config.cookie_dir, Some(PathBuf::from("/env/cookie/path")));
-        assert_eq!(config.grpc_tls, None);
+        assert!(config.grpc_settings.tls.is_none());
         Ok(())
     });
 }
