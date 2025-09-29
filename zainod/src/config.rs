@@ -72,7 +72,7 @@ pub struct IndexerConfig {
     pub enable_cookie_auth: bool,
     /// Directory to store authentication cookie file.
     pub cookie_dir: Option<PathBuf>,
-    /// gRPC server settings including listen addr, tls key and cert.
+    /// gRPC server settings including listen addr, tls status, key and cert.
     pub grpc_settings: GrpcConfig,
     /// Full node / validator listen port.
     #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
