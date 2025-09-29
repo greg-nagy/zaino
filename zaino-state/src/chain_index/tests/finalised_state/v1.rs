@@ -15,7 +15,7 @@ use crate::chain_index::tests::init_tracing;
 use crate::chain_index::tests::vectors::{build_mockchain_source, load_test_vectors};
 use crate::chain_index::types::TransactionHash;
 use crate::error::FinalisedStateError;
-use crate::{AddrScript, BlockCacheConfig, ChainWork, Height, IndexedBlock, Outpoint};
+use crate::{AddrScript, BlockCacheConfig, BlockMetadata, BlockWithMetadata, ChainWork, Height, IndexedBlock, Outpoint};
 
 pub(crate) async fn spawn_v1_zaino_db(
     source: MockchainSource,
@@ -79,7 +79,7 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v1_zaino_db() -> (
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
     ) in blocks.clone()
     {
-        let chain_block = IndexedBlock::try_from((
+        let metadata = BlockMetadata::new(
             &zebra_block,
             sapling_root,
             sapling_root_size as u32,
@@ -240,7 +240,7 @@ async fn load_db_from_file() {
                 (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
             ) in blocks_clone
             {
-                let chain_block = IndexedBlock::try_from((
+                let metadata = BlockMetadata::new(
                     &zebra_block,
                     sapling_root,
                     sapling_root_size as u32,
@@ -392,7 +392,7 @@ async fn get_chain_blocks() {
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
     ) in blocks.iter()
     {
-        let chain_block = IndexedBlock::try_from((
+        let metadata = BlockMetadata::new(
             zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
@@ -442,7 +442,7 @@ async fn get_compact_blocks() {
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
     ) in blocks.iter()
     {
-        let chain_block = IndexedBlock::try_from((
+        let metadata = BlockMetadata::new(
             zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
@@ -503,7 +503,7 @@ async fn get_faucet_txids() {
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
     ) in blocks.iter()
     {
-        let chain_block = IndexedBlock::try_from((
+        let metadata = BlockMetadata::new(
             zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
@@ -601,7 +601,7 @@ async fn get_recipient_txids() {
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
     ) in blocks.iter()
     {
-        let chain_block = IndexedBlock::try_from((
+        let metadata = BlockMetadata::new(
             zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
@@ -827,7 +827,7 @@ async fn check_faucet_spent_map() {
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
     ) in blocks.iter()
     {
-        let chain_block = IndexedBlock::try_from((
+        let metadata = BlockMetadata::new(
             zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
@@ -963,7 +963,7 @@ async fn check_recipient_spent_map() {
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
     ) in blocks.iter()
     {
-        let chain_block = IndexedBlock::try_from((
+        let metadata = BlockMetadata::new(
             zebra_block,
             *sapling_root,
             *sapling_root_size as u32,
