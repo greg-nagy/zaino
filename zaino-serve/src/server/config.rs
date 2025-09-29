@@ -19,9 +19,9 @@ use super::error::ServerError;
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct GrpcTls {
     /// Path to the TLS certificate file in PEM format.
-    pub tls_cert_path: PathBuf,
+    pub cert_path: PathBuf,
     /// Path to the TLS private key file in PEM format.
-    pub tls_key_path: PathBuf,
+    pub key_path: PathBuf,
 }
 
 /*
@@ -38,12 +38,14 @@ impl Default for GrpcTlsSettings {
 */
 
 /// Configuration data for Zaino's gRPC server.
+// TODO add debug clone and serialise
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct GrpcConfig {
     /// gRPC server bind addr.
     // TODO : commented this out because serde didn't want to be portable (orphan rule?)
     // can we work aorund this, or do we have to wrap it or something
     // #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
-    pub grpc_listen_address: SocketAddr,
+    pub listen_address: SocketAddr,
     /// Enables TLS.
     pub tls: Option<GrpcTls>,
 }
@@ -51,22 +53,25 @@ pub struct GrpcConfig {
 impl GrpcConfig {
     /// If TLS is enabled, reads the certificate and key files and returns a valid
     /// `ServerTlsConfig`. If TLS is not enabled, returns `Ok(None)`.
+    // TODO seemingly only used in one place,
+    // when starting gRPC Tonic server
+    // TODO : redundant?
     pub async fn get_valid_tls(&self) -> Result<Option<ServerTlsConfig>, ServerError> {
         match self.tls.clone() {
-            Some(t) => {
-                if !t.tls_cert_path.exists() {
+            Some(tls) => {
+                if !tls.cert_path.exists() {
                     return Err(ServerError::ServerConfigError(
                         "TLS enabled but tls_cert_path does not exist".into(),
                     ));
                 }
-                let cert_path = t.tls_cert_path;
+                let cert_path = tls.cert_path;
 
-                if !t.tls_key_path.exists() {
+                if !tls.key_path.exists() {
                     return Err(ServerError::ServerConfigError(
                         "TLS enabled but tls_key_path does not exist".into(),
                     ));
                 }
-                let key_path = t.tls_key_path;
+                let key_path = tls.key_path;
 
                 // Read the certificate and key files asynchronously.
                 let cert = tokio::fs::read(cert_path).await.map_err(|e| {
