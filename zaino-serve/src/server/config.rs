@@ -20,9 +20,6 @@ pub struct GrpcTls {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct GrpcConfig {
     /// gRPC server bind addr.
-    // TODO : commented this out because serde didn't want to be portable (orphan rule?)
-    // can we work aorund this, or do we have to wrap it or something
-    // #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     pub listen_address: SocketAddr,
     /// Enables TLS.
     pub tls: Option<GrpcTls>,
