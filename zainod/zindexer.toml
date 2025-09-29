@@ -84,7 +84,6 @@ validator_cookie_auth = false
 # Zebra Block Cache database file path.
 # If omitted, this defaults to $HOME/.cache/zebra/ (platform dependent).
 # zebra_db_path = "/path/to/zebra_db"
-zebra_db_path = "/home/o/.cache/zebra/state/v27/testnet"
 
 # Block Cache database maximum size in gb.
 # Only used by the FetchService.
