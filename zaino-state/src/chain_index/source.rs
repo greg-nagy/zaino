@@ -582,7 +582,7 @@ impl BlockchainSource for ValidatorConnector {
                     .await
                 {
                     Ok(ReadResponse::NonFinalizedBlocksListener(listener)) => {
-                        // TODO: Explore whether this unwrap is actually safe, replace with expect if so.
+                        // NOTE:  This is not Option::unwrap, but a custom zebra-defined NonFinalizedBlocksListener::unwrap.
                         Ok(Some(listener.unwrap()))
                     }
                     Ok(_) => unreachable!(),

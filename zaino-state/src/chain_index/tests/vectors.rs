@@ -12,6 +12,8 @@ use zebra_rpc::methods::GetAddressUtxos;
 use crate::chain_index::source::test::MockchainSource;
 use crate::{read_u32_le, read_u64_le, BlockHash, CompactSize};
 
+// TODO: Add custom MockChain block data structs to simplify unit test interface
+// and add getter methods for comonly used types.
 #[allow(clippy::type_complexity)]
 pub fn read_vectors_from_file<P: AsRef<Path>>(
     base_dir: P,
