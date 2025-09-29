@@ -74,16 +74,6 @@ pub struct IndexerConfig {
     pub cookie_dir: Option<PathBuf>,
     /// gRPC server settings including listen addr, tls key and cert.
     pub grpc_settings: GrpcConfig,
-    // #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
-    // pub grpc_listen_address: SocketAddr,
-    /// Enables TLS.
-    // pub grpc_tls: Option<GrpcTlsConfig>,
-    /*
-    /// Path to the TLS certificate file.
-    pub tls_cert_path: Option<String>,
-    /// Path to the TLS private key file.
-    pub tls_key_path: Option<String>,
-    */
     /// Full node / validator listen port.
     #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     pub validator_listen_address: SocketAddr,
