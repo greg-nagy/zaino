@@ -17,6 +17,7 @@ use tempfile::TempDir;
 use testvectors::{seeds, REG_O_ADDR_FROM_ABANDONART};
 use tracing_subscriber::EnvFilter;
 use zaino_common::{CacheConfig, DatabaseConfig, ServiceConfig, StorageConfig};
+use zaino_serve::server::config::GrpcConfig;
 use zaino_state::BackendType;
 use zainodlib::config::default_ephemeral_cookie_path;
 pub use zingo_infra_services as services;
@@ -441,8 +442,10 @@ impl TestManager {
                 json_rpc_listen_address: zaino_json_listen_address,
                 enable_cookie_auth: enable_zaino_jsonrpc_server_cookie_auth,
                 cookie_dir: zaino_json_server_cookie_dir.clone(),
-                grpc_listen_address: zaino_grpc_listen_address,
-                grpc_tls: None,
+                grpc_settings: GrpcConfig {
+                    listen_address: zaino_grpc_listen_address,
+                    tls: None,
+                },
                 validator_listen_address: zebrad_rpc_listen_address,
                 validator_grpc_listen_address: zebrad_grpc_listen_address,
                 validator_cookie_auth: false,
@@ -621,8 +624,10 @@ impl TestManager {
                 json_rpc_listen_address: zaino_json_listen_address,
                 enable_cookie_auth: enable_zaino_jsonrpc_server_cookie_auth,
                 cookie_dir: zaino_json_server_cookie_dir.clone(),
-                grpc_listen_address: zaino_grpc_listen_address,
-                grpc_tls: None,
+                grpc_settings: GrpcConfig {
+                    listen_address: zaino_grpc_listen_address,
+                    tls: None,
+                },
                 validator_listen_address: zebrad_rpc_listen_address,
                 validator_grpc_listen_address: zebrad_grpc_listen_address,
                 validator_cookie_auth: false,

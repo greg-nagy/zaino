@@ -6049,6 +6049,7 @@ dependencies = [
  "tonic",
  "tracing-subscriber",
  "zaino-common",
+ "zaino-serve",
  "zaino-state",
  "zaino-testvectors",
  "zainod",
