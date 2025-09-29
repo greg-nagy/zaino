@@ -160,8 +160,6 @@ impl IndexerConfig {
         #[cfg(not(feature = "no_tls_use_unencrypted_traffic"))]
         let grpc_addr =
             fetch_socket_addr_from_hostname(&self.grpc_settings.listen_address.to_string())?;
-        // #[cfg(feature = "no_tls_use_unencrypted_traffic")]
-        // let _ = fetch_socket_addr_from_hostname(&self.grpc_listen_address.to_string())?;
 
         let validator_addr =
             fetch_socket_addr_from_hostname(&self.validator_listen_address.to_string())?;
