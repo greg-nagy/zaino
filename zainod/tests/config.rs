@@ -29,7 +29,6 @@ fn test_deserialize_full_valid_config() {
         jail.create_dir(zaino_db_dir_name)?;
         jail.create_dir(zebra_db_dir_name)?;
 
-        // TODO we are altering this TOML ... see {cert_file_name} etc
         // Use relative paths in the TOML string
         let toml_str = format!(
             r#"
@@ -51,8 +50,6 @@ fn test_deserialize_full_valid_config() {
             no_sync = false
             no_db = false
             slow_sync = false
-
-
         "#
         );
 
