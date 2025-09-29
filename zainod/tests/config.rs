@@ -38,7 +38,7 @@ fn test_deserialize_full_valid_config() {
             json_rpc_listen_address = "127.0.0.1:8000"
             enable_cookie_auth = true
             cookie_dir = "{zaino_cookie_dir_name}"
-            grpc_settings: = {{ listen_address = "0.0.0.0:9000", tls = {{cert_path: "{cert_file_name}".into(), key_path: "{key_file_name}"}} }}
+            grpc_settings = {{ listen_address = "0.0.0.0:9000", tls = {{cert_path = "{cert_file_name}", key_path = "{key_file_name}" }} }}
             validator_listen_address = "192.168.1.10:18232"
             validator_cookie_auth = true
             validator_cookie_path = "{validator_cookie_file_name}"
