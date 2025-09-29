@@ -113,11 +113,9 @@ where
         let grpc_server = TonicServer::spawn(
             service.inner_ref().get_subscriber(),
             GrpcConfig {
-                grpc_listen_address: indexer_config.grpc_listen_address,
+                listen_address: indexer_config.grpc_settings.listen_address,
                 // TODO indexer_config is passed in with spawn_inner
-                tls: indexer_config.grpc_tls,
-                tls_cert_path: indexer_config.tls_cert_path.clone(),
-                tls_key_path: indexer_config.tls_key_path.clone(),
+                tls: indexer_config.grpc_settings.tls,
             },
         )
         .await
