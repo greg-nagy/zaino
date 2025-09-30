@@ -237,14 +237,13 @@ async fn load_db_from_file() {
                 (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
             ) in blocks_clone
             {
-                let chain_block = IndexedBlock::try_from((
-                    &zebra_block,
+                let metadata = BlockMetadata::new(
                     sapling_root,
                     sapling_root_size as u32,
                     orchard_root,
                     orchard_root_size as u32,
-                    &parent_chain_work,
-                    &zebra_chain::parameters::Network::new_regtest(
+                    parent_chain_work,
+                    zebra_chain::parameters::Network::new_regtest(
                         zebra_chain::parameters::testnet::ConfiguredActivationHeights {
                             before_overwinter: Some(1),
                             overwinter: Some(1),
@@ -259,8 +258,10 @@ async fn load_db_from_file() {
                             nu7: None,
                         },
                     ),
-                ))
-                .unwrap();
+                );
+
+                let chain_block =
+                    IndexedBlock::try_from(BlockWithMetadata::new(&zebra_block, metadata)).unwrap();
 
                 parent_chain_work = *chain_block.index().chainwork();
 
@@ -336,14 +337,13 @@ async fn get_compact_blocks() {
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
     ) in blocks.iter()
     {
-        let chain_block = IndexedBlock::try_from((
-            zebra_block,
+        let metadata = BlockMetadata::new(
             *sapling_root,
             *sapling_root_size as u32,
             *orchard_root,
             *orchard_root_size as u32,
-            &parent_chain_work,
-            &zebra_chain::parameters::Network::new_regtest(
+            parent_chain_work,
+            zebra_chain::parameters::Network::new_regtest(
                 zebra_chain::parameters::testnet::ConfiguredActivationHeights {
                     before_overwinter: Some(1),
                     overwinter: Some(1),
@@ -358,8 +358,11 @@ async fn get_compact_blocks() {
                     nu7: None,
                 },
             ),
-        ))
-        .unwrap();
+        );
+
+        let chain_block =
+            IndexedBlock::try_from(BlockWithMetadata::new(&zebra_block, metadata)).unwrap();
+
         let compact_block = chain_block.to_compact_block();
 
         parent_chain_work = *chain_block.index().chainwork();

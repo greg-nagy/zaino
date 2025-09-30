@@ -10,7 +10,7 @@ use crate::chain_index::finalised_state::db::DbBackend;
 use crate::chain_index::finalised_state::ZainoDB;
 use crate::chain_index::tests::init_tracing;
 use crate::chain_index::tests::vectors::{build_mockchain_source, load_test_vectors};
-use crate::{BlockCacheConfig, ChainWork, IndexedBlock};
+use crate::{BlockCacheConfig, BlockMetadata, BlockWithMetadata, ChainWork, IndexedBlock};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn v0_to_v1_full() {
@@ -140,14 +140,13 @@ async fn v0_to_v1_interrupted() {
             break;
         }
 
-        let chain_block = IndexedBlock::try_from((
-            &zebra_block,
+        let metadata = BlockMetadata::new(
             sapling_root,
             sapling_root_size as u32,
             orchard_root,
             orchard_root_size as u32,
-            &parent_chain_work,
-            &zebra_chain::parameters::Network::new_regtest(
+            parent_chain_work,
+            zebra_chain::parameters::Network::new_regtest(
                 zebra_chain::parameters::testnet::ConfiguredActivationHeights {
                     before_overwinter: Some(1),
                     overwinter: Some(1),
@@ -162,8 +161,10 @@ async fn v0_to_v1_interrupted() {
                     nu7: None,
                 },
             ),
-        ))
-        .unwrap();
+        );
+
+        let chain_block =
+            IndexedBlock::try_from(BlockWithMetadata::new(&zebra_block, metadata)).unwrap();
 
         parent_chain_work = *chain_block.index().chainwork();
 
@@ -247,14 +248,13 @@ async fn v0_to_v1_partial() {
         (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
     ) in blocks.clone()
     {
-        let chain_block = IndexedBlock::try_from((
-            &zebra_block,
+        let metadata = BlockMetadata::new(
             sapling_root,
             sapling_root_size as u32,
             orchard_root,
             orchard_root_size as u32,
-            &parent_chain_work,
-            &zebra_chain::parameters::Network::new_regtest(
+            parent_chain_work,
+            zebra_chain::parameters::Network::new_regtest(
                 zebra_chain::parameters::testnet::ConfiguredActivationHeights {
                     before_overwinter: Some(1),
                     overwinter: Some(1),
@@ -269,8 +269,10 @@ async fn v0_to_v1_partial() {
                     nu7: None,
                 },
             ),
-        ))
-        .unwrap();
+        );
+
+        let chain_block =
+            IndexedBlock::try_from(BlockWithMetadata::new(&zebra_block, metadata)).unwrap();
 
         parent_chain_work = *chain_block.index().chainwork();
 
