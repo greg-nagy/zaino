@@ -25,10 +25,6 @@ version = "0.1.2"
 
 
 [workspace.dependencies]
-# Zingolabs
-
-testvectors = { git = "https://github.com/zingolabs/zingolib.git", tag = "2.0.0-beta2" }
-
 # Librustzcash
 zcash_address = "0.9"
 zcash_keys = "0.10"
@@ -37,11 +33,11 @@ zcash_primitives = "0.24"
 zcash_transparent = "0.4"
 
 # Zebra
-# Can be updated to 2.4.0 once lands. Should be updated to crates.io releases once available.
 zebra-chain = "2.0"
 zebra-state = "2.0"
 zebra-rpc = "2.0"
 
+# Zingo Infrastructure
 zingo_netutils = { git = "https://github.com/zingolabs/infrastructure.git", rev = "cc2af1ac80cb6b7a7f0a0b8f331f7b0873d667bf" }
 
 # Runtime
@@ -139,6 +135,3 @@ zip32 = "0.2.1"
 [profile.test]
 opt-level = 3
 debug = true
-
-#[workspace.dev-dependencies]
-# zingolib is imported in zaino-testutils!!

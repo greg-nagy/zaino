@@ -10,9 +10,11 @@ version = { workspace = true }
 publish = false
 
 [dependencies]
+# Zaino
 zaino-state = { workspace = true, features = ["bench"] }
 zaino-testvectors.workspace = true
 zaino-common.workspace = true
+zainod = { workspace = true }
 
 # Librustzcash
 zcash_protocol = { git = "https://github.com/zcash/librustzcash", rev = "d387aed7e04e881dbe30c6ff8b26a96c834c094b", features = [
@@ -29,24 +31,22 @@ zingo_common_components = { git = "https://github.com/zingolabs/infrastructure.g
 zingo_test_vectors = { git = "https://github.com/zingolabs/infrastructure.git", rev = "317978667919734f197248a4b3fb87baa0016f4b" }
 
 # ZingoLib
-zingolib = { git = "https://github.com/zingolabs/zingolib.git", rev = "e076b7553f9ea385fd16854b7058436d8515dea9", features = [
+zingolib = { git = "https://github.com/zingolabs/zingolib.git", rev = "f88e1d76ea244d6cc48d7fd4c3a609c6598318dc", features = [
     "testutils",
 ] }
+
+# Miscellaneous
+http = { workspace = true }
+once_cell = { workspace = true }
+portpicker = { workspace = true }
+tokio = { workspace = true }
+tonic = { workspace = true }
+tempfile = { workspace = true }
 tracing-subscriber = { workspace = true, features = [
     "fmt",
     "env-filter",
     "time",
 ] }
-
-# Miscellaneous
-tokio = { workspace = true }
-tonic = { workspace = true }
-http = { workspace = true }
-tempfile = { workspace = true }
-portpicker = { workspace = true }
-once_cell = { workspace = true }
-
-zainod = { workspace = true }
 
 # We don't need this as a direct dependency.
 # Rather, we need to pin this version of proptest.
