@@ -9,10 +9,10 @@ use super::{
 };
 
 use crate::{
+    BlockHash, ChainWork, Height, IndexedBlock,
     chain_index::{source::BlockchainSource, types::GENESIS_HEIGHT},
     config::BlockCacheConfig,
     error::FinalisedStateError,
-    BlockHash, ChainWork, Height, IndexedBlock,
 };
 
 use async_trait::async_trait;
@@ -75,7 +75,7 @@ impl<T: BlockchainSource> MigrationManager<T> {
     }
 
     /// Return the next migration for the current version.
-    fn get_migration(&self) -> Result<impl Migration<T>, FinalisedStateError> {
+    fn get_migration(&self) -> Result<impl Migration<T> + use<T>, FinalisedStateError> {
         match (
             self.current_version.major,
             self.current_version.minor,

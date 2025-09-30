@@ -10,7 +10,7 @@ use zebra_chain::serialization::ZcashDeserialize as _;
 use zebra_rpc::methods::GetAddressUtxos;
 
 use crate::chain_index::source::test::MockchainSource;
-use crate::{read_u32_le, read_u64_le, BlockHash, CompactSize};
+use crate::{BlockHash, ChainWork, CompactSize, IndexedBlock, read_u32_le, read_u64_le};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestVectorData {
@@ -36,6 +36,44 @@ pub struct TestVectorClientData {
     pub txids: Vec<String>,
     pub utxos: Vec<GetAddressUtxos>,
     pub balance: u64,
+}
+
+pub async fn sync_db_with_blockdata(
+    db: &impl crate::chain_index::finalised_state::capability::DbWrite,
+    vector_data: Vec<TestVectorBlockData>,
+    height_limit: Option<u32>,
+) {
+    let mut parent_chain_work = ChainWork::from_u256(0.into());
+    for TestVectorBlockData {
+        height,
+        zebra_block,
+        sapling_root,
+        sapling_tree_size,
+        orchard_root,
+        orchard_tree_size,
+        ..
+    } in vector_data
+    {
+        if let Some(h) = height_limit
+            && height > h
+        {
+            break;
+        }
+        let chain_block = IndexedBlock::try_from((
+            &zebra_block,
+            sapling_root,
+            sapling_tree_size as u32,
+            orchard_root,
+            orchard_tree_size as u32,
+            &parent_chain_work,
+            &zaino_common::Network::Regtest(zaino_common::network::ActivationHeights::default())
+                .to_zebra_network(),
+        ))
+        .unwrap();
+        parent_chain_work = *chain_block.chainwork();
+
+        db.write_block(chain_block).await.unwrap();
+    }
 }
 
 // TODO: Add custom MockChain block data structs to simplify unit test interface
