@@ -9,14 +9,16 @@ use crate::chain_index::finalised_state::capability::{DbCore as _, DbWrite as _}
 use crate::chain_index::finalised_state::db::DbBackend;
 use crate::chain_index::finalised_state::ZainoDB;
 use crate::chain_index::tests::init_tracing;
-use crate::chain_index::tests::vectors::{build_mockchain_source, load_test_vectors};
+use crate::chain_index::tests::vectors::{
+    build_mockchain_source, load_test_vectors, TestVectorData,
+};
 use crate::{BlockCacheConfig, ChainWork, IndexedBlock};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn v0_to_v1_full() {
     init_tracing();
 
-    let (blocks, _faucet, _recipient) = load_test_vectors().unwrap();
+    let TestVectorData { blocks, .. } = load_test_vectors().unwrap();
 
     let temp_dir: TempDir = tempfile::tempdir().unwrap();
     let db_path: PathBuf = temp_dir.path().to_path_buf();
