@@ -43,6 +43,21 @@ fn make_uri(indexer_port: portpicker::Port) -> http::Uri {
         .unwrap()
 }
 
+// temporary until activation heights are unified to zebra-chain type.
+// from/into impls not added in zaino-common to avoid unecessary addition of zcash-protocol dep to non-test code
+fn local_network_from_activation_heights(activation_heights: ActivationHeights) -> zcash_protocol::local_consensus::LocalNetwork {
+    zcash_protocol::local_consensus::LocalNetwork {
+        overwinter: activation_heights.overwinter.map(zcash_protocol::consensus::BlockHeight::from),
+        sapling: activation_heights.sapling.map(zcash_protocol::consensus::BlockHeight::from),
+        blossom: activation_heights.blossom.map(zcash_protocol::consensus::BlockHeight::from),
+        heartwood: activation_heights.heartwood.map(zcash_protocol::consensus::BlockHeight::from),
+        canopy: activation_heights.canopy.map(zcash_protocol::consensus::BlockHeight::from),
+        nu5: activation_heights.nu5.map(zcash_protocol::consensus::BlockHeight::from),
+        nu6: activation_heights.nu6.map(zcash_protocol::consensus::BlockHeight::from),
+        nu6_1: activation_heights.nu6_1.map(zcash_protocol::consensus::BlockHeight::from),
+    }
+}
+
 /// Path for zcashd binary.
 pub static ZCASHD_BIN: Lazy<Option<PathBuf>> = Lazy::new(|| binary_path("zcashd"));
 
@@ -484,31 +499,13 @@ impl TestManager {
             );
             let faucet = client_builder.build_faucet(
                 true,
-                zcash_protocol::local_consensus::LocalNetwork {
-                    overwinter: Some(1.into()),
-                    sapling: Some(1.into()),
-                    blossom: Some(1.into()),
-                    heartwood: Some(1.into()),
-                    canopy: Some(1.into()),
-                    nu5: Some(1.into()),
-                    nu6: Some(1.into()),
-                    nu6_1: Some(1.into()),
-                },
+                local_network_from_activation_heights(activation_heights),
             );
             let recipient = client_builder.build_client(
                 seeds::HOSPITAL_MUSEUM_SEED.to_string(),
                 1,
                 true,
-                zcash_protocol::local_consensus::LocalNetwork {
-                    overwinter: Some(1.into()),
-                    sapling: Some(1.into()),
-                    blossom: Some(1.into()),
-                    heartwood: Some(1.into()),
-                    canopy: Some(1.into()),
-                    nu5: Some(1.into()),
-                    nu6: Some(1.into()),
-                    nu6_1: Some(1.into()),
-                },
+                local_network_from_activation_heights(activation_heights),
             );
             Some(Clients {
                 client_builder,
