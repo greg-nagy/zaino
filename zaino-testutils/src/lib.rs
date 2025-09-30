@@ -400,6 +400,7 @@ impl TestManager {
             ValidatorKind::Zcashd => {
                 let mut cfg = ZcashdConfig::default_test();
                 cfg.rpc_listen_port = Some(rpc_listen_port);
+                cfg.configured_activation_heights = activation_heights.into();
                 cfg.chain_cache = chain_cache.clone();
                 ValidatorConfig::ZcashdConfig(cfg)
             }
@@ -407,6 +408,7 @@ impl TestManager {
                 let mut cfg = ZebradConfig::default_test();
                 cfg.rpc_listen_port = Some(rpc_listen_port);
                 cfg.indexer_listen_port = Some(grpc_listen_port);
+                cfg.configured_activation_heights = activation_heights.into();
                 cfg.chain_cache = chain_cache.clone();
                 cfg.network = network_kind;
                 ValidatorConfig::ZebradConfig(cfg)
@@ -486,16 +488,13 @@ impl TestManager {
 
         // Launch Zingolib Lightclients:
         let clients = if enable_clients {
-            let lightclient_dir = tempfile::tempdir().unwrap();
-            // let activation_heights =
-            //     zingo_common_components::protocol::activation_heights::test::block_one();
             let mut client_builder = ClientBuilder::new(
                 make_uri(
                     zaino_grpc_listen_address
                         .expect("Error launching zingo lightclients. `enable_zaino` is None.")
                         .port(),
                 ),
-                lightclient_dir,
+                tempfile::tempdir().unwrap(),
             );
             let faucet = client_builder.build_faucet(
                 true,
