@@ -700,7 +700,7 @@ mod launch_testmanager {
             )
             .await
             .unwrap();
-            let grpc_client = build_client(services::network::localhost_uri(
+            let _grpc_client = build_client(services::network::localhost_uri(
                 test_manager
                     .zaino_grpc_listen_address
                     .expect("Zaino listen port is not available but zaino is active.")
@@ -761,7 +761,7 @@ mod launch_testmanager {
                 .expect("Clients are not initialized");
 
             clients.faucet.sync_and_await().await.unwrap();
-            dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await);
+            dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await.unwrap());
 
             assert!(
                     clients.faucet.account_balance(zip32::AccountId::ZERO).await.unwrap().total_orchard_balance.unwrap().into_u64() > 0
@@ -876,7 +876,7 @@ mod launch_testmanager {
                 )
                 .await
                 .unwrap();
-                let grpc_client = build_client(services::network::localhost_uri(
+                let _grpc_client = build_client(services::network::localhost_uri(
                     test_manager
                         .zaino_grpc_listen_address
                         .expect("Zaino listen port not available but zaino is active.")
@@ -937,11 +937,11 @@ mod launch_testmanager {
                     .expect("Clients are not initialized");
 
                 clients.faucet.sync_and_await().await.unwrap();
-                dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await);
+                dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await.unwrap());
 
                 test_manager.local_net.generate_blocks(100).await.unwrap();
                 clients.faucet.sync_and_await().await.unwrap();
-                dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await);
+                dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await.unwrap());
 
                 assert!(
                     clients.faucet.account_balance(zip32::AccountId::ZERO).await.unwrap().total_orchard_balance.unwrap().into_u64() > 0
@@ -978,7 +978,7 @@ mod launch_testmanager {
                 test_manager.local_net.generate_blocks(100).await.unwrap();
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                 clients.faucet.sync_and_await().await.unwrap();
-                dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await);
+                dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await.unwrap());
 
                 assert!(
                     clients
@@ -1006,7 +1006,7 @@ mod launch_testmanager {
                 test_manager.local_net.generate_blocks(1).await.unwrap();
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                 clients.faucet.sync_and_await().await.unwrap();
-                dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await);
+                dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await.unwrap());
 
                 assert!(
                 clients.faucet.account_balance(zip32::AccountId::ZERO).await.unwrap().total_orchard_balance.unwrap().into_u64() > 0,
@@ -1031,7 +1031,7 @@ mod launch_testmanager {
                         .recipient
                         .account_balance(zip32::AccountId::ZERO)
                         .await
-                );
+.unwrap()                );
 
                 assert_eq!(
                     clients
@@ -1172,7 +1172,7 @@ mod launch_testmanager {
                 )
                 .await
                 .unwrap();
-                let grpc_client = build_client(services::network::localhost_uri(
+                let _grpc_client = build_client(services::network::localhost_uri(
                     test_manager
                         .zaino_grpc_listen_address
                         .expect("Zaino listen port not available but zaino is active.")
@@ -1235,11 +1235,11 @@ mod launch_testmanager {
                     .expect("Clients are not initialized");
 
                 clients.faucet.sync_and_await().await.unwrap();
-                dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await);
+                dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await.unwrap());
 
                 test_manager.generate_blocks_with_delay(100).await;
                 clients.faucet.sync_and_await().await.unwrap();
-                dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await);
+                dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await.unwrap());
 
                 assert!(
                     clients.faucet.account_balance(zip32::AccountId::ZERO).await.unwrap().total_orchard_balance.unwrap().into_u64() > 0
@@ -1277,7 +1277,7 @@ mod launch_testmanager {
 
                 test_manager.generate_blocks_with_delay(100).await;
                 clients.faucet.sync_and_await().await.unwrap();
-                dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await);
+                dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await.unwrap());
 
                 assert!(
                     clients
@@ -1304,7 +1304,7 @@ mod launch_testmanager {
                 clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
                 test_manager.generate_blocks_with_delay(1).await;
                 clients.faucet.sync_and_await().await.unwrap();
-                dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await);
+                dbg!(clients.faucet.account_balance(zip32::AccountId::ZERO).await.unwrap());
 
                 assert!(
                 clients.faucet.account_balance(zip32::AccountId::ZERO).await.unwrap().total_orchard_balance.unwrap().into_u64() > 0,
@@ -1327,7 +1327,7 @@ mod launch_testmanager {
                     clients
                         .recipient
                         .account_balance(zip32::AccountId::ZERO)
-                        .await
+                        .await.unwrap()
                 );
 
                 assert_eq!(
