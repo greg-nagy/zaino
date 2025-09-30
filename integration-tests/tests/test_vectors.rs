@@ -164,7 +164,11 @@ async fn create_200_block_regtest_chain_vectors() {
     clients.faucet.sync_and_await().await.unwrap();
 
     // create transactions
-    clients.faucet.quick_shield(zip32::AccountId::ZERO).await.unwrap();
+    clients
+        .faucet
+        .quick_shield(zip32::AccountId::ZERO)
+        .await
+        .unwrap();
 
     // Generate block
     test_manager.local_net.generate_blocks(1).await.unwrap(); // Block 102
@@ -174,7 +178,11 @@ async fn create_200_block_regtest_chain_vectors() {
     clients.faucet.sync_and_await().await.unwrap();
 
     // create transactions
-    clients.faucet.quick_shield(zip32::AccountId::ZERO).await.unwrap();
+    clients
+        .faucet
+        .quick_shield(zip32::AccountId::ZERO)
+        .await
+        .unwrap();
     from_inputs::quick_send(
         &mut clients.faucet,
         vec![(recipient_uaddr.as_str(), 250_000, None)],
@@ -191,7 +199,11 @@ async fn create_200_block_regtest_chain_vectors() {
     clients.recipient.sync_and_await().await.unwrap();
 
     // create transactions
-    clients.faucet.quick_shield(zip32::AccountId::ZERO).await.unwrap();
+    clients
+        .faucet
+        .quick_shield(zip32::AccountId::ZERO)
+        .await
+        .unwrap();
 
     from_inputs::quick_send(
         &mut clients.faucet,
@@ -222,7 +234,11 @@ async fn create_200_block_regtest_chain_vectors() {
     clients.recipient.sync_and_await().await.unwrap();
 
     // create transactions
-    clients.faucet.quick_shield(zip32::AccountId::ZERO).await.unwrap();
+    clients
+        .faucet
+        .quick_shield(zip32::AccountId::ZERO)
+        .await
+        .unwrap();
     clients
         .recipient
         .quick_shield(zip32::AccountId::ZERO)
@@ -265,7 +281,11 @@ async fn create_200_block_regtest_chain_vectors() {
         }
 
         // create transactions
-        clients.faucet.quick_shield(zip32::AccountId::ZERO).await.unwrap();
+        clients
+            .faucet
+            .quick_shield(zip32::AccountId::ZERO)
+            .await
+            .unwrap();
         clients
             .recipient
             .quick_shield(zip32::AccountId::ZERO)
@@ -313,7 +333,11 @@ async fn create_200_block_regtest_chain_vectors() {
         }
 
         // create transactions
-        clients.faucet.quick_shield(zip32::AccountId::ZERO).await.unwrap();
+        clients
+            .faucet
+            .quick_shield(zip32::AccountId::ZERO)
+            .await
+            .unwrap();
         clients
             .recipient
             .quick_shield(zip32::AccountId::ZERO)
