@@ -37,9 +37,6 @@ zebra-chain = "2.0"
 zebra-state = "2.0"
 zebra-rpc = "2.0"
 
-# Zingo Infrastructure
-zingo_netutils = { git = "https://github.com/zingolabs/infrastructure.git", rev = "5a01b06c95b5b464e0e0fa251c7d36b9ccd6b829" }
-
 # Runtime
 tokio = { version = "1.38", features = ["full"] }
 tokio-stream = "0.1"
@@ -121,6 +118,7 @@ zainod = { path = "zainod" }
 figment = "0.10"
 nonempty = "0.11.0"
 proptest = "~1.2"
+zip32 = "0.2.1"
 
 # Patch for vulnerable dependency
 slab = "0.4.11"
@@ -129,8 +127,6 @@ arc-swap = "1.7.1"
 cargo-lock = "10.1.0"
 derive_more = "2.0.1"
 lazy_static = "1.5.0"
-zcash_client_backend = "0.19.1"
-zip32 = "0.2.1"
 
 [profile.test]
 opt-level = 3
