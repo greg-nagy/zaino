@@ -136,7 +136,8 @@ async fn v0_to_v1_interrupted() {
 
     // Partial build v1 database.
     let zaino_db = DbBackend::spawn_v1(&v1_config).await.unwrap();
-    crate::chain_index::tests::vectors::sync_db_with_blockdata(&zaino_db, blocks.clone(), Some(50));
+    crate::chain_index::tests::vectors::sync_db_with_blockdata(&zaino_db, blocks.clone(), Some(50))
+        .await;
 
     dbg!(zaino_db.shutdown().await.unwrap());
 
@@ -197,7 +198,8 @@ async fn v0_to_v1_partial() {
         zaino_db.router(),
         blocks.clone(),
         None,
-    );
+    )
+    .await;
 
     zaino_db.wait_until_ready().await;
     dbg!(zaino_db.status());
@@ -208,7 +210,8 @@ async fn v0_to_v1_partial() {
 
     // Partial build v1 database.
     let zaino_db = DbBackend::spawn_v1(&v1_config).await.unwrap();
-    crate::chain_index::tests::vectors::sync_db_with_blockdata(&zaino_db, blocks.clone(), None);
+    crate::chain_index::tests::vectors::sync_db_with_blockdata(&zaino_db, blocks.clone(), None)
+        .await;
 
     dbg!(zaino_db.shutdown().await.unwrap());
 

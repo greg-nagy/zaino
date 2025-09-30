@@ -254,27 +254,21 @@ pub(crate) fn build_active_mockchain_source(
     loaded_chain_height: u32,
     // the input data for this function could be reduced for wider use
     // but is more simple to pass all test block data here.
-    blockchain_data: Vec<(
-        u32,
-        zebra_chain::block::Block,
-        (
-            zebra_chain::sapling::tree::Root,
-            u64,
-            zebra_chain::orchard::tree::Root,
-            u64,
-        ),
-        (Vec<u8>, Vec<u8>),
-    )>,
+    blockchain_data: Vec<TestVectorBlockData>,
 ) -> MockchainSource {
     let (mut heights, mut zebra_blocks, mut block_roots, mut block_hashes, mut block_treestates) =
         (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
 
-    for (
+    for TestVectorBlockData {
         height,
         zebra_block,
-        (sapling_root, sapling_tree_size, orchard_root, orchard_tree_size),
-        (sapling_treestate, orchard_treestate),
-    ) in blockchain_data.clone()
+        sapling_root,
+        sapling_tree_size,
+        sapling_tree_state,
+        orchard_root,
+        orchard_tree_size,
+        orchard_tree_state,
+    } in blockchain_data.clone()
     {
         heights.push(height);
         block_hashes.push(BlockHash::from(zebra_block.hash()));
@@ -285,7 +279,7 @@ pub(crate) fn build_active_mockchain_source(
             Some((orchard_root, orchard_tree_size)),
         ));
 
-        block_treestates.push((sapling_treestate, orchard_treestate));
+        block_treestates.push((sapling_tree_state, orchard_tree_state));
     }
 
     MockchainSource::new_with_active_height(

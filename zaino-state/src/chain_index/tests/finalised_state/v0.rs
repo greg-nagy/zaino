@@ -54,7 +54,8 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v0_zaino_db()
         zaino_db.router(),
         test_data.blocks.clone(),
         None,
-    );
+    )
+    .await;
 
     (test_data, db_dir, zaino_db)
 }
@@ -162,7 +163,8 @@ async fn save_db_to_file_and_reload() {
                 zaino_db.router(),
                 blocks_clone,
                 None,
-            );
+            )
+            .await;
 
             zaino_db.wait_until_ready().await;
             dbg!(zaino_db.status());
