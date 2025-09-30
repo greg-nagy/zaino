@@ -38,7 +38,7 @@ zebra-state = "2.0"
 zebra-rpc = "2.0"
 
 # Zingo Infrastructure
-zingo_netutils = { git = "https://github.com/zingolabs/infrastructure.git", rev = "cc2af1ac80cb6b7a7f0a0b8f331f7b0873d667bf" }
+zingo_netutils = { git = "https://github.com/zingolabs/infrastructure.git", rev = "5a01b06c95b5b464e0e0fa251c7d36b9ccd6b829" }
 
 # Runtime
 tokio = { version = "1.38", features = ["full"] }
