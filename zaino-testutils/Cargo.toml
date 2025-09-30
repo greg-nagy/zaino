@@ -28,7 +28,7 @@ zebra-chain = { workspace = true }
 # Zingo-infra
 zcash_local_net = { git = "https://github.com/zingolabs/infrastructure.git", rev = "c53ae95cd4bcdc17121a4cb2566c07dba5a7b9a5" }
 zingo_common_components = { git = "https://github.com/zingolabs/infrastructure.git", rev = "5a01b06c95b5b464e0e0fa251c7d36b9ccd6b829", features = [ "for_test" ]}
-zingo_test_vectors = { git = "https://github.com/zingolabs/infrastructure.git", rev = "317978667919734f197248a4b3fb87baa0016f4b" }
+zingo_test_vectors = { git = "https://github.com/zingolabs/infrastructure.git", rev = "5a01b06c95b5b464e0e0fa251c7d36b9ccd6b829" }
 
 # ZingoLib
 zingolib = { git = "https://github.com/zingolabs/zingolib.git", rev = "f88e1d76ea244d6cc48d7fd4c3a609c6598318dc", features = [
