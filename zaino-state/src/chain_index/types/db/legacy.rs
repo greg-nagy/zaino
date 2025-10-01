@@ -1182,6 +1182,31 @@ impl IndexedBlock {
     }
 }
 
+
+impl ZainoVersionedSerialise for IndexedBlock {
+    const VERSION: u8 = version::V1;
+
+    fn encode_body<W: Write>(&self, mut w: &mut W) -> io::Result<()> {
+        self.index.serialize(&mut w)?;
+        self.data.serialize(&mut w)?;
+        write_vec(&mut w, &self.transactions, |w, tx| tx.serialize(w))?;
+        self.commitment_tree_data.serialize(&mut w)
+    }
+
+    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
+        Self::decode_v1(r)
+    }
+
+    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+        let index = BlockIndex::deserialize(&mut r)?;
+        let data = BlockData::deserialize(&mut r)?;
+        let tx = read_vec(&mut r, |r| CompactTxData::deserialize(r))?;
+        let ctd = CommitmentTreeData::deserialize(&mut r)?;
+
+        Ok(IndexedBlock::new(index, data, tx, ctd))
+    }
+}
 /// TryFrom inputs:
 /// - FullBlock:
 ///   - Holds block data.
