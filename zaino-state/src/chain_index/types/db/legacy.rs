@@ -26,20 +26,8 @@
 //! - `shielded.rs` - Shielded pool types (SaplingCompactTx, OrchardCompactTx, etc.)
 
 // =============================================================================
-// MODULE ORGANIZATION
+// IMPORTS
 // =============================================================================
-
-pub mod db;
-pub mod primitives;
-
-// Re-export types from organized submodules
-pub use db::{CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes};
-
-// =============================================================================
-// IMPORTS FOR LEGACY TYPES
-// =============================================================================
-// These imports support the types below that haven't been migrated yet.
-// They should be moved to the appropriate submodules along with their types.
 
 use core2::io::{self, Read, Write};
 use hex::{FromHex, ToHex};
@@ -47,14 +35,12 @@ use primitive_types::U256;
 use std::{fmt, io::Cursor};
 
 use crate::chain_index::encoding::{
-    read_fixed_le, version, write_fixed_le, ZainoVersionedSerialise,
+    read_fixed_le, read_i64_le, read_option, read_u16_be, read_u32_be, read_u32_le, read_u64_le,
+    read_vec, version, write_fixed_le, write_i64_le, write_option, write_u16_be, write_u32_be,
+    write_u32_le, write_u64_le, write_vec, FixedEncodedLen, ZainoVersionedSerialise,
 };
 
-use super::encoding::{
-    read_i64_le, read_option, read_u16_be, read_u32_be, read_u32_le, read_u64_le, read_vec,
-    write_i64_le, write_option, write_u16_be, write_u32_be, write_u32_le, write_u64_le, write_vec,
-    FixedEncodedLen,
-};
+use super::commitment::{CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes};
 
 // =============================================================================
 // LEGACY TYPES AWAITING MIGRATION
@@ -1340,9 +1326,6 @@ impl
 }
 
 /// Tree root data from blockchain source
-#[derive(Debug, Clone)]
-
-/// Compact indexed representation of a transaction within a block, supporting quick queries.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct CompactTxData {
