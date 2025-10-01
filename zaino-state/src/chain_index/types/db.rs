@@ -21,8 +21,10 @@
 pub mod address;
 pub mod block;
 pub mod commitment;
+pub mod legacy;
 pub mod primitives;
 pub mod shielded;
 pub mod transaction;
 
 pub use commitment::{CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes};
+pub use legacy::*;
