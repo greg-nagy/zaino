@@ -22,7 +22,7 @@ use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
-        response::GetMempoolInfoResponse,
+        response::{GetMempoolInfoResponse, GetNetworkSolPsResponse},
     },
 };
 
@@ -575,6 +575,29 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .into_iter()
             .map(|utxos| utxos.into())
             .collect())
+    }
+
+    
+    /// Returns the estimated network solutions per second based on the last n blocks.
+    ///
+    /// zcashd reference: [`getnetworksolps`](https://zcash.github.io/rpc/getnetworksolps.html)
+    /// method: post
+    /// tags: blockchain
+    ///
+    /// # Parameters
+    ///
+    /// - `blocks`: (number, optional, default=120) Number of blocks, or -1 for blocks over difficulty averaging window.
+    /// - `height`: (number, optional, default=-1) To estimate network speed at the time of a specific block height.
+    async fn get_network_sol_ps(
+        &self,
+        blocks: Option<i32>,
+        height: Option<i32>,
+    ) -> Result<GetNetworkSolPsResponse, Self::Error> {
+        Ok(
+            self.fetcher
+                .get_network_sol_ps(blocks, height)
+                .await?
+        )
     }
 }
 

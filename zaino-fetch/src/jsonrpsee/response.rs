@@ -227,7 +227,7 @@ pub struct GetDifficultyResponse(pub f64);
 
 /// Response to a `getnetworksolps` RPC request.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct GetNetworkSolPsResponse(pub f64);
+pub struct GetNetworkSolPsResponse(pub u64);
 
 impl ResponseToError for GetNetworkSolPsResponse {
     type RpcError = Infallible;

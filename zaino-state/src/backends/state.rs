@@ -26,7 +26,7 @@ use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
-        response::{GetMempoolInfoResponse, GetSubtreesResponse},
+        response::{GetMempoolInfoResponse, GetNetworkSolPsResponse, GetSubtreesResponse},
     },
 };
 use zaino_proto::proto::{
@@ -1504,6 +1504,31 @@ impl ZcashIndexer for StateServiceSubscriber {
             .collect())
     }
 
+
+    /// Calls RPC Client and Returns the estimated network solutions per second based on the last n blocks.
+    ///
+    /// zcashd reference: [`getnetworksolps`](https://zcash.github.io/rpc/getnetworksolps.html)
+    /// method: post
+    /// tags: blockchain
+    ///
+    /// # Parameters
+    ///
+    /// - `blocks`: (number, optional, default=120) Number of blocks, or -1 for blocks over difficulty averaging window.
+    /// - `height`: (number, optional, default=-1) To estimate network speed at the time of a specific block height.
+    async fn get_network_sol_ps(
+        &self,
+        blocks: Option<i32>,
+        height: Option<i32>,
+    ) -> Result<GetNetworkSolPsResponse, Self::Error> {
+        self.rpc_client
+            .get_network_sol_ps(
+                blocks,
+                height
+            )
+            .await
+            .map_err(|e| StateServiceError::Custom(e.to_string()))
+    } 
+    
     // Helper function, to get the chain height in rpc implementations
     async fn chain_height(&self) -> Result<Height, Self::Error> {
         let mut state = self.read_state_service.clone();
