@@ -311,7 +311,7 @@ pub trait ZcashIndexerRpc {
     async fn z_get_address_utxos(
         &self,
         address_strings: AddressStrings,
-    ) -> Result<Vec<GetAddressUtxos>, ErrorObjectOwned>;   
+    ) -> Result<Vec<GetAddressUtxos>, ErrorObjectOwned>;
 
     /// Returns the estimated network solutions per second based on the last n blocks.
     ///
@@ -330,7 +330,6 @@ pub trait ZcashIndexerRpc {
         blocks: Option<i32>,
         height: Option<i32>,
     ) -> Result<GetNetworkSolPsResponse, ErrorObjectOwned>;
-
 }
 /// Uses ErrorCode::InvalidParams as this is converted to zcash legacy "minsc" ErrorCode in RPC middleware.
 #[jsonrpsee::core::async_trait]

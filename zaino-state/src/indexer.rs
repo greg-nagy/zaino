@@ -408,8 +408,6 @@ pub trait ZcashIndexer: Send + Sync + 'static {
         address_strings: AddressStrings,
     ) -> Result<Vec<GetAddressUtxos>, Self::Error>;
 
-
-
     /// Returns the estimated network solutions per second based on the last n blocks.
     ///
     /// zcashd reference: [`getnetworksolps`](https://zcash.github.io/rpc/getnetworksolps.html)
@@ -425,8 +423,8 @@ pub trait ZcashIndexer: Send + Sync + 'static {
         blocks: Option<i32>,
         height: Option<i32>,
     ) -> Result<GetNetworkSolPsResponse, Self::Error>;
-    
-     /// Helper function to get the chain height
+
+    /// Helper function to get the chain height
     async fn chain_height(&self) -> Result<Height, Self::Error>;
 
     /// Helper function, to get the list of taddresses that have sends or reciepts

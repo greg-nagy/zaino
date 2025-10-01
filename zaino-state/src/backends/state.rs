@@ -1504,7 +1504,6 @@ impl ZcashIndexer for StateServiceSubscriber {
             .collect())
     }
 
-
     /// Calls RPC Client and Returns the estimated network solutions per second based on the last n blocks.
     ///
     /// zcashd reference: [`getnetworksolps`](https://zcash.github.io/rpc/getnetworksolps.html)
@@ -1521,14 +1520,11 @@ impl ZcashIndexer for StateServiceSubscriber {
         height: Option<i32>,
     ) -> Result<GetNetworkSolPsResponse, Self::Error> {
         self.rpc_client
-            .get_network_sol_ps(
-                blocks,
-                height
-            )
+            .get_network_sol_ps(blocks, height)
             .await
             .map_err(|e| StateServiceError::Custom(e.to_string()))
-    } 
-    
+    }
+
     // Helper function, to get the chain height in rpc implementations
     async fn chain_height(&self) -> Result<Height, Self::Error> {
         let mut state = self.read_state_service.clone();

@@ -577,7 +577,6 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .collect())
     }
 
-    
     /// Returns the estimated network solutions per second based on the last n blocks.
     ///
     /// zcashd reference: [`getnetworksolps`](https://zcash.github.io/rpc/getnetworksolps.html)
@@ -593,11 +592,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
         blocks: Option<i32>,
         height: Option<i32>,
     ) -> Result<GetNetworkSolPsResponse, Self::Error> {
-        Ok(
-            self.fetcher
-                .get_network_sol_ps(blocks, height)
-                .await?
-        )
+        Ok(self.fetcher.get_network_sol_ps(blocks, height).await?)
     }
 }
 
