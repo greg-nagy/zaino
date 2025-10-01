@@ -30,6 +30,7 @@
 // =============================================================================
 
 pub mod commitment;
+pub mod db;
 pub mod primitives;
 
 // Re-export types from organized submodules
