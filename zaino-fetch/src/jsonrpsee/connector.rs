@@ -20,7 +20,7 @@ use std::{
     time::Duration,
 };
 use tracing::error;
-use zebra_rpc::client::ValidateAddressResponse;
+use zebra_rpc::client::{GetMiningInfoResponse, ValidateAddressResponse};
 
 use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
@@ -692,6 +692,13 @@ impl JsonRpSeeConnector {
     ) -> Result<Vec<GetUtxosResponse>, RpcRequestError<GetUtxosError>> {
         let params = vec![serde_json::json!({ "addresses": addresses })];
         self.send_request("getaddressutxos", params).await
+    }
+
+    // TODO: Double check if truly Infallible
+    pub async fn get_mining_info(
+        &self,
+    ) -> Result<GetMiningInfoResponse, RpcRequestError<Infallible>> {
+        self.send_request("getmininginfo", ()).await
     }
 }
 

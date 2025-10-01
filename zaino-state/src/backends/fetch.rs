@@ -10,7 +10,10 @@ use zebra_state::HashOrHeight;
 
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::{
-    client::{GetSubtreesByIndexResponse, GetTreestateResponse, ValidateAddressResponse},
+    client::{
+        GetMiningInfoResponse, GetSubtreesByIndexResponse, GetTreestateResponse,
+        ValidateAddressResponse,
+    },
     methods::{
         AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
         GetBlockHashResponse, GetBlockchainInfoResponse, GetInfo, GetRawTransaction,
@@ -358,6 +361,10 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_block(hash_or_height, verbosity)
             .await?
             .try_into()?)
+    }
+
+    async fn get_mining_info(&self) -> Result<GetMiningInfoResponse, Self::Error> {
+        Ok(self.fetcher.get_mining_info().await?.into())
     }
 
     /// Returns the hash of the best block (tip) of the longest chain.

@@ -48,8 +48,8 @@ use zebra_chain::{
 };
 use zebra_rpc::{
     client::{
-        GetBlockchainInfoBalance, GetSubtreesByIndexResponse, GetTreestateResponse, HexData,
-        SubtreeRpcData, TransactionObject, ValidateAddressResponse,
+        GetBlockchainInfoBalance, GetMiningInfoResponse, GetSubtreesByIndexResponse,
+        GetTreestateResponse, HexData, SubtreeRpcData, TransactionObject, ValidateAddressResponse,
     },
     methods::{
         chain_tip_difficulty, AddressBalance, AddressStrings, ConsensusBranchIdHex,
@@ -314,6 +314,7 @@ impl Drop for StateService {
     }
 }
 
+// TODO: Maybe rename to something like `StateServiceBackend`?
 /// A fetch service subscriber.
 ///
 /// Subscribers should be
@@ -1155,6 +1156,10 @@ impl ZcashIndexer for StateServiceSubscriber {
             sapling,
             orchard,
         ))
+    }
+
+    async fn get_mining_info(&self) -> Result<GetMiningInfoResponse, Self::Error> {
+        self.rpc_client.get_mining_info().await.map_err(Into::into)
     }
 
     // No request parameters.

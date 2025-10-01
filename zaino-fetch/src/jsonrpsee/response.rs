@@ -16,7 +16,7 @@ use zebra_chain::{
 };
 
 use zebra_rpc::{
-    client::{GetBlockchainInfoBalance, ValidateAddressResponse},
+    client::{GetBlockchainInfoBalance, GetMiningInfoResponse, ValidateAddressResponse},
     methods::opthex,
 };
 
@@ -1512,5 +1512,9 @@ pub struct GetMempoolInfoResponse {
 }
 
 impl ResponseToError for GetMempoolInfoResponse {
+    type RpcError = Infallible;
+}
+
+impl ResponseToError for GetMiningInfoResponse {
     type RpcError = Infallible;
 }
