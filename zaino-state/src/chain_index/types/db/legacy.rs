@@ -622,13 +622,13 @@ impl FixedEncodedLen for Outpoint {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct BlockIndex {
     /// The hash identifying this block uniquely.
-    pub(super) hash: BlockHash,
+    pub hash: BlockHash,
     /// The hash of this block's parent block (previous block in chain).
-    pub(super) parent_hash: BlockHash,
+    pub parent_hash: BlockHash,
     /// The cumulative proof-of-work of the blockchain up to this block, used for chain selection.
-    pub(super) chainwork: ChainWork,
+    pub chainwork: ChainWork,
     /// The height of this block if it's in the current best chain. None if it's part of a fork.
-    pub(super) height: Option<Height>,
+    pub height: Option<Height>,
 }
 
 impl BlockIndex {
@@ -780,21 +780,21 @@ impl FixedEncodedLen for ChainWork {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct BlockData {
     /// Version number of the block format (protocol upgrades).
-    pub(super) version: u32,
+    pub version: u32,
     /// Unix timestamp of when the block was mined (seconds since epoch).
-    pub(super) time: i64,
+    pub time: i64,
     /// Merkle root hash of all transaction IDs in the block (used for quick tx inclusion proofs).
-    pub(super) merkle_root: [u8; 32],
+    pub merkle_root: [u8; 32],
     /// Digest representing the block-commitments Merkle root (commitment to note states).
     /// - < V4: `hashFinalSaplingRoot` - Sapling note commitment tree root.
     /// - => V4: `hashBlockCommitments` - digest over hashLightClientRoot and hashAuthDataRoot.``
-    pub(super) block_commitments: [u8; 32],
+    pub block_commitments: [u8; 32],
     /// Compact difficulty target used for proof-of-work and difficulty calculation.
-    pub(super) bits: u32,
+    pub bits: u32,
     /// Equihash nonse.
-    pub(super) nonce: [u8; 32],
+    pub nonce: [u8; 32],
     /// Equihash solution
-    pub(super) solution: EquihashSolution,
+    pub solution: EquihashSolution,
 }
 
 impl BlockData {
@@ -1073,14 +1073,14 @@ impl ZainoVersionedSerialise for EquihashSolution {
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct IndexedBlock {
     /// Metadata and indexing information for this block.
-    pub(super) index: BlockIndex,
+    pub index: BlockIndex,
     /// Essential header and metadata information for the block.
-    pub(super) data: BlockData,
+    pub data: BlockData,
     /// Compact representations of transactions in this block.
-    pub(super) transactions: Vec<CompactTxData>,
+    pub transactions: Vec<CompactTxData>,
     /// Sapling and orchard commitment tree data for the chain
     /// *after this block has been applied.
-    pub(super) commitment_tree_data: CommitmentTreeData,
+    pub commitment_tree_data: CommitmentTreeData,
 }
 
 impl IndexedBlock {

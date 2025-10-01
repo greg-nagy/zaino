@@ -608,7 +608,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         let heights_to_hashes = blocks
             .iter()
             .filter_map(|(hash, chainblock)| {
-                chainblock.index().height.map(|height| (height, *hash))
+                chainblock.index().height().map(|height| (height, *hash))
             })
             .collect();
 
