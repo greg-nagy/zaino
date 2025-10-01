@@ -29,12 +29,11 @@
 // MODULE ORGANIZATION
 // =============================================================================
 
-pub mod commitment;
 pub mod db;
 pub mod primitives;
 
 // Re-export types from organized submodules
-pub use commitment::{CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes};
+pub use db::{CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes};
 
 // =============================================================================
 // IMPORTS FOR LEGACY TYPES

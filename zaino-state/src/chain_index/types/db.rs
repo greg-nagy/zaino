@@ -17,3 +17,7 @@
 //! 3. **Never change structs without proper migration**
 //!    - Implement a new version when changes are needed
 //!    - Update ZainoDB and implement necessary migrations
+
+pub mod commitment;
+
+pub use commitment::{CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes};
