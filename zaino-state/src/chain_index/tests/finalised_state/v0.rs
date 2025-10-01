@@ -81,7 +81,7 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v0_zaino_db() -> (
             sapling_root_size as u32,
             orchard_root,
             orchard_root_size as u32,
-            parent_chain_work.clone(),
+            parent_chain_work,
             zebra_chain::parameters::Network::new_regtest(
                 zebra_chain::parameters::testnet::ConfiguredActivationHeights {
                     before_overwinter: Some(1),
@@ -361,7 +361,7 @@ async fn get_compact_blocks() {
         );
 
         let chain_block =
-            IndexedBlock::try_from(BlockWithMetadata::new(&zebra_block, metadata)).unwrap();
+            IndexedBlock::try_from(BlockWithMetadata::new(zebra_block, metadata)).unwrap();
 
         let compact_block = chain_block.to_compact_block();
 

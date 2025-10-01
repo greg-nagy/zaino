@@ -276,7 +276,7 @@ impl ZainoDB {
                 sapling_size as u32,
                 orchard_root,
                 orchard_size as u32,
-                parent_chainwork.clone(),
+                parent_chainwork,
                 network.to_zebra_network(),
             );
 

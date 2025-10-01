@@ -241,9 +241,9 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 .difficulty_threshold
                 .to_work()
                 .ok_or_else(|| {
-                    InitError::InvalidNodeData(Box::new(InvalidData(format!(
-                        "Invalid work field of genesis block"
-                    ))))
+                    InitError::InvalidNodeData(Box::new(InvalidData(
+                        "Invalid work field of genesis block".to_string(),
+                    )))
                 })?
                 .as_u128(),
         ));
@@ -681,7 +681,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         Self::create_indexed_block_with_required_roots(
             block,
             &tree_roots,
-            prev_block.chainwork().clone(),
+            *prev_block.chainwork(),
             self.network.clone(),
         )
         .map_err(|e| {

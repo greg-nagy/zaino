@@ -192,7 +192,7 @@ impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
                             sapling_root_size as u32,
                             orchard_root,
                             orchard_root_size as u32,
-                            parent_chain_work.clone(),
+                            parent_chain_work,
                             cfg.network.to_zebra_network(),
                         );
 
