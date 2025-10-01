@@ -1182,7 +1182,6 @@ impl IndexedBlock {
     }
 }
 
-
 impl ZainoVersionedSerialise for IndexedBlock {
     const VERSION: u8 = version::V1;
 
