@@ -54,10 +54,10 @@ pub async fn sync_db_with_blockdata(
         ..
     } in vector_data
     {
-        if let Some(h) = height_limit
-            && height > h
-        {
-            break;
+        if let Some(h) = height_limit {
+            if height > h {
+                break;
+            }
         }
         let chain_block = IndexedBlock::try_from((
             &zebra_block,
