@@ -63,7 +63,7 @@ mod chain_query_interface {
         },
         Height, StateService, StateServiceConfig, ZcashService as _,
     };
-    use zebra_chain::serialization::{ZcashDeserialize, ZcashDeserializeInto};
+    use zebra_chain::{parameters::NetworkKind, serialization::{ZcashDeserialize, ZcashDeserializeInto}};
 
     use super::*;
 
@@ -97,8 +97,8 @@ mod chain_query_interface {
                     Some(dir) => dir,
                     None => test_manager.data_dir.clone(),
                 };
-                let network = match test_manager.network.to_string().as_str() {
-                    "Regtest" => zebra_chain::parameters::Network::new_regtest(
+                let network = match test_manager.network {
+                    NetworkKind::Regtest => zebra_chain::parameters::Network::new_regtest(
                         zebra_chain::parameters::testnet::ConfiguredActivationHeights {
                             before_overwinter: Some(1),
                             overwinter: Some(1),
@@ -109,13 +109,12 @@ mod chain_query_interface {
                             nu5: Some(1),
                             nu6: Some(1),
                             // TODO: What is network upgrade 6.1? What does a minor version NU mean?
-                            nu6_1: None,
+                            nu6_1: Some(1),
                             nu7: None,
                         },
                     ),
-                    "Testnet" => zebra_chain::parameters::Network::new_default_testnet(),
-                    "Mainnet" => zebra_chain::parameters::Network::Mainnet,
-                    _ => panic!("Incorrect newtork type found."),
+                    NetworkKind::Testnet => zebra_chain::parameters::Network::new_default_testnet(),
+                    NetworkKind::Mainnet => zebra_chain::parameters::Network::Mainnet,
                 };
                 let state_service = StateService::spawn(StateServiceConfig::new(
                     zebra_state::Config {
