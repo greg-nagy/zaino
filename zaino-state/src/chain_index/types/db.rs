@@ -18,6 +18,11 @@
 //!    - Implement a new version when changes are needed
 //!    - Update ZainoDB and implement necessary migrations
 
+pub mod address;
+pub mod block;
 pub mod commitment;
+pub mod primitives;
+pub mod shielded;
+pub mod transaction;
 
 pub use commitment::{CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes};
