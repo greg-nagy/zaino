@@ -10,7 +10,7 @@ use zebra_chain::serialization::ZcashDeserialize as _;
 use zebra_rpc::methods::GetAddressUtxos;
 
 use crate::chain_index::source::test::MockchainSource;
-use crate::{BlockHash, ChainWork, CompactSize, IndexedBlock, read_u32_le, read_u64_le};
+use crate::{read_u32_le, read_u64_le, BlockHash, ChainWork, CompactSize, IndexedBlock};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestVectorData {

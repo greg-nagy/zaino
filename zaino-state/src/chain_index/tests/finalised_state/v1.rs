@@ -6,14 +6,14 @@ use tempfile::TempDir;
 use zaino_common::network::ActivationHeights;
 use zaino_common::{DatabaseConfig, Network, StorageConfig};
 
-use crate::chain_index::finalised_state::ZainoDB;
 use crate::chain_index::finalised_state::capability::IndexedBlockExt;
 use crate::chain_index::finalised_state::db::DbBackend;
 use crate::chain_index::finalised_state::reader::DbReader;
+use crate::chain_index::finalised_state::ZainoDB;
 use crate::chain_index::source::test::MockchainSource;
 use crate::chain_index::tests::init_tracing;
 use crate::chain_index::tests::vectors::{
-    TestVectorBlockData, TestVectorData, build_mockchain_source, load_test_vectors,
+    build_mockchain_source, load_test_vectors, TestVectorBlockData, TestVectorData,
 };
 use crate::chain_index::types::TransactionHash;
 use crate::error::FinalisedStateError;
@@ -45,8 +45,8 @@ pub(crate) async fn spawn_v1_zaino_db(
     Ok((temp_dir, zaino_db))
 }
 
-pub(crate) async fn load_vectors_and_spawn_and_sync_v1_zaino_db()
--> (TestVectorData, TempDir, ZainoDB) {
+pub(crate) async fn load_vectors_and_spawn_and_sync_v1_zaino_db(
+) -> (TestVectorData, TempDir, ZainoDB) {
     let test_vector_data = load_test_vectors().unwrap();
     let blocks = test_vector_data.blocks.clone();
 
@@ -62,8 +62,8 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v1_zaino_db()
     (test_vector_data, db_dir, zaino_db)
 }
 
-pub(crate) async fn load_vectors_v1db_and_reader()
--> (TestVectorData, TempDir, std::sync::Arc<ZainoDB>, DbReader) {
+pub(crate) async fn load_vectors_v1db_and_reader(
+) -> (TestVectorData, TempDir, std::sync::Arc<ZainoDB>, DbReader) {
     let (test_vector_data, db_dir, zaino_db) = load_vectors_and_spawn_and_sync_v1_zaino_db().await;
 
     let zaino_db = std::sync::Arc::new(zaino_db);
@@ -183,15 +183,13 @@ async fn save_db_to_file_and_reload() {
     std::thread::spawn(move || {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async move {
-            dbg!(
-                config
-                    .storage
-                    .database
-                    .path
-                    .read_dir()
-                    .unwrap()
-                    .collect::<Vec<_>>()
-            );
+            dbg!(config
+                .storage
+                .database
+                .path
+                .read_dir()
+                .unwrap()
+                .collect::<Vec<_>>());
             let zaino_db_2 = ZainoDB::spawn(config, source_clone).await.unwrap();
 
             zaino_db_2.wait_until_ready().await;
@@ -246,13 +244,11 @@ async fn load_db_backend_from_file() {
         prev_hash = Some(block.index().hash);
         assert_eq!(block.index.height, Some(Height(height)));
     }
-    assert!(
-        finalized_state_backend
-            .get_chain_block(Height(101))
-            .await
-            .unwrap()
-            .is_none()
-    );
+    assert!(finalized_state_backend
+        .get_chain_block(Height(101))
+        .await
+        .unwrap()
+        .is_none());
     std::fs::remove_file(db_path.join("regtest").join("v1").join("lock.mdb")).unwrap()
 }
 
@@ -759,12 +755,10 @@ async fn get_balance() {
     let faucet_addr_script = AddrScript::from_script(faucet_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
-    let reader_faucet_balance = dbg!(
-        db_reader
-            .addr_balance_by_range(faucet_addr_script, start, end)
-            .await
-            .unwrap()
-    ) as u64;
+    let reader_faucet_balance = dbg!(db_reader
+        .addr_balance_by_range(faucet_addr_script, start, end)
+        .await
+        .unwrap()) as u64;
 
     assert_eq!(test_vector_data.faucet.balance, reader_faucet_balance);
 
@@ -780,12 +774,10 @@ async fn get_balance() {
     let recipient_addr_script = AddrScript::from_script(recipient_script.as_raw_bytes())
         .expect("faucet script must be standard P2PKH or P2SH");
 
-    let reader_recipient_balance = dbg!(
-        db_reader
-            .addr_balance_by_range(recipient_addr_script, start, end)
-            .await
-            .unwrap()
-    ) as u64;
+    let reader_recipient_balance = dbg!(db_reader
+        .addr_balance_by_range(recipient_addr_script, start, end)
+        .await
+        .unwrap()) as u64;
 
     assert_eq!(test_vector_data.recipient.balance, reader_recipient_balance);
 }

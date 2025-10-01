@@ -1,16 +1,16 @@
 //! Zaino-State ChainIndex Mempool unit tests.
 
 use std::{collections::HashMap, io::Cursor, str::FromStr as _};
-use tokio::time::{Duration, sleep, timeout};
+use tokio::time::{sleep, timeout, Duration};
 use zebra_chain::serialization::ZcashDeserialize as _;
 
 use crate::{
-    Mempool, MempoolKey, MempoolValue,
     chain_index::{
         mempool::MempoolSubscriber,
         source::test::MockchainSource,
-        tests::vectors::{TestVectorBlockData, build_active_mockchain_source, load_test_vectors},
+        tests::vectors::{build_active_mockchain_source, load_test_vectors, TestVectorBlockData},
     },
+    Mempool, MempoolKey, MempoolValue,
 };
 
 async fn spawn_mempool_and_mockchain() -> (

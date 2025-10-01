@@ -19,14 +19,14 @@ use tracing::info;
 use zebra_chain::parameters::NetworkKind;
 
 use crate::{
-    BlockHash, ChainWork, Height, IndexedBlock, StatusType,
     chain_index::{source::BlockchainSourceError, types::GENESIS_HEIGHT},
     config::BlockCacheConfig,
     error::FinalisedStateError,
+    BlockHash, ChainWork, Height, IndexedBlock, StatusType,
 };
 
 use std::{sync::Arc, time::Duration};
-use tokio::time::{MissedTickBehavior, interval};
+use tokio::time::{interval, MissedTickBehavior};
 
 use super::source::BlockchainSource;
 

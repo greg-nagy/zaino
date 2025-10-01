@@ -19,22 +19,22 @@ pub(crate) fn init_tracing() {
 mod mockchain_tests {
     use std::path::PathBuf;
     use tempfile::TempDir;
-    use tokio::time::{Duration, sleep};
+    use tokio::time::{sleep, Duration};
     use tokio_stream::StreamExt as _;
-    use zaino_common::{DatabaseConfig, Network, StorageConfig, network::ActivationHeights};
+    use zaino_common::{network::ActivationHeights, DatabaseConfig, Network, StorageConfig};
     use zebra_chain::serialization::ZcashDeserializeInto;
 
     use crate::{
-        BlockCacheConfig,
         chain_index::{
-            ChainIndex, NodeBackedChainIndex, NodeBackedChainIndexSubscriber,
             source::test::MockchainSource,
             tests::vectors::{
-                TestVectorBlockData, build_active_mockchain_source, build_mockchain_source,
-                load_test_vectors,
+                build_active_mockchain_source, build_mockchain_source, load_test_vectors,
+                TestVectorBlockData,
             },
             types::{BestChainLocation, TransactionHash},
+            ChainIndex, NodeBackedChainIndex, NodeBackedChainIndexSubscriber,
         },
+        BlockCacheConfig,
     };
 
     async fn load_test_vectors_and_sync_chain_index(

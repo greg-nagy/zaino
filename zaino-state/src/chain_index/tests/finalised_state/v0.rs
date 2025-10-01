@@ -6,12 +6,12 @@ use tempfile::TempDir;
 use zaino_common::network::ActivationHeights;
 use zaino_common::{DatabaseConfig, Network, StorageConfig};
 
-use crate::chain_index::finalised_state::ZainoDB;
 use crate::chain_index::finalised_state::reader::DbReader;
+use crate::chain_index::finalised_state::ZainoDB;
 use crate::chain_index::source::test::MockchainSource;
 use crate::chain_index::tests::init_tracing;
 use crate::chain_index::tests::vectors::{
-    TestVectorBlockData, TestVectorData, build_mockchain_source, load_test_vectors,
+    build_mockchain_source, load_test_vectors, TestVectorBlockData, TestVectorData,
 };
 use crate::error::FinalisedStateError;
 use crate::{BlockCacheConfig, ChainWork, Height, IndexedBlock};
@@ -42,8 +42,8 @@ pub(crate) async fn spawn_v0_zaino_db(
     Ok((temp_dir, zaino_db))
 }
 
-pub(crate) async fn load_vectors_and_spawn_and_sync_v0_zaino_db()
--> (TestVectorData, TempDir, ZainoDB) {
+pub(crate) async fn load_vectors_and_spawn_and_sync_v0_zaino_db(
+) -> (TestVectorData, TempDir, ZainoDB) {
     let test_data = load_test_vectors().unwrap();
 
     let source = build_mockchain_source(test_data.blocks.clone());
@@ -60,8 +60,8 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v0_zaino_db()
     (test_data, db_dir, zaino_db)
 }
 
-pub(crate) async fn load_vectors_v0db_and_reader()
--> (TestVectorData, TempDir, std::sync::Arc<ZainoDB>, DbReader) {
+pub(crate) async fn load_vectors_v0db_and_reader(
+) -> (TestVectorData, TempDir, std::sync::Arc<ZainoDB>, DbReader) {
     let (test_data, db_dir, zaino_db) = load_vectors_and_spawn_and_sync_v0_zaino_db().await;
 
     let zaino_db = std::sync::Arc::new(zaino_db);
@@ -181,15 +181,13 @@ async fn save_db_to_file_and_reload() {
     std::thread::spawn(move || {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async move {
-            dbg!(
-                config
-                    .storage
-                    .database
-                    .path
-                    .read_dir()
-                    .unwrap()
-                    .collect::<Vec<_>>()
-            );
+            dbg!(config
+                .storage
+                .database
+                .path
+                .read_dir()
+                .unwrap()
+                .collect::<Vec<_>>());
             let zaino_db_2 = ZainoDB::spawn(config, source_clone).await.unwrap();
 
             zaino_db_2.wait_until_ready().await;
