@@ -45,16 +45,34 @@ fn make_uri(indexer_port: portpicker::Port) -> http::Uri {
 
 // temporary until activation heights are unified to zebra-chain type.
 // from/into impls not added in zaino-common to avoid unecessary addition of zcash-protocol dep to non-test code
-fn local_network_from_activation_heights(activation_heights: ActivationHeights) -> zcash_protocol::local_consensus::LocalNetwork {
+fn local_network_from_activation_heights(
+    activation_heights: ActivationHeights,
+) -> zcash_protocol::local_consensus::LocalNetwork {
     zcash_protocol::local_consensus::LocalNetwork {
-        overwinter: activation_heights.overwinter.map(zcash_protocol::consensus::BlockHeight::from),
-        sapling: activation_heights.sapling.map(zcash_protocol::consensus::BlockHeight::from),
-        blossom: activation_heights.blossom.map(zcash_protocol::consensus::BlockHeight::from),
-        heartwood: activation_heights.heartwood.map(zcash_protocol::consensus::BlockHeight::from),
-        canopy: activation_heights.canopy.map(zcash_protocol::consensus::BlockHeight::from),
-        nu5: activation_heights.nu5.map(zcash_protocol::consensus::BlockHeight::from),
-        nu6: activation_heights.nu6.map(zcash_protocol::consensus::BlockHeight::from),
-        nu6_1: activation_heights.nu6_1.map(zcash_protocol::consensus::BlockHeight::from),
+        overwinter: activation_heights
+            .overwinter
+            .map(zcash_protocol::consensus::BlockHeight::from),
+        sapling: activation_heights
+            .sapling
+            .map(zcash_protocol::consensus::BlockHeight::from),
+        blossom: activation_heights
+            .blossom
+            .map(zcash_protocol::consensus::BlockHeight::from),
+        heartwood: activation_heights
+            .heartwood
+            .map(zcash_protocol::consensus::BlockHeight::from),
+        canopy: activation_heights
+            .canopy
+            .map(zcash_protocol::consensus::BlockHeight::from),
+        nu5: activation_heights
+            .nu5
+            .map(zcash_protocol::consensus::BlockHeight::from),
+        nu6: activation_heights
+            .nu6
+            .map(zcash_protocol::consensus::BlockHeight::from),
+        nu6_1: activation_heights
+            .nu6_1
+            .map(zcash_protocol::consensus::BlockHeight::from),
     }
 }
 
