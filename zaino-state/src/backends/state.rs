@@ -26,7 +26,7 @@ use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
-        response::{GetMempoolInfoResponse, GetSubtreesResponse},
+        response::{internal::GetPeerInfoWire, GetMempoolInfoResponse, GetSubtreesResponse},
     },
 };
 use zaino_proto::proto::{
@@ -1033,6 +1033,10 @@ impl ZcashIndexer for StateServiceSubscriber {
     /// the [optional `fullyNotified` field](<https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L1549>), is only utilized for zcashd regtests, is deprecated, and is not included.
     async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error> {
         Ok(self.mempool.get_mempool_info().await?)
+    }
+
+    async fn get_peer_info(&self) -> Result<GetPeerInfoWire, Self::Error> {
+        Ok(self.rpc_client.get_peer_info().await?.into())
     }
 
     async fn z_get_address_balance(

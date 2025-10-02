@@ -599,6 +599,34 @@ async fn assert_fetch_service_difficulty_matches_rpc(validator: &ValidatorKind) 
     assert_eq!(fetch_service_get_difficulty, rpc_difficulty_response.0);
 }
 
+async fn assert_fetch_service_peerinfo_matches_rpc(validator: &ValidatorKind) {
+    let (test_manager, _fetch_service, fetch_service_subscriber) =
+        create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
+
+    let fetch_service_get_peer_info = fetch_service_subscriber.get_peer_info().await.unwrap();
+
+    let jsonrpc_client = JsonRpSeeConnector::new_with_basic_auth(
+        test_node_and_return_url(
+            test_manager.zebrad_rpc_listen_address,
+            false,
+            None,
+            Some("xxxxxx".to_string()),
+            Some("xxxxxx".to_string()),
+        )
+        .await
+        .unwrap(),
+        "xxxxxx".to_string(),
+        "xxxxxx".to_string(),
+    )
+    .unwrap();
+
+    let rpc_peer_info_response = jsonrpc_client.get_peer_info().await.unwrap();
+
+    dbg!(&rpc_peer_info_response);
+    dbg!(&fetch_service_get_peer_info);
+    assert_eq!(fetch_service_get_peer_info, rpc_peer_info_response);
+}
+
 async fn fetch_service_get_block(validator: &ValidatorKind) {
     let (mut test_manager, _fetch_service, fetch_service_subscriber) =
         create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
@@ -1444,6 +1472,11 @@ mod zcashd {
         }
 
         #[tokio::test]
+        pub(crate) async fn peer_info() {
+            assert_fetch_service_peerinfo_matches_rpc(&ValidatorKind::Zcashd).await;
+        }
+
+        #[tokio::test]
         pub(crate) async fn best_blockhash() {
             fetch_service_get_best_blockhash(&ValidatorKind::Zcashd).await;
         }
@@ -1636,6 +1669,11 @@ mod zebrad {
         #[tokio::test]
         pub(crate) async fn difficulty() {
             assert_fetch_service_difficulty_matches_rpc(&ValidatorKind::Zebrad).await;
+        }
+
+        #[tokio::test]
+        pub(crate) async fn peer_info() {
+            assert_fetch_service_peerinfo_matches_rpc(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test]

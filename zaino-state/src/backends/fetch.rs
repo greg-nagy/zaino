@@ -22,7 +22,7 @@ use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
-        response::GetMempoolInfoResponse,
+        response::{internal::GetPeerInfoWire, GetMempoolInfoResponse},
     },
 };
 
@@ -248,6 +248,10 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// Zebra does not support this RPC call directly.
     async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error> {
         Ok(self.mempool.get_mempool_info().await?)
+    }
+
+    async fn get_peer_info(&self) -> Result<GetPeerInfoWire, Self::Error> {
+        Ok(self.fetcher.get_peer_info().await?.into())
     }
 
     /// Returns the proof-of-work difficulty as a multiple of the minimum difficulty.
