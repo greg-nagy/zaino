@@ -1230,6 +1230,38 @@ mod zebrad {
             test_manager.close().await;
         }
 
+        #[tokio::test]
+        async fn get_network_sol_ps() {
+            let (
+                mut test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+
+                        test_manager.local_net.generate_blocks(2).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let initial_fetch_service_get_network_sol_ps =
+                fetch_service_subscriber.get_network_sol_ps(None, None).await.unwrap();
+            let initial_state_service_get_network_sol_ps =
+                state_service_subscriber.get_network_sol_ps(None, None).await.unwrap();
+            assert_eq!(
+                initial_fetch_service_get_network_sol_ps,
+                initial_state_service_get_network_sol_ps
+            );
+
+            test_manager.close().await;
+        }
+        
         mod z {
             use super::*;
 
