@@ -1557,7 +1557,7 @@ mod zcashd {
         }
 
         #[tokio::test]
-        pub(crate) async fn getnetworksops() {
+        pub(crate) async fn get_network_sol_ps() {
             assert_fetch_service_getnetworksols_matches_rpc(&ValidatorKind::Zcashd).await;
         }
     }
@@ -1754,6 +1754,11 @@ mod zebrad {
         #[tokio::test]
         pub(crate) async fn lightd_info() {
             fetch_service_get_lightd_info(&ValidatorKind::Zebrad).await;
+        }
+
+        #[tokio::test]
+        pub(crate) async fn get_network_sol_ps() {
+            assert_fetch_service_getnetworksols_matches_rpc(&ValidatorKind::Zebrad).await;
         }
     }
 }
