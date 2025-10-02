@@ -323,7 +323,6 @@ pub trait ZcashIndexerRpc {
     ///
     /// - `blocks`: (number, optional, default=120) Number of blocks, or -1 for blocks over difficulty averaging window.
     /// - `height`: (number, optional, default=-1) To estimate network speed at the time of a specific block height.
-
     #[method(name = "getnetworksolps")]
     async fn get_network_sol_ps(
         &self,
