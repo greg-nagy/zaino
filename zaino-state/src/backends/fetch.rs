@@ -364,7 +364,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
     }
 
     async fn get_mining_info(&self) -> Result<GetMiningInfoResponse, Self::Error> {
-        Ok(self.fetcher.get_mining_info().await?.into())
+        Ok(self.fetcher.get_mining_info().await?)
     }
 
     /// Returns the hash of the best block (tip) of the longest chain.
