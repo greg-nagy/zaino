@@ -1190,6 +1190,47 @@ mod zebrad {
         }
 
         #[tokio::test]
+        async fn mining_info() {
+            let (
+                mut test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+
+            let initial_fetch_service_mining_info =
+                fetch_service_subscriber.get_mining_info().await.unwrap();
+            let initial_state_service_mining_info =
+                state_service_subscriber.get_mining_info().await.unwrap();
+            assert_eq!(
+                initial_fetch_service_mining_info,
+                initial_state_service_mining_info
+            );
+
+            test_manager.local_net.generate_blocks(2).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+            let final_fetch_service_mining_info =
+                fetch_service_subscriber.get_mining_info().await.unwrap();
+            let final_state_service_mining_info =
+                state_service_subscriber.get_mining_info().await.unwrap();
+            assert_eq!(
+                final_fetch_service_mining_info,
+                final_state_service_mining_info
+            );
+
+            test_manager.close().await;
+        }
+
+        #[tokio::test]
         async fn difficulty() {
             let (
                 mut test_manager,
