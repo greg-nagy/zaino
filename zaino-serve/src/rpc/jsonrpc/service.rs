@@ -1,11 +1,11 @@
 //! Zcash RPC implementations.
 
-use zaino_fetch::jsonrpsee::response::GetMempoolInfoResponse;
+use zaino_fetch::jsonrpsee::response::{GetMempoolInfoResponse, GetMiningInfoWire};
 use zaino_state::{LightWalletIndexer, ZcashIndexer};
 
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::client::{
-    GetBlockchainInfoResponse, GetMiningInfoResponse, GetSubtreesByIndexResponse,
+    GetBlockchainInfoResponse, GetSubtreesByIndexResponse,
     GetTreestateResponse, ValidateAddressResponse,
 };
 use zebra_rpc::methods::{
@@ -67,7 +67,7 @@ pub trait ZcashIndexerRpc {
     ///
     /// `zcashd` reference (may be outdated): [`getmininginfo`](https://zcash.github.io/rpc/getmininginfo.html)
     #[method(name = "getmininginfo")]
-    async fn get_mining_info(&self) -> Result<GetMiningInfoResponse, ErrorObjectOwned>;
+    async fn get_mining_info(&self) -> Result<GetMiningInfoWire, ErrorObjectOwned>;
 
     /// Returns the hash of the best block (tip) of the longest chain.
     /// zcashd reference: [`getbestblockhash`](https://zcash.github.io/rpc/getbestblockhash.html)
@@ -337,8 +337,9 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
             })
     }
 
-    async fn get_mining_info(&self) -> Result<GetMiningInfoResponse, ErrorObjectOwned> {
-        self.service_subscriber
+    async fn get_mining_info(&self) -> Result<GetMiningInfoWire, ErrorObjectOwned> {
+        Ok(self
+            .service_subscriber
             .inner_ref()
             .get_mining_info()
             .await
@@ -348,7 +349,7 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
                     "Internal server error",
                     Some(e.to_string()),
                 )
-            })
+            })?)
     }
 
     async fn get_best_blockhash(&self) -> Result<GetBlockHash, ErrorObjectOwned> {

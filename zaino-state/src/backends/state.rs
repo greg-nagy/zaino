@@ -26,7 +26,7 @@ use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
-        response::{GetMempoolInfoResponse, GetSubtreesResponse},
+        response::{GetMempoolInfoResponse, GetMiningInfoWire, GetSubtreesResponse},
     },
 };
 use zaino_proto::proto::{
@@ -48,7 +48,7 @@ use zebra_chain::{
 };
 use zebra_rpc::{
     client::{
-        GetBlockchainInfoBalance, GetMiningInfoResponse, GetSubtreesByIndexResponse,
+        GetBlockchainInfoBalance, GetSubtreesByIndexResponse,
         GetTreestateResponse, HexData, SubtreeRpcData, TransactionObject, ValidateAddressResponse,
     },
     methods::{
@@ -1158,8 +1158,8 @@ impl ZcashIndexer for StateServiceSubscriber {
         ))
     }
 
-    async fn get_mining_info(&self) -> Result<GetMiningInfoResponse, Self::Error> {
-        self.rpc_client.get_mining_info().await.map_err(Into::into)
+    async fn get_mining_info(&self) -> Result<GetMiningInfoWire, Self::Error> {
+        Ok(self.rpc_client.get_mining_info().await?)
     }
 
     // No request parameters.

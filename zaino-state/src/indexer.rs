@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use tokio::{sync::mpsc, time::timeout};
 use tracing::warn;
-use zaino_fetch::jsonrpsee::response::GetMempoolInfoResponse;
+use zaino_fetch::jsonrpsee::response::{GetMempoolInfoResponse, GetMiningInfoWire};
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
     service::{
@@ -17,7 +17,7 @@ use zaino_proto::proto::{
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::{
     client::{
-        GetMiningInfoResponse, GetSubtreesByIndexResponse, GetTreestateResponse,
+        GetSubtreesByIndexResponse, GetTreestateResponse,
         ValidateAddressResponse,
     },
     methods::{
@@ -413,7 +413,7 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     ) -> Result<Vec<GetAddressUtxos>, Self::Error>;
 
     // TODO: Document
-    async fn get_mining_info(&self) -> Result<GetMiningInfoResponse, Self::Error>;
+    async fn get_mining_info(&self) -> Result<GetMiningInfoWire, Self::Error>;
 
     /// Helper function to get the chain height
     async fn chain_height(&self) -> Result<Height, Self::Error>;

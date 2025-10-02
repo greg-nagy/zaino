@@ -20,16 +20,16 @@ use std::{
     time::Duration,
 };
 use tracing::error;
-use zebra_rpc::client::{GetMiningInfoResponse, ValidateAddressResponse};
+use zebra_rpc::client::ValidateAddressResponse;
 
 use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
     response::{
         GetBalanceError, GetBalanceResponse, GetBlockCountResponse, GetBlockError, GetBlockHash,
         GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse, GetMempoolInfoResponse,
-        GetSubtreesError, GetSubtreesResponse, GetTransactionResponse, GetTreestateError,
-        GetTreestateResponse, GetUtxosError, GetUtxosResponse, SendTransactionError,
-        SendTransactionResponse, TxidsError, TxidsResponse,
+        GetMiningInfoWire, GetSubtreesError, GetSubtreesResponse, GetTransactionResponse,
+        GetTreestateError, GetTreestateResponse, GetUtxosError, GetUtxosResponse,
+        SendTransactionError, SendTransactionResponse, TxidsError, TxidsResponse,
     },
 };
 
@@ -695,9 +695,7 @@ impl JsonRpSeeConnector {
     }
 
     // TODO: Double check if truly Infallible
-    pub async fn get_mining_info(
-        &self,
-    ) -> Result<GetMiningInfoResponse, RpcRequestError<Infallible>> {
+    pub async fn get_mining_info(&self) -> Result<GetMiningInfoWire, RpcRequestError<Infallible>> {
         self.send_request("getmininginfo", ()).await
     }
 }

@@ -3,7 +3,7 @@
 //! These types are redefined rather than imported from zebra_rpc
 //! to prevent locking consumers into a zebra_rpc version
 
-use std::{convert::Infallible, num::ParseIntError};
+use std::{collections::HashMap, convert::Infallible, num::ParseIntError};
 
 use hex::FromHex;
 use serde::{de::Error as DeserError, Deserialize, Deserializer, Serialize};
@@ -16,7 +16,7 @@ use zebra_chain::{
 };
 
 use zebra_rpc::{
-    client::{GetBlockchainInfoBalance, GetMiningInfoResponse, ValidateAddressResponse},
+    client::{GetBlockchainInfoBalance, ValidateAddressResponse},
     methods::opthex,
 };
 
@@ -1515,6 +1515,112 @@ impl ResponseToError for GetMempoolInfoResponse {
     type RpcError = Infallible;
 }
 
-impl ResponseToError for GetMiningInfoResponse {
+impl ResponseToError for GetMiningInfoWire {
     type RpcError = Infallible;
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+enum Num {
+    U(u64),
+    F(f64),
+}
+impl Num {
+    fn as_f64(self) -> f64 {
+        match self {
+            Num::U(u) => u as f64,
+            Num::F(f) => f,
+        }
+    }
+}
+
+/// Wire superset compatible with `zcashd` and `zebrad`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct GetMiningInfoWire {
+    #[serde(rename = "blocks")]
+    tip_height: u64,
+
+    #[serde(rename = "currentblocksize", default)]
+    current_block_size: Option<u64>,
+
+    #[serde(rename = "currentblocktx", default)]
+    current_block_tx: Option<u64>,
+
+    #[serde(default)]
+    networksolps: Option<Num>,
+    #[serde(default)]
+    networkhashps: Option<Num>,
+
+    // Present on both zcashd and zebrad
+    #[serde(default)]
+    chain: String,
+    #[serde(default)]
+    testnet: bool,
+
+    // zcashd
+    #[serde(default)]
+    difficulty: Option<f64>,
+    #[serde(default)]
+    errors: Option<String>,
+    #[serde(default)]
+    errorstimestamp: Option<serde_json::Value>,
+    #[serde(default)]
+    genproclimit: Option<i64>,
+    #[serde(default)]
+    localsolps: Option<Num>,
+    #[serde(default)]
+    pooledtx: Option<u64>,
+    #[serde(default)]
+    generate: Option<bool>,
+
+    #[serde(flatten)]
+    extras: HashMap<String, serde_json::Value>,
+}
+
+// TODO: maybe only expose this one?
+#[derive(Debug, Clone)]
+pub struct MiningInfo {
+    pub tip_height: u64,
+    pub current_block_size: Option<u64>,
+    pub current_block_tx: Option<u64>,
+    pub network_solution_rate: Option<f64>,
+    pub network_hash_rate: Option<f64>,
+    pub chain: String,
+    pub testnet: bool,
+
+    pub difficulty: Option<f64>,
+    pub errors: Option<String>,
+
+    pub extras: HashMap<String, serde_json::Value>,
+}
+
+impl From<GetMiningInfoWire> for MiningInfo {
+    fn from(w: GetMiningInfoWire) -> Self {
+        let network_hash_rate = w.networkhashps.map(|n| n.as_f64());
+        let network_solution_rate = w.networksolps.map(|n| n.as_f64());
+
+        Self {
+            tip_height: w.tip_height,
+            current_block_size: w.current_block_size,
+            current_block_tx: w.current_block_tx,
+            network_solution_rate,
+            network_hash_rate,
+            chain: if w.chain.is_empty() {
+                "main".into()
+            } else {
+                w.chain
+            },
+            testnet: w.testnet,
+
+            difficulty: w.difficulty,
+            errors: w.errors,
+
+            extras: w.extras,
+        }
+    }
+}
+
+pub fn parse_mining_info(json: &str) -> Result<MiningInfo, serde_json::Error> {
+    let wire: GetMiningInfoWire = serde_json::from_str(json)?;
+    Ok(wire.into())
 }

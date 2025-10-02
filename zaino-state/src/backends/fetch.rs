@@ -11,7 +11,7 @@ use zebra_state::HashOrHeight;
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::{
     client::{
-        GetMiningInfoResponse, GetSubtreesByIndexResponse, GetTreestateResponse,
+        GetSubtreesByIndexResponse, GetTreestateResponse,
         ValidateAddressResponse,
     },
     methods::{
@@ -25,7 +25,7 @@ use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
-        response::GetMempoolInfoResponse,
+        response::{GetMempoolInfoResponse, GetMiningInfoWire},
     },
 };
 
@@ -363,7 +363,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .try_into()?)
     }
 
-    async fn get_mining_info(&self) -> Result<GetMiningInfoResponse, Self::Error> {
+    async fn get_mining_info(&self) -> Result<GetMiningInfoWire, Self::Error> {
         Ok(self.fetcher.get_mining_info().await?)
     }
 
