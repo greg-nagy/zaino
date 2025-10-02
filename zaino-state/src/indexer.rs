@@ -16,10 +16,7 @@ use zaino_proto::proto::{
 };
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::{
-    client::{
-        GetSubtreesByIndexResponse, GetTreestateResponse,
-        ValidateAddressResponse,
-    },
+    client::{GetSubtreesByIndexResponse, GetTreestateResponse, ValidateAddressResponse},
     methods::{
         AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
         GetBlockHash, GetBlockchainInfoResponse, GetInfo, GetRawTransaction, SentTransactionHash,
@@ -127,7 +124,6 @@ where
     }
 }
 
-// TODO: Maybe rename to something like `ZcashChainSource`?
 /// Zcash RPC method signatures.
 ///
 /// Doc comments taken from Zebra for consistency.
@@ -412,7 +408,9 @@ pub trait ZcashIndexer: Send + Sync + 'static {
         address_strings: AddressStrings,
     ) -> Result<Vec<GetAddressUtxos>, Self::Error>;
 
-    // TODO: Document
+    /// Returns a json object containing mining-related information.
+    ///
+    /// `zcashd` reference (may be outdated): [`getmininginfo`](https://zcash.github.io/rpc/getmininginfo.html)
     async fn get_mining_info(&self) -> Result<GetMiningInfoWire, Self::Error>;
 
     /// Helper function to get the chain height
@@ -477,7 +475,6 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     }
 }
 
-// TODO: Maybe rename to something like `CompactTxStreamerBackend`?
 /// Light Client Protocol gRPC method signatures.
 /// For more information, see [the lightwallet protocol](https://github.com/zcash/lightwallet-protocol/blob/180717dfa21f3cbf063b8a1ad7697ccba7f5b054/walletrpc/service.proto#L181).
 ///

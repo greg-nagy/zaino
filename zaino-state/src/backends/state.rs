@@ -48,8 +48,8 @@ use zebra_chain::{
 };
 use zebra_rpc::{
     client::{
-        GetBlockchainInfoBalance, GetSubtreesByIndexResponse,
-        GetTreestateResponse, HexData, SubtreeRpcData, TransactionObject, ValidateAddressResponse,
+        GetBlockchainInfoBalance, GetSubtreesByIndexResponse, GetTreestateResponse, HexData,
+        SubtreeRpcData, TransactionObject, ValidateAddressResponse,
     },
     methods::{
         chain_tip_difficulty, AddressBalance, AddressStrings, ConsensusBranchIdHex,
@@ -314,7 +314,6 @@ impl Drop for StateService {
     }
 }
 
-// TODO: Maybe rename to something like `StateServiceBackend`?
 /// A fetch service subscriber.
 ///
 /// Subscribers should be

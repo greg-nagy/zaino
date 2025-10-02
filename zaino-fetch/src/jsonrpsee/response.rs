@@ -1577,20 +1577,37 @@ pub struct GetMiningInfoWire {
     extras: HashMap<String, serde_json::Value>,
 }
 
-// TODO: maybe only expose this one?
+/// Internal representation of `GetMiningInfoWire`.
 #[derive(Debug, Clone)]
 pub struct MiningInfo {
+    /// Current tip height.
     pub tip_height: u64,
+
+    /// Size of the last mined block, if present.
     pub current_block_size: Option<u64>,
+
+    /// Transaction count in the last mined block, if present.
     pub current_block_tx: Option<u64>,
+
+    /// Estimated network solution rate (Sol/s), if present.
     pub network_solution_rate: Option<f64>,
+
+    /// Estimated network hash rate (H/s), if present.
     pub network_hash_rate: Option<f64>,
+
+    /// Network name (e.g., "main", "test").
     pub chain: String,
+
+    /// Whether the node is on testnet.
     pub testnet: bool,
 
+    /// Current difficulty, if present.
     pub difficulty: Option<f64>,
+
+    /// Upstream error/status message, if present.
     pub errors: Option<String>,
 
+    /// Extra upstream fields.
     pub extras: HashMap<String, serde_json::Value>,
 }
 
@@ -1620,6 +1637,7 @@ impl From<GetMiningInfoWire> for MiningInfo {
     }
 }
 
+/// Parse a `GetMiningInfoWire` into a `MiningInfo`.
 pub fn parse_mining_info(json: &str) -> Result<MiningInfo, serde_json::Error> {
     let wire: GetMiningInfoWire = serde_json::from_str(json)?;
     Ok(wire.into())

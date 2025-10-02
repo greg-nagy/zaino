@@ -1223,9 +1223,6 @@ mod zebrad {
             let final_state_service_mining_info =
                 state_service_subscriber.get_mining_info().await.unwrap();
 
-            dbg!(&final_fetch_service_mining_info);
-            dbg!(&final_state_service_mining_info);
-
             assert_eq!(
                 final_fetch_service_mining_info,
                 final_state_service_mining_info

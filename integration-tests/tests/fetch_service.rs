@@ -621,8 +621,6 @@ async fn assert_fetch_service_mininginfo_matches_rpc(validator: &ValidatorKind) 
     .unwrap();
 
     let rpc_mining_info_response = jsonrpc_client.get_mining_info().await.unwrap();
-    dbg!(&fetch_service_mining_info);
-    dbg!(&rpc_mining_info_response);
     assert_eq!(fetch_service_mining_info, rpc_mining_info_response);
 }
 

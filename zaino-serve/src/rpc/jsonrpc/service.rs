@@ -5,8 +5,8 @@ use zaino_state::{LightWalletIndexer, ZcashIndexer};
 
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::client::{
-    GetBlockchainInfoResponse, GetSubtreesByIndexResponse,
-    GetTreestateResponse, ValidateAddressResponse,
+    GetBlockchainInfoResponse, GetSubtreesByIndexResponse, GetTreestateResponse,
+    ValidateAddressResponse,
 };
 use zebra_rpc::methods::{
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,

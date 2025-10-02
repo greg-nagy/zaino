@@ -10,10 +10,7 @@ use zebra_state::HashOrHeight;
 
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::{
-    client::{
-        GetSubtreesByIndexResponse, GetTreestateResponse,
-        ValidateAddressResponse,
-    },
+    client::{GetSubtreesByIndexResponse, GetTreestateResponse, ValidateAddressResponse},
     methods::{
         AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
         GetBlockHashResponse, GetBlockchainInfoResponse, GetInfo, GetRawTransaction,

@@ -694,7 +694,9 @@ impl JsonRpSeeConnector {
         self.send_request("getaddressutxos", params).await
     }
 
-    // TODO: Double check if truly Infallible
+    /// Returns a json object containing mining-related information.
+    ///
+    /// `zcashd` reference (may be outdated): [`getmininginfo`](https://zcash.github.io/rpc/getmininginfo.html)
     pub async fn get_mining_info(&self) -> Result<GetMiningInfoWire, RpcRequestError<Infallible>> {
         self.send_request("getmininginfo", ()).await
     }
