@@ -5,8 +5,8 @@ use zaino_state::{LightWalletIndexer, ZcashIndexer};
 
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::client::{
-    GetBlockchainInfoResponse, GetSubtreesByIndexResponse, GetTreestateResponse,
-    ValidateAddressResponse,
+    GetBlockchainInfoResponse, GetMiningInfoResponse, GetSubtreesByIndexResponse,
+    GetTreestateResponse, ValidateAddressResponse,
 };
 use zebra_rpc::methods::{
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
@@ -62,6 +62,12 @@ pub trait ZcashIndexerRpc {
     /// Canonical source code implementation: [`getmempoolinfo`](https://github.com/zcash/zcash/blob/18238d90cd0b810f5b07d5aaa1338126aa128c06/src/rpc/blockchain.cpp#L1555)
     #[method(name = "getmempoolinfo")]
     async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, ErrorObjectOwned>;
+
+    /// Returns a json object containing mining-related information.
+    ///
+    /// `zcashd` reference (may be outdated): [`getmininginfo`](https://zcash.github.io/rpc/getmininginfo.html)
+    #[method(name = "getmininginfo")]
+    async fn get_mining_info(&self) -> Result<GetMiningInfoResponse, ErrorObjectOwned>;
 
     /// Returns the hash of the best block (tip) of the longest chain.
     /// zcashd reference: [`getbestblockhash`](https://zcash.github.io/rpc/getbestblockhash.html)
@@ -321,6 +327,20 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
         self.service_subscriber
             .inner_ref()
             .get_info()
+            .await
+            .map_err(|e| {
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
+            })
+    }
+
+    async fn get_mining_info(&self) -> Result<GetMiningInfoResponse, ErrorObjectOwned> {
+        self.service_subscriber
+            .inner_ref()
+            .get_mining_info()
             .await
             .map_err(|e| {
                 ErrorObjectOwned::owned(
