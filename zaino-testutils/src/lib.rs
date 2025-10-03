@@ -580,9 +580,9 @@ impl TestManager {
     ) -> Result<Self, std::io::Error> {
         let activation_heights = match validator {
             ValidatorKind::Zebrad => ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
-            ValidatorKind::Zcashd => ActivationHeights::default(), 
+            ValidatorKind::Zcashd => ActivationHeights::default(),
         };
-        
+
         Self::launch(
             validator,
             backend,
