@@ -4,8 +4,8 @@ use zaino_state::{
     bench::{BlockCache, BlockCacheConfig, BlockCacheSubscriber},
     BackendType,
 };
-use zaino_testutils::{Validator as _, ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS};
 use zaino_testutils::{TestManager, ValidatorKind};
+use zaino_testutils::{Validator as _, ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS};
 use zebra_chain::{block::Height, parameters::NetworkKind};
 use zebra_state::HashOrHeight;
 
