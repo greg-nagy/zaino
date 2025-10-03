@@ -562,8 +562,6 @@ impl TestManager {
         })
     }
 
-    // I didnt respec every test invocation of this function to take an extra none.
-    // I didnt copy-paste the entire function.
     /// Helper function to support default test case.
     #[allow(clippy::too_many_arguments)]
     pub async fn launch_with_default_activation_heights(
