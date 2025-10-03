@@ -30,6 +30,21 @@ pub use zingolib::lightclient::LightClient;
 pub use zingolib::testutils::lightclient::from_inputs;
 use zingolib::testutils::scenarios::ClientBuilder;
 
+// TODO: update zebra to allow full nu6.1 test support
+/// Temporary default zebrad activation height until zaino is updated to next zebra release (or latest main).
+pub const ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS: ActivationHeights = ActivationHeights {
+    overwinter: Some(1),
+    before_overwinter: Some(1),
+    sapling: Some(1),
+    blossom: Some(1),
+    heartwood: Some(1),
+    canopy: Some(1),
+    nu5: Some(1),
+    nu6: Some(1),
+    nu6_1: Some(1000),
+    nu7: None,
+};
+
 /// Helper to get the test binary path from the TEST_BINARIES_DIR env var.
 fn binary_path(binary_name: &str) -> Option<PathBuf> {
     std::env::var("TEST_BINARIES_DIR")
@@ -563,11 +578,16 @@ impl TestManager {
         zaino_no_db: bool,
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
+        let activation_heights = match validator {
+            ValidatorKind::Zebrad => ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
+            ValidatorKind::Zcashd => ActivationHeights::default(), 
+        };
+        
         Self::launch(
             validator,
             backend,
             network,
-            None,
+            Some(activation_heights),
             chain_cache,
             enable_zaino,
             enable_zaino_jsonrpc_server,
