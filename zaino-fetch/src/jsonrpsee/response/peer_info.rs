@@ -1,10 +1,12 @@
 use std::convert::Infallible;
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
 use crate::jsonrpsee::connector::ResponseToError;
 
+// TODO: A potential useful test would be to boot up multiple nodes and compare multiple `getpeerinfo` calls
+// to a `zcashd` and `zebrad` node.
 /// Response to a `getpeerinfo` RPC request.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub enum GetPeerInfo {
@@ -27,46 +29,44 @@ pub struct ZebradPeerInfo {
 // TODO: Do not use primitive types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ZcashdPeerInfo {
-    pub id: u64,
+    pub id: i64,
     pub addr: String,
-    // TODO: what does this actually look like?
-    pub services: String,
+    pub services: ServiceFlags,
     pub relaytxes: bool,
-    pub lastsend: u64,
-    pub lastrecv: u64,
+    pub lastsend: i64, // seconds since epoch
+    pub lastrecv: i64, // seconds since epoch
     pub bytessent: u64,
     pub bytesrecv: u64,
-    pub conntime: u64,
-    pub timeoffset: i64,
-    pub pingtime: f64,
-    pub version: u64,
+    pub conntime: i64,   // seconds since epoch
+    pub timeoffset: i64, // can be negative
+    pub pingtime: f64,   // seconds
+    pub version: i64,
     pub subver: String,
     pub inbound: bool,
     pub startingheight: i64,
-    pub addr_processed: bool,
-    pub addr_rate_limited: bool,
+    pub addr_processed: u64,
+    pub addr_rate_limited: u64,
     pub whitelisted: bool,
 
-    // Present only sometimes in the C++ codebase:
+    // conditional in RPC output
     #[serde(default)]
     pub addrlocal: Option<String>, // only if not empty
 
     #[serde(default)]
     pub pingwait: Option<f64>, // only if > 0.0
 
-    // Only when fStateStats == true:
+    // only when fStateStats is true
     #[serde(default)]
     pub banscore: Option<i64>,
 
     #[serde(default, rename = "synced_headers")]
-    pub synced_headers: Option<u64>,
+    pub synced_headers: Option<i64>,
 
     #[serde(default, rename = "synced_blocks")]
-    pub synced_blocks: Option<u64>,
+    pub synced_blocks: Option<i64>,
 
-    /// Heights array, only when state stats present
     #[serde(default)]
-    pub inflight: Option<Vec<i64>>,
+    pub inflight: Option<Vec<i64>>, // heights
 }
 
 impl<'de> Deserialize<'de> for GetPeerInfo {
@@ -103,6 +103,65 @@ impl ResponseToError for GetPeerInfo {
     type RpcError = Infallible;
 }
 
+/// Bitflags for the peer's advertised services (backed by a u64).
+/// Serialized as a zero-padded 16-digit lowercase hex string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ServiceFlags(pub u64);
+
+impl ServiceFlags {
+    pub fn bits(self) -> u64 {
+        self.0
+    }
+    pub fn has(self, mask: u64) -> bool {
+        (self.0 & mask) != 0
+    }
+
+    pub const NODE_NETWORK: u64 = 1 << 0;
+    // Legacy. see NO_BLOOM_VERSION
+    pub const NODE_BLOOM: u64 = 1 << 2;
+
+    pub fn has_node_network(self) -> bool {
+        self.has(Self::NODE_NETWORK)
+    }
+    pub fn has_node_bloom(self) -> bool {
+        self.has(Self::NODE_BLOOM)
+    }
+
+    // Helper to surface forward-compat unknown bits
+    pub fn unknown_bits(self) -> u64 {
+        let known = Self::NODE_NETWORK | Self::NODE_BLOOM;
+        self.bits() & !known
+    }
+}
+
+impl From<u64> for ServiceFlags {
+    fn from(x: u64) -> Self {
+        ServiceFlags(x)
+    }
+}
+impl From<ServiceFlags> for u64 {
+    fn from(f: ServiceFlags) -> Self {
+        f.0
+    }
+}
+
+impl Serialize for ServiceFlags {
+    fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
+        ser.serialize_str(&format!("{:016x}", self.0))
+    }
+}
+impl<'de> Deserialize<'de> for ServiceFlags {
+    fn deserialize<D: Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(de)?;
+
+        // Optional `0x`
+        let s = s.strip_prefix("0x").unwrap_or(&s);
+        u64::from_str_radix(s, 16)
+            .map(ServiceFlags)
+            .map_err(|e| serde::de::Error::custom(format!("invalid services hex: {e}")))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,8 +188,8 @@ mod tests {
             "subver": "/MagicBean:5.8.0/",
             "inbound": false,
             "startingheight": 2000000,
-            "addr_processed": true,
-            "addr_rate_limited": false,
+            "addr_processed": 1,
+            "addr_rate_limited": 0,
             "whitelisted": false,
             "addrlocal": "192.168.1.10:8233",
             "pingwait": 0.1,
@@ -207,5 +266,73 @@ mod tests {
         let non_array_json = r#"{"foo": 1, "bar": "baz"}"#;
         let err = serde_json::from_str::<GetPeerInfo>(non_array_json).unwrap_err();
         assert_eq!(err.to_string(), "getpeerinfo: expected JSON array");
+    }
+
+    mod serviceflags {
+        use crate::jsonrpsee::response::peer_info::{ServiceFlags, ZcashdPeerInfo};
+
+        #[test]
+        fn serviceflags_roundtrip() {
+            let f = ServiceFlags(0x0000_0000_0000_0001);
+            let s = serde_json::to_string(&f).unwrap();
+            assert_eq!(s, r#""0000000000000001""#); // zero-padded, lowercase
+            let back: ServiceFlags = serde_json::from_str(&s).unwrap();
+            assert_eq!(back.bits(), 1);
+            assert!(back.has(1));
+        }
+
+        #[test]
+        fn zcashd_peerinfo_deser_with_typed_services() {
+            let j = r#"[{
+            "id":1,
+            "addr":"127.0.0.1:8233",
+            "services":"0000000000000003",
+            "relaytxes":true,
+            "lastsend":1,"lastrecv":2,"bytessent":3,"bytesrecv":4,
+            "conntime":5,"timeoffset":0,"pingtime":0.001,
+            "version":170002,"subver":"/MagicBean:5.8.0/","inbound":false,
+            "startingheight":2000000,"addr_processed":7,"addr_rate_limited":8,"whitelisted":false
+        }]"#;
+
+            let v: Vec<ZcashdPeerInfo> = serde_json::from_str(j).unwrap();
+            assert_eq!(v[0].services.bits(), 3);
+            assert!(v[0].services.has(1));
+            assert!(v[0].services.has(2));
+        }
+
+        #[test]
+        fn zcashd_peerinfo_serializes_back_to_hex() {
+            let pi = ZcashdPeerInfo {
+                id: 1,
+                addr: "127.0.0.1:8233".into(),
+                services: ServiceFlags(0x0A0B_0C0D_0E0F),
+                relaytxes: true,
+                lastsend: 1,
+                lastrecv: 2,
+                bytessent: 3,
+                bytesrecv: 4,
+                conntime: 5,
+                timeoffset: 0,
+                pingtime: 0.1,
+                version: 170002,
+                subver: "/X/".into(),
+                inbound: false,
+                startingheight: 42,
+                addr_processed: 0,
+                addr_rate_limited: 0,
+                whitelisted: false,
+                addrlocal: None,
+                pingwait: None,
+                banscore: None,
+                synced_headers: None,
+                synced_blocks: None,
+                inflight: None,
+            };
+
+            let v = serde_json::to_value(&pi).unwrap();
+            let services_str = v["services"].as_str().unwrap();
+            let expected = format!("{:016x}", u64::from(pi.services));
+            assert_eq!(services_str, expected); // "00000a0b0c0d0e0f"
+        }
     }
 }
