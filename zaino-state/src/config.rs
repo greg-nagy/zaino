@@ -47,9 +47,9 @@ pub struct StateServiceConfig {
     /// Disables internal sync and stops zaino waiting on server sync.
     /// Used for testing.
     pub no_sync: bool,
-    /// Disables FinalisedState.
-    /// Used for testing.
-    pub no_db: bool,
+    // /// Disables FinalisedState.
+    // /// Used for testing.
+    // pub no_db: bool,
 }
 
 impl StateServiceConfig {
@@ -68,7 +68,7 @@ impl StateServiceConfig {
         storage: StorageConfig,
         network: Network,
         no_sync: bool,
-        no_db: bool,
+        // no_db: bool,
     ) -> Self {
         StateServiceConfig {
             validator_config,
@@ -82,7 +82,7 @@ impl StateServiceConfig {
             storage,
             network,
             no_sync,
-            no_db,
+            // no_db,
         }
     }
 }
@@ -109,9 +109,9 @@ pub struct FetchServiceConfig {
     /// Disables internal sync and stops zaino waiting on server sync.
     /// Used for testing.
     pub no_sync: bool,
-    /// Disables FinalisedState.
-    /// Used for testing.
-    pub no_db: bool,
+    // /// Disables FinalisedState.
+    // /// Used for testing.
+    // pub no_db: bool,
 }
 
 impl FetchServiceConfig {
@@ -128,7 +128,7 @@ impl FetchServiceConfig {
         storage: StorageConfig,
         network: Network,
         no_sync: bool,
-        no_db: bool,
+        // no_db: bool,
     ) -> Self {
         FetchServiceConfig {
             validator_rpc_address,
@@ -140,7 +140,7 @@ impl FetchServiceConfig {
             storage,
             network,
             no_sync,
-            no_db,
+            // no_db,
         }
     }
 }
@@ -158,9 +158,9 @@ pub struct BlockCacheConfig {
     /// Stops zaino waiting on server sync.
     /// Used for testing.
     pub no_sync: bool,
-    /// Disables FinalisedState.
-    /// Used for testing.
-    pub no_db: bool,
+    // /// Disables FinalisedState.
+    // /// Used for testing.
+    // pub no_db: bool,
 }
 
 impl BlockCacheConfig {
@@ -171,14 +171,14 @@ impl BlockCacheConfig {
         db_version: u32,
         network: Network,
         no_sync: bool,
-        no_db: bool,
+        // no_db: bool,
     ) -> Self {
         BlockCacheConfig {
             storage,
             db_version,
             network,
             no_sync,
-            no_db,
+            // no_db,
         }
     }
 }
@@ -191,7 +191,7 @@ impl From<StateServiceConfig> for BlockCacheConfig {
             db_version: 1,
             network: value.network,
             no_sync: value.no_sync,
-            no_db: value.no_db,
+            // no_db: value.no_db,
         }
     }
 }
@@ -204,7 +204,7 @@ impl From<FetchServiceConfig> for BlockCacheConfig {
             db_version: 1,
             network: value.network,
             no_sync: value.no_sync,
-            no_db: value.no_db,
+            // no_db: value.no_db,
         }
     }
 }

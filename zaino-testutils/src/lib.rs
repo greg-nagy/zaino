@@ -463,7 +463,7 @@ impl TestManager {
                 zebra_db_path,
                 network: network.into(),
                 no_sync: zaino_no_sync,
-                no_db: zaino_no_db,
+                // no_db: zaino_no_db,
             };
             let handle = zainodlib::indexer::spawn_indexer(indexer_config)
                 .await
@@ -645,7 +645,7 @@ impl TestManager {
                 zebra_db_path,
                 network: network.into(),
                 no_sync: zaino_no_sync,
-                no_db: zaino_no_db,
+                // no_db: zaino_no_db,
             };
             let handle = zainodlib::indexer::spawn_indexer(indexer_config)
                 .await

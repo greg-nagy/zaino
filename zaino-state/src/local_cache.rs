@@ -57,6 +57,8 @@ impl BlockCache {
         info!("Launching Local Block Cache..");
         let (channel_tx, channel_rx) = tokio::sync::mpsc::channel(100);
 
+        // TODO here
+        // no_db is used in non-test code
         let finalised_state = if !config.no_db {
             Some(FinalisedState::spawn(fetcher, state, channel_rx, config.clone()).await?)
         } else {

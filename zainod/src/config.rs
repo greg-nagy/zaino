@@ -91,6 +91,7 @@ pub struct IndexerConfig {
     /// Service-level configuration (timeout, channel size).
     pub service: ServiceConfig,
     /// Storage configuration (cache and database).
+    // this is it, in here
     pub storage: StorageConfig,
     /// Block Cache database file path.
     ///
@@ -101,9 +102,9 @@ pub struct IndexerConfig {
     /// Disables internal sync and stops zaino waiting on server sync.
     /// Used for testing.
     pub no_sync: bool,
-    /// Disables FinalisedState.
-    /// Used for testing.
-    pub no_db: bool,
+    // /// db size 0 = (no_db) - Disables FinalisedState.
+    // /// Used for testing.
+    // pub no_db: bool,
 }
 
 impl IndexerConfig {
@@ -254,7 +255,7 @@ impl Default for IndexerConfig {
             zebra_db_path: default_zebra_db_path().unwrap(),
             network: Network::Testnet,
             no_sync: false,
-            no_db: false,
+            // no_db: false,
         }
     }
 }
@@ -388,7 +389,7 @@ impl TryFrom<IndexerConfig> for BackendConfig {
                 storage: cfg.storage,
                 network: cfg.network,
                 no_sync: cfg.no_sync,
-                no_db: cfg.no_db,
+                // no_db: cfg.no_db,
             })),
 
             zaino_state::BackendType::Fetch => Ok(BackendConfig::Fetch(FetchServiceConfig {
@@ -403,7 +404,7 @@ impl TryFrom<IndexerConfig> for BackendConfig {
                 storage: cfg.storage,
                 network: cfg.network,
                 no_sync: cfg.no_sync,
-                no_db: cfg.no_db,
+                // no_db: cfg.no_db,
             })),
         }
     }

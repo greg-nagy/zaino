@@ -37,6 +37,7 @@ impl Default for CacheConfig {
 /// This enum provides a clean TOML interface and easy extensibility for different units.
 #[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
+// and here
 pub enum DatabaseSize {
     /// Limited to a specific size in GB
     Gb(usize),
@@ -69,6 +70,7 @@ impl DatabaseSize {
 /// Configures the file path and size limits for persistent storage
 /// used by Zaino services.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+// and here
 pub struct DatabaseConfig {
     /// Database file path.
     pub path: PathBuf,
@@ -90,6 +92,7 @@ impl Default for DatabaseConfig {
 ///
 /// This is used by services that need both in-memory caching and persistent storage.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
+// via here
 pub struct StorageConfig {
     /// Cache configuration. Uses defaults if not specified in TOML.
     #[serde(default)]
