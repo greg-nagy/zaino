@@ -353,7 +353,6 @@ impl TestManager {
         enable_zaino_jsonrpc_server: bool,
         enable_zaino_jsonrpc_server_cookie_auth: bool,
         zaino_no_sync: bool,
-        zaino_no_db: bool,
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
         if (validator == &ValidatorKind::Zcashd) && (backend == &BackendType::State) {
@@ -463,7 +462,6 @@ impl TestManager {
                 zebra_db_path,
                 network: network.into(),
                 no_sync: zaino_no_sync,
-                // no_db: zaino_no_db,
             };
             let handle = zainodlib::indexer::spawn_indexer(indexer_config)
                 .await
@@ -534,7 +532,6 @@ impl TestManager {
         enable_zaino_jsonrpc_server: bool,
         enable_zaino_jsonrpc_server_cookie_auth: bool,
         zaino_no_sync: bool,
-        zaino_no_db: bool,
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
         if (validator == &ValidatorKind::Zcashd) && (backend == &BackendType::State) {
@@ -645,7 +642,6 @@ impl TestManager {
                 zebra_db_path,
                 network: network.into(),
                 no_sync: zaino_no_sync,
-                // no_db: zaino_no_db,
             };
             let handle = zainodlib::indexer::spawn_indexer(indexer_config)
                 .await
