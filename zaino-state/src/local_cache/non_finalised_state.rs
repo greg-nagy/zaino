@@ -314,22 +314,22 @@ impl NonFinalisedState {
                 if pop_height.0 < (validator_height.saturating_sub(100)) {
                     if let Some(hash) = self.heights_to_hashes.get(&pop_height) {
                         // Send to FinalisedState if db is active.
-                        // match to db = 0
-                        // TODO this seems to be non-test code where no_db is used
-                        // ? if no_db is fasle, then there is some db size
-                        if !self.config.no_db {
-                            if let Some(block) = self.hashes_to_blocks.get(&hash) {
-                                if self
-                                    .block_sender
-                                    .send((pop_height, *hash, block.as_ref().clone()))
-                                    .await
-                                    .is_err()
-                                {
-                                    self.status.store(StatusType::CriticalError);
-                                    return Err(NonFinalisedStateError::Critical(
-                                        "Critical error in database. Closing NonFinalisedState"
-                                            .to_string(),
-                                    ));
+                        match self.config.storage.database.size {
+                            zaino_common::DatabaseSize::Gb(0) => {} // do nothing
+                            zaino_common::DatabaseSize::Gb(_) => {
+                                if let Some(block) = self.hashes_to_blocks.get(&hash) {
+                                    if self
+                                        .block_sender
+                                        .send((pop_height, *hash, block.as_ref().clone()))
+                                        .await
+                                        .is_err()
+                                    {
+                                        self.status.store(StatusType::CriticalError);
+                                        return Err(NonFinalisedStateError::Critical(
+                                            "Critical error in database. Closing NonFinalisedState"
+                                                .to_string(),
+                                        ));
+                                    }
                                 }
                             }
                         }
@@ -372,11 +372,11 @@ impl NonFinalisedState {
     /// Waits for server to sync with p2p network.
     pub async fn wait_on_server(&self) -> Result<(), NonFinalisedStateError> {
         // If no_db is active wait for server to sync with p2p network.
-        // TODO here also no_db used
-        if self.config.no_db
-            && !self.config.network.to_zebra_network().is_regtest()
-            && !self.config.no_sync
-        {
+        let mybool = match self.config.storage.database.size {
+            zaino_common::DatabaseSize::Gb(0) => true,
+            zaino_common::DatabaseSize::Gb(_) => false,
+        };
+        if mybool && !self.config.network.to_zebra_network().is_regtest() && !self.config.no_sync {
             self.status.store(StatusType::Syncing);
             loop {
                 let blockchain_info = self.fetcher.get_blockchain_info().await.map_err(|e| {
