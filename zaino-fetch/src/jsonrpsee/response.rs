@@ -4,7 +4,7 @@
 //! to prevent locking consumers into a zebra_rpc version
 
 pub mod convert;
-pub mod internal;
+pub mod peer_info;
 
 use std::{convert::Infallible, num::ParseIntError};
 

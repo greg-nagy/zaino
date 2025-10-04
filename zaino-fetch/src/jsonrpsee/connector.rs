@@ -25,7 +25,7 @@ use zebra_rpc::client::ValidateAddressResponse;
 use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
     response::{
-        internal::GetPeerInfoWire, GetBalanceError, GetBalanceResponse, GetBlockCountResponse,
+        peer_info::GetPeerInfo, GetBalanceError, GetBalanceResponse, GetBlockCountResponse,
         GetBlockError, GetBlockHash, GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse,
         GetMempoolInfoResponse, GetSubtreesError, GetSubtreesResponse, GetTransactionResponse,
         GetTreestateError, GetTreestateResponse, GetUtxosError, GetUtxosResponse,
@@ -435,8 +435,8 @@ impl JsonRpSeeConnector {
             .await
     }
 
-    pub async fn get_peer_info(&self) -> Result<GetPeerInfoWire, RpcRequestError<Infallible>> {
-        self.send_request::<(), GetPeerInfoWire>("getpeerinfo", ())
+    pub async fn get_peer_info(&self) -> Result<GetPeerInfo, RpcRequestError<Infallible>> {
+        self.send_request::<(), GetPeerInfo>("getpeerinfo", ())
             .await
     }
 

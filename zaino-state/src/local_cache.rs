@@ -16,8 +16,8 @@ use zaino_fetch::{
     chain::block::FullBlock,
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcRequestError},
-        error::TransportError,
         response::{GetBlockError, GetBlockResponse},
+        error::TransportError,
     },
 };
 use zaino_proto::proto::compact_formats::{ChainMetadata, CompactBlock, CompactOrchardAction};

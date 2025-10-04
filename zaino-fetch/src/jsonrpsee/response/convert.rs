@@ -1,5 +1,3 @@
-// src/convert.rs (or similar)
-
 /// Converts a source type into an internal domain type.
 pub trait IntoInternal<T> {
     /// Convert to the internal representation.

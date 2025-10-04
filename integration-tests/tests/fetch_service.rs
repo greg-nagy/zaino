@@ -1,3 +1,5 @@
+//! These tests compare the output of `FetchService` with the output of `JsonRpcConnector`.
+
 use futures::StreamExt as _;
 use zaino_common::network::ActivationHeights;
 use zaino_common::{DatabaseConfig, Network, ServiceConfig, StorageConfig};

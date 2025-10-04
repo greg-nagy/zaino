@@ -22,7 +22,7 @@ use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
-        response::{internal::GetPeerInfoWire, GetMempoolInfoResponse},
+        response::{peer_info::GetPeerInfo, GetMempoolInfoResponse},
     },
 };
 
@@ -250,7 +250,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
         Ok(self.mempool.get_mempool_info().await?)
     }
 
-    async fn get_peer_info(&self) -> Result<GetPeerInfoWire, Self::Error> {
+    async fn get_peer_info(&self) -> Result<GetPeerInfo, Self::Error> {
         Ok(self.fetcher.get_peer_info().await?.into())
     }
 
