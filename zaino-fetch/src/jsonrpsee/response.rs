@@ -3,7 +3,6 @@
 //! These types are redefined rather than imported from zebra_rpc
 //! to prevent locking consumers into a zebra_rpc version
 
-pub mod convert;
 pub mod peer_info;
 
 use std::{convert::Infallible, num::ParseIntError};
