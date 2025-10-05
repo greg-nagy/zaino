@@ -50,7 +50,7 @@ pub struct ZcashdPeerInfo {
     /// Last send time (Unix seconds).
     pub lastsend: i64,
 
-    /// Last receive time (Unix seconds).    
+    /// Last receive time (Unix seconds).
     pub lastrecv: i64,
 
     /// Total bytes sent.
