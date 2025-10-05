@@ -99,8 +99,7 @@ async fn create_test_manager_and_block_cache(
 }
 
 async fn launch_local_cache(validator: &ValidatorKind) {
-    let (_test_manager, _json_service, _block_cache, block_cache_subscriber) =
-        create_test_manager_and_block_cache(validator, None, false, true, false).await;
+    create_test_manager_and_block_cache(validator, None, false, true, false).await;
 }
 
 /// Launches a testmanager and block cache and generates `n*100` blocks, checking blocks are stored and fetched correctly.
