@@ -29,7 +29,6 @@ async fn create_test_manager_and_fetch_services(
         true,
         enable_cookie_auth,
         true,
-        true,
         clients,
     )
     .await
@@ -58,7 +57,6 @@ async fn create_test_manager_and_fetch_services(
             ..Default::default()
         },
         zaino_common::Network::Regtest(ActivationHeights::default()),
-        true,
         true,
     ))
     .await
@@ -92,7 +90,6 @@ async fn create_test_manager_and_fetch_services(
             ..Default::default()
         },
         zaino_common::Network::Regtest(ActivationHeights::default()),
-        true,
         true,
     ))
     .await

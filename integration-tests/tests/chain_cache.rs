@@ -7,7 +7,7 @@ async fn create_test_manager_and_connector(
     chain_cache: Option<std::path::PathBuf>,
     enable_zaino: bool,
     zaino_no_sync: bool,
-    zaino_no_db: bool,
+    // zaino_no_db: bool,
     enable_clients: bool,
 ) -> (TestManager, JsonRpSeeConnector) {
     let test_manager = TestManager::launch(
@@ -19,7 +19,6 @@ async fn create_test_manager_and_connector(
         false,
         false,
         zaino_no_sync,
-        zaino_no_db,
         enable_clients,
     )
     .await
@@ -72,7 +71,7 @@ mod chain_query_interface {
         chain_cache: Option<std::path::PathBuf>,
         enable_zaino: bool,
         zaino_no_sync: bool,
-        zaino_no_db: bool,
+        // zaino_no_db: bool,
         enable_clients: bool,
     ) -> (
         TestManager,
@@ -85,7 +84,6 @@ mod chain_query_interface {
             chain_cache.clone(),
             enable_zaino,
             zaino_no_sync,
-            zaino_no_db,
             enable_clients,
         )
         .await;
@@ -144,7 +142,6 @@ mod chain_query_interface {
             },
             network.into(),
             true,
-            true,
         ))
         .await
         .unwrap();
@@ -161,7 +158,7 @@ mod chain_query_interface {
             db_version: 1,
             network: zaino_common::Network::Regtest(ActivationHeights::default()),
             no_sync: false,
-            no_db: false,
+            // no_db: false,
         };
         let chain_index = NodeBackedChainIndex::new(
             ValidatorConnector::State(chain_index::source::State {
@@ -187,7 +184,7 @@ mod chain_query_interface {
                 None,
                 true,
                 false,
-                false,
+                // no_db = false,
                 true,
             )
             .await;
@@ -223,15 +220,8 @@ mod chain_query_interface {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn find_fork_point() {
         let (test_manager, _json_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(
-                &ValidatorKind::Zebrad,
-                None,
-                true,
-                false,
-                false,
-                true,
-            )
-            .await;
+            create_test_manager_and_chain_index(&ValidatorKind::Zebrad, None, true, false, true)
+                .await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
         test_manager.generate_blocks_with_delay(5).await;
@@ -254,15 +244,8 @@ mod chain_query_interface {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_raw_transaction() {
         let (test_manager, _json_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(
-                &ValidatorKind::Zebrad,
-                None,
-                true,
-                false,
-                false,
-                true,
-            )
-            .await;
+            create_test_manager_and_chain_index(&ValidatorKind::Zebrad, None, true, false, true)
+                .await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
         test_manager.generate_blocks_with_delay(5).await;
@@ -303,15 +286,8 @@ mod chain_query_interface {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_transaction_status() {
         let (test_manager, _json_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(
-                &ValidatorKind::Zebrad,
-                None,
-                true,
-                false,
-                false,
-                true,
-            )
-            .await;
+            create_test_manager_and_chain_index(&ValidatorKind::Zebrad, None, true, false, true)
+                .await;
         let snapshot = indexer.snapshot_nonfinalized_state();
         // I don't know where this second block is generated. Somewhere in the
         // guts of create_test_manager_and_chain_index
@@ -342,15 +318,8 @@ mod chain_query_interface {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn sync_large_chain() {
         let (test_manager, state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(
-                &ValidatorKind::Zebrad,
-                None,
-                true,
-                false,
-                false,
-                true,
-            )
-            .await;
+            create_test_manager_and_chain_index(&ValidatorKind::Zebrad, None, true, false, true)
+                .await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
         test_manager.generate_blocks_with_delay(5).await;

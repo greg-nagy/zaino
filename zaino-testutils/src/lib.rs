@@ -747,7 +747,6 @@ mod launch_testmanager {
                 false,
                 false,
                 true,
-                true,
                 false,
             )
             .await
@@ -769,7 +768,6 @@ mod launch_testmanager {
                 false,
                 false,
                 false,
-                true,
                 true,
                 false,
             )
@@ -799,7 +797,6 @@ mod launch_testmanager {
                 false,
                 false,
                 true,
-                true,
                 false,
             )
             .await
@@ -821,7 +818,6 @@ mod launch_testmanager {
                 true,
                 false,
                 false,
-                true,
                 true,
                 false,
             )
@@ -856,7 +852,6 @@ mod launch_testmanager {
                 false,
                 true,
                 true,
-                true,
             )
             .await
             .unwrap();
@@ -882,7 +877,6 @@ mod launch_testmanager {
                 true,
                 false,
                 false,
-                true,
                 true,
                 true,
             )
@@ -927,7 +921,6 @@ mod launch_testmanager {
                     false,
                     false,
                     true,
-                    true,
                     false,
                 )
                 .await
@@ -949,7 +942,6 @@ mod launch_testmanager {
                     false,
                     false,
                     false,
-                    true,
                     true,
                     false,
                 )
@@ -979,7 +971,6 @@ mod launch_testmanager {
                     false,
                     false,
                     true,
-                    true,
                     false,
                 )
                 .await
@@ -1001,7 +992,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    true,
                     true,
                     false,
                 )
@@ -1036,7 +1026,6 @@ mod launch_testmanager {
                     false,
                     true,
                     true,
-                    true,
                 )
                 .await
                 .unwrap();
@@ -1062,7 +1051,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    true,
                     true,
                     true,
                 )
@@ -1101,7 +1089,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    true,
                     true,
                     true,
                 )
@@ -1185,7 +1172,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    true,
                     true,
                     true,
                 )
@@ -1216,7 +1202,6 @@ mod launch_testmanager {
                     false,
                     false,
                     true,
-                    true,
                     false,
                 )
                 .await
@@ -1238,7 +1223,6 @@ mod launch_testmanager {
                     false,
                     false,
                     false,
-                    true,
                     true,
                     false,
                 )
@@ -1268,7 +1252,6 @@ mod launch_testmanager {
                     false,
                     false,
                     true,
-                    true,
                     false,
                 )
                 .await
@@ -1290,7 +1273,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    true,
                     true,
                     false,
                 )
@@ -1325,7 +1307,6 @@ mod launch_testmanager {
                     false,
                     true,
                     true,
-                    true,
                 )
                 .await
                 .unwrap();
@@ -1352,7 +1333,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    true,
                     true,
                     true,
                 )
@@ -1393,7 +1373,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    true,
                     true,
                     true,
                 )
@@ -1475,7 +1454,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    true,
                     true,
                     true,
                 )

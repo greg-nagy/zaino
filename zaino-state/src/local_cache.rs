@@ -196,7 +196,6 @@ impl BlockCacheSubscriber {
     /// Returns the status of the [`BlockCache`]..
     pub fn status(&self) -> StatusType {
         let non_finalised_state_status = self.non_finalised_state.status();
-        // mathcing on no_db = 0
         let finalised_state_status = match self.config.storage.database.size {
             zaino_common::DatabaseSize::Gb(0) => StatusType::Ready,
             zaino_common::DatabaseSize::Gb(_) => match &self.finalised_state {
