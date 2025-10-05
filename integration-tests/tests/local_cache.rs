@@ -15,7 +15,6 @@ async fn create_test_manager_and_block_cache(
     chain_cache: Option<std::path::PathBuf>,
     enable_zaino: bool,
     zaino_no_sync: bool,
-    // TODO removed no_db here - what matters?
     enable_clients: bool,
 ) -> (
     TestManager,
@@ -175,14 +174,8 @@ mod zcashd {
     use crate::{launch_local_cache, launch_local_cache_process_n_block_batches};
 
     #[tokio::test]
-    async fn launch_no_db() {
+    async fn launch_local_cache_zcashd() {
         // TODO here explicitly launching with no_db true
-        launch_local_cache(&ValidatorKind::Zcashd).await;
-    }
-
-    #[tokio::test]
-    async fn launch_with_db() {
-        // TODO here explicitly launching with no_db false
         launch_local_cache(&ValidatorKind::Zcashd).await;
     }
 
@@ -203,14 +196,7 @@ mod zebrad {
     use crate::{launch_local_cache, launch_local_cache_process_n_block_batches};
 
     #[tokio::test]
-    async fn launch_no_db() {
-        // TODO here explicitly launching with no_db true
-        launch_local_cache(&ValidatorKind::Zebrad).await;
-    }
-
-    #[tokio::test]
-    async fn launch_with_db() {
-        // TODO here explicitly launching with no_db false
+    async fn launch_local_cache_zebrad() {
         launch_local_cache(&ValidatorKind::Zebrad).await;
     }
 
