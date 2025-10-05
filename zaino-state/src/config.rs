@@ -148,27 +148,17 @@ pub struct BlockCacheConfig {
     /// Stops zaino waiting on server sync.
     /// Used for testing.
     pub no_sync: bool,
-    // /// Disables FinalisedState.
-    // /// Used for testing.
-    // pub no_db: bool,
 }
 
 impl BlockCacheConfig {
     /// Returns a new instance of [`BlockCacheConfig`].
     #[allow(dead_code)]
-    pub fn new(
-        storage: StorageConfig,
-        db_version: u32,
-        network: Network,
-        no_sync: bool,
-        // no_db: bool,
-    ) -> Self {
+    pub fn new(storage: StorageConfig, db_version: u32, network: Network, no_sync: bool) -> Self {
         BlockCacheConfig {
             storage,
             db_version,
             network,
             no_sync,
-            // no_db,
         }
     }
 }
@@ -181,7 +171,6 @@ impl From<StateServiceConfig> for BlockCacheConfig {
             db_version: 1,
             network: value.network,
             no_sync: value.no_sync,
-            // no_db: value.no_db,
         }
     }
 }
@@ -194,7 +183,6 @@ impl From<FetchServiceConfig> for BlockCacheConfig {
             db_version: 1,
             network: value.network,
             no_sync: value.no_sync,
-            // no_db: value.no_db,
         }
     }
 }
