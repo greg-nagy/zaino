@@ -7,8 +7,6 @@ use serde_json::Value;
 
 use crate::jsonrpsee::connector::ResponseToError;
 
-// TODO: A potential useful test would be to boot up multiple nodes and compare multiple `getpeerinfo` calls
-// to a `zcashd` and `zebrad` node.
 /// Response to a `getpeerinfo` RPC request.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub enum GetPeerInfo {
@@ -71,7 +69,7 @@ pub struct ZcashdPeerInfo {
     /// Protocol version
     pub version: i64,
 
-    /// User agent string. TODO: sanitized.
+    /// User agent string.
     pub subver: String,
 
     /// Whether the connection is inbound.
@@ -122,7 +120,6 @@ impl<'de> Deserialize<'de> for GetPeerInfo {
             return Ok(GetPeerInfo::Zebrad(zebra));
         }
         // unknown
-        // TODO: Does it make sense to enforce an unkown value to be an array?
         if v.is_array() {
             let raw: Vec<Value> = serde_json::from_value(v).map_err(serde::de::Error::custom)?;
             Ok(GetPeerInfo::Unknown(raw))
