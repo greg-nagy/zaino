@@ -332,10 +332,8 @@ impl JsonRpSeeConnector {
                 )),
                 // Success
                 200..300 => {
-                    let response: RpcResponse<R> =
-                        serde_json::from_slice(&body_bytes).map_err(|e| {
-                            TransportError::BadNodeData(Box::new(e), type_name::<R>())
-                        })?;
+                    let response: RpcResponse<R> = serde_json::from_slice(&body_bytes)
+                        .map_err(|e| TransportError::BadNodeData(Box::new(e), type_name::<R>()))?;
 
                     match (response.error, response.result) {
                         (Some(error), _) => Err(RpcRequestError::Method(
