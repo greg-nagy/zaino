@@ -5,7 +5,13 @@ use std::convert::Infallible;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
-use crate::jsonrpsee::connector::ResponseToError;
+use crate::jsonrpsee::{
+    connector::ResponseToError,
+    response::common::{
+        BlockHeight, Bytes, MaybeHeight, NodeId, ProtocolVersion, SecondsF64, TimeOffsetSeconds,
+        UnixTime,
+    },
+};
 
 /// Response to a `getpeerinfo` RPC request.
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -34,7 +40,7 @@ pub struct ZebradPeerInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ZcashdPeerInfo {
     /// Peer index (NodeId).
-    pub id: i64,
+    pub id: NodeId,
 
     /// Remote address `host:port`.
     pub addr: String,
@@ -46,28 +52,28 @@ pub struct ZcashdPeerInfo {
     pub relaytxes: bool,
 
     /// Last send time (Unix seconds).
-    pub lastsend: i64,
+    pub lastsend: UnixTime,
 
     /// Last receive time (Unix seconds).
-    pub lastrecv: i64,
+    pub lastrecv: UnixTime,
 
     /// Total bytes sent.
-    pub bytessent: u64,
+    pub bytessent: Bytes,
 
     /// Total bytes received.
-    pub bytesrecv: u64,
+    pub bytesrecv: Bytes,
 
     /// Connection time (Unix seconds).
-    pub conntime: i64,
+    pub conntime: UnixTime,
 
     /// Clock offset (seconds, can be negative).
-    pub timeoffset: i64,
+    pub timeoffset: TimeOffsetSeconds,
 
     /// Ping time (seconds).
-    pub pingtime: f64,
+    pub pingtime: SecondsF64,
 
-    /// Protocol version
-    pub version: i64,
+    /// Protocol version.
+    pub version: ProtocolVersion,
 
     /// User agent string.
     pub subver: String,
@@ -76,7 +82,7 @@ pub struct ZcashdPeerInfo {
     pub inbound: bool,
 
     /// Starting block height advertised by the peer.
-    pub startingheight: i64,
+    pub startingheight: MaybeHeight,
 
     /// Count of processed addr messages.
     pub addr_processed: u64,
@@ -93,7 +99,7 @@ pub struct ZcashdPeerInfo {
 
     /// Ping wait time in seconds. Only present if > 0.0.
     #[serde(default)]
-    pub pingwait: Option<f64>,
+    pub pingwait: Option<SecondsF64>,
 
     /// Grouped validation/sync state (present when zcashd exposes state stats).
     #[serde(flatten)]
@@ -206,11 +212,11 @@ pub struct PeerStateStats {
     /// Misbehavior score.
     pub banscore: i64,
     /// Last header height in common.
-    pub synced_headers: i64,
+    pub synced_headers: BlockHeight,
     /// Last block height in common.
-    pub synced_blocks: i64,
+    pub synced_blocks: BlockHeight,
     /// Block heights currently requested from this peer.
-    pub inflight: Vec<i64>,
+    pub inflight: Vec<BlockHeight>,
 }
 
 #[cfg(test)]
@@ -256,17 +262,20 @@ mod tests {
         match parsed {
             GetPeerInfo::Zcashd(items) => {
                 let p = &items[0];
-                assert_eq!(p.id, 1);
+                assert_eq!(p.id, NodeId(1));
                 assert_eq!(p.addr, "127.0.0.1:8233");
-                assert_eq!(p.version, 170002);
+                assert_eq!(p.version, ProtocolVersion(170002));
                 assert!(!p.inbound);
-                assert_eq!(p.pingwait, Some(0.1));
+                assert_eq!(p.pingwait, Some(SecondsF64(0.1)));
 
                 let st = p.state.as_ref().expect("expected state stats");
-                assert_eq!(st.synced_blocks, 1999999);
-                assert_eq!(st.synced_headers, 1999999);
+                assert_eq!(st.synced_blocks, BlockHeight::from(1999999));
+                assert_eq!(st.synced_headers, BlockHeight::from(1999999));
                 assert_eq!(st.banscore, 0);
-                assert_eq!(st.inflight, vec![2000000, 2000001]);
+                assert_eq!(
+                    st.inflight,
+                    vec![BlockHeight::from(2000000), BlockHeight::from(2000001),]
+                );
             }
             other => panic!("expected Zcashd, got: {:?}", other),
         }
@@ -324,7 +333,13 @@ mod tests {
     }
 
     mod serviceflags {
-        use crate::jsonrpsee::response::peer_info::{ServiceFlags, ZcashdPeerInfo};
+        use crate::jsonrpsee::response::{
+            common::{
+                BlockHeight, Bytes, MaybeHeight, NodeId, ProtocolVersion, SecondsF64,
+                TimeOffsetSeconds, UnixTime,
+            },
+            peer_info::{ServiceFlags, ZcashdPeerInfo},
+        };
 
         #[test]
         fn serviceflags_roundtrip() {
@@ -358,21 +373,21 @@ mod tests {
         #[test]
         fn zcashd_peerinfo_serializes_back_to_hex() {
             let pi = ZcashdPeerInfo {
-                id: 1,
+                id: NodeId(1),
                 addr: "127.0.0.1:8233".into(),
                 services: ServiceFlags(0x0A0B_0C0D_0E0F),
                 relaytxes: true,
-                lastsend: 1,
-                lastrecv: 2,
-                bytessent: 3,
-                bytesrecv: 4,
-                conntime: 5,
-                timeoffset: 0,
-                pingtime: 0.1,
-                version: 170002,
+                lastsend: UnixTime(1),
+                lastrecv: UnixTime(2),
+                bytessent: Bytes(3),
+                bytesrecv: Bytes(4),
+                conntime: UnixTime(5),
+                timeoffset: TimeOffsetSeconds(0),
+                pingtime: SecondsF64(0.1),
+                version: ProtocolVersion(170002),
                 subver: "/X/".into(),
                 inbound: false,
-                startingheight: 42,
+                startingheight: MaybeHeight(Some(BlockHeight::from(42))),
                 addr_processed: 0,
                 addr_rate_limited: 0,
                 whitelisted: false,
