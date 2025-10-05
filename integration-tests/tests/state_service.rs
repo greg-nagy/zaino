@@ -1230,6 +1230,32 @@ mod zebrad {
             test_manager.close().await;
         }
 
+        /// A proper test would boot up multiple nodes at the same time, and ask each node
+        /// for information about its peers. In the current state, this test does nothing.
+        #[tokio::test]
+        async fn peer_info() {
+            let (
+                mut test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+
+            let fetch_service_peer_info = fetch_service_subscriber.get_peer_info().await.unwrap();
+            let state_service_peer_info = state_service_subscriber.get_peer_info().await.unwrap();
+            assert_eq!(fetch_service_peer_info, state_service_peer_info);
+
+            test_manager.close().await;
+        }
+
         mod z {
             use super::*;
 
