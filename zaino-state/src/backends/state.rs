@@ -1036,7 +1036,7 @@ impl ZcashIndexer for StateServiceSubscriber {
     }
 
     async fn get_peer_info(&self) -> Result<GetPeerInfo, Self::Error> {
-        Ok(self.rpc_client.get_peer_info().await?.into())
+        Ok(self.rpc_client.get_peer_info().await?)
     }
 
     async fn z_get_address_balance(

@@ -435,6 +435,12 @@ impl JsonRpSeeConnector {
             .await
     }
 
+    /// Returns data about each connected network node as a json array of objects.
+    ///
+    /// zcashd reference: [`getpeerinfo`](https://zcash.github.io/rpc/getpeerinfo.html)
+    /// tags: network
+    ///
+    /// Current `zebrad` does not include the same fields as `zcashd`.
     pub async fn get_peer_info(&self) -> Result<GetPeerInfo, RpcRequestError<Infallible>> {
         self.send_request::<(), GetPeerInfo>("getpeerinfo", ())
             .await

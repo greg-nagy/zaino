@@ -1,3 +1,5 @@
+//! Types associated with the `getpeerinfo` RPC request.
+
 use std::convert::Infallible;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -20,53 +22,96 @@ pub enum GetPeerInfo {
     Unknown(Vec<Value>),
 }
 
+/// Response to a `getpeerinfo` RPC request coming from `zebrad`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ZebradPeerInfo {
+    /// Remote address `host:port`.
     pub addr: String,
+    /// Remote address `host:port`.
     pub inbound: bool,
 }
 
 // TODO: Do not use primitive types
+/// Response to a `getpeerinfo` RPC request coming from `zcashd`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ZcashdPeerInfo {
+    /// Peer index (NodeId).
     pub id: i64,
+
+    /// Remote address `host:port`.
     pub addr: String,
+
+    /// Typed representation of the hex-encoded service flags.
     pub services: ServiceFlags,
+
+    /// Whether the peer asked us to relay transactions.
     pub relaytxes: bool,
-    pub lastsend: i64, // seconds since epoch
-    pub lastrecv: i64, // seconds since epoch
+
+    /// Last send time (Unix seconds).
+    pub lastsend: i64,
+
+    /// Last receive time (Unix seconds).    
+    pub lastrecv: i64,
+
+    /// Total bytes sent.
     pub bytessent: u64,
+
+    /// Total bytes sent.
     pub bytesrecv: u64,
-    pub conntime: i64,   // seconds since epoch
-    pub timeoffset: i64, // can be negative
-    pub pingtime: f64,   // seconds
+
+    /// Connection time (Unix seconds).
+    pub conntime: i64,
+
+    /// Clock offset (seconds, can be negative).
+    pub timeoffset: i64,
+
+    /// Ping time (seconds).
+    pub pingtime: f64,
+
+    /// Protocol version
     pub version: i64,
+
+    /// User agent string. TODO: sanitized.
     pub subver: String,
+
+    /// Whether the connection is inbound.
     pub inbound: bool,
+
+    /// Starting block height advertised by the peer.
     pub startingheight: i64,
+
+    /// Count of processed addr messages.
     pub addr_processed: u64,
+
+    /// Count of rate-limited addr messages.
     pub addr_rate_limited: u64,
+
+    /// Whether the peer is whitelisted.
     pub whitelisted: bool,
 
-    // conditional in RPC output
+    /// Local address `host:port`.
     #[serde(default)]
-    pub addrlocal: Option<String>, // only if not empty
+    pub addrlocal: Option<String>,
 
+    /// Ping wait time in seconds. Only present if > 0.0.
     #[serde(default)]
-    pub pingwait: Option<f64>, // only if > 0.0
+    pub pingwait: Option<f64>,
 
-    // only when fStateStats is true
+    /// Misbehavior score. Only present when state stats are available.
     #[serde(default)]
     pub banscore: Option<i64>,
 
+    /// Last header in common. Only present when state stats are available.
     #[serde(default, rename = "synced_headers")]
     pub synced_headers: Option<i64>,
 
+    /// Last block in common. Only present when state stats are available.
     #[serde(default, rename = "synced_blocks")]
     pub synced_blocks: Option<i64>,
 
+    /// Heights of blocks currently in flight. Only present when state stats are available.
     #[serde(default)]
-    pub inflight: Option<Vec<i64>>, // heights
+    pub inflight: Option<Vec<i64>>,
 }
 
 impl<'de> Deserialize<'de> for GetPeerInfo {
@@ -109,25 +154,33 @@ impl ResponseToError for GetPeerInfo {
 pub struct ServiceFlags(pub u64);
 
 impl ServiceFlags {
+    /// Returns the underlying bits
     pub fn bits(self) -> u64 {
         self.0
     }
+
+    /// Returns true if the given bit is set
     pub fn has(self, mask: u64) -> bool {
         (self.0 & mask) != 0
     }
 
+    /// Node offers full network services (bit 0).
     pub const NODE_NETWORK: u64 = 1 << 0;
-    // Legacy. see NO_BLOOM_VERSION
+
+    /// Legacy Bloom filter support (bit 2).
     pub const NODE_BLOOM: u64 = 1 << 2;
 
+    /// Returns true if the `NODE_NETWORK` bit is set
     pub fn has_node_network(self) -> bool {
         self.has(Self::NODE_NETWORK)
     }
+
+    /// Returns true if the `NODE_BLOOM` bit is set
     pub fn has_node_bloom(self) -> bool {
         self.has(Self::NODE_BLOOM)
     }
 
-    // Helper to surface forward-compat unknown bits
+    /// Bits not recognized by this crate.
     pub fn unknown_bits(self) -> u64 {
         let known = Self::NODE_NETWORK | Self::NODE_BLOOM;
         self.bits() & !known
@@ -209,7 +262,7 @@ mod tests {
                 assert_eq!(p.id, 1);
                 assert_eq!(p.addr, "127.0.0.1:8233");
                 assert_eq!(p.version, 170002);
-                assert_eq!(p.inbound, false);
+                assert!(!p.inbound);
                 assert_eq!(p.synced_blocks, Some(1999999));
                 assert_eq!(p.pingwait, Some(0.1));
             }
@@ -232,9 +285,9 @@ mod tests {
             GetPeerInfo::Zebrad(items) => {
                 assert_eq!(items.len(), 2);
                 assert_eq!(items[0].addr, "1.2.3.4:8233");
-                assert_eq!(items[0].inbound, true);
+                assert!(items[0].inbound);
                 assert_eq!(items[1].addr, "5.6.7.8:8233");
-                assert_eq!(items[1].inbound, false);
+                assert!(!items[1].inbound);
             }
             other => panic!("expected Zebrad variant, got: {:?}", other),
         }

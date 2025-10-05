@@ -16,10 +16,7 @@ use zaino_proto::proto::{
 };
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::{
-    client::{
-        GetPeerInfoResponse, GetSubtreesByIndexResponse, GetTreestateResponse,
-        ValidateAddressResponse,
-    },
+    client::{GetSubtreesByIndexResponse, GetTreestateResponse, ValidateAddressResponse},
     methods::{
         AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
         GetBlockHash, GetBlockchainInfoResponse, GetInfo, GetRawTransaction, SentTransactionHash,
@@ -184,6 +181,12 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// Original implementation: [`getmempoolinfo`](https://github.com/zcash/zcash/blob/18238d90cd0b810f5b07d5aaa1338126aa128c06/src/rpc/blockchain.cpp#L1555)
     async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error>;
 
+    /// Returns data about each connected network node as a json array of objects.
+    ///
+    /// zcashd reference: [`getpeerinfo`](https://zcash.github.io/rpc/getpeerinfo.html)
+    /// tags: network
+    ///
+    /// Current `zebrad` does not include the same fields as `zcashd`.
     async fn get_peer_info(&self) -> Result<GetPeerInfo, Self::Error>;
 
     /// Returns the total balance of a provided `addresses` in an [`AddressBalance`] instance.

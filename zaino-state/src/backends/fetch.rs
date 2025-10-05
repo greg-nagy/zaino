@@ -251,7 +251,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
     }
 
     async fn get_peer_info(&self) -> Result<GetPeerInfo, Self::Error> {
-        Ok(self.fetcher.get_peer_info().await?.into())
+        Ok(self.fetcher.get_peer_info().await?)
     }
 
     /// Returns the proof-of-work difficulty as a multiple of the minimum difficulty.
