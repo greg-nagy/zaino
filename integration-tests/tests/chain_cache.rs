@@ -7,7 +7,6 @@ async fn create_test_manager_and_connector(
     chain_cache: Option<std::path::PathBuf>,
     enable_zaino: bool,
     zaino_no_sync: bool,
-    // zaino_no_db: bool,
     enable_clients: bool,
 ) -> (TestManager, JsonRpSeeConnector) {
     let test_manager = TestManager::launch(
@@ -71,7 +70,6 @@ mod chain_query_interface {
         chain_cache: Option<std::path::PathBuf>,
         enable_zaino: bool,
         zaino_no_sync: bool,
-        // zaino_no_db: bool,
         enable_clients: bool,
     ) -> (
         TestManager,
@@ -158,7 +156,6 @@ mod chain_query_interface {
             db_version: 1,
             network: zaino_common::Network::Regtest(ActivationHeights::default()),
             no_sync: false,
-            // no_db: false,
         };
         let chain_index = NodeBackedChainIndex::new(
             ValidatorConnector::State(chain_index::source::State {
@@ -179,15 +176,8 @@ mod chain_query_interface {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_block_range() {
         let (test_manager, _json_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(
-                &ValidatorKind::Zebrad,
-                None,
-                true,
-                false,
-                // no_db = false,
-                true,
-            )
-            .await;
+            create_test_manager_and_chain_index(&ValidatorKind::Zebrad, None, true, false, true)
+                .await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
         test_manager.generate_blocks_with_delay(5).await;
