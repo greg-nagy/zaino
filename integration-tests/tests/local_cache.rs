@@ -62,7 +62,6 @@ async fn create_test_manager_and_block_cache(
                 canopy: Some(1),
                 nu5: Some(1),
                 nu6: Some(1),
-                // TODO: What is network upgrade 6.1? What does a minor version NU mean?
                 nu6_1: None,
                 nu7: None,
             },
@@ -102,8 +101,6 @@ async fn create_test_manager_and_block_cache(
 async fn launch_local_cache(validator: &ValidatorKind) {
     let (_test_manager, _json_service, _block_cache, block_cache_subscriber) =
         create_test_manager_and_block_cache(validator, None, false, true, false).await;
-
-    dbg!(block_cache_subscriber.status());
 }
 
 /// Launches a testmanager and block cache and generates `n*100` blocks, checking blocks are stored and fetched correctly.
@@ -175,7 +172,6 @@ mod zcashd {
 
     #[tokio::test]
     async fn launch_local_cache_zcashd() {
-        // TODO here explicitly launching with no_db true
         launch_local_cache(&ValidatorKind::Zcashd).await;
     }
 
