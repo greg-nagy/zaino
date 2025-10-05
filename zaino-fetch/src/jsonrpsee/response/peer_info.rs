@@ -27,7 +27,7 @@ pub enum GetPeerInfo {
 pub struct ZebradPeerInfo {
     /// Remote address `host:port`.
     pub addr: String,
-    /// Remote address `host:port`.
+    /// Whether the connection is inbound.
     pub inbound: bool,
 }
 
@@ -56,7 +56,7 @@ pub struct ZcashdPeerInfo {
     /// Total bytes sent.
     pub bytessent: u64,
 
-    /// Total bytes sent.
+    /// Total bytes received.
     pub bytesrecv: u64,
 
     /// Connection time (Unix seconds).
@@ -97,21 +97,9 @@ pub struct ZcashdPeerInfo {
     #[serde(default)]
     pub pingwait: Option<f64>,
 
-    /// Misbehavior score. Only present when state stats are available.
-    #[serde(default)]
-    pub banscore: Option<i64>,
-
-    /// Last header in common. Only present when state stats are available.
-    #[serde(default, rename = "synced_headers")]
-    pub synced_headers: Option<i64>,
-
-    /// Last block in common. Only present when state stats are available.
-    #[serde(default, rename = "synced_blocks")]
-    pub synced_blocks: Option<i64>,
-
-    /// Heights of blocks currently in flight. Only present when state stats are available.
-    #[serde(default)]
-    pub inflight: Option<Vec<i64>>,
+    /// Grouped validation/sync state (present when zcashd exposes state stats).
+    #[serde(flatten)]
+    pub state: Option<PeerStateStats>,
 }
 
 impl<'de> Deserialize<'de> for GetPeerInfo {
@@ -215,6 +203,19 @@ impl<'de> Deserialize<'de> for ServiceFlags {
     }
 }
 
+/// Per-peer validation/sync state. Present when state stats are set. `zcashd` only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PeerStateStats {
+    /// Misbehavior score.
+    pub banscore: i64,
+    /// Last header height in common.
+    pub synced_headers: i64,
+    /// Last block height in common.
+    pub synced_blocks: i64,
+    /// Block heights currently requested from this peer.
+    pub inflight: Vec<i64>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -257,16 +258,20 @@ mod tests {
         let parsed: GetPeerInfo = serde_json::from_str(zcashd_json).unwrap();
         match parsed {
             GetPeerInfo::Zcashd(items) => {
-                assert_eq!(items.len(), 1);
                 let p = &items[0];
                 assert_eq!(p.id, 1);
                 assert_eq!(p.addr, "127.0.0.1:8233");
                 assert_eq!(p.version, 170002);
                 assert!(!p.inbound);
-                assert_eq!(p.synced_blocks, Some(1999999));
                 assert_eq!(p.pingwait, Some(0.1));
+
+                let st = p.state.as_ref().expect("expected state stats");
+                assert_eq!(st.synced_blocks, 1999999);
+                assert_eq!(st.synced_headers, 1999999);
+                assert_eq!(st.banscore, 0);
+                assert_eq!(st.inflight, vec![2000000, 2000001]);
             }
-            other => panic!("expected Zcashd variant, got: {:?}", other),
+            other => panic!("expected Zcashd, got: {:?}", other),
         }
     }
 
@@ -376,10 +381,7 @@ mod tests {
                 whitelisted: false,
                 addrlocal: None,
                 pingwait: None,
-                banscore: None,
-                synced_headers: None,
-                synced_blocks: None,
-                inflight: None,
+                state: None,
             };
 
             let v = serde_json::to_value(&pi).unwrap();
