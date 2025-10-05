@@ -15,6 +15,7 @@ use crate::jsonrpsee::{
 
 /// Response to a `getpeerinfo` RPC request.
 #[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(untagged)]
 pub enum GetPeerInfo {
     /// The `zcashd` typed response.
     Zcashd(Vec<ZcashdPeerInfo>),
@@ -330,6 +331,20 @@ mod tests {
         let non_array_json = r#"{"foo": 1, "bar": "baz"}"#;
         let err = serde_json::from_str::<GetPeerInfo>(non_array_json).unwrap_err();
         assert_eq!(err.to_string(), "getpeerinfo: expected JSON array");
+    }
+
+    #[test]
+    fn getpeerinfo_serializes_as_raw_array() {
+        let val = GetPeerInfo::Zcashd(Vec::new());
+        let s = serde_json::to_string(&val).unwrap();
+        assert_eq!(s, "[]");
+    }
+
+    #[test]
+    fn getpeerinfo_unknown_serializes_as_raw_array() {
+        let val = GetPeerInfo::Unknown(vec![serde_json::json!({"foo":1})]);
+        let s = serde_json::to_string(&val).unwrap();
+        assert_eq!(s, r#"[{"foo":1}]"#);
     }
 
     mod serviceflags {

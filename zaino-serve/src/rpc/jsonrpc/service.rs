@@ -1,5 +1,6 @@
 //! Zcash RPC implementations.
 
+use zaino_fetch::jsonrpsee::response::peer_info::GetPeerInfo;
 use zaino_fetch::jsonrpsee::response::GetMempoolInfoResponse;
 use zaino_state::{LightWalletIndexer, ZcashIndexer};
 
@@ -85,6 +86,15 @@ pub trait ZcashIndexerRpc {
     /// tags: blockchain
     #[method(name = "getdifficulty")]
     async fn get_difficulty(&self) -> Result<f64, ErrorObjectOwned>;
+
+    /// Returns data about each connected network node as a json array of objects.
+    ///
+    /// zcashd reference: [`getpeerinfo`](https://zcash.github.io/rpc/getpeerinfo.html)
+    /// tags: network
+    ///
+    /// Current `zebrad` does not include the same fields as `zcashd`.
+    #[method(name = "getpeerinfo")]
+    async fn get_peer_info(&self) -> Result<GetPeerInfo, ErrorObjectOwned>;
 
     /// Returns the current block count in the best valid block chain.
     ///
@@ -377,6 +387,20 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
         self.service_subscriber
             .inner_ref()
             .get_difficulty()
+            .await
+            .map_err(|e| {
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
+            })
+    }
+
+    async fn get_peer_info(&self) -> Result<GetPeerInfo, ErrorObjectOwned> {
+        self.service_subscriber
+            .inner_ref()
+            .get_peer_info()
             .await
             .map_err(|e| {
                 ErrorObjectOwned::owned(

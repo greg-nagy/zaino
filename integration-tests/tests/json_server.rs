@@ -1,3 +1,5 @@
+//! Tests that compare the output of both `zcashd` and `zainod` through `FetchService`.
+
 use zaino_common::network::ActivationHeights;
 use zaino_common::{DatabaseConfig, ServiceConfig, StorageConfig};
 use zaino_state::{
@@ -654,6 +656,7 @@ async fn z_get_address_utxos_inner() {
     test_manager.close().await;
 }
 
+// TODO: This module should not be called `zcashd`
 mod zcashd {
     use super::*;
 
@@ -709,6 +712,26 @@ mod zcashd {
 
                 test_manager.local_net.generate_blocks(1).await.unwrap();
             }
+
+            test_manager.close().await;
+        }
+
+        #[tokio::test]
+        async fn get_peer_info() {
+            let (
+                mut test_manager,
+                _zcashd_service,
+                zcashd_subscriber,
+                _zaino_service,
+                zaino_subscriber,
+            ) = create_test_manager_and_fetch_services(false, false).await;
+
+            let zcashd_peer_info = zcashd_subscriber.get_peer_info().await.unwrap();
+            let zaino_peer_info = zaino_subscriber.get_peer_info().await.unwrap();
+
+            assert_eq!(zcashd_peer_info, zaino_peer_info);
+
+            test_manager.local_net.generate_blocks(1).await.unwrap();
 
             test_manager.close().await;
         }
