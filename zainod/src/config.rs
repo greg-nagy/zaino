@@ -91,7 +91,6 @@ pub struct IndexerConfig {
     /// Service-level configuration (timeout, channel size).
     pub service: ServiceConfig,
     /// Storage configuration (cache and database).
-    // this is it, in here
     pub storage: StorageConfig,
     /// Block Cache database file path.
     ///
@@ -186,7 +185,7 @@ impl IndexerConfig {
             ));
             }
         }
-        // TODO insure this is activated or removed
+
         #[cfg(feature = "no_tls_use_unencrypted_traffic")]
         {
             warn!(
@@ -252,7 +251,6 @@ impl Default for IndexerConfig {
             zebra_db_path: default_zebra_db_path().unwrap(),
             network: Network::Testnet,
             no_sync: false,
-            // no_db: false,
         }
     }
 }
@@ -386,7 +384,6 @@ impl TryFrom<IndexerConfig> for BackendConfig {
                 storage: cfg.storage,
                 network: cfg.network,
                 no_sync: cfg.no_sync,
-                // no_db: cfg.no_db,
             })),
 
             zaino_state::BackendType::Fetch => Ok(BackendConfig::Fetch(FetchServiceConfig {
@@ -401,7 +398,6 @@ impl TryFrom<IndexerConfig> for BackendConfig {
                 storage: cfg.storage,
                 network: cfg.network,
                 no_sync: cfg.no_sync,
-                // no_db: cfg.no_db,
             })),
         }
     }
