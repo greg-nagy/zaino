@@ -102,9 +102,6 @@ pub struct IndexerConfig {
     /// Disables internal sync and stops zaino waiting on server sync.
     /// Used for testing.
     pub no_sync: bool,
-    // /// db size 0 = (no_db) - Disables FinalisedState.
-    // /// Used for testing.
-    // pub no_db: bool,
 }
 
 impl IndexerConfig {
