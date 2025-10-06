@@ -21,7 +21,7 @@ use tracing::{error, info};
 use zaino_common::{
     CacheConfig, DatabaseConfig, DatabaseSize, Network, ServiceConfig, StorageConfig,
 };
-use zaino_serve::server::config::GrpcConfig;
+use zaino_serve::server::config::{GrpcConfig, JsonRpcConfig};
 use zaino_state::{BackendConfig, FetchServiceConfig, StateServiceConfig};
 
 use crate::error::IndexerError;
@@ -63,15 +63,20 @@ pub struct IndexerConfig {
     #[serde(deserialize_with = "deserialize_backendtype_from_string")]
     #[serde(serialize_with = "serialize_backendtype_to_string")]
     pub backend: zaino_state::BackendType,
+    // TODO create a nested type, like ... the others
     /// Enable JsonRPC server.
-    pub enable_json_server: bool,
-    /// Server bind addr.
-    #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
-    pub json_rpc_listen_address: SocketAddr,
-    /// Enable cookie-based authentication.
-    pub enable_cookie_auth: bool,
-    /// Directory to store authentication cookie file.
-    pub cookie_dir: Option<PathBuf>,
+    pub json_server_settings: Option<JsonRpcConfig>,
+    // Some is true
+    // pub enable_json_server: bool,
+    // /// Server bind addr.
+    // TODO commenting out : for rpc listen #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
+    // pub json_rpc_listen_address: SocketAddr,
+    // /// Enable cookie-based authentication.
+    // pub enable_cookie_auth: bool,
+    // /// Directory to store authentication cookie file.
+    // pub cookie_dir: Option<PathBuf>,
+    // TODO end here, I believe
+    //
     /// gRPC server settings including listen addr, tls status, key and cert.
     pub grpc_settings: GrpcConfig,
     /// Full node / validator listen port.
@@ -107,7 +112,6 @@ impl IndexerConfig {
     /// Performs checks on config data.
     pub(crate) fn check_config(&self) -> Result<(), IndexerError> {
         // Network type is validated at the type level via Network enum.
-
         // Check TLS settings.
         if self.grpc_settings.tls.is_some() {
             // then check if cert path exists or return error
@@ -194,7 +198,14 @@ impl IndexerConfig {
         }
 
         // Check gRPC and JsonRPC server are not listening on the same address.
-        if self.json_rpc_listen_address == self.grpc_settings.listen_address {
+        if self.json_server_settings.is_some()
+            && self
+                .json_server_settings
+                .as_ref()
+                .expect("json_server_settings to be Some")
+                .json_rpc_listen_address
+                == self.grpc_settings.listen_address
+        {
             return Err(IndexerError::ConfigError(
                 "gRPC server and JsonRPC server must listen on different addresses.".to_string(),
             ));
@@ -226,10 +237,11 @@ impl Default for IndexerConfig {
     fn default() -> Self {
         Self {
             backend: zaino_state::BackendType::Fetch,
-            enable_json_server: false,
-            json_rpc_listen_address: "127.0.0.1:8237".parse().unwrap(),
-            enable_cookie_auth: false,
-            cookie_dir: None,
+            json_server_settings: None,
+            // enable_json_server: false,
+            // json_rpc_listen_address: "127.0.0.1:8237".parse().unwrap(),
+            // enable_cookie_auth: false,
+            // cookie_dir: None,
             grpc_settings: GrpcConfig {
                 listen_address: "127.0.0.1:8137".parse().unwrap(),
                 tls: None,

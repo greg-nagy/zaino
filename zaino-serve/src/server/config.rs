@@ -66,8 +66,11 @@ impl GrpcConfig {
 }
 
 /// Configuration data for Zaino's gRPC server.
+// #[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct JsonRpcConfig {
     /// Server bind addr.
+    // TODO for this field, assess #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     pub json_rpc_listen_address: SocketAddr,
 
     /// Enable cookie-based authentication.
