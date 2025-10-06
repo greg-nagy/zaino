@@ -8482,7 +8482,7 @@ dependencies = [
  "zaino-proto",
  "zcash_address 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "zcash_keys 0.10.1",
- "zcash_local_net",
+ "zcash_local_net 0.1.0 (git+https://github.com/zingolabs/infrastructure.git?rev=631440204438d8d9044d15bbd8b3acc10db157b2)",
  "zcash_primitives 0.24.1",
  "zcash_protocol 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "zcash_transparent 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -8509,12 +8509,12 @@ dependencies = [
  "zaino-testvectors",
  "zainod",
  "zcash_client_backend 0.19.1 (git+https://github.com/zcash/librustzcash?rev=d387aed7e04e881dbe30c6ff8b26a96c834c094b)",
- "zcash_local_net",
+ "zcash_local_net 0.1.0 (git+https://github.com/zingolabs/infrastructure.git?branch=executable_location)",
  "zcash_protocol 0.6.1 (git+https://github.com/zcash/librustzcash?rev=d387aed7e04e881dbe30c6ff8b26a96c834c094b)",
  "zebra-chain",
  "zingo_common_components",
  "zingo_netutils 0.1.0 (git+https://github.com/zingolabs/infrastructure.git?branch=file_not_found)",
- "zingo_test_vectors 0.0.1 (git+https://github.com/zingolabs/infrastructure.git?rev=631440204438d8d9044d15bbd8b3acc10db157b2)",
+ "zingo_test_vectors 0.0.1 (git+https://github.com/zingolabs/infrastructure.git?branch=executable_location)",
  "zingolib",
  "zip32",
 ]
@@ -8825,6 +8825,29 @@ dependencies = [
  "zcash_protocol 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "zcash_transparent 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "zip32",
+]
+
+[[package]]
+name = "zcash_local_net"
+version = "0.1.0"
+source = "git+https://github.com/zingolabs/infrastructure.git?branch=executable_location#162c694bbf9c61f1c06965af00257627a7f4a43b"
+dependencies = [
+ "getset",
+ "hex",
+ "http",
+ "json",
+ "portpicker",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "zcash_protocol 0.6.1 (git+https://github.com/zcash/librustzcash?rev=d387aed7e04e881dbe30c6ff8b26a96c834c094b)",
+ "zebra-chain",
+ "zebra-node-services",
+ "zebra-rpc",
+ "zingo_common_components",
 ]
 
 [[package]]
@@ -9622,7 +9645,7 @@ dependencies = [
 [[package]]
 name = "zingo_test_vectors"
 version = "0.0.1"
-source = "git+https://github.com/zingolabs/infrastructure.git?rev=631440204438d8d9044d15bbd8b3acc10db157b2#631440204438d8d9044d15bbd8b3acc10db157b2"
+source = "git+https://github.com/zingolabs/infrastructure.git?branch=executable_location#162c694bbf9c61f1c06965af00257627a7f4a43b"
 dependencies = [
  "bip0039",
 ]
