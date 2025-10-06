@@ -219,8 +219,13 @@ impl IndexerConfig {
         Ok(self.network.to_zebra_network())
     }
 
-    /// Finalizes the configuration after initial parsing, applying conditional defaults.
+    // /// Finalizes the configuration after initial parsing, applying conditional defaults.
+    /*
     fn finalize_config_logic(mut self) -> Self {
+        // ONLY used in one place, no need for helper fn
+        // just set default of cookie dir if cookie auth is true
+        // and make sure cookie dir is none if there is no  cookie auth
+
         if self.enable_cookie_auth {
             if self.cookie_dir.is_none() {
                 self.cookie_dir = Some(default_ephemeral_cookie_path());
@@ -229,8 +234,10 @@ impl IndexerConfig {
             // If auth is not enabled, cookie_dir should be None, regardless of what was in the config.
             self.cookie_dir = None;
         }
+
         self
     }
+    */
 }
 
 impl Default for IndexerConfig {
@@ -353,7 +360,45 @@ pub fn load_config(file_path: &PathBuf) -> Result<IndexerConfig, IndexerError> {
 
     match figment.extract::<IndexerConfig>() {
         Ok(parsed_config) => {
+            if parsed_config.json_server_settings.is_some() {
+                // if cookie auth is true
+                if parsed_config
+                    .json_server_settings
+                    .as_ref()
+                    .expect("json_server_settings to be Some")
+                    .enable_cookie_auth
+                    && parsed_config
+                        .json_server_settings
+                        .as_ref()
+                        .expect("json_server_settings to be Some")
+                        .cookie_dir
+                        .is_none()
+                {
+
+                    // apply default cookie dir default
+
+                    //              parsed_config.json_server_settings.cookie_dir = Some(default_ephemeral_cookie_path());
+                }
+            }
+
+            // old way
             let finalized_config = parsed_config.finalize_config_logic();
+            // only place for finalize_config_logic
+            //
+            // just set default of cookie dir if cookie auth is true
+            // and make sure cookie dir is none if there is no cookie auth
+            /*
+            if self.enable_cookie_auth {
+                if self.cookie_dir.is_none() {
+                    self.cookie_dir = Some(default_ephemeral_cookie_path());
+                }
+            } else {
+                // If auth is not enabled, cookie_dir should be None, regardless of what was in the config.
+                self.cookie_dir = None;
+            }
+
+            self
+            */
             finalized_config.check_config()?;
             info!(
                 "Successfully loaded and validated config. Base TOML file checked: '{}'",
