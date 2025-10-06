@@ -1,4 +1,7 @@
 //! Types associated with the `getpeerinfo` RPC request.
+//!
+//! Although the current threat model assumes that `zaino` connects to a trusted validator,
+//! the `getpeerinfo` RPC performs some light validation.
 
 use std::convert::Infallible;
 
@@ -29,6 +32,7 @@ pub enum GetPeerInfo {
 
 /// Response to a `getpeerinfo` RPC request coming from `zebrad`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct ZebradPeerInfo {
     /// Remote address `host:port`.
     pub addr: String,
@@ -39,6 +43,7 @@ pub struct ZebradPeerInfo {
 // TODO: Do not use primitive types
 /// Response to a `getpeerinfo` RPC request coming from `zcashd`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct ZcashdPeerInfo {
     /// Peer index (NodeId).
     pub id: NodeId,
@@ -302,6 +307,46 @@ mod tests {
                 assert!(!items[1].inbound);
             }
             other => panic!("expected Zebrad variant, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn zcashd_rejects_extra_fields() {
+        let j = r#"[{
+        "id":1,"addr":"127.0.0.1:8233","services":"0000000000000001",
+        "relaytxes":true,"lastsend":1,"lastrecv":2,"bytessent":3,"bytesrecv":4,
+        "conntime":5,"timeoffset":0,"pingtime":0.1,"version":170002,"subver":"/X/","inbound":false,
+        "startingheight":-1,"addr_processed":0,"addr_rate_limited":0,"whitelisted":false,
+        "unexpected":"oops"
+    }]"#;
+
+        // zcashd fails due to unknown field
+        let err = serde_json::from_str::<Vec<ZcashdPeerInfo>>(j).unwrap_err();
+        assert!(err.to_string().contains("unknown field"));
+
+        // Should be `Unknown`
+        let parsed = serde_json::from_str::<GetPeerInfo>(j).unwrap();
+        matches!(parsed, GetPeerInfo::Unknown(_));
+    }
+
+    /// Integrity test that ensures no Downgrade-to-Zebrad via type poisoning is possible.
+    #[test]
+    fn zebrad_does_not_act_as_catchall() {
+        let invalid_zcashd = r#"
+        [
+            { "addr": "1.2.3.4:8233", "inbound": false, "whitelisted": "true" }
+        ]
+        "#;
+
+        let parsed: GetPeerInfo = serde_json::from_str(invalid_zcashd).unwrap();
+
+        match parsed {
+            GetPeerInfo::Unknown(items) => {
+                assert_eq!(items.len(), 1);
+            }
+            other => {
+                panic!("expected Unknown variant, got: {:?}", other);
+            }
         }
     }
 
