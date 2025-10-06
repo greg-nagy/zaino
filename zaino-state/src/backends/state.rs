@@ -26,7 +26,10 @@ use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
-        response::{peer_info::GetPeerInfo, GetMempoolInfoResponse, GetSubtreesResponse},
+        response::{
+            block_subsidy::GetBlockSubsidy, peer_info::GetPeerInfo, GetMempoolInfoResponse,
+            GetSubtreesResponse,
+        },
     },
 };
 use zaino_proto::proto::{
@@ -883,6 +886,13 @@ impl ZcashIndexer for StateServiceSubscriber {
                 "failed to get difficulty",
             ))
         })
+    }
+
+    async fn get_block_subsidy(&self, height: u32) -> Result<GetBlockSubsidy, Self::Error> {
+        self.rpc_client
+            .get_block_subsidy(height)
+            .await
+            .map_err(|e| StateServiceError::Custom(e.to_string()))
     }
 
     async fn get_blockchain_info(&self) -> Result<GetBlockchainInfoResponse, Self::Error> {

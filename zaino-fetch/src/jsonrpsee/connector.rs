@@ -25,11 +25,12 @@ use zebra_rpc::client::ValidateAddressResponse;
 use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
     response::{
-        peer_info::GetPeerInfo, GetBalanceError, GetBalanceResponse, GetBlockCountResponse,
-        GetBlockError, GetBlockHash, GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse,
-        GetMempoolInfoResponse, GetSubtreesError, GetSubtreesResponse, GetTransactionResponse,
-        GetTreestateError, GetTreestateResponse, GetUtxosError, GetUtxosResponse,
-        SendTransactionError, SendTransactionResponse, TxidsError, TxidsResponse,
+        block_subsidy::GetBlockSubsidy, peer_info::GetPeerInfo, GetBalanceError,
+        GetBalanceResponse, GetBlockCountResponse, GetBlockError, GetBlockHash, GetBlockResponse,
+        GetBlockchainInfoResponse, GetInfoResponse, GetMempoolInfoResponse, GetSubtreesError,
+        GetSubtreesResponse, GetTransactionResponse, GetTreestateError, GetTreestateResponse,
+        GetUtxosError, GetUtxosResponse, SendTransactionError, SendTransactionResponse, TxidsError,
+        TxidsResponse,
     },
 };
 
@@ -456,6 +457,14 @@ impl JsonRpSeeConnector {
     ) -> Result<GetDifficultyResponse, RpcRequestError<Infallible>> {
         self.send_request::<(), GetDifficultyResponse>("getdifficulty", ())
             .await
+    }
+
+    pub async fn get_block_subsidy(
+        &self,
+        height: u32,
+    ) -> Result<GetBlockSubsidy, RpcRequestError<Infallible>> {
+        let params = vec![serde_json::to_value(height).map_err(RpcRequestError::JsonRpc)?];
+        self.send_request("getblocksubsidy", params).await
     }
 
     /// Returns the total balance of a provided `addresses` in an [`crate::jsonrpsee::response::GetBalanceResponse`] instance.

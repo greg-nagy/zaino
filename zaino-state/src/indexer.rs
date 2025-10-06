@@ -4,7 +4,9 @@
 use async_trait::async_trait;
 use tokio::{sync::mpsc, time::timeout};
 use tracing::warn;
-use zaino_fetch::jsonrpsee::response::{peer_info::GetPeerInfo, GetMempoolInfoResponse};
+use zaino_fetch::jsonrpsee::response::{
+    block_subsidy::GetBlockSubsidy, peer_info::GetPeerInfo, GetMempoolInfoResponse,
+};
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
     service::{
@@ -171,6 +173,8 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// method: post
     /// tags: blockchain
     async fn get_difficulty(&self) -> Result<f64, Self::Error>;
+
+    async fn get_block_subsidy(&self, height: u32) -> Result<GetBlockSubsidy, Self::Error>;
 
     /// Returns details on the active state of the TX memory pool.
     ///

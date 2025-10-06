@@ -3,6 +3,7 @@
 //! These types are redefined rather than imported from zebra_rpc
 //! to prevent locking consumers into a zebra_rpc version
 
+pub mod block_subsidy;
 mod common;
 pub mod peer_info;
 
