@@ -26,10 +26,10 @@ zcash_client_backend = { git = "https://github.com/zcash/librustzcash", rev = "d
 zebra-chain = { workspace = true }
 
 # Zingo-infra
-zcash_local_net = { git = "https://github.com/zingolabs/infrastructure.git", tag = "zcash_local_net_v0.0.0" }
-zingo_common_components = { git = "https://github.com/zingolabs/infrastructure.git", tag = "zcash_local_net_v0.0.0", features = [ "for_test" ]}
-zingo_test_vectors = { git = "https://github.com/zingolabs/infrastructure.git", tag = "zcash_local_net_v0.0.0" }
+zcash_local_net = { git = "https://github.com/zingolabs/infrastructure.git", rev = "631440204438d8d9044d15bbd8b3acc10db157b2" }
+zingo_test_vectors = { git = "https://github.com/zingolabs/infrastructure.git", rev = "631440204438d8d9044d15bbd8b3acc10db157b2"  }
 
+zingo_common_components = { git = "https://github.com/zingolabs/zingo-common.git", rev = "23814ee904ee64913585c0b8f871c6dbd94504c6", features = [ "for_test" ]}
 # ZingoLib
 zingolib = { git = "https://github.com/zingolabs/zingolib.git", rev = "f88e1d76ea244d6cc48d7fd4c3a609c6598318dc", features = [
     "testutils",
@@ -61,4 +61,4 @@ lazy_static = { workspace = true }
 zip32 = {workspace = true}
 
 [dev-dependencies]
-zingo_netutils = { git = "https://github.com/zingolabs/infrastructure.git", tag = "zcash_local_net_v0.0.0" }
+zingo_netutils = { git = "https://github.com/zingolabs/infrastructure.git", branch = "file_not_found"  }

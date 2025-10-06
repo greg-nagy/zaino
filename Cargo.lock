@@ -8513,8 +8513,8 @@ dependencies = [
  "zcash_protocol 0.6.1 (git+https://github.com/zcash/librustzcash?rev=d387aed7e04e881dbe30c6ff8b26a96c834c094b)",
  "zebra-chain",
  "zingo_common_components",
- "zingo_netutils 0.1.0 (git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.0.0)",
- "zingo_test_vectors 0.0.1 (git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.0.0)",
+ "zingo_netutils 0.1.0 (git+https://github.com/zingolabs/infrastructure.git?branch=file_not_found)",
+ "zingo_test_vectors 0.0.1 (git+https://github.com/zingolabs/infrastructure.git?rev=631440204438d8d9044d15bbd8b3acc10db157b2)",
  "zingolib",
  "zip32",
 ]
@@ -8830,7 +8830,7 @@ dependencies = [
 [[package]]
 name = "zcash_local_net"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.0.0#51162c0c603d324a3c36f1cead17bf4680aa1dca"
+source = "git+https://github.com/zingolabs/infrastructure.git?rev=631440204438d8d9044d15bbd8b3acc10db157b2#631440204438d8d9044d15bbd8b3acc10db157b2"
 dependencies = [
  "getset",
  "hex",
@@ -9570,7 +9570,7 @@ dependencies = [
 [[package]]
 name = "zingo_common_components"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.0.0#51162c0c603d324a3c36f1cead17bf4680aa1dca"
+source = "git+https://github.com/zingolabs/zingo-common.git?rev=23814ee904ee64913585c0b8f871c6dbd94504c6#23814ee904ee64913585c0b8f871c6dbd94504c6"
 dependencies = [
  "zebra-chain",
 ]
@@ -9578,7 +9578,7 @@ dependencies = [
 [[package]]
 name = "zingo_netutils"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.0.0#51162c0c603d324a3c36f1cead17bf4680aa1dca"
+source = "git+https://github.com/zingolabs/infrastructure.git?branch=file_not_found#041ec07127f482aa036d96a2116ef4dbc7ec2109"
 dependencies = [
  "http",
  "http-body",
@@ -9622,7 +9622,7 @@ dependencies = [
 [[package]]
 name = "zingo_test_vectors"
 version = "0.0.1"
-source = "git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.0.0#51162c0c603d324a3c36f1cead17bf4680aa1dca"
+source = "git+https://github.com/zingolabs/infrastructure.git?rev=631440204438d8d9044d15bbd8b3acc10db157b2#631440204438d8d9044d15bbd8b3acc10db157b2"
 dependencies = [
  "bip0039",
 ]
