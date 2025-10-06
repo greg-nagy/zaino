@@ -718,7 +718,7 @@ impl JsonRpSeeConnector {
         if let Some(b) = blocks {
             params.push(serde_json::json!(b));
         } else {
-            params.push(serde_json::json!(120 as i32))
+            params.push(serde_json::json!(120_i32))
         }
 
         // check whether the height parameter is present
@@ -726,7 +726,7 @@ impl JsonRpSeeConnector {
             params.push(serde_json::json!(h));
         } else {
             // default to -1
-            params.push(serde_json::json!(-1 as i32))
+            params.push(serde_json::json!(-1_i32))
         }
 
         self.send_request("getnetworksolps", params).await
