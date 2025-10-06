@@ -26,8 +26,8 @@ zcash_client_backend = { git = "https://github.com/zcash/librustzcash", rev = "d
 zebra-chain = { workspace = true }
 
 # Zingo-infra
-zcash_local_net = { git = "https://github.com/zingolabs/infrastructure.git", rev = "631440204438d8d9044d15bbd8b3acc10db157b2" }
-zingo_test_vectors = { git = "https://github.com/zingolabs/infrastructure.git", rev = "631440204438d8d9044d15bbd8b3acc10db157b2"  }
+zcash_local_net = { git = "https://github.com/zingolabs/infrastructure.git", branch = "noexec_debug" }
+zingo_test_vectors = { git = "https://github.com/zingolabs/infrastructure.git", branch = "noexec_debug"  }
 
 zingo_common_components = { git = "https://github.com/zingolabs/zingo-common.git", rev = "23814ee904ee64913585c0b8f871c6dbd94504c6", features = [ "for_test" ]}
 # ZingoLib
