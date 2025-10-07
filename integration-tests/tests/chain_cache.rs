@@ -90,6 +90,7 @@ mod chain_query_interface {
     ) {
         let activation_heights = match validator {
             ValidatorKind::Zebrad => ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
+            // ValidatorKind::Zcashd => ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
             ValidatorKind::Zcashd => ActivationHeights::default(),
         };
 
@@ -166,11 +167,12 @@ mod chain_query_interface {
                     no_db: false,
                 };
                 let chain_index = NodeBackedChainIndex::new(
-                    ValidatorConnector::State(chain_index::source::State {
-                        read_state_service: state_service.read_state_service().clone(),
-                        mempool_fetcher: json_service.clone(),
-                        network: config.network,
-                    }),
+                    // ValidatorConnector::State(chain_index::source::State {
+                    //     read_state_service: state_service.read_state_service().clone(),
+                    //     mempool_fetcher: json_service.clone(),
+                    //     network: config.network,
+                    // }),
+                    ValidatorConnector::Fetch(json_service.clone()),
                     config,
                 )
                 .await
@@ -221,6 +223,11 @@ mod chain_query_interface {
         get_block_range(&ValidatorKind::Zebrad).await
     }
 
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn get_block_range_zcashd() {
+        get_block_range(&ValidatorKind::Zcashd).await
+    }
+
     async fn get_block_range(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
             create_test_manager_and_chain_index(validator, None, true, false, false, true).await;
@@ -258,6 +265,11 @@ mod chain_query_interface {
         find_fork_point(&ValidatorKind::Zebrad).await
     }
 
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn find_fork_point_zcashd() {
+        find_fork_point(&ValidatorKind::Zcashd).await
+    }
+
     async fn find_fork_point(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
             create_test_manager_and_chain_index(validator, None, true, false, false, true).await;
@@ -285,9 +297,15 @@ mod chain_query_interface {
         get_raw_transaction(&ValidatorKind::Zebrad).await
     }
 
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn get_raw_transaction_zcashd() {
+        get_raw_transaction(&ValidatorKind::Zcashd).await
+    }    
+
     async fn get_raw_transaction(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(validator, None, true, false, false, true).await;
+            create_test_manager_and_chain_index(validator, None, true, true, true, true).await;
+            // create_test_manager_and_chain_index(validator, None, true, false, false, true).await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
         test_manager.generate_blocks_with_delay(5).await;
@@ -330,6 +348,11 @@ mod chain_query_interface {
         get_transaction_status(&ValidatorKind::Zebrad).await
     }
 
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn get_transaction_status_zcashd() {
+        get_transaction_status(&ValidatorKind::Zcashd).await
+    }    
+
     async fn get_transaction_status(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
             create_test_manager_and_chain_index(validator, None, true, false, false, true).await;
@@ -364,6 +387,11 @@ mod chain_query_interface {
     async fn sync_large_chain_zebrad() {
         sync_large_chain(&ValidatorKind::Zebrad).await
     }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn sync_large_chain_zcashd() {
+        sync_large_chain(&ValidatorKind::Zcashd).await
+    }    
 
     async fn sync_large_chain(validator: &ValidatorKind) {
         let (test_manager, json_service, _option_state_service, _chain_index, indexer) =
