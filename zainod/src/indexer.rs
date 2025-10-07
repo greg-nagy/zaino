@@ -5,8 +5,10 @@ use tracing::info;
 
 use zaino_fetch::jsonrpsee::connector::test_node_and_return_url;
 use zaino_serve::server::{
-    config::{GrpcConfig, JsonRpcConfig},
+    // TODO see: config here
+    config::GrpcConfig,
     grpc::TonicServer,
+    // TODO vs Server here
     jsonrpc::JsonRpcServer,
 };
 use zaino_state::{
@@ -79,21 +81,13 @@ where
         indexer_config: IndexerConfig,
     ) -> Result<tokio::task::JoinHandle<Result<(), IndexerError>>, IndexerError> {
         let service = IndexerService::<Service>::spawn(service_config).await?;
-
-        let json_server = match indexer_config.enable_json_server {
-            true => Some(
-                JsonRpcServer::spawn(
-                    service.inner_ref().get_subscriber(),
-                    JsonRpcConfig {
-                        json_rpc_listen_address: indexer_config.json_rpc_listen_address,
-                        enable_cookie_auth: indexer_config.enable_cookie_auth,
-                        cookie_dir: indexer_config.cookie_dir,
-                    },
-                )
-                .await
-                .unwrap(),
+        let json_server = match indexer_config.json_server_settings {
+            Some(json_server_config) => Some(
+                JsonRpcServer::spawn(service.inner_ref().get_subscriber(), json_server_config)
+                    .await
+                    .unwrap(),
             ),
-            false => None,
+            None => None,
         };
 
         let grpc_server = TonicServer::spawn(
