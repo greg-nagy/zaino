@@ -12,16 +12,19 @@
 //!   - NOTE: Full transaction and block data is served from the backend finalizer.
 
 use crate::chain_index::non_finalised_state::BestTip;
+use crate::chain_index::types::{BestChainLocation, NonBestChainLocation};
 use crate::error::{ChainIndexError, ChainIndexErrorKind, FinalisedStateError};
+use crate::IndexedBlock;
 use crate::{AtomicStatus, StatusType, SyncError};
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::collections::HashSet;
+use std::{sync::Arc, time::Duration};
 
 use futures::{FutureExt, Stream};
 use non_finalised_state::NonfinalizedBlockCacheSnapshot;
 use source::{BlockchainSource, ValidatorConnector};
 use tokio_stream::StreamExt;
 use tracing::info;
-use types::IndexedBlock;
+use zebra_chain::parameters::ConsensusBranchId;
 pub use zebra_chain::parameters::Network as ZebraNetwork;
 use zebra_chain::serialization::ZcashSerialize;
 use zebra_state::HashOrHeight;
@@ -172,6 +175,15 @@ pub trait ChainIndex {
     /// it existed at the moment the snapshot was taken.
     fn snapshot_nonfinalized_state(&self) -> Self::Snapshot;
 
+    /// Returns Some(Height) for the given block hash *if* it is currently in the best chain.
+    ///
+    /// Returns None if the specified block is not in the best chain or is not found.
+    fn get_block_height(
+        &self,
+        nonfinalized_snapshot: &Self::Snapshot,
+        hash: types::BlockHash,
+    ) -> impl std::future::Future<Output = Result<Option<types::Height>, Self::Error>>;
+
     /// Given inclusive start and end heights, stream all blocks
     /// between the given heights.
     /// Returns None if the specified end height
@@ -192,12 +204,25 @@ pub trait ChainIndex {
         block_hash: &types::BlockHash,
     ) -> Result<Option<(types::BlockHash, types::Height)>, Self::Error>;
 
-    /// given a transaction id, returns the transaction
+    /// Returns the block commitment tree data by hash
+    #[allow(clippy::type_complexity)]
+    fn get_treestate(
+        &self,
+        // snapshot: &Self::Snapshot,
+        // currently not implemented internally, fetches data from validator.
+        //
+        // NOTE: Should this check blockhash exists in snapshot and db before proxying call?
+        hash: &types::BlockHash,
+    ) -> impl std::future::Future<Output = Result<(Option<Vec<u8>>, Option<Vec<u8>>), Self::Error>>;
+
+    /// given a transaction id, returns the transaction, along with
+    /// its consensus branch ID if available
+    #[allow(clippy::type_complexity)]
     fn get_raw_transaction(
         &self,
         snapshot: &Self::Snapshot,
         txid: &types::TransactionHash,
-    ) -> impl std::future::Future<Output = Result<Option<Vec<u8>>, Self::Error>>;
+    ) -> impl std::future::Future<Output = Result<Option<(Vec<u8>, Option<u32>)>, Self::Error>>;
 
     /// Given a transaction ID, returns all known hashes and heights of blocks
     /// containing that transaction. Height is None for blocks not on the best chain.
@@ -210,13 +235,7 @@ pub trait ChainIndex {
         snapshot: &Self::Snapshot,
         txid: &types::TransactionHash,
     ) -> impl std::future::Future<
-        Output = Result<
-            (
-                std::collections::HashMap<types::BlockHash, Option<types::Height>>,
-                bool,
-            ),
-            Self::Error,
-        >,
+        Output = Result<(Option<BestChainLocation>, HashSet<NonBestChainLocation>), Self::Error>,
     >;
 
     /// Returns all transactions currently in the mempool, filtered by `exclude_list`.
@@ -362,6 +381,7 @@ pub trait ChainIndex {
 /// - Automatic synchronization between state layers
 /// - Snapshot-based consistency for queries
 pub struct NodeBackedChainIndex<Source: BlockchainSource = ValidatorConnector> {
+    blockchain_source: std::sync::Arc<Source>,
     #[allow(dead_code)]
     mempool: std::sync::Arc<mempool::Mempool<Source>>,
     non_finalized_state: std::sync::Arc<crate::NonFinalizedState<Source>>,
@@ -393,19 +413,22 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
         };
 
         let non_finalized_state = crate::NonFinalizedState::initialize(
-            source,
+            source.clone(),
             config.network.to_zebra_network(),
             top_of_finalized,
         )
         .await?;
+
         let mut chain_index = Self {
+            blockchain_source: Arc::new(source),
             mempool: std::sync::Arc::new(mempool_state),
             non_finalized_state: std::sync::Arc::new(non_finalized_state),
             finalized_db,
             sync_loop_handle: None,
-            status: AtomicStatus::new(StatusType::Spawning as u16),
+            status: AtomicStatus::new(StatusType::Spawning),
         };
         chain_index.sync_loop_handle = Some(chain_index.start_sync_loop());
+
         Ok(chain_index)
     }
 
@@ -413,6 +436,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
     /// a clone-safe, drop-safe, read-only view onto the running indexer.
     pub async fn subscriber(&self) -> NodeBackedChainIndexSubscriber<Source> {
         NodeBackedChainIndexSubscriber {
+            blockchain_source: self.blockchain_source.as_ref().clone(),
             mempool: self.mempool.subscriber(),
             non_finalized_state: self.non_finalized_state.clone(),
             finalized_state: self.finalized_db.to_reader(),
@@ -426,7 +450,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
     pub async fn shutdown(&self) -> Result<(), FinalisedStateError> {
         self.finalized_db.shutdown().await?;
         self.mempool.close();
-        self.status.store(StatusType::Closing as usize);
+        self.status.store(StatusType::Closing);
         Ok(())
     }
 
@@ -434,10 +458,12 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
     pub fn status(&self) -> StatusType {
         let finalized_status = self.finalized_db.status();
         let mempool_status = self.mempool.status();
-        let combined_status = StatusType::from(self.status.load())
+        let combined_status = self
+            .status
+            .load()
             .combine(finalized_status)
             .combine(mempool_status);
-        self.status.store(combined_status as usize);
+        self.status.store(combined_status);
         combined_status
     }
 
@@ -448,11 +474,11 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
         let status = self.status.clone();
         tokio::task::spawn(async move {
             loop {
-                if status.load() == StatusType::Closing as usize {
+                if status.load() == StatusType::Closing {
                     break;
                 }
 
-                status.store(StatusType::Syncing as usize);
+                status.store(StatusType::Syncing);
                 // Sync nfs to chain tip, trimming blocks to finalized tip.
                 nfs.sync(fs.clone()).await?;
 
@@ -491,7 +517,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
                             .map_err(|_e| SyncError::CompetingSyncProcess)?;
                     }
                 }
-                status.store(StatusType::Ready as usize);
+                status.store(StatusType::Ready);
                 // TODO: configure sleep duration?
                 tokio::time::sleep(Duration::from_millis(500)).await
                 // TODO: Check for shutdown signal.
@@ -508,6 +534,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
 /// [`NodeBackedChainIndexSubscriber`] can safely be cloned and dropped freely.
 #[derive(Clone)]
 pub struct NodeBackedChainIndexSubscriber<Source: BlockchainSource = ValidatorConnector> {
+    blockchain_source: Source,
     mempool: mempool::MempoolSubscriber,
     non_finalized_state: std::sync::Arc<crate::NonFinalizedState<Source>>,
     finalized_state: finalised_state::reader::DbReader,
@@ -519,10 +546,12 @@ impl<Source: BlockchainSource> NodeBackedChainIndexSubscriber<Source> {
     pub fn status(&self) -> StatusType {
         let finalized_status = self.finalized_state.status();
         let mempool_status = self.mempool.status();
-        let combined_status = StatusType::from(self.status.load())
+        let combined_status = self
+            .status
+            .load()
             .combine(finalized_status)
             .combine(mempool_status);
-        self.status.store(combined_status as usize);
+        self.status.store(combined_status);
         combined_status
     }
 
@@ -592,6 +621,25 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
     /// it existed at the moment the snapshot was taken.
     fn snapshot_nonfinalized_state(&self) -> Self::Snapshot {
         self.non_finalized_state.get_snapshot()
+    }
+
+    /// Returns Some(Height) for the given block hash *if* it is currently in the best chain.
+    ///
+    /// Returns None if the specified block is not in the best chain or is not found.
+    ///
+    /// Used for hash based block lookup (random access).
+    async fn get_block_height(
+        &self,
+        nonfinalized_snapshot: &Self::Snapshot,
+        hash: types::BlockHash,
+    ) -> Result<Option<types::Height>, Self::Error> {
+        match nonfinalized_snapshot.blocks.get(&hash).cloned() {
+            Some(block) => Ok(block.index().height()),
+            None => match self.finalized_state.get_block_height(hash).await {
+                Ok(height) => Ok(height),
+                Err(_e) => Err(ChainIndexError::database_hole(hash)),
+            },
+        }
     }
 
     /// Given inclusive start and end heights, stream all blocks
@@ -666,12 +714,31 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
         }
     }
 
+    /// Returns the block commitment tree data by hash
+    async fn get_treestate(
+        &self,
+        // snapshot: &Self::Snapshot,
+        // currently not implemented internally, fetches data from validator.
+        //
+        // NOTE: Should this check blockhash exists in snapshot and db before proxying call?
+        hash: &types::BlockHash,
+    ) -> Result<(Option<Vec<u8>>, Option<Vec<u8>>), Self::Error> {
+        match self.blockchain_source.get_treestate(*hash).await {
+            Ok(resp) => Ok(resp),
+            Err(e) => Err(ChainIndexError {
+                kind: ChainIndexErrorKind::InternalServerError,
+                message: "failed to fetch treestate from validator".to_string(),
+                source: Some(Box::new(e)),
+            }),
+        }
+    }
+
     /// given a transaction id, returns the transaction
     async fn get_raw_transaction(
         &self,
         snapshot: &Self::Snapshot,
         txid: &types::TransactionHash,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
+    ) -> Result<Option<(Vec<u8>, Option<u32>)>, Self::Error> {
         if let Some(mempool_tx) = self
             .mempool
             .get_transaction(&mempool::MempoolKey {
@@ -680,7 +747,20 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
             .await
         {
             let bytes = mempool_tx.serialized_tx.as_ref().as_ref().to_vec();
-            return Ok(Some(bytes));
+            let mempool_height = snapshot
+                .blocks
+                .iter()
+                .find(|(hash, _block)| **hash == self.mempool.mempool_chain_tip())
+                .and_then(|(_hash, block)| block.height());
+            let mempool_branch_id = mempool_height.and_then(|height| {
+                ConsensusBranchId::current(
+                    &self.non_finalized_state.network,
+                    zebra_chain::block::Height::from(height + 1),
+                )
+                .map(u32::from)
+            });
+
+            return Ok(Some((bytes, mempool_branch_id)));
         }
 
         let Some(block) = self
@@ -705,6 +785,11 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
             .await
             .map_err(ChainIndexError::backing_validator)?
             .ok_or_else(|| ChainIndexError::database_hole(block.index().hash()))?;
+        let block_consensus_branch_id = full_block.coinbase_height().and_then(|height| {
+            ConsensusBranchId::current(&self.non_finalized_state.network, dbg!(height))
+                .map(u32::from)
+        });
+        dbg!(block_consensus_branch_id);
         full_block
             .transactions
             .iter()
@@ -715,36 +800,72 @@ impl<Source: BlockchainSource> ChainIndex for NodeBackedChainIndexSubscriber<Sou
             .map(ZcashSerialize::zcash_serialize_to_vec)
             .ok_or_else(|| ChainIndexError::database_hole(block.index().hash()))?
             .map_err(ChainIndexError::backing_validator)
+            .map(|transaction| (transaction, block_consensus_branch_id))
             .map(Some)
     }
 
     /// Given a transaction ID, returns all known blocks containing this transaction
-    /// At most one of these blocks will be on the best chain
     ///
-    /// Also returns a bool representing whether the transaction is *currently* in the mempool.
-    /// This is not currently tied to the given snapshot but rather uses the live mempool.
+    /// If the transaction is in the mempool, it will be in the BestChainLocation
+    /// if the mempool and snapshot are up-to-date, and the NonBestChainLocation set
+    /// if the snapshot is out-of-date compared to the mempool
     async fn get_transaction_status(
         &self,
         snapshot: &Self::Snapshot,
         txid: &types::TransactionHash,
-    ) -> Result<
-        (
-            HashMap<types::BlockHash, std::option::Option<types::Height>>,
-            bool,
-        ),
-        ChainIndexError,
-    > {
-        Ok((
-            self.blocks_containing_transaction(snapshot, txid.0)
-                .await?
-                .map(|block| (*block.hash(), block.height()))
-                .collect(),
-            self.mempool
-                .contains_txid(&mempool::MempoolKey {
-                    txid: txid.to_string(),
-                })
-                .await,
-        ))
+    ) -> Result<(Option<BestChainLocation>, HashSet<NonBestChainLocation>), ChainIndexError> {
+        let blocks_containing_transaction = self
+            .blocks_containing_transaction(snapshot, txid.0)
+            .await?
+            .collect::<Vec<_>>();
+        let mut best_chain_block = blocks_containing_transaction
+            .iter()
+            .find_map(|block| BestChainLocation::try_from(block).ok());
+        let mut non_best_chain_blocks: HashSet<NonBestChainLocation> =
+            blocks_containing_transaction
+                .iter()
+                .filter_map(|block| NonBestChainLocation::try_from(block).ok())
+                .collect();
+        let in_mempool = self
+            .mempool
+            .contains_txid(&mempool::MempoolKey {
+                txid: txid.to_string(),
+            })
+            .await;
+        if in_mempool {
+            let mempool_tip_hash = self.mempool.mempool_chain_tip();
+            if mempool_tip_hash == snapshot.best_tip.blockhash {
+                if best_chain_block.is_some() {
+                    return Err(ChainIndexError {
+                        kind: ChainIndexErrorKind::InvalidSnapshot,
+                        message:
+                            "Best chain and up-to-date mempool both contain the same transaction"
+                                .to_string(),
+                        source: None,
+                    });
+                } else {
+                    best_chain_block =
+                        Some(BestChainLocation::Mempool(snapshot.best_tip.height + 1));
+                }
+            } else {
+                let target_height = self
+                    .non_finalized_state
+                    .get_snapshot()
+                    .blocks
+                    .iter()
+                    .find_map(|(hash, block)| {
+                        if *hash == mempool_tip_hash {
+                            Some(block.height().map(|height| height + 1))
+                        } else {
+                            None
+                        }
+                    })
+                    .flatten();
+                non_best_chain_blocks.insert(NonBestChainLocation::Mempool(target_height));
+            }
+        }
+
+        Ok((best_chain_block, non_best_chain_blocks))
     }
 
     /// Returns all transactions currently in the mempool, filtered by `exclude_list`.

@@ -1,6 +1,45 @@
-//! Holds chain and block structs used internally by the ChainIndex.
+//! Type definitions for the chain index.
 //!
-//! Held here to ensure serialisation consistency for ZainoDB.
+//! MODULE RULES: These rules must **always** be followed with no exeptions.
+//! - structs in this module must never use external types as fields directly,
+//!   instead fundamental data should be saved into the struct, and from / into
+//!   (or appropriate getters / setters) should be implemented.
+//!
+//! - structs in this module must implement ZainoVersionedSerialize and abide by
+//!   the stringent version rules outlined in that trait.
+//!
+//! - structs in this module must never be changed without implementing a new version
+//!   and implementing the necessary ZainoDB updates and migrations.
+//!
+//! This module is currently in transition from a large monolithic file to well-organized
+//! submodules. The organized types have been moved to focused modules:
+//!
+//! ## Organized Modules
+//! - [`types::primitives`] - Foundational types (hashes, heights, tree sizes, etc.)
+//! - [`types::commitment`] - Commitment tree data structures and utilities
+//!
+//! ## Planned Module Organization
+//! The remaining types in this file will be migrated to:
+//! - `block.rs` - Block-related structures (BlockIndex, BlockData, IndexedBlock)
+//! - `transaction.rs` - Transaction types (CompactTxData, TransparentCompactTx, etc.)
+//! - `address.rs` - Address and UTXO types (AddrScript, Outpoint, etc.)
+//! - `shielded.rs` - Shielded pool types (SaplingCompactTx, OrchardCompactTx, etc.)
+
+// =============================================================================
+// MODULE ORGANIZATION
+// =============================================================================
+
+pub mod commitment;
+pub mod primitives;
+
+// Re-export types from organized submodules
+pub use commitment::{CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes};
+
+// =============================================================================
+// IMPORTS FOR LEGACY TYPES
+// =============================================================================
+// These imports support the types below that haven't been migrated yet.
+// They should be moved to the appropriate submodules along with their types.
 
 use core2::io::{self, Read, Write};
 use hex::{FromHex, ToHex};
@@ -17,7 +56,11 @@ use super::encoding::{
     FixedEncodedLen,
 };
 
-// *** Key Objects ***
+// =============================================================================
+// LEGACY TYPES AWAITING MIGRATION
+// =============================================================================
+// The types below should be extracted to their appropriate modules.
+// Each section should be migrated as a complete unit to maintain clean git history.
 
 /// Block hash (SHA256d hash of the block header).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -38,6 +81,55 @@ impl BlockHash {
         internal_byte_order.reverse();
 
         BlockHash(internal_byte_order)
+    }
+}
+
+/// The location of a transaction in the best chain
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum BestChainLocation {
+    /// the block containing the transaction
+    Block(BlockHash, Height),
+    /// If the transaction is in the mempool and the mempool
+    /// matches the snapshot's chaintip
+    /// Return the target height, which is known to be a block above
+    /// the provided snapshot's chaintip and is returned for convenience
+    Mempool(Height),
+}
+
+/// The location of a transaction not in the best chain
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum NonBestChainLocation {
+    /// the block containing the transaction
+    // TODO: in this case, returning a consensus branch
+    // ID would be useful
+    Block(BlockHash),
+    /// if the transaction is in the mempool
+    /// but the mempool does not match the
+    /// snapshot's chaintip, return the target height if known
+    ///
+    /// This likely means that the provided
+    /// snapshot is out-of-date
+    Mempool(Option<Height>),
+}
+
+impl TryFrom<&IndexedBlock> for NonBestChainLocation {
+    type Error = ();
+
+    fn try_from(value: &IndexedBlock) -> Result<Self, Self::Error> {
+        match value.height() {
+            Some(_) => Err(()),
+            None => Ok(NonBestChainLocation::Block(*value.hash())),
+        }
+    }
+}
+impl TryFrom<&IndexedBlock> for BestChainLocation {
+    type Error = ();
+
+    fn try_from(value: &IndexedBlock) -> Result<Self, Self::Error> {
+        match value.height() {
+            None => Err(()),
+            Some(height) => Ok(BestChainLocation::Block(*value.hash(), height)),
+        }
     }
 }
 
@@ -1021,169 +1113,6 @@ impl ZainoVersionedSerialise for EquihashSolution {
             )),
         }
     }
-}
-
-/// Pair of commitment-tree roots and their corresponding leaf counts
-/// after the current block has been applied.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub struct CommitmentTreeData {
-    roots: CommitmentTreeRoots,
-    sizes: CommitmentTreeSizes,
-}
-
-impl CommitmentTreeData {
-    /// Returns a new CommitmentTreeData instance.
-    pub fn new(roots: CommitmentTreeRoots, sizes: CommitmentTreeSizes) -> Self {
-        Self { roots, sizes }
-    }
-
-    /// Returns the commitment tree roots for the block.
-    pub fn roots(&self) -> &CommitmentTreeRoots {
-        &self.roots
-    }
-
-    /// Returns the commitment tree sizes for the block.
-    pub fn sizes(&self) -> &CommitmentTreeSizes {
-        &self.sizes
-    }
-}
-
-impl ZainoVersionedSerialise for CommitmentTreeData {
-    const VERSION: u8 = version::V1;
-
-    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        let mut w = w;
-        self.roots.serialize(&mut w)?; // carries its own tag
-        self.sizes.serialize(&mut w)
-    }
-
-    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_v1(r)
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        let mut r = r;
-        let roots = CommitmentTreeRoots::deserialize(&mut r)?;
-        let sizes = CommitmentTreeSizes::deserialize(&mut r)?;
-        Ok(CommitmentTreeData::new(roots, sizes))
-    }
-}
-
-/// CommitmentTreeData: 74 bytes total
-impl FixedEncodedLen for CommitmentTreeData {
-    // 1 byte tag + 64 body for roots
-    // + 1 byte tag +  8 body for sizes
-    const ENCODED_LEN: usize =
-        (CommitmentTreeRoots::ENCODED_LEN + 1) + (CommitmentTreeSizes::ENCODED_LEN + 1);
-}
-
-/// Commitment tree roots for shielded transactions, enabling shielded wallet synchronization.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub struct CommitmentTreeRoots {
-    /// Sapling note-commitment tree root (anchor) at this block.
-    sapling: [u8; 32],
-    /// Orchard note-commitment tree root at this block.
-    orchard: [u8; 32],
-}
-
-impl CommitmentTreeRoots {
-    /// Reutns a new CommitmentTreeRoots instance.
-    pub fn new(sapling: [u8; 32], orchard: [u8; 32]) -> Self {
-        Self { sapling, orchard }
-    }
-
-    /// Returns sapling commitment tree root.
-    pub fn sapling(&self) -> &[u8; 32] {
-        &self.sapling
-    }
-
-    /// returns orchard commitment tree root.
-    pub fn orchard(&self) -> &[u8; 32] {
-        &self.orchard
-    }
-}
-
-impl ZainoVersionedSerialise for CommitmentTreeRoots {
-    const VERSION: u8 = version::V1;
-
-    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        let mut w = w;
-        write_fixed_le::<32, _>(&mut w, &self.sapling)?;
-        write_fixed_le::<32, _>(&mut w, &self.orchard)
-    }
-
-    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_v1(r)
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        let mut r = r;
-        let sapling = read_fixed_le::<32, _>(&mut r)?;
-        let orchard = read_fixed_le::<32, _>(&mut r)?;
-        Ok(CommitmentTreeRoots::new(sapling, orchard))
-    }
-}
-
-/// CommitmentTreeRoots: 64 bytes total
-impl FixedEncodedLen for CommitmentTreeRoots {
-    /// 32 byte hash + 32 byte hash.
-    const ENCODED_LEN: usize = 32 + 32;
-}
-
-/// Sizes of commitment trees, indicating total number of shielded notes created.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
-pub struct CommitmentTreeSizes {
-    /// Total notes in Sapling commitment tree.
-    sapling: u32,
-    /// Total notes in Orchard commitment tree.
-    orchard: u32,
-}
-
-impl CommitmentTreeSizes {
-    /// Creates a new CompactSaplingSizes instance.
-    pub fn new(sapling: u32, orchard: u32) -> Self {
-        Self { sapling, orchard }
-    }
-
-    /// Returns sapling commitment tree size
-    pub fn sapling(&self) -> u32 {
-        self.sapling
-    }
-
-    /// Returns orchard commitment tree size
-    pub fn orchard(&self) -> u32 {
-        self.orchard
-    }
-}
-
-impl ZainoVersionedSerialise for CommitmentTreeSizes {
-    const VERSION: u8 = version::V1;
-
-    fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        let mut w = w;
-        write_u32_le(&mut w, self.sapling)?;
-        write_u32_le(&mut w, self.orchard)
-    }
-
-    fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_v1(r)
-    }
-
-    fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
-        let mut r = r;
-        let sapling = read_u32_le(&mut r)?;
-        let orchard = read_u32_le(&mut r)?;
-        Ok(CommitmentTreeSizes::new(sapling, orchard))
-    }
-}
-
-/// CommitmentTreeSizes: 8 bytes total
-impl FixedEncodedLen for CommitmentTreeSizes {
-    /// 4 byte LE int32 + 4 byte LE int32
-    const ENCODED_LEN: usize = 4 + 4;
 }
 
 /// Represents the indexing data of a single compact Zcash block used internally by Zaino.

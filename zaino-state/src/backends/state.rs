@@ -126,16 +126,16 @@ impl StateService {
         let mut read_state_service = self.read_state_service.clone();
         poll_fn(|cx| match read_state_service.poll_ready(cx) {
             std::task::Poll::Ready(Ok(())) => {
-                self.status.store(StatusType::Ready.into());
+                self.status.store(StatusType::Ready);
                 std::task::Poll::Ready(StatusType::Ready)
             }
             std::task::Poll::Ready(Err(e)) => {
                 eprintln!("Service readiness error: {e:?}");
-                self.status.store(StatusType::CriticalError.into());
+                self.status.store(StatusType::CriticalError);
                 std::task::Poll::Ready(StatusType::CriticalError)
             }
             std::task::Poll::Pending => {
-                self.status.store(StatusType::Busy.into());
+                self.status.store(StatusType::Busy);
                 std::task::Poll::Pending
             }
         })
@@ -251,6 +251,7 @@ impl ZcashService for StateService {
         let mempool_source = ValidatorConnector::State(crate::chain_index::source::State {
             read_state_service: read_state_service.clone(),
             mempool_fetcher: rpc_client.clone(),
+            network: config.network,
         });
 
         let mempool = Mempool::spawn(mempool_source, None).await?;
@@ -264,10 +265,10 @@ impl ZcashService for StateService {
             mempool,
             data,
             config,
-            status: AtomicStatus::new(StatusType::Spawning.into()),
+            status: AtomicStatus::new(StatusType::Spawning),
         };
 
-        state_service.status.store(StatusType::Ready.into());
+        state_service.status.store(StatusType::Ready);
 
         Ok(state_service)
     }
@@ -289,7 +290,7 @@ impl ZcashService for StateService {
     /// We first check for `status = StatusType::Closing` as this signifies a shutdown order
     /// from an external process.
     async fn status(&self) -> StatusType {
-        let current_status = self.status.load().into();
+        let current_status = self.status.load();
         if current_status == StatusType::Closing {
             current_status
         } else {
@@ -847,6 +848,11 @@ impl StateServiceSubscriber {
                 format!("invalid verbosity of {more_than_two}"),
             ))),
         }
+    }
+
+    /// Returns the network type running.
+    pub fn network(&self) -> zaino_common::Network {
+        self.config.network
     }
 }
 
