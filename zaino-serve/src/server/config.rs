@@ -65,20 +65,15 @@ impl GrpcConfig {
     }
 }
 
-// TODO comment! :P
-/// Configuration data for Zaino's gRPC server.
-// using this at all is an option. if it's on, we have a SocketAddr.
-// If it's got a cookie dir... cookies are always on?
+/// Configuration data for Zaino's JSON RPC server.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct JsonRpcConfig {
     /// Server bind addr.
     // TODO for this field, assess #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     pub json_rpc_listen_address: SocketAddr,
 
-    // TODO : eliminate this - if we have a cookie dir, we're using cookies.
-    /// Enable cookie-based authentication.
-    pub enable_cookie_auth: bool,
-
+    // If cookie_dir is Some, cookie auth is on.
+    // An empty PathBuf will have an emphemeral path assigned to it when zaino loads the config.
     /// Directory to store authentication cookie file.
     pub cookie_dir: Option<PathBuf>,
 }
