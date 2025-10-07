@@ -174,6 +174,15 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// tags: blockchain
     async fn get_difficulty(&self) -> Result<f64, Self::Error>;
 
+    /// Returns block subsidy reward, taking into account the mining slow start and the founders reward, of block at index provided.
+    ///
+    /// zcashd reference: [`getblocksubsidy`](https://zcash.github.io/rpc/getblocksubsidy.html)
+    /// method: post
+    /// tags: blockchain
+    ///
+    /// # Parameters
+    ///
+    /// - `height`: (number, optional) The block height. If not provided, defaults to the current height of the chain.
     async fn get_block_subsidy(&self, height: u32) -> Result<GetBlockSubsidy, Self::Error>;
 
     /// Returns details on the active state of the TX memory pool.

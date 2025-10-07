@@ -97,6 +97,15 @@ pub trait ZcashIndexerRpc {
     #[method(name = "getpeerinfo")]
     async fn get_peer_info(&self) -> Result<GetPeerInfo, ErrorObjectOwned>;
 
+    /// Returns block subsidy reward, taking into account the mining slow start and the founders reward, of block at index provided.
+    ///
+    /// zcashd reference: [`getblocksubsidy`](https://zcash.github.io/rpc/getblocksubsidy.html)
+    /// method: post
+    /// tags: blockchain
+    ///
+    /// # Parameters
+    ///
+    /// - `height`: (number, optional) The block height. If not provided, defaults to the current height of the chain.
     #[method(name = "getblocksubsidy")]
     async fn get_block_subsidy(&self, height: u32) -> Result<GetBlockSubsidy, ErrorObjectOwned>;
 
