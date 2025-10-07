@@ -190,8 +190,8 @@ mod tests {
             {
               "recipient":"Lockbox A",
               "specification":"https://spec",
-              "value": 0.5,                    // ZEC decimal on wire → parsed to zats by ZecAmount
-              "valueZat": 50_000_000            // integer zats on wire
+              "value": 0.5,                    // ZEC decimal on wire means parsed to zats by ZecAmount
+              "valueZat": 50_000_000           // integer zats on wire
             }
           ]
         });
@@ -207,7 +207,7 @@ mod tests {
                 assert_eq!(x.lockbox_streams.len(), 1);
 
                 let lb = &x.lockbox_streams[0];
-                assert_eq!(lb.value.as_zatoshis(), lb.value_zat.0); // ZEC decimal == zats
+                assert_eq!(lb.value.as_zatoshis(), lb.value_zat.0);
                 assert_eq!(lb.recipient, "Lockbox A");
             }
             _ => panic!("expected Known"),
@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn lockbox_stream_rejects_address_field() {
-        // LockBoxStream has no `address` field; with deny_unknown_fields this must fail.
+        // LockBoxStream has no `address` field.
         // Note that this would actually get matched to the `Unknown` variant.
         let j = serde_json::json!({
           "miner": 0, "founders": 0, "fundingstreamstotal": 0,
@@ -265,16 +265,14 @@ mod tests {
             common::amount::{Zatoshis, ZecAmount},
         };
 
-        // Build a fully-populated payload
         let bs = BlockSubsidy {
-            // 3.0 ZEC miner, 0 founders, 0.5 funding streams, 1.5 lockboxes => 5.0 total
+            // 3.0 ZEC miner, 0 founders, 0.5 funding streams, 1.5 lockboxes = 5.0 total
             miner: ZecAmount::try_from_zec_f64(3.0).unwrap(),
             founders: ZecAmount::from_zats(0),
             funding_streams_total: ZecAmount::try_from_zec_f64(0.5).unwrap(),
             lockbox_total: ZecAmount::try_from_zec_f64(1.5).unwrap(),
             total_block_subsidy: ZecAmount::try_from_zec_f64(5.0).unwrap(),
 
-            // One funding stream (has address)
             funding_streams: vec![FundingStream {
                 recipient: "ZCG".into(),
                 specification: "https://spec".into(),
@@ -282,8 +280,6 @@ mod tests {
                 value_zat: Zatoshis(50_000_000),
                 address: Some("t1abc".into()),
             }],
-
-            // Two lockbox streams (no address)
             lockbox_streams: vec![
                 LockBoxStream {
                     recipient: "Lockbox A".into(),
@@ -305,19 +301,18 @@ mod tests {
         // Serialize to JSON
         let s = serde_json::to_string(&wrapped).unwrap();
 
-        // Quick shape/type checks on the JSON itself
         let v: serde_json::Value = serde_json::from_str(&s).unwrap();
-        // top-level amounts are integers (zats)
+        // Top-level amounts are integers (zats)
         assert!(v["miner"].is_number());
         assert!(v["totalblocksubsidy"].is_number());
 
-        // funding stream value is a decimal number; valueZat is integer
+        // Funding stream value is a decimal number, valueZat is an integer
         let fs0 = &v["fundingstreams"][0];
         assert!(fs0["value"].is_number());
         assert!(fs0["valueZat"].is_u64());
         assert!(fs0.get("address").is_some());
 
-        // lockbox streams have no address
+        // Lockbox streams have no address
         let lb0 = &v["lockboxstreams"][0];
         assert!(lb0.get("address").is_none());
 
@@ -327,7 +322,7 @@ mod tests {
         // Struct-level equality must hold
         assert_eq!(back, GetBlockSubsidy::Known(bs));
 
-        // Extra sanity: totals match sums
+        // Totals match sums
         if let GetBlockSubsidy::Known(x) = back {
             let sum_funding: u64 = x.funding_streams.iter().map(|f| f.value_zat.0).sum();
             let sum_lockbox: u64 = x.lockbox_streams.iter().map(|l| l.value_zat.0).sum();

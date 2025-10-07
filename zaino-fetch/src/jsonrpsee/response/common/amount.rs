@@ -3,14 +3,14 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub const ZATS_PER_ZEC: u64 = 100_000_000;
-/// Integer zatoshis on the wire.
+/// Represents an amount in Zatoshis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct Zatoshis(pub u64);
 
 impl<'de> Deserialize<'de> for Zatoshis {
     fn deserialize<D: Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
-        /// Integers first. For floats, use [`ZecAmount`].
+        /// For floats, use [`ZecAmount`].
         #[derive(Deserialize)]
         #[serde(untagged)]
         enum IntLike {
@@ -36,9 +36,7 @@ impl<'de> Deserialize<'de> for Zatoshis {
     }
 }
 
-/// ZEC decimal on the wire (e.g. 2.5), stored internally as zatoshis.
-/// - Deserialize: accepts string or number in ZEC, converts to zats.
-/// - Serialize: emits a JSON number in ZEC (up to 8 dp).
+/// Represents a ZEC amount. The amount is stored in zatoshis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ZecAmount(u64);
 
@@ -90,12 +88,10 @@ impl<'de> Deserialize<'de> for ZecAmount {
                 if !f.is_finite() || f < 0.0 {
                     return Err(serde::de::Error::custom("invalid amount"));
                 }
-                Ok(ZecAmount(
-                    (f * (ZATS_PER_ZEC as f64)).round() as u64
-                ))
+                Ok(ZecAmount((f * (ZATS_PER_ZEC as f64)).round() as u64))
             }
             NumLike::Str(s) => {
-                // parse "int.frac" with up to 8 fractional digits → zats
+                // Parse "int.frac" with up to 8 fractional digits into zats
                 let s = s.trim();
                 if s.starts_with('-') {
                     return Err(serde::de::Error::custom("negative amount"));
@@ -134,7 +130,7 @@ impl<'de> Deserialize<'de> for ZecAmount {
 
 impl Serialize for ZecAmount {
     fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
-        // Emit a JSON number in ZEC. Using f64 is fine at ZEC ranges (<= ~2.1e15 zats).
+        // Emit a JSON number in ZEC.
         let zec = (self.0 as f64) / 100_000_000.0;
         ser.serialize_f64(zec)
     }
@@ -148,132 +144,139 @@ impl From<ZecAmount> for u64 {
 
 #[cfg(test)]
 mod tests {
-    use crate::jsonrpsee::response::common::amount::{Zatoshis, ZecAmount};
 
-    #[test]
-    fn zatoshis_integer_number_is_zats() {
-        let z: Zatoshis = serde_json::from_str("625000000").unwrap();
-        assert_eq!(z.0, 625_000_000);
+    mod zatoshis {
+        use crate::jsonrpsee::response::common::amount::Zatoshis;
+
+        #[test]
+        fn zatoshis_integer_number_is_zats() {
+            let z: Zatoshis = serde_json::from_str("625000000").unwrap();
+            assert_eq!(z.0, 625_000_000);
+        }
+
+        #[test]
+        fn zatoshis_string_digits_are_zats() {
+            let z: Zatoshis = serde_json::from_str(r#""625000000""#).unwrap();
+            assert_eq!(z.0, 625_000_000);
+        }
+
+        #[test]
+        fn zatoshis_rejects_float_number() {
+            let result = serde_json::from_str::<Zatoshis>("2.5");
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn zatoshis_rejects_decimal_string() {
+            let err = serde_json::from_str::<Zatoshis>(r#""2.5""#).unwrap_err();
+            assert!(err.to_string().contains("expected integer"));
+        }
+
+        #[test]
+        fn zatoshis_rejects_negative() {
+            let err = serde_json::from_str::<Zatoshis>("-1").unwrap_err();
+            assert!(err.to_string().contains("negative"));
+        }
+
+        #[test]
+        fn zatoshis_rejects_non_digit_string() {
+            let err = serde_json::from_str::<Zatoshis>(r#""abc""#).unwrap_err();
+            assert!(err.to_string().contains("expected integer"));
+        }
     }
 
-    #[test]
-    fn zatoshis_string_digits_are_zats() {
-        let z: Zatoshis = serde_json::from_str(r#""625000000""#).unwrap();
-        assert_eq!(z.0, 625_000_000);
-    }
+    mod zecamount {
+        use crate::jsonrpsee::response::common::amount::ZecAmount;
 
-    #[test]
-    fn zatoshis_rejects_float_number() {
-        let result = serde_json::from_str::<Zatoshis>("2.5");
-        assert!(result.is_err());
-    }
+        #[test]
+        fn zecamount_from_float_decimal() {
+            let a: ZecAmount = serde_json::from_str("2.5").unwrap();
+            assert_eq!(a.as_zatoshis(), 250_000_000);
+        }
 
-    #[test]
-    fn zatoshis_rejects_decimal_string() {
-        let err = serde_json::from_str::<Zatoshis>(r#""2.5""#).unwrap_err();
-        assert!(err.to_string().contains("expected integer"));
-    }
+        #[test]
+        fn zecamount_from_string_decimal() {
+            let a: ZecAmount = serde_json::from_str(r#""0.00000001""#).unwrap();
+            assert_eq!(a.as_zatoshis(), 1);
+        }
 
-    #[test]
-    fn zatoshis_rejects_negative() {
-        let err = serde_json::from_str::<Zatoshis>("-1").unwrap_err();
-        assert!(err.to_string().contains("negative"));
-    }
+        #[test]
+        fn zecamount_from_integer_number_interpreted_as_zec() {
+            // 2 ZEC
+            let a: ZecAmount = serde_json::from_str("2").unwrap();
+            assert_eq!(a.as_zatoshis(), 200_000_000);
+        }
 
-    #[test]
-    fn zatoshis_rejects_non_digit_string() {
-        let err = serde_json::from_str::<Zatoshis>(r#""abc""#).unwrap_err();
-        assert!(err.to_string().contains("expected integer"));
-    }
+        #[test]
+        fn zecamount_from_integer_string_interpreted_as_zec() {
+            // 2 ZEC
+            let a: ZecAmount = serde_json::from_str(r#""2""#).unwrap();
+            assert_eq!(a.as_zatoshis(), 200_000_000);
+        }
 
-    // ---------- ZecAmount (wire ZEC → stored zats) ----------
+        #[test]
+        fn zecamount_rejects_negative() {
+            let err = serde_json::from_str::<ZecAmount>("-0.1").unwrap_err();
+            assert!(
+                err.to_string().contains("invalid amount") || err.to_string().contains("negative")
+            );
+        }
 
-    #[test]
-    fn zecamount_from_float_decimal() {
-        let a: ZecAmount = serde_json::from_str("2.5").unwrap();
-        assert_eq!(a.as_zatoshis(), 250_000_000);
-    }
+        #[test]
+        fn zecamount_rejects_more_than_8_fractional_digits() {
+            let err = serde_json::from_str::<ZecAmount>(r#""1.000000000""#).unwrap_err();
+            assert!(err.to_string().contains("fractional"));
+        }
 
-    #[test]
-    fn zecamount_from_string_decimal() {
-        let a: ZecAmount = serde_json::from_str(r#""0.00000001""#).unwrap();
-        assert_eq!(a.as_zatoshis(), 1);
-    }
+        #[test]
+        fn zecamount_overflow_on_huge_integer_zec() {
+            // From u64::MAX ZEC, multiplying by 1e8 should overflow
+            let huge = format!("{}", u64::MAX);
+            let err = serde_json::from_str::<ZecAmount>(&huge).unwrap_err();
+            assert!(
+                err.to_string().contains("overflow"),
+                "expected overflow, got: {err}"
+            );
+        }
 
-    #[test]
-    fn zecamount_from_integer_number_interpreted_as_zec() {
-        // 2 ZEC
-        let a: ZecAmount = serde_json::from_str("2").unwrap();
-        assert_eq!(a.as_zatoshis(), 200_000_000);
-    }
+        #[test]
+        fn zecamount_boundary_integer_ok() {
+            // Max integer ZEC that fits when scaled: floor(u64::MAX / 1e8)
+            let max_int_zec = 184_467_440_737u64;
+            let a: ZecAmount = serde_json::from_str(&max_int_zec.to_string()).unwrap();
+            assert_eq!(a.as_zatoshis(), 18_446_744_073_700_000_000);
+        }
 
-    #[test]
-    fn zecamount_from_integer_string_interpreted_as_zec() {
-        // 2 ZEC
-        let a: ZecAmount = serde_json::from_str(r#""2""#).unwrap();
-        assert_eq!(a.as_zatoshis(), 200_000_000);
-    }
+        #[test]
+        fn zecamount_overflow_on_large_integer_zec() {
+            // Just over the boundary must overflow
+            let too_big = 184_467_440_738u64;
+            let err = serde_json::from_str::<ZecAmount>(&too_big.to_string()).unwrap_err();
+            assert!(err.to_string().contains("overflow"));
+        }
 
-    #[test]
-    fn zecamount_rejects_negative() {
-        let err = serde_json::from_str::<ZecAmount>("-0.1").unwrap_err();
-        assert!(err.to_string().contains("invalid amount") || err.to_string().contains("negative"));
-    }
+        #[test]
+        fn zecamount_serializes_as_decimal_number() {
+            let a = ZecAmount::from_zats(250_000_000); // 2.5 ZEC
+            let s = serde_json::to_string(&a).unwrap();
+            // Parse back and compare as f64 to avoid formatting quirks (e.g., 1e-8)
+            let v: serde_json::Value = serde_json::from_str(&s).unwrap();
+            let f = v.as_f64().unwrap();
+            assert!((f - 2.5).abs() < 1e-12, "serialized {s} parsed {f}");
+        }
 
-    #[test]
-    fn zecamount_rejects_more_than_8_fractional_digits() {
-        let err = serde_json::from_str::<ZecAmount>(r#""1.000000000""#).unwrap_err();
-        assert!(err.to_string().contains("fractional"));
-    }
-
-    #[test]
-    fn zecamount_overflow_on_huge_integer_zec() {
-        // u64::MAX ZEC → multiply by 1e8 should overflow
-        let huge = format!("{}", u64::MAX);
-        let err = serde_json::from_str::<ZecAmount>(&huge).unwrap_err();
-        assert!(
-            err.to_string().contains("overflow"),
-            "expected overflow, got: {err}"
-        );
-    }
-
-    #[test]
-    fn zecamount_boundary_integer_ok() {
-        // Max integer ZEC that fits when scaled: floor(u64::MAX / 1e8)
-        let max_int_zec = 184_467_440_737u64;
-        let a: ZecAmount = serde_json::from_str(&max_int_zec.to_string()).unwrap();
-        assert_eq!(a.as_zatoshis(), 18_446_744_073_700_000_000);
-    }
-
-    #[test]
-    fn zecamount_overflow_on_large_integer_zec() {
-        // Just over the boundary must overflow
-        let too_big = 184_467_440_738u64;
-        let err = serde_json::from_str::<ZecAmount>(&too_big.to_string()).unwrap_err();
-        assert!(err.to_string().contains("overflow"));
-    }
-
-    #[test]
-    fn zecamount_serializes_as_decimal_number() {
-        let a = ZecAmount(250_000_000); // 2.5 ZEC
-        let s = serde_json::to_string(&a).unwrap();
-        // Parse back and compare as f64 to avoid formatting quirks (e.g., 1e-8)
-        let v: serde_json::Value = serde_json::from_str(&s).unwrap();
-        let f = v.as_f64().unwrap();
-        assert!((f - 2.5).abs() < 1e-12, "serialized {s} parsed {f}");
-    }
-
-    #[test]
-    fn zecamount_roundtrip_small_fraction() {
-        // 1 zat
-        let a: ZecAmount = serde_json::from_str(r#""0.00000001""#).unwrap();
-        let s = serde_json::to_string(&a).unwrap();
-        let v: serde_json::Value = serde_json::from_str(&s).unwrap();
-        let f = v.as_f64().unwrap();
-        assert!(
-            (f - 0.00000001f64).abs() < 1e-20,
-            "serialized {s} parsed {f}"
-        );
-        assert_eq!(a.as_zatoshis(), 1);
+        #[test]
+        fn zecamount_roundtrip_small_fraction() {
+            // 1 zat
+            let a: ZecAmount = serde_json::from_str(r#""0.00000001""#).unwrap();
+            let s = serde_json::to_string(&a).unwrap();
+            let v: serde_json::Value = serde_json::from_str(&s).unwrap();
+            let f = v.as_f64().unwrap();
+            assert!(
+                (f - 0.00000001f64).abs() < 1e-20,
+                "serialized {s} parsed {f}"
+            );
+            assert_eq!(a.as_zatoshis(), 1);
+        }
     }
 }
