@@ -304,8 +304,7 @@ mod chain_query_interface {
 
     async fn get_raw_transaction(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(validator, None, true, true, true, true).await;
-            // create_test_manager_and_chain_index(validator, None, true, false, false, true).await;
+            create_test_manager_and_chain_index(validator, None, true, false, false, true).await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
         test_manager.generate_blocks_with_delay(5).await;
