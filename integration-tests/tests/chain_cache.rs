@@ -90,7 +90,6 @@ mod chain_query_interface {
     ) {
         let activation_heights = match validator {
             ValidatorKind::Zebrad => ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
-            // ValidatorKind::Zcashd => ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
             ValidatorKind::Zcashd => ActivationHeights::default(),
         };
 
@@ -300,7 +299,7 @@ mod chain_query_interface {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_raw_transaction_zcashd() {
         get_raw_transaction(&ValidatorKind::Zcashd).await
-    }    
+    }
 
     async fn get_raw_transaction(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
@@ -309,6 +308,12 @@ mod chain_query_interface {
         // this delay had to increase. Maybe we tweak sync loop rerun time?
         test_manager.generate_blocks_with_delay(5).await;
         let snapshot = indexer.snapshot_nonfinalized_state();
+        _chain_index
+            .sync_loop_handle
+            .unwrap()
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(snapshot.as_ref().blocks.len(), 7);
         for (txid, height) in snapshot.blocks.values().flat_map(|block| {
             block
@@ -350,7 +355,7 @@ mod chain_query_interface {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_transaction_status_zcashd() {
         get_transaction_status(&ValidatorKind::Zcashd).await
-    }    
+    }
 
     async fn get_transaction_status(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
@@ -390,7 +395,7 @@ mod chain_query_interface {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn sync_large_chain_zcashd() {
         sync_large_chain(&ValidatorKind::Zcashd).await
-    }    
+    }
 
     async fn sync_large_chain(validator: &ValidatorKind) {
         let (test_manager, json_service, _option_state_service, _chain_index, indexer) =

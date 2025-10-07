@@ -386,7 +386,8 @@ pub struct NodeBackedChainIndex<Source: BlockchainSource = ValidatorConnector> {
     mempool: std::sync::Arc<mempool::Mempool<Source>>,
     non_finalized_state: std::sync::Arc<crate::NonFinalizedState<Source>>,
     finalized_db: std::sync::Arc<finalised_state::ZainoDB>,
-    sync_loop_handle: Option<tokio::task::JoinHandle<Result<(), SyncError>>>,
+    /// TODO: handle task errors
+    pub sync_loop_handle: Option<tokio::task::JoinHandle<Result<(), SyncError>>>,
     status: AtomicStatus,
 }
 
@@ -472,6 +473,7 @@ impl<Source: BlockchainSource> NodeBackedChainIndex<Source> {
         let nfs = self.non_finalized_state.clone();
         let fs = self.finalized_db.clone();
         let status = self.status.clone();
+        // FIXME: sync error breaks loop
         tokio::task::spawn(async move {
             loop {
                 if status.load() == StatusType::Closing {

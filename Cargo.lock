@@ -8512,7 +8512,7 @@ dependencies = [
  "zcash_local_net",
  "zcash_protocol 0.6.1 (git+https://github.com/zcash/librustzcash?rev=d387aed7e04e881dbe30c6ff8b26a96c834c094b)",
  "zebra-chain",
- "zingo_common_components",
+ "zingo_common_components 0.1.0 (git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.0.0)",
  "zingo_netutils 0.1.0 (git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.0.0)",
  "zingo_test_vectors 0.0.1 (git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.0.0)",
  "zingolib",
@@ -8830,7 +8830,7 @@ dependencies = [
 [[package]]
 name = "zcash_local_net"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.0.0#51162c0c603d324a3c36f1cead17bf4680aa1dca"
+source = "git+https://github.com/Oscar-Pepper/infrastructure.git?branch=make_nu6_1_optional#ff4689183074fcee877b9a09f87b9c942149e878"
 dependencies = [
  "getset",
  "hex",
@@ -8850,7 +8850,7 @@ dependencies = [
  "zebra-chain",
  "zebra-node-services",
  "zebra-rpc",
- "zingo_common_components",
+ "zingo_common_components 0.1.0 (git+https://github.com/Oscar-Pepper/infrastructure.git?branch=make_nu6_1_optional)",
 ]
 
 [[package]]
@@ -9571,6 +9571,14 @@ dependencies = [
 name = "zingo_common_components"
 version = "0.1.0"
 source = "git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.0.0#51162c0c603d324a3c36f1cead17bf4680aa1dca"
+dependencies = [
+ "zebra-chain",
+]
+
+[[package]]
+name = "zingo_common_components"
+version = "0.1.0"
+source = "git+https://github.com/Oscar-Pepper/infrastructure.git?branch=make_nu6_1_optional#ff4689183074fcee877b9a09f87b9c942149e878"
 dependencies = [
  "zebra-chain",
 ]

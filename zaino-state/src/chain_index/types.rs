@@ -1406,6 +1406,13 @@ impl
             &zebra_chain::parameters::Network,
         ),
     ) -> Result<Self, Self::Error> {
+        let mut block = block.clone();
+
+        if block.coinbase_height() == Some(zebra_chain::block::Height(1)) {
+            let header = std::sync::Arc::make_mut(&mut block.header);
+            header.commitment_bytes = zebra_chain::fmt::HexDebug::from([0u8; 32]);
+        }
+
         let data = BlockData {
             version: block.header.version,
             time: block.header.time.timestamp(),
@@ -1413,7 +1420,7 @@ impl
             bits: u32::from_be_bytes(block.header.difficulty_threshold.bytes_in_display_order()),
             block_commitments: match block
                 .commitment(network)
-                .map_err(|_| "Block commitment could not be computed".to_string())?
+                .map_err(|e| format!("Block commitment could not be computed\n{e}"))?
             {
                 zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
                 zebra_chain::block::Commitment::FinalSaplingRoot(root) => root.into(),
