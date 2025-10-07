@@ -230,7 +230,7 @@ mod chain_query_interface {
 
     async fn get_block_range(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(validator, None, true, false, false, true).await;
+            create_test_manager_and_chain_index(validator, None, false, false, false, false).await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
         test_manager.generate_blocks_with_delay(5).await;
@@ -272,7 +272,7 @@ mod chain_query_interface {
 
     async fn find_fork_point(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(validator, None, true, false, false, true).await;
+            create_test_manager_and_chain_index(validator, None, false, false, false, false).await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
         test_manager.generate_blocks_with_delay(5).await;
@@ -304,7 +304,7 @@ mod chain_query_interface {
 
     async fn get_raw_transaction(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(validator, None, true, false, false, true).await;
+            create_test_manager_and_chain_index(validator, None, false, false, false, false).await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
         test_manager.generate_blocks_with_delay(5).await;
@@ -354,7 +354,7 @@ mod chain_query_interface {
 
     async fn get_transaction_status(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(validator, None, true, false, false, true).await;
+            create_test_manager_and_chain_index(validator, None, false, false, false, false).await;
         let snapshot = indexer.snapshot_nonfinalized_state();
         // I don't know where this second block is generated. Somewhere in the
         // guts of create_test_manager_and_chain_index
@@ -394,7 +394,7 @@ mod chain_query_interface {
 
     async fn sync_large_chain(validator: &ValidatorKind) {
         let (test_manager, json_service, _option_state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(validator, None, true, false, false, true).await;
+            create_test_manager_and_chain_index(validator, None, false, false, false, false).await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
         test_manager.generate_blocks_with_delay(5).await;
