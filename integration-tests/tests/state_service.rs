@@ -1262,6 +1262,38 @@ mod zebrad {
             test_manager.close().await;
         }
 
+        #[tokio::test]
+        async fn block_subsidy_fails_before_first_halving() {
+            let (
+                test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(services::network::Network::Regtest),
+            )
+            .await;
+
+            const BLOCK_LIMIT: u32 = 10;
+
+            for i in 0..BLOCK_LIMIT {
+                test_manager.local_net.generate_blocks(1).await.unwrap();
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                let fetch_service_block_subsidy =
+                    fetch_service_subscriber.get_block_subsidy(i).await;
+
+                let state_service_block_subsidy =
+                    state_service_subscriber.get_block_subsidy(i).await;
+                assert!(fetch_service_block_subsidy.is_err());
+                assert!(state_service_block_subsidy.is_err());
+            }
+        }
+
         mod z {
             use super::*;
 
