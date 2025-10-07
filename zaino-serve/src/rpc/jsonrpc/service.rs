@@ -1,5 +1,6 @@
 //! Zcash RPC implementations.
 
+use zaino_fetch::jsonrpsee::response::block_subsidy::GetBlockSubsidy;
 use zaino_fetch::jsonrpsee::response::peer_info::GetPeerInfo;
 use zaino_fetch::jsonrpsee::response::GetMempoolInfoResponse;
 use zaino_state::{LightWalletIndexer, ZcashIndexer};
@@ -95,6 +96,9 @@ pub trait ZcashIndexerRpc {
     /// Current `zebrad` does not include the same fields as `zcashd`.
     #[method(name = "getpeerinfo")]
     async fn get_peer_info(&self) -> Result<GetPeerInfo, ErrorObjectOwned>;
+
+    #[method(name = "getblocksubsidy")]
+    async fn get_block_subsidy(&self, height: u32) -> Result<GetBlockSubsidy, ErrorObjectOwned>;
 
     /// Returns the current block count in the best valid block chain.
     ///
@@ -401,6 +405,20 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
         self.service_subscriber
             .inner_ref()
             .get_peer_info()
+            .await
+            .map_err(|e| {
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
+            })
+    }
+
+    async fn get_block_subsidy(&self, height: u32) -> Result<GetBlockSubsidy, ErrorObjectOwned> {
+        self.service_subscriber
+            .inner_ref()
+            .get_block_subsidy(height)
             .await
             .map_err(|e| {
                 ErrorObjectOwned::owned(

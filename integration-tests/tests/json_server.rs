@@ -747,6 +747,26 @@ mod zcashd {
         }
 
         #[tokio::test]
+        async fn get_block_subsidy() {
+            let (
+                mut test_manager,
+                _zcashd_service,
+                zcashd_subscriber,
+                _zaino_service,
+                zaino_subscriber,
+            ) = create_test_manager_and_fetch_services(false, false).await;
+
+            test_manager.local_net.generate_blocks(1).await.unwrap();
+
+            let zcashd_block_subsidy = zcashd_subscriber.get_block_subsidy(1).await.unwrap();
+            let zaino_block_subsidy = zaino_subscriber.get_block_subsidy(1).await.unwrap();
+
+            assert_eq!(zcashd_block_subsidy, zaino_block_subsidy);
+
+            test_manager.close().await;
+        }
+
+        #[tokio::test]
         async fn validate_address() {
             validate_address_inner().await;
         }
