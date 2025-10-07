@@ -145,9 +145,9 @@ impl BlockchainSource for ValidatorConnector {
                 Err(e) => Err(BlockchainSourceError::Unrecoverable(e.to_string())),
             },
             ValidatorConnector::Fetch(fetch) => {
-                match fetch
-                    .get_block(id.to_string(), Some(0))
-                    .await
+                match dbg!(fetch
+                    .get_block(dbg!(id.to_string()), Some(0))
+                    .await)
                 {
                     Ok(GetBlockResponse::Raw(raw_block)) => Ok(Some(Arc::new(
                         zebra_chain::block::Block::zcash_deserialize(raw_block.as_ref())
@@ -157,6 +157,7 @@ impl BlockchainSource for ValidatorConnector {
                     Err(e) => match e {
                         RpcRequestError::Method(GetBlockError::MissingBlock(_)) => Ok(None),
                         RpcRequestError::ServerWorkQueueFull => Err(BlockchainSourceError::Unrecoverable("Work queue full. not yet implemented: handling of ephemeral network errors.".to_string())),
+                        RpcRequestError::Transport(zaino_fetch::jsonrpsee::error::TransportError::ErrorStatusCode(500)) => Ok(None),
                         _ => Err(BlockchainSourceError::Unrecoverable(e.to_string())),
                     },
                 }

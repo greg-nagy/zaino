@@ -90,6 +90,7 @@ mod chain_query_interface {
     ) {
         let activation_heights = match validator {
             ValidatorKind::Zebrad => ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
+            // ValidatorKind::Zcashd => ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
             ValidatorKind::Zcashd => ActivationHeights::default(),
         };
 
