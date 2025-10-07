@@ -640,6 +640,38 @@ async fn assert_fetch_service_peerinfo_matches_rpc(validator: &ValidatorKind) {
     assert_eq!(fetch_service_get_peer_info, rpc_peer_info_response);
 }
 
+async fn fetch_service_get_block_subsidy(validator: &ValidatorKind) {
+    let (test_manager, _fetch_service, fetch_service_subscriber) =
+        create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
+
+    const BLOCK_LIMIT: u32 = 10;
+
+    for i in 0..BLOCK_LIMIT {
+        test_manager.local_net.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        let fetch_service_get_block_subsidy =
+            fetch_service_subscriber.get_block_subsidy(i).await.unwrap();
+
+        let jsonrpc_client = JsonRpSeeConnector::new_with_basic_auth(
+            test_node_and_return_url(
+                test_manager.zebrad_rpc_listen_address,
+                false,
+                None,
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await
+            .unwrap(),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
+        )
+        .unwrap();
+
+        let rpc_block_subsidy_response = jsonrpc_client.get_block_subsidy(i).await.unwrap();
+        assert_eq!(fetch_service_get_block_subsidy, rpc_block_subsidy_response);
+    }
+}
+
 async fn fetch_service_get_block(validator: &ValidatorKind) {
     let (mut test_manager, _fetch_service, fetch_service_subscriber) =
         create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
@@ -1494,6 +1526,11 @@ mod zcashd {
         }
 
         #[tokio::test]
+        pub(crate) async fn block_subsidy() {
+            fetch_service_get_block_subsidy(&ValidatorKind::Zcashd).await;
+        }
+
+        #[tokio::test]
         pub(crate) async fn best_blockhash() {
             fetch_service_get_best_blockhash(&ValidatorKind::Zcashd).await;
         }
@@ -1691,6 +1728,11 @@ mod zebrad {
         #[tokio::test]
         pub(crate) async fn peer_info() {
             assert_fetch_service_peerinfo_matches_rpc(&ValidatorKind::Zebrad).await;
+        }
+
+        #[tokio::test]
+        pub(crate) async fn block_subsidy() {
+            fetch_service_get_block_subsidy(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test]
