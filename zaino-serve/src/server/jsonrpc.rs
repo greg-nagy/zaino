@@ -45,7 +45,7 @@ impl JsonRpcServer {
         };
 
         // Initialize Zebra-compatible cookie-based authentication if enabled.
-        let (cookie, cookie_dir) = if server_config.enable_cookie_auth {
+        let (cookie, cookie_dir) = if server_config.cookie_dir.is_some() {
             let cookie = Cookie::default();
             if let Some(dir) = &server_config.cookie_dir {
                 write_to_disk(&cookie, dir).map_err(|e| {
