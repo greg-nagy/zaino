@@ -14,6 +14,9 @@ use crate::{
 };
 
 /// LightWallet server capable of servicing clients over TCP.
+// TODO rename to gRPC server?
+// also, why no listen address?
+// below, it's taken straight from the config.
 pub struct TonicServer {
     /// Current status of the server.
     pub status: AtomicStatus,
@@ -56,6 +59,7 @@ impl TonicServer {
         };
         let server_future = server_builder
             .add_service(svc)
+            // here, it's taken straight from the config.
             .serve_with_shutdown(server_config.listen_address, shutdown_signal);
 
         let task_status = status.clone();

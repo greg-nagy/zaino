@@ -17,7 +17,7 @@ use tempfile::TempDir;
 use testvectors::{seeds, REG_O_ADDR_FROM_ABANDONART};
 use tracing_subscriber::EnvFilter;
 use zaino_common::{CacheConfig, DatabaseConfig, ServiceConfig, StorageConfig};
-use zaino_serve::server::config::GrpcConfig;
+use zaino_serve::server::{config::{GrpcConfig, JsonRpcConfig}, jsonrpc::JsonRpcServer};
 use zaino_state::BackendType;
 use zainodlib::config::default_ephemeral_cookie_path;
 pub use zingo_infra_services as services;
@@ -350,6 +350,7 @@ impl TestManager {
         network: Option<services::network::Network>,
         chain_cache: Option<PathBuf>,
         enable_zaino: bool,
+        // TODO here
         enable_zaino_jsonrpc_server: bool,
         enable_zaino_jsonrpc_server_cookie_auth: bool,
         zaino_no_sync: bool,
@@ -421,7 +422,13 @@ impl TestManager {
         // Launch Zaino:
         let (
             zaino_grpc_listen_address,
+
+            // TODO there is some mismatch between JsonRpcConfig/JsonRpcServer and GrpcConfig/GrpcServer
+            
+            // TODO this can be set to None [ an Option<ScoketAddr> ]- which is different than our Config type representation
+            // ah! but we are _listening_ here, not serving I think.
             zaino_json_listen_address,
+            // Option<PathBuf> - like our config.
             zaino_json_server_cookie_dir,
             zaino_handle,
         ) = if enable_zaino {
@@ -429,18 +436,28 @@ impl TestManager {
             let zaino_grpc_listen_address =
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), zaino_grpc_listen_port);
 
+            // generating port on the spot
             let zaino_json_listen_port = portpicker::pick_unused_port().expect("No ports free");
+            // set to localhost with the newly generated port
             let zaino_json_listen_address =
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), zaino_json_listen_port);
+            // this cookie dir is generated on the spot, whenever zaino is enabled
             let zaino_json_server_cookie_dir = Some(default_ephemeral_cookie_path());
 
+            // then here we custom-set an entire, whole new config
             let indexer_config = zainodlib::config::IndexerConfig {
                 // TODO: Make configurable.
                 backend: *backend,
-                enable_json_server: enable_zaino_jsonrpc_server,
+                json_server_settings: Some(zaino_serve::server::config::JsonRpcConfig {
+                    
+                    // TODO
+                    // this is the argument to launch, passed in: (meaning Some)
+//                enable_json_server: enable_zaino_jsonrpc_server,
                 json_rpc_listen_address: zaino_json_listen_address,
-                enable_cookie_auth: enable_zaino_jsonrpc_server_cookie_auth,
-                cookie_dir: zaino_json_server_cookie_dir.clone(),
+                    // this an the argument to launch, passed in: (meaning Some)
+//                enable_cookie_auth: enable_zaino_jsonrpc_server_cookie_auth,
+//                cookie_dir: zaino_json_server_cookie_dir.clone(),
+                })
                 grpc_settings: GrpcConfig {
                     listen_address: zaino_grpc_listen_address,
                     tls: None,
@@ -463,21 +480,40 @@ impl TestManager {
                 network: network.into(),
                 no_sync: zaino_no_sync,
             };
+                // TODO we create the handle here, with indexer_config.
+                // I think we could possibly ... spit out the indexer stuff if we need it later, piece by piece?
+                // ie, just return the handle and the config
+                // 
+                // so... we need indexer_config to launch the handle. But maybe we should separate this out?
+                // step one, set config, step two spawn indexer
             let handle = zainodlib::indexer::spawn_indexer(indexer_config)
                 .await
                 .unwrap();
 
             // NOTE: This is required to give the server time to launch, this is not used in production code but could be rewritten to improve testing efficiency.
+            // TODO try decrementing to one? less?
+            // what about with the $(nproc) stuff?
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
             (
                 Some(zaino_grpc_listen_address),
+                // this is also different than the conceived 
                 Some(zaino_json_listen_address),
                 zaino_json_server_cookie_dir,
                 Some(handle),
             )
         } else {
+                // so we already have these types as None
             (None, None, None, None)
         };
+    // TODO find out where the not-joinhandle config-stuff is needed. (two socketaddrs and an Option<Pathbuf>.. )
+    // are all of these in the config?
+
+    // TODO by here we've already generated a JoinHandle.
+    // pub zaino_handle: Option<tokio::task::JoinHandle<Result<(), zainodlib::error::IndexerError>>>,
+    // along with two listen addresses and a cookie_dir.
+    // these should be separated out, I'm almost sure.
+    //
+
 
         // Launch Zingolib Lightclients:
         let clients = if enable_clients {
@@ -614,6 +650,7 @@ impl TestManager {
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), zaino_json_listen_port);
             let zaino_json_server_cookie_dir = Some(default_ephemeral_cookie_path());
 
+            // TODO set this up for refurbish
             let indexer_config = zainodlib::config::IndexerConfig {
                 // TODO: Make configurable.
                 backend: *backend,
