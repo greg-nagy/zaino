@@ -170,7 +170,6 @@ mod zcashd {
 
     #[tokio::test]
     async fn launch_no_db() {
-        std::env::set_var("RUST_BACKTRACE", "1");
         launch_local_cache(&ValidatorKind::Zcashd, true).await;
     }
 
