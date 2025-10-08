@@ -88,10 +88,33 @@ mod chain_query_interface {
         NodeBackedChainIndex,
         NodeBackedChainIndexSubscriber,
     ) {
+        // until zaino is switched over to using chain index we will keep these activation heights separate.
+        // TODO: unify acitvation heights after switchover to chain index
         let activation_heights = match validator {
-            ValidatorKind::Zebrad => ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
-            // ValidatorKind::Zcashd => ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
-            ValidatorKind::Zcashd => ActivationHeights::default(),
+            ValidatorKind::Zebrad => ActivationHeights {
+                overwinter: Some(1),
+                before_overwinter: Some(1),
+                sapling: Some(1),
+                blossom: Some(1),
+                heartwood: Some(1),
+                canopy: Some(1),
+                nu5: Some(2),
+                nu6: Some(2),
+                nu6_1: Some(1000),
+                nu7: None,
+            },
+            ValidatorKind::Zcashd => ActivationHeights {
+                overwinter: Some(1),
+                before_overwinter: Some(1),
+                sapling: Some(1),
+                blossom: Some(1),
+                heartwood: Some(1),
+                canopy: Some(1),
+                nu5: Some(2),
+                nu6: Some(2),
+                nu6_1: Some(2),
+                nu7: None,
+            },
         };
 
         let (test_manager, json_service) = create_test_manager_and_connector(
@@ -167,12 +190,11 @@ mod chain_query_interface {
                     no_db: false,
                 };
                 let chain_index = NodeBackedChainIndex::new(
-                    // ValidatorConnector::State(chain_index::source::State {
-                    //     read_state_service: state_service.read_state_service().clone(),
-                    //     mempool_fetcher: json_service.clone(),
-                    //     network: config.network,
-                    // }),
-                    ValidatorConnector::Fetch(json_service.clone()),
+                    ValidatorConnector::State(chain_index::source::State {
+                        read_state_service: state_service.read_state_service().clone(),
+                        mempool_fetcher: json_service.clone(),
+                        network: config.network,
+                    }),
                     config,
                 )
                 .await
@@ -309,12 +331,6 @@ mod chain_query_interface {
         // this delay had to increase. Maybe we tweak sync loop rerun time?
         test_manager.generate_blocks_with_delay(5).await;
         let snapshot = indexer.snapshot_nonfinalized_state();
-        _chain_index
-            .sync_loop_handle
-            .unwrap()
-            .await
-            .unwrap()
-            .unwrap();
         assert_eq!(snapshot.as_ref().blocks.len(), 7);
         for (txid, height) in snapshot.blocks.values().flat_map(|block| {
             block
@@ -335,6 +351,10 @@ mod chain_query_interface {
                 branch_id,
                 if height == Some(chain_index::types::GENESIS_HEIGHT) {
                     None
+                } else if height == Some(Height::try_from(1).unwrap()) {
+                    zebra_chain::parameters::NetworkUpgrade::Canopy
+                        .branch_id()
+                        .map(u32::from)
                 } else {
                     zebra_chain::parameters::NetworkUpgrade::Nu6
                         .branch_id()

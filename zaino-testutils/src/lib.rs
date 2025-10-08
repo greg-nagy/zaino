@@ -434,7 +434,7 @@ impl TestManager {
                 let mut cfg = ZcashdConfig::default_test();
                 cfg.rpc_listen_port = Some(rpc_listen_port);
                 cfg.configured_activation_heights = activation_heights.into();
-                cfg.chain_cache = chain_cache.clone();               
+                cfg.chain_cache = chain_cache.clone();
                 ValidatorConfig::ZcashdConfig(cfg)
             }
             ValidatorKind::Zebrad => {
