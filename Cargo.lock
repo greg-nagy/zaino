@@ -8512,9 +8512,9 @@ dependencies = [
  "zcash_local_net",
  "zcash_protocol 0.6.1 (git+https://github.com/zcash/librustzcash?rev=d387aed7e04e881dbe30c6ff8b26a96c834c094b)",
  "zebra-chain",
- "zingo_common_components",
- "zingo_netutils 0.1.0 (git+https://github.com/zingolabs/infrastructure.git?branch=file_not_found)",
- "zingo_test_vectors 0.0.1 (git+https://github.com/zingolabs/infrastructure.git?branch=executable_location)",
+ "zingo_common_components 0.1.0 (git+https://github.com/zingolabs/zingo-common.git?tag=zingo_common_components_v0.1.0)",
+ "zingo_netutils 0.1.0 (git+https://github.com/zingolabs/zingo-common.git?tag=zingo_common_components_v0.1.0)",
+ "zingo_test_vectors 0.0.1 (git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.1.0)",
  "zingolib",
  "zip32",
 ]
@@ -8830,7 +8830,7 @@ dependencies = [
 [[package]]
 name = "zcash_local_net"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?branch=executable_location#319d6ebd13957868f398c6ba07f551e0565ca486"
+source = "git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.1.0#9f479fe8610ac15bb67f06d9e65ee37bcfebd228"
 dependencies = [
  "getset",
  "hex",
@@ -8847,7 +8847,7 @@ dependencies = [
  "zebra-chain",
  "zebra-node-services",
  "zebra-rpc",
- "zingo_common_components",
+ "zingo_common_components 0.1.0 (git+https://github.com/zingolabs/zingo-common.git?rev=23814ee904ee64913585c0b8f871c6dbd94504c6)",
 ]
 
 [[package]]
@@ -9567,6 +9567,14 @@ dependencies = [
 [[package]]
 name = "zingo_common_components"
 version = "0.1.0"
+source = "git+https://github.com/zingolabs/zingo-common.git?tag=zingo_common_components_v0.1.0#7407028a9c561561d174740e70170c4c20529bcd"
+dependencies = [
+ "zebra-chain",
+]
+
+[[package]]
+name = "zingo_common_components"
+version = "0.1.0"
 source = "git+https://github.com/zingolabs/zingo-common.git?rev=23814ee904ee64913585c0b8f871c6dbd94504c6#23814ee904ee64913585c0b8f871c6dbd94504c6"
 dependencies = [
  "zebra-chain",
@@ -9575,18 +9583,14 @@ dependencies = [
 [[package]]
 name = "zingo_netutils"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?branch=file_not_found#041ec07127f482aa036d96a2116ef4dbc7ec2109"
+source = "git+https://github.com/zingolabs/zingo-common.git?tag=zingo_common_components_v0.1.0#7407028a9c561561d174740e70170c4c20529bcd"
 dependencies = [
  "http",
  "http-body",
- "http-body-util",
  "hyper",
  "hyper-rustls",
  "hyper-util",
- "prost",
  "thiserror 1.0.69",
- "time",
- "time-core",
  "tokio-rustls",
  "tonic 0.13.1",
  "tower 0.5.2",
@@ -9619,7 +9623,7 @@ dependencies = [
 [[package]]
 name = "zingo_test_vectors"
 version = "0.0.1"
-source = "git+https://github.com/zingolabs/infrastructure.git?branch=executable_location#319d6ebd13957868f398c6ba07f551e0565ca486"
+source = "git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.1.0#9f479fe8610ac15bb67f06d9e65ee37bcfebd228"
 dependencies = [
  "bip0039",
 ]
