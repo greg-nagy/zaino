@@ -66,7 +66,6 @@ mod chain_query_interface {
         },
         Height, StateService, StateServiceConfig, ZcashService as _,
     };
-    use zaino_testutils::ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS;
     use zebra_chain::{
         parameters::NetworkKind,
         serialization::{ZcashDeserialize, ZcashDeserializeInto},
