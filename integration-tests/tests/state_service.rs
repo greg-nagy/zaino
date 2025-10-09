@@ -1251,7 +1251,7 @@ mod zebrad {
                 None,
                 false,
                 false,
-                Some(services::network::Network::Regtest),
+                Some(NetworkKind::Regtest),
             )
             .await;
 
