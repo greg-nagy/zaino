@@ -7,9 +7,10 @@ use zaino_state::BackendType;
 use zaino_testutils::from_inputs;
 use zaino_testutils::TestManager;
 use zaino_testutils::ValidatorKind;
+use zip32::AccountId;
 
 async fn connect_to_node_get_info_for_validator(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::launch(
+    let mut test_manager = TestManager::launch_with_default_activation_heights(
         validator, backend, None, None, true, false, false, true, true, true,
     )
     .await
@@ -26,7 +27,7 @@ async fn connect_to_node_get_info_for_validator(validator: &ValidatorKind, backe
 }
 
 async fn send_to_orchard(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::launch(
+    let mut test_manager = TestManager::launch_with_default_activation_heights(
         validator, backend, None, None, true, false, false, true, true, true,
     )
     .await
@@ -41,7 +42,7 @@ async fn send_to_orchard(validator: &ValidatorKind, backend: &BackendType) {
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
+        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
         test_manager.generate_blocks_with_delay(1).await;
         clients.faucet.sync_and_await().await.unwrap();
     };
@@ -56,10 +57,12 @@ async fn send_to_orchard(validator: &ValidatorKind, backend: &BackendType) {
     assert_eq!(
         clients
             .recipient
-            .do_balance()
+            .account_balance(zip32::AccountId::ZERO)
             .await
-            .orchard_balance
-            .unwrap(),
+            .unwrap()
+            .total_orchard_balance
+            .unwrap()
+            .into_u64(),
         250_000
     );
 
@@ -67,7 +70,7 @@ async fn send_to_orchard(validator: &ValidatorKind, backend: &BackendType) {
 }
 
 async fn send_to_sapling(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::launch(
+    let mut test_manager = TestManager::launch_with_default_activation_heights(
         validator, backend, None, None, true, false, false, true, true, true,
     )
     .await
@@ -82,7 +85,7 @@ async fn send_to_sapling(validator: &ValidatorKind, backend: &BackendType) {
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
+        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
         test_manager.generate_blocks_with_delay(1).await;
         clients.faucet.sync_and_await().await.unwrap();
     };
@@ -97,10 +100,12 @@ async fn send_to_sapling(validator: &ValidatorKind, backend: &BackendType) {
     assert_eq!(
         clients
             .recipient
-            .do_balance()
+            .account_balance(zip32::AccountId::ZERO)
             .await
-            .sapling_balance
-            .unwrap(),
+            .unwrap()
+            .total_sapling_balance
+            .unwrap()
+            .into_u64(),
         250_000
     );
 
@@ -108,7 +113,7 @@ async fn send_to_sapling(validator: &ValidatorKind, backend: &BackendType) {
 }
 
 async fn send_to_transparent(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::launch(
+    let mut test_manager = TestManager::launch_with_default_activation_heights(
         validator, backend, None, None, true, false, false, true, true, true,
     )
     .await
@@ -123,7 +128,7 @@ async fn send_to_transparent(validator: &ValidatorKind, backend: &BackendType) {
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
+        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
         test_manager.generate_blocks_with_delay(1).await;
         clients.faucet.sync_and_await().await.unwrap();
     };
@@ -196,10 +201,12 @@ async fn send_to_transparent(validator: &ValidatorKind, backend: &BackendType) {
     assert_eq!(
         clients
             .recipient
-            .do_balance()
+            .account_balance(zip32::AccountId::ZERO)
             .await
+            .unwrap()
             .confirmed_transparent_balance
-            .unwrap(),
+            .unwrap()
+            .into_u64(),
         250_000
     );
 
@@ -210,7 +217,7 @@ async fn send_to_transparent(validator: &ValidatorKind, backend: &BackendType) {
 }
 
 async fn send_to_all(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::launch(
+    let mut test_manager = TestManager::launch_with_default_activation_heights(
         validator, backend, None, None, true, false, false, true, true, true,
     )
     .await
@@ -227,13 +234,13 @@ async fn send_to_all(validator: &ValidatorKind, backend: &BackendType) {
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
+        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
         test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
+        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
         test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
+        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
         test_manager.generate_blocks_with_delay(1).await;
         clients.faucet.sync_and_await().await.unwrap();
     };
@@ -266,28 +273,34 @@ async fn send_to_all(validator: &ValidatorKind, backend: &BackendType) {
     assert_eq!(
         clients
             .recipient
-            .do_balance()
+            .account_balance(zip32::AccountId::ZERO)
             .await
-            .orchard_balance
-            .unwrap(),
+            .unwrap()
+            .total_orchard_balance
+            .unwrap()
+            .into_u64(),
         250_000
     );
     assert_eq!(
         clients
             .recipient
-            .do_balance()
+            .account_balance(zip32::AccountId::ZERO)
             .await
-            .sapling_balance
-            .unwrap(),
+            .unwrap()
+            .total_sapling_balance
+            .unwrap()
+            .into_u64(),
         250_000
     );
     assert_eq!(
         clients
             .recipient
-            .do_balance()
+            .account_balance(zip32::AccountId::ZERO)
             .await
+            .unwrap()
             .confirmed_transparent_balance
-            .unwrap(),
+            .unwrap()
+            .into_u64(),
         250_000
     );
 
@@ -295,7 +308,7 @@ async fn send_to_all(validator: &ValidatorKind, backend: &BackendType) {
 }
 
 async fn shield_for_validator(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::launch(
+    let mut test_manager = TestManager::launch_with_default_activation_heights(
         validator, backend, None, None, true, false, false, true, true, true,
     )
     .await
@@ -310,7 +323,7 @@ async fn shield_for_validator(validator: &ValidatorKind, backend: &BackendType) 
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
+        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
         test_manager.generate_blocks_with_delay(1).await;
         clients.faucet.sync_and_await().await.unwrap();
     };
@@ -335,24 +348,32 @@ async fn shield_for_validator(validator: &ValidatorKind, backend: &BackendType) 
     assert_eq!(
         clients
             .recipient
-            .do_balance()
+            .account_balance(zip32::AccountId::ZERO)
             .await
+            .unwrap()
             .confirmed_transparent_balance
-            .unwrap(),
+            .unwrap()
+            .into_u64(),
         250_000
     );
 
-    clients.recipient.quick_shield().await.unwrap();
+    clients
+        .recipient
+        .quick_shield(AccountId::ZERO)
+        .await
+        .unwrap();
     test_manager.generate_blocks_with_delay(1).await;
     clients.recipient.sync_and_await().await.unwrap();
 
     assert_eq!(
         clients
             .recipient
-            .do_balance()
+            .account_balance(zip32::AccountId::ZERO)
             .await
-            .orchard_balance
-            .unwrap(),
+            .unwrap()
+            .total_orchard_balance
+            .unwrap()
+            .into_u64(),
         235_000
     );
 
@@ -363,7 +384,7 @@ async fn monitor_unverified_mempool_for_validator(
     validator: &ValidatorKind,
     backend: &BackendType,
 ) {
-    let mut test_manager = TestManager::launch(
+    let mut test_manager = TestManager::launch_with_default_activation_heights(
         validator, backend, None, None, true, false, false, true, true, true,
     )
     .await
@@ -379,10 +400,10 @@ async fn monitor_unverified_mempool_for_validator(
     if matches!(validator, ValidatorKind::Zebrad) {
         test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
+        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
         test_manager.generate_blocks_with_delay(100).await;
         clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
+        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
         test_manager.generate_blocks_with_delay(1).await;
         clients.faucet.sync_and_await().await.unwrap();
     };
@@ -409,7 +430,7 @@ async fn monitor_unverified_mempool_for_validator(
     .unwrap();
 
     println!("\n\nStarting Mempool!\n");
-    clients.recipient.wallet.lock().await.clear_all();
+    clients.recipient.wallet.write().await.clear_all();
     clients.recipient.sync_and_await().await.unwrap();
 
     // test_manager.local_net.print_stdout();
@@ -452,19 +473,23 @@ async fn monitor_unverified_mempool_for_validator(
     assert_eq!(
         clients
             .recipient
-            .do_balance()
+            .account_balance(zip32::AccountId::ZERO)
             .await
-            .unverified_orchard_balance
-            .unwrap(),
+            .unwrap()
+            .unconfirmed_orchard_balance
+            .unwrap()
+            .into_u64(),
         250_000
     );
     assert_eq!(
         clients
             .recipient
-            .do_balance()
+            .account_balance(zip32::AccountId::ZERO)
             .await
-            .unverified_sapling_balance
-            .unwrap(),
+            .unwrap()
+            .unconfirmed_sapling_balance
+            .unwrap()
+            .into_u64(),
         250_000
     );
 
@@ -489,19 +514,23 @@ async fn monitor_unverified_mempool_for_validator(
     assert_eq!(
         clients
             .recipient
-            .do_balance()
+            .account_balance(zip32::AccountId::ZERO)
             .await
-            .verified_orchard_balance
-            .unwrap(),
+            .unwrap()
+            .confirmed_orchard_balance
+            .unwrap()
+            .into_u64(),
         250_000
     );
     assert_eq!(
         clients
             .recipient
-            .do_balance()
+            .account_balance(zip32::AccountId::ZERO)
             .await
-            .verified_sapling_balance
-            .unwrap(),
+            .unwrap()
+            .confirmed_orchard_balance
+            .unwrap()
+            .into_u64(),
         250_000
     );
 
