@@ -376,16 +376,16 @@ async fn try_write_invalid_block() {
 
     // NOTE: Currently using default here.
     let parent_chain_work = ChainWork::from_u256(0.into());
-    let mut chain_block = IndexedBlock::try_from((
-        &zebra_block,
+    let metadata = BlockMetadata::new(
         sapling_root,
         sapling_root_size as u32,
         orchard_root,
         orchard_root_size as u32,
-        &parent_chain_work,
-        &zaino_common::Network::Regtest(ActivationHeights::default()).to_zebra_network(),
-    ))
-    .unwrap();
+        parent_chain_work,
+        zaino_common::Network::Regtest(ActivationHeights::default()).to_zebra_network(),
+    );
+    let mut chain_block =
+        IndexedBlock::try_from(BlockWithMetadata::new(&zebra_block, metadata)).unwrap();
 
     chain_block.index.height = Some(crate::Height(height + 1));
     dbg!(chain_block.index.height);
@@ -969,17 +969,18 @@ async fn check_faucet_spent_map() {
                     )| {
                         // NOTE: Currently using default here.
                         let parent_chain_work = ChainWork::from_u256(0.into());
-                        let chain_block = IndexedBlock::try_from((
-                            zebra_block,
+                        let metadata = BlockMetadata::new(
                             *sapling_root,
                             *sapling_root_size as u32,
                             *orchard_root,
                             *orchard_root_size as u32,
-                            &parent_chain_work,
-                            &zaino_common::Network::Regtest(ActivationHeights::default())
+                            parent_chain_work,
+                            zaino_common::Network::Regtest(ActivationHeights::default())
                                 .to_zebra_network(),
-                        ))
-                        .unwrap();
+                        );
+                        let chain_block =
+                            IndexedBlock::try_from(BlockWithMetadata::new(zebra_block, metadata))
+                                .unwrap();
 
                         chain_block
                             .transactions()
@@ -1127,17 +1128,18 @@ async fn check_recipient_spent_map() {
                     )| {
                         // NOTE: Currently using default here.
                         let parent_chain_work = ChainWork::from_u256(0.into());
-                        let chain_block = IndexedBlock::try_from((
-                            zebra_block,
+                        let metadata = BlockMetadata::new(
                             *sapling_root,
                             *sapling_root_size as u32,
                             *orchard_root,
                             *orchard_root_size as u32,
-                            &parent_chain_work,
-                            &zaino_common::Network::Regtest(ActivationHeights::default())
+                            parent_chain_work,
+                            zaino_common::Network::Regtest(ActivationHeights::default())
                                 .to_zebra_network(),
-                        ))
-                        .unwrap();
+                        );
+                        let chain_block =
+                            IndexedBlock::try_from(BlockWithMetadata::new(zebra_block, metadata))
+                                .unwrap();
 
                         chain_block
                             .transactions()

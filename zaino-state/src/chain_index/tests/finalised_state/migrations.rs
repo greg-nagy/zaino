@@ -138,16 +138,16 @@ async fn v0_to_v1_interrupted() {
         _treestates,
     ) in blocks.clone()
     {
-        let chain_block = IndexedBlock::try_from((
-            &zebra_block,
+        let metadata = BlockMetadata::new(
             sapling_root,
             sapling_root_size as u32,
             orchard_root,
             orchard_root_size as u32,
-            &parent_chain_work,
-            &zaino_common::Network::Regtest(ActivationHeights::default()).to_zebra_network(),
-        ))
-        .unwrap();
+            parent_chain_work,
+            zaino_common::Network::Regtest(ActivationHeights::default()).to_zebra_network(),
+        );
+        let chain_block =
+            IndexedBlock::try_from(BlockWithMetadata::new(&zebra_block, metadata)).unwrap();
         parent_chain_work = *chain_block.chainwork();
 
         zaino_db.write_block(chain_block).await.unwrap();
@@ -266,16 +266,16 @@ async fn v0_to_v1_partial() {
         _treestates,
     ) in blocks.clone()
     {
-        let chain_block = IndexedBlock::try_from((
-            &zebra_block,
+        let metadata = BlockMetadata::new(
             sapling_root,
             sapling_root_size as u32,
             orchard_root,
             orchard_root_size as u32,
-            &parent_chain_work,
-            &zaino_common::Network::Regtest(ActivationHeights::default()).to_zebra_network(),
-        ))
-        .unwrap();
+            parent_chain_work,
+            zaino_common::Network::Regtest(ActivationHeights::default()).to_zebra_network(),
+        );
+        let chain_block =
+            IndexedBlock::try_from(BlockWithMetadata::new(&zebra_block, metadata)).unwrap();
         parent_chain_work = *chain_block.chainwork();
 
         zaino_db.write_block(chain_block).await.unwrap();
