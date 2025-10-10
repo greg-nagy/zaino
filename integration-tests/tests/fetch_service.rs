@@ -576,7 +576,7 @@ async fn fetch_service_get_latest_block(validator: &ValidatorKind) {
         hash: json_service_blockchain_info.best_block_hash.0.to_vec(),
     });
 
-    assert_eq!(fetch_service_get_latest_block.height, 2);
+    assert_eq!(fetch_service_get_latest_block.height, 3);
     assert_eq!(
         fetch_service_get_latest_block,
         json_service_get_latest_block
@@ -647,7 +647,7 @@ async fn fetch_service_get_best_blockhash(validator: &ValidatorKind) {
 
     let inspected_block: GetBlock = fetch_service_subscriber
         // Some(verbosity) : 1 for JSON Object, 2 for tx data as JSON instead of hex
-        .z_get_block("6".to_string(), Some(1))
+        .z_get_block("7".to_string(), Some(1))
         .await
         .unwrap();
 
@@ -675,7 +675,7 @@ async fn fetch_service_get_block_count(validator: &ValidatorKind) {
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
     let block_id = BlockId {
-        height: 6,
+        height: 7,
         hash: Vec::new(),
     };
 

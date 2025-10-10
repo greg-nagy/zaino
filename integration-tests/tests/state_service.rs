@@ -1682,7 +1682,7 @@ mod zebrad {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
             let block = BlockId {
-                height: 102,
+                height: 103,
                 hash: vec![],
             };
             let state_service_block_by_height = state_service_subscriber
