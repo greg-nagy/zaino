@@ -2,7 +2,7 @@
 //!
 //! This module provides types for blockchain indexing, organized into two main categories:
 //!
-//! ## Database Types ([`db`])
+//! ## Database Types
 //! Types that implement `ZainoVersionedSerialise` for database persistence.
 //! These types follow strict versioning rules and require migrations for any changes.
 //!
@@ -13,7 +13,7 @@
 //! - Shielded types: SaplingCompactTx, OrchardCompactTx, etc.
 //! - Primitives: Height, ChainWork, ShardIndex, etc.
 //!
-//! ## Helper Types ([`helpers`])
+//! ## Helper Types
 //! Non-database types for in-memory operations and conversions:
 //! - BestChainLocation, NonBestChainLocation - Transaction location tracking
 //! - TreeRootData - Commitment tree roots wrapper
