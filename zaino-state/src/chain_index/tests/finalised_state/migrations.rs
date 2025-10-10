@@ -54,25 +54,21 @@ async fn v0_to_v1_full() {
 
     // Build v0 database.
     let zaino_db = ZainoDB::spawn(v0_config, source.clone()).await.unwrap();
-    let mut parent_chain_work = ChainWork::from_u256(0.into());
-    for (
-        _h,
-        zebra_block,
-        (sapling_root, sapling_root_size, orchard_root, orchard_root_size),
-        _treestates,
-    ) in blocks.clone()
+    let mut parent_chainwork = ChainWork::from_u256(0.into());
+    for (_h, zebra_block, (sapling_root, sapling_size, orchard_root, orchard_size), _treestates) in
+        blocks.clone()
     {
-        let chain_block = IndexedBlock::try_from((
-            &zebra_block,
+        let metadata = BlockMetadata::new(
             sapling_root,
-            sapling_root_size as u32,
+            sapling_size as u32,
             orchard_root,
-            orchard_root_size as u32,
-            &parent_chain_work,
-            &zaino_common::Network::Regtest(ActivationHeights::default()).to_zebra_network(),
-        ))
-        .unwrap();
-        parent_chain_work = *chain_block.chainwork();
+            orchard_size as u32,
+            parent_chainwork,
+            zaino_common::Network::Regtest(ActivationHeights::default()).to_zebra_network(),
+        );
+        let chain_block =
+            IndexedBlock::try_from(BlockWithMetadata::new(&zebra_block, metadata)).unwrap();
+        parent_chainwork = *chain_block.chainwork();
 
         zaino_db.write_block(chain_block).await.unwrap();
     }
