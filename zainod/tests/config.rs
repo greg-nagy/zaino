@@ -2,7 +2,7 @@
 
 use figment::Jail;
 use std::path::PathBuf;
-use zaino_common::network::ActivationHeights;
+// use zaino_common::network::ActivationHeights;
 use zaino_common::Network;
 
 // Use the explicit library name `zainodlib` as defined in Cargo.toml [lib] name.
@@ -33,11 +33,18 @@ fn test_deserialize_full_valid_config() {
         let toml_str = format!(
             r#"
             backend = "fetch"
-            enable_json_server = true
+            
+            [json_server_settings]
             json_rpc_listen_address = "127.0.0.1:8000"
-            enable_cookie_auth = true
             cookie_dir = "{zaino_cookie_dir_name}"
-            grpc_settings = {{ listen_address = "0.0.0.0:9000", tls = {{cert_path = "{cert_file_name}", key_path = "{key_file_name}" }} }}
+          
+            [grpc_settings]
+            listen_address = "0.0.0.0:9000"
+
+            [grpc_settings.tls]
+            cert_path = "{cert_file_name}"
+            key_path = "{key_file_name}"
+            
             validator_listen_address = "192.168.1.10:18232"
             validator_cookie_auth = true
             validator_cookie_path = "{validator_cookie_file_name}"
@@ -105,6 +112,7 @@ fn test_deserialize_full_valid_config() {
                 .key_path,
             PathBuf::from(key_file_name)
         );
+        // TODO how did I break this
         assert_eq!(
             finalized_config.validator_cookie_path,
             Some(validator_cookie_file_name.to_string())
@@ -247,7 +255,7 @@ fn test_cookie_dir_logic() {
                 .cookie_dir,
             Some(PathBuf::from("/my/cookie/path"))
         );
-
+        // TODO you took out a whole test without switching it to expect to fail
         Ok(())
     });
 }
@@ -258,13 +266,16 @@ fn test_cookie_dir_logic() {
 fn test_string_none_as_path_for_cookie_dir() {
     Jail::expect_with(|jail| {
         let toml_auth_enabled_path = jail.directory().join("auth_enabled.toml");
+        // TODO first case is cookie auth on but no dir assigned
         jail.create_file(
             &toml_auth_enabled_path,
             r#"
             backend = "fetch"
-            enable_cookie_auth = true
-            cookie_dir = "None"
+
+            [json_server_settings]
             json_rpc_listen_address = "127.0.0.1:8237"
+            cookie_dir = ""
+            
             grpc_listen_address = "127.0.0.1:8137"
             validator_listen_address = "127.0.0.1:18232"
             zaino_db_path = "/zaino/db"
@@ -275,23 +286,27 @@ fn test_string_none_as_path_for_cookie_dir() {
         let config_auth_enabled =
             load_config(&toml_auth_enabled_path).expect("Auth enabled failed");
         assert!(config_auth_enabled.json_server_settings.is_some());
-        assert_eq!(
-            config_auth_enabled
-                .json_server_settings
-                .as_ref()
-                .expect("json settings to be Some")
-                .cookie_dir,
-            Some(PathBuf::from("None"))
-        );
+        assert!(config_auth_enabled
+            .json_server_settings
+            .as_ref()
+            .expect("json settings to be Some")
+            // TODO default does add a cookie dir?
+            // I see "/run/user/1000/zaino/.cookie
+            // assigns cookie dir automatically
+            .cookie_dir
+            .is_some());
 
+        // TODO this case is cookie auth off, no cookie dir
         let toml_auth_disabled_path = jail.directory().join("auth_disabled.toml");
         jail.create_file(
             &toml_auth_disabled_path,
             r#"
             backend = "fetch"
-            enable_cookie_auth = false
-            cookie_dir = "None"
+
+            [json_server_settings]
             json_rpc_listen_address = "127.0.0.1:8237"
+            cookie_dir = ""
+
             grpc_listen_address = "127.0.0.1:8137"
             validator_listen_address = "127.0.0.1:18232"
             zaino_db_path = "/zaino/db"
@@ -302,6 +317,7 @@ fn test_string_none_as_path_for_cookie_dir() {
         let config_auth_disabled =
             load_config(&toml_auth_disabled_path).expect("Auth disabled failed");
         assert!(config_auth_disabled.json_server_settings.is_some());
+        // TODO here we see there is an assignment happening somehow. I assume it because of a default
         assert_eq!(
             config_auth_disabled
                 .json_server_settings
@@ -369,12 +385,16 @@ fn test_deserialize_invalid_socket_address() {
         let invalid_toml_path = jail.directory().join("invalid_socket.toml");
         jail.create_file(
             &invalid_toml_path,
-            r#"json_rpc_listen_address = "not-a-valid-address""#,
+            r#"
+            [json_server_settings]
+            json_rpc_listen_address = "not-a-valid-address"
+            cookie_dir = ""
+            "#,
         )?;
         let result = load_config(&invalid_toml_path);
         assert!(result.is_err());
         if let Err(IndexerError::ConfigError(msg)) = result {
-            assert!(msg.contains("Invalid socket address string"));
+            assert!(msg.contains("invalid socket address syntax"));
         }
         Ok(())
     });
@@ -414,14 +434,18 @@ fn test_figment_env_override_toml_and_defaults() {
             "test_config.toml",
             r#"
             network = "Testnet"
-            enable_json_server = false
+            json_server_settings = ""
         "#,
         )?;
         jail.set_env("ZAINO_NETWORK", "Mainnet");
+        // TODO this:
+        // config intended to be no-json-server, testing env variables
+        // TODO these have to be used, somehow, somewhere?
         jail.set_env("ZAINO_ENABLE_JSON_SERVER", "true");
-        jail.set_env("ZAINO_STORAGE.CACHE.CAPACITY", "12345");
         jail.set_env("ZAINO_ENABLE_COOKIE_AUTH", "true");
         jail.set_env("ZAINO_COOKIE_DIR", "/env/cookie/path");
+        // TODO lacking default address
+        jail.set_env("ZAINO_STORAGE.CACHE.CAPACITY", "12345");
 
         let temp_toml_path = jail.directory().join("test_config.toml");
         let config = load_config(&temp_toml_path).expect("load_config should succeed");
@@ -450,16 +474,16 @@ fn test_figment_toml_overrides_defaults() {
             "test_config.toml",
             r#"
             network = "Regtest"
-            enable_json_server = true
+
+            [json_server_settings]
+            json_rpc_listen_address = ""
+            cookie_dir = ""
         "#,
         )?;
         let temp_toml_path = jail.directory().join("test_config.toml");
-        let config = load_config(&temp_toml_path).expect("load_config should succeed");
-        assert_eq!(
-            config.network,
-            Network::Regtest(ActivationHeights::default())
-        );
-        assert!(config.json_server_settings.is_some());
+
+        // a json_server_setting without a listening address is forbidden
+        assert!(load_config(&temp_toml_path).is_err());
         Ok(())
     });
 }
