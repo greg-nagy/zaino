@@ -493,6 +493,7 @@ impl TestManager {
                     // this is the argument to launch, passed in: (meaning Some)
                     //                enable_json_server: enable_zaino_jsonrpc_server,
                     json_rpc_listen_address: zaino_json_listen_address,
+                    cookie_dir: zaino_json_server_cookie_dir.clone(),
                     // this an the argument to launch, passed in: (meaning Some)
                     //                enable_cookie_auth: enable_zaino_jsonrpc_server_cookie_auth,
                     //                cookie_dir: zaino_json_server_cookie_dir.clone(),
