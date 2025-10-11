@@ -18,7 +18,10 @@ use tracing_subscriber::EnvFilter;
 use zaino_common::{
     network::ActivationHeights, CacheConfig, DatabaseConfig, Network, ServiceConfig, StorageConfig,
 };
-use zaino_serve::server::{config::{GrpcConfig, JsonRpcConfig}, jsonrpc::JsonRpcServer};
+use zaino_serve::server::{
+    config::{GrpcConfig, JsonRpcConfig},
+    jsonrpc::JsonRpcServer,
+};
 use zaino_state::BackendType;
 use zainodlib::config::default_ephemeral_cookie_path;
 pub use zcash_local_net as services;
@@ -460,9 +463,8 @@ impl TestManager {
         // Launch Zaino:
         let (
             zaino_grpc_listen_address,
-
             // TODO there is some mismatch between JsonRpcConfig/JsonRpcServer and GrpcConfig/GrpcServer
-            
+
             // TODO this can be set to None [ an Option<ScoketAddr> ]- which is different than our Config type representation
             // ah! but we are _listening_ here, not serving I think.
             zaino_json_listen_address,
@@ -487,15 +489,14 @@ impl TestManager {
                 // TODO: Make configurable.
                 backend: *backend,
                 json_server_settings: Some(zaino_serve::server::config::JsonRpcConfig {
-                    
                     // TODO
                     // this is the argument to launch, passed in: (meaning Some)
-//                enable_json_server: enable_zaino_jsonrpc_server,
-                json_rpc_listen_address: zaino_json_listen_address,
+                    //                enable_json_server: enable_zaino_jsonrpc_server,
+                    json_rpc_listen_address: zaino_json_listen_address,
                     // this an the argument to launch, passed in: (meaning Some)
-//                enable_cookie_auth: enable_zaino_jsonrpc_server_cookie_auth,
-//                cookie_dir: zaino_json_server_cookie_dir.clone(),
-                })
+                    //                enable_cookie_auth: enable_zaino_jsonrpc_server_cookie_auth,
+                    //                cookie_dir: zaino_json_server_cookie_dir.clone(),
+                }),
                 grpc_settings: GrpcConfig {
                     listen_address: zaino_grpc_listen_address,
                     tls: None,
@@ -518,12 +519,12 @@ impl TestManager {
                 network: zaino_network_kind,
                 no_sync: zaino_no_sync,
             };
-                // TODO we create the handle here, with indexer_config.
-                // I think we could possibly ... spit out the indexer stuff if we need it later, piece by piece?
-                // ie, just return the handle and the config
-                // 
-                // so... we need indexer_config to launch the handle. But maybe we should separate this out?
-                // step one, set config, step two spawn indexer
+            // TODO we create the handle here, with indexer_config.
+            // I think we could possibly ... spit out the indexer stuff if we need it later, piece by piece?
+            // ie, just return the handle and the config
+            //
+            // so... we need indexer_config to launch the handle. But maybe we should separate this out?
+            // step one, set config, step two spawn indexer
             let handle = zainodlib::indexer::spawn_indexer(indexer_config)
                 .await
                 .unwrap();
@@ -534,24 +535,23 @@ impl TestManager {
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
             (
                 Some(zaino_grpc_listen_address),
-                // this is also different than the conceived 
+                // this is also different than the conceived
                 Some(zaino_json_listen_address),
                 zaino_json_server_cookie_dir,
                 Some(handle),
             )
         } else {
-                // so we already have these types as None
+            // so we already have these types as None
             (None, None, None, None)
         };
-    // TODO find out where the not-joinhandle config-stuff is needed. (two socketaddrs and an Option<Pathbuf>.. )
-    // are all of these in the config?
+        // TODO find out where the not-joinhandle config-stuff is needed. (two socketaddrs and an Option<Pathbuf>.. )
+        // are all of these in the config?
 
-    // TODO by here we've already generated a JoinHandle.
-    // pub zaino_handle: Option<tokio::task::JoinHandle<Result<(), zainodlib::error::IndexerError>>>,
-    // along with two listen addresses and a cookie_dir.
-    // these should be separated out, I'm almost sure.
-    //
-
+        // TODO by here we've already generated a JoinHandle.
+        // pub zaino_handle: Option<tokio::task::JoinHandle<Result<(), zainodlib::error::IndexerError>>>,
+        // along with two listen addresses and a cookie_dir.
+        // these should be separated out, I'm almost sure.
+        //
 
         // Launch Zingolib Lightclients:
         let clients = if enable_clients {
@@ -630,7 +630,6 @@ impl TestManager {
             enable_zaino_jsonrpc_server,
             enable_zaino_jsonrpc_server_cookie_auth,
             zaino_no_sync,
-            zaino_no_db,
             enable_clients,
         )
         .await
