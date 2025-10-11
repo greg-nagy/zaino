@@ -113,11 +113,7 @@ impl From<GetMiningInfoWire> for MiningInfo {
             current_block_tx: w.current_block_tx,
             network_solution_rate,
             network_hash_rate,
-            chain: if w.chain.is_empty() {
-                "main".into()
-            } else {
-                w.chain
-            },
+            chain: w.chain,
             testnet: w.testnet,
 
             difficulty: w.difficulty,
