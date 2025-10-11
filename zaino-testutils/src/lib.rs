@@ -18,10 +18,7 @@ use tracing_subscriber::EnvFilter;
 use zaino_common::{
     network::ActivationHeights, CacheConfig, DatabaseConfig, Network, ServiceConfig, StorageConfig,
 };
-use zaino_serve::server::{
-    config::{GrpcConfig, JsonRpcConfig},
-    jsonrpc::JsonRpcServer,
-};
+use zaino_serve::server::config::{GrpcConfig, JsonRpcConfig};
 use zaino_state::BackendType;
 use zainodlib::config::default_ephemeral_cookie_path;
 pub use zcash_local_net as services;
@@ -396,8 +393,6 @@ impl TestManager {
         chain_cache: Option<PathBuf>,
         enable_zaino: bool,
         // TODO here
-        enable_zaino_jsonrpc_server: bool,
-        enable_zaino_jsonrpc_server_cookie_auth: bool,
         zaino_no_sync: bool,
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
@@ -488,7 +483,7 @@ impl TestManager {
             let indexer_config = zainodlib::config::IndexerConfig {
                 // TODO: Make configurable.
                 backend: *backend,
-                json_server_settings: Some(zaino_serve::server::config::JsonRpcConfig {
+                json_server_settings: Some(JsonRpcConfig {
                     json_rpc_listen_address: zaino_json_listen_address,
                     cookie_dir: Some(zaino_json_server_cookie_dir.clone()),
                 }),
@@ -618,8 +613,6 @@ impl TestManager {
             Some(activation_heights),
             chain_cache,
             enable_zaino,
-            enable_zaino_jsonrpc_server,
-            enable_zaino_jsonrpc_server_cookie_auth,
             zaino_no_sync,
             enable_clients,
         )

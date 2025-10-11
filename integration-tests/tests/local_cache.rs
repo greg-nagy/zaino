@@ -33,8 +33,6 @@ async fn create_test_manager_and_block_cache(
         Some(activation_heights),
         chain_cache,
         enable_zaino,
-        false,
-        false,
         zaino_no_sync,
         enable_clients,
     )
