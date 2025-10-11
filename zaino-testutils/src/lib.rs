@@ -489,14 +489,8 @@ impl TestManager {
                 // TODO: Make configurable.
                 backend: *backend,
                 json_server_settings: Some(zaino_serve::server::config::JsonRpcConfig {
-                    // TODO
-                    // this is the argument to launch, passed in: (meaning Some)
-                    //                enable_json_server: enable_zaino_jsonrpc_server,
                     json_rpc_listen_address: zaino_json_listen_address,
                     cookie_dir: zaino_json_server_cookie_dir.clone(),
-                    // this an the argument to launch, passed in: (meaning Some)
-                    //                enable_cookie_auth: enable_zaino_jsonrpc_server_cookie_auth,
-                    //                cookie_dir: zaino_json_server_cookie_dir.clone(),
                 }),
                 grpc_settings: GrpcConfig {
                     listen_address: zaino_grpc_listen_address,
