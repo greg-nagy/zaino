@@ -6,18 +6,19 @@ use zaino_state::{
     StateServiceConfig, StateServiceSubscriber, ZcashIndexer, ZcashService as _,
 };
 use zaino_testutils::from_inputs;
-use zaino_testutils::services;
 use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind, ZEBRAD_TESTNET_CACHE_DIR};
+use zebra_chain::parameters::NetworkKind;
 use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetInfo};
+use zip32::AccountId;
 
 async fn create_test_manager_and_services(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
     enable_zaino: bool,
     enable_clients: bool,
-    network: Option<services::network::Network>,
+    network: Option<NetworkKind>,
 ) -> (
     TestManager,
     FetchService,
@@ -25,7 +26,7 @@ async fn create_test_manager_and_services(
     StateService,
     StateServiceSubscriber,
 ) {
-    let test_manager = TestManager::launch(
+    let test_manager = TestManager::launch_with_default_activation_heights(
         validator,
         &BackendType::Fetch,
         network,
@@ -40,12 +41,12 @@ async fn create_test_manager_and_services(
     .unwrap();
 
     let (network_type, zaino_sync_bool) = match network {
-        Some(services::network::Network::Mainnet) => {
+        Some(NetworkKind::Mainnet) => {
             println!("Waiting for validator to spawn..");
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
             (zaino_common::Network::Mainnet, false)
         }
-        Some(services::network::Network::Testnet) => {
+        Some(NetworkKind::Testnet) => {
             println!("Waiting for validator to spawn..");
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
             (zaino_common::Network::Testnet, false)
@@ -139,7 +140,7 @@ async fn create_test_manager_and_services(
 async fn state_service_check_info(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
-    network: services::network::Network,
+    network: NetworkKind,
 ) {
     let (
         mut test_manager,
@@ -285,7 +286,7 @@ async fn state_service_get_address_balance(validator: &ValidatorKind) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
+        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.sync_and_await().await.unwrap();
@@ -301,7 +302,11 @@ async fn state_service_get_address_balance(validator: &ValidatorKind) {
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
     clients.recipient.sync_and_await().await.unwrap();
-    let recipient_balance = clients.recipient.do_balance().await;
+    let recipient_balance = clients
+        .recipient
+        .account_balance(zip32::AccountId::ZERO)
+        .await
+        .unwrap();
 
     let fetch_service_balance = fetch_service_subscriber
         .z_get_address_balance(AddressStrings::new(vec![recipient_taddr.clone()]))
@@ -318,11 +323,17 @@ async fn state_service_get_address_balance(validator: &ValidatorKind) {
     dbg!(&state_service_balance);
 
     assert_eq!(
-        recipient_balance.confirmed_transparent_balance.unwrap(),
+        recipient_balance
+            .confirmed_transparent_balance
+            .unwrap()
+            .into_u64(),
         250_000,
     );
     assert_eq!(
-        recipient_balance.confirmed_transparent_balance.unwrap(),
+        recipient_balance
+            .confirmed_transparent_balance
+            .unwrap()
+            .into_u64(),
         fetch_service_balance.balance(),
     );
     assert_eq!(fetch_service_balance, state_service_balance);
@@ -342,7 +353,7 @@ async fn state_service_get_address_balance_testnet() {
         ZEBRAD_TESTNET_CACHE_DIR.clone(),
         false,
         false,
-        Some(services::network::Network::Testnet),
+        Some(NetworkKind::Testnet),
     )
     .await;
 
@@ -372,7 +383,7 @@ async fn state_service_get_address_balance_testnet() {
 async fn state_service_get_block_raw(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
-    network: services::network::Network,
+    network: NetworkKind,
 ) {
     let (
         mut test_manager,
@@ -383,7 +394,7 @@ async fn state_service_get_block_raw(
     ) = create_test_manager_and_services(validator, chain_cache, false, false, Some(network)).await;
 
     let height = match network {
-        services::network::Network::Regtest => "1".to_string(),
+        NetworkKind::Regtest => "1".to_string(),
         _ => "1000000".to_string(),
     };
 
@@ -405,7 +416,7 @@ async fn state_service_get_block_raw(
 async fn state_service_get_block_object(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
-    network: services::network::Network,
+    network: NetworkKind,
 ) {
     let (
         mut test_manager,
@@ -416,7 +427,7 @@ async fn state_service_get_block_object(
     ) = create_test_manager_and_services(validator, chain_cache, false, false, Some(network)).await;
 
     let height = match network {
-        services::network::Network::Regtest => "1".to_string(),
+        NetworkKind::Regtest => "1".to_string(),
         _ => "1000000".to_string(),
     };
 
@@ -467,11 +478,11 @@ async fn state_service_get_raw_mempool(validator: &ValidatorKind) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
+        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
+        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.sync_and_await().await.unwrap();
@@ -514,7 +525,7 @@ async fn state_service_get_raw_mempool_testnet() {
         ZEBRAD_TESTNET_CACHE_DIR.clone(),
         false,
         false,
-        Some(services::network::Network::Testnet),
+        Some(NetworkKind::Testnet),
     )
     .await;
 
@@ -551,7 +562,7 @@ async fn state_service_z_get_treestate(validator: &ValidatorKind) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
+        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.sync_and_await().await.unwrap();
@@ -592,7 +603,7 @@ async fn state_service_z_get_treestate_testnet() {
         ZEBRAD_TESTNET_CACHE_DIR.clone(),
         false,
         false,
-        Some(services::network::Network::Testnet),
+        Some(NetworkKind::Testnet),
     )
     .await;
 
@@ -634,7 +645,7 @@ async fn state_service_z_get_subtrees_by_index(validator: &ValidatorKind) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
+        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.sync_and_await().await.unwrap();
@@ -675,7 +686,7 @@ async fn state_service_z_get_subtrees_by_index_testnet() {
         ZEBRAD_TESTNET_CACHE_DIR.clone(),
         false,
         false,
-        Some(services::network::Network::Testnet),
+        Some(NetworkKind::Testnet),
     )
     .await;
 
@@ -739,7 +750,7 @@ async fn state_service_get_raw_transaction(validator: &ValidatorKind) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
+        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.sync_and_await().await.unwrap();
@@ -782,7 +793,7 @@ async fn state_service_get_raw_transaction_testnet() {
         ZEBRAD_TESTNET_CACHE_DIR.clone(),
         false,
         false,
-        Some(services::network::Network::Testnet),
+        Some(NetworkKind::Testnet),
     )
     .await;
 
@@ -827,7 +838,7 @@ async fn state_service_get_address_tx_ids(validator: &ValidatorKind) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
+        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.sync_and_await().await.unwrap();
@@ -890,7 +901,7 @@ async fn state_service_get_address_tx_ids_testnet() {
         ZEBRAD_TESTNET_CACHE_DIR.clone(),
         false,
         false,
-        Some(services::network::Network::Testnet),
+        Some(NetworkKind::Testnet),
     )
     .await;
 
@@ -938,7 +949,7 @@ async fn state_service_get_address_utxos(validator: &ValidatorKind) {
         test_manager.local_net.generate_blocks(100).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield().await.unwrap();
+        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
         test_manager.local_net.generate_blocks(1).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         clients.faucet.sync_and_await().await.unwrap();
@@ -993,7 +1004,7 @@ async fn state_service_get_address_utxos_testnet() {
         ZEBRAD_TESTNET_CACHE_DIR.clone(),
         false,
         false,
-        Some(services::network::Network::Testnet),
+        Some(NetworkKind::Testnet),
     )
     .await;
 
@@ -1029,17 +1040,12 @@ mod zebrad {
         use super::*;
         use zaino_testutils::ZEBRAD_CHAIN_CACHE_DIR;
 
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn regtest_no_cache() {
-            state_service_check_info(
-                &ValidatorKind::Zebrad,
-                None,
-                services::network::Network::Regtest,
-            )
-            .await;
+            state_service_check_info(&ValidatorKind::Zebrad, None, NetworkKind::Regtest).await;
         }
 
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn state_service_chaintip_update_subscriber() {
             let (
                 test_manager,
@@ -1052,7 +1058,7 @@ mod zebrad {
                 None,
                 false,
                 false,
-                Some(services::network::Network::Regtest),
+                Some(NetworkKind::Regtest),
             )
             .await;
             let mut chaintip_subscriber = state_service_subscriber.chaintip_update_subscriber();
@@ -1072,24 +1078,24 @@ mod zebrad {
             }
         }
 
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         #[ignore = "We no longer use chain caches. See zcashd::check_info::regtest_no_cache."]
         async fn regtest_with_cache() {
             state_service_check_info(
                 &ValidatorKind::Zebrad,
                 ZEBRAD_CHAIN_CACHE_DIR.clone(),
-                services::network::Network::Regtest,
+                NetworkKind::Regtest,
             )
             .await;
         }
 
         #[ignore = "requires fully synced testnet."]
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn testnet() {
             state_service_check_info(
                 &ValidatorKind::Zebrad,
                 ZEBRAD_TESTNET_CACHE_DIR.clone(),
-                services::network::Network::Testnet,
+                NetworkKind::Testnet,
             )
             .await;
         }
@@ -1099,40 +1105,40 @@ mod zebrad {
 
         use super::*;
 
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn address_utxos() {
             state_service_get_address_utxos(&ValidatorKind::Zebrad).await;
         }
 
         #[ignore = "requires fully synced testnet."]
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn address_utxos_testnet() {
             state_service_get_address_utxos_testnet().await;
         }
 
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn address_tx_ids_regtest() {
             state_service_get_address_tx_ids(&ValidatorKind::Zebrad).await;
         }
 
         #[ignore = "requires fully synced testnet."]
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn address_tx_ids_testnet() {
             state_service_get_address_tx_ids_testnet().await;
         }
 
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn raw_transaction_regtest() {
             state_service_get_raw_transaction(&ValidatorKind::Zebrad).await;
         }
 
         #[ignore = "requires fully synced testnet."]
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn raw_transaction_testnet() {
             state_service_get_raw_transaction_testnet().await;
         }
 
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn best_blockhash() {
             let (
                 test_manager,
@@ -1145,7 +1151,7 @@ mod zebrad {
                 None,
                 false,
                 false,
-                Some(services::network::Network::Regtest),
+                Some(NetworkKind::Regtest),
             )
             .await;
             test_manager.local_net.generate_blocks(2).await.unwrap();
@@ -1158,7 +1164,7 @@ mod zebrad {
             assert_eq!(fetch_service_bbh, state_service_bbh);
         }
 
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn block_count() {
             let (
                 mut test_manager,
@@ -1171,7 +1177,7 @@ mod zebrad {
                 None,
                 false,
                 false,
-                Some(services::network::Network::Regtest),
+                Some(NetworkKind::Regtest),
             )
             .await;
             test_manager.local_net.generate_blocks(2).await.unwrap();
@@ -1186,7 +1192,7 @@ mod zebrad {
             test_manager.close().await;
         }
 
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn difficulty() {
             let (
                 mut test_manager,
@@ -1199,7 +1205,7 @@ mod zebrad {
                 None,
                 false,
                 false,
-                Some(services::network::Network::Regtest),
+                Some(NetworkKind::Regtest),
             )
             .await;
 
@@ -1227,39 +1233,97 @@ mod zebrad {
             test_manager.close().await;
         }
 
+        /// A proper test would boot up multiple nodes at the same time, and ask each node
+        /// for information about its peers. In the current state, this test does nothing.
+        #[tokio::test]
+        async fn peer_info() {
+            let (
+                mut test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(NetworkKind::Regtest),
+            )
+            .await;
+
+            let fetch_service_peer_info = fetch_service_subscriber.get_peer_info().await.unwrap();
+            let state_service_peer_info = state_service_subscriber.get_peer_info().await.unwrap();
+            assert_eq!(fetch_service_peer_info, state_service_peer_info);
+
+            test_manager.close().await;
+        }
+
+        #[tokio::test]
+        async fn block_subsidy_fails_before_first_halving() {
+            let (
+                test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(NetworkKind::Regtest),
+            )
+            .await;
+
+            const BLOCK_LIMIT: u32 = 10;
+
+            for i in 0..BLOCK_LIMIT {
+                test_manager.local_net.generate_blocks(1).await.unwrap();
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                let fetch_service_block_subsidy =
+                    fetch_service_subscriber.get_block_subsidy(i).await;
+
+                let state_service_block_subsidy =
+                    state_service_subscriber.get_block_subsidy(i).await;
+                assert!(fetch_service_block_subsidy.is_err());
+                assert!(state_service_block_subsidy.is_err());
+            }
+        }
+
         mod z {
             use super::*;
 
-            #[tokio::test]
+            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn subtrees_by_index_regtest() {
                 state_service_z_get_subtrees_by_index(&ValidatorKind::Zebrad).await;
             }
 
             #[ignore = "requires fully synced testnet."]
-            #[tokio::test]
+            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn subtrees_by_index_testnet() {
                 state_service_z_get_subtrees_by_index_testnet().await;
             }
 
-            #[tokio::test]
+            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn treestate_regtest() {
                 state_service_z_get_treestate(&ValidatorKind::Zebrad).await;
             }
 
             #[ignore = "requires fully synced testnet."]
-            #[tokio::test]
+            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn treestate_testnet() {
                 state_service_z_get_treestate_testnet().await;
             }
         }
 
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn raw_mempool_regtest() {
             state_service_get_raw_mempool(&ValidatorKind::Zebrad).await;
         }
 
         /// `getmempoolinfo` computed from local Broadcast state
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn get_mempool_info() {
             let (
                 mut test_manager,
@@ -1281,7 +1345,7 @@ mod zebrad {
             test_manager.local_net.generate_blocks(100).await.unwrap();
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             clients.faucet.sync_and_await().await.unwrap();
-            clients.faucet.quick_shield().await.unwrap();
+            clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
             test_manager.local_net.generate_blocks(1).await.unwrap();
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             clients.faucet.sync_and_await().await.unwrap();
@@ -1334,60 +1398,51 @@ mod zebrad {
         }
 
         #[ignore = "requires fully synced testnet."]
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn raw_mempool_testnet() {
             state_service_get_raw_mempool_testnet().await;
         }
 
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn block_object_regtest() {
-            state_service_get_block_object(
-                &ValidatorKind::Zebrad,
-                None,
-                services::network::Network::Regtest,
-            )
-            .await;
+            state_service_get_block_object(&ValidatorKind::Zebrad, None, NetworkKind::Regtest)
+                .await;
         }
 
         #[ignore = "requires fully synced testnet."]
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn block_object_testnet() {
             state_service_get_block_object(
                 &ValidatorKind::Zebrad,
                 ZEBRAD_TESTNET_CACHE_DIR.clone(),
-                services::network::Network::Testnet,
+                NetworkKind::Testnet,
             )
             .await;
         }
 
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn block_raw_regtest() {
-            state_service_get_block_raw(
-                &ValidatorKind::Zebrad,
-                None,
-                services::network::Network::Regtest,
-            )
-            .await;
+            state_service_get_block_raw(&ValidatorKind::Zebrad, None, NetworkKind::Regtest).await;
         }
 
         #[ignore = "requires fully synced testnet."]
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn block_raw_testnet() {
             state_service_get_block_raw(
                 &ValidatorKind::Zebrad,
                 ZEBRAD_TESTNET_CACHE_DIR.clone(),
-                services::network::Network::Testnet,
+                NetworkKind::Testnet,
             )
             .await;
         }
 
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn address_balance_regtest() {
             state_service_get_address_balance(&ValidatorKind::Zebrad).await;
         }
 
         #[ignore = "requires fully synced testnet."]
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn address_balance_testnet() {
             state_service_get_address_balance_testnet().await;
         }
@@ -1401,7 +1456,7 @@ mod zebrad {
         use zebra_rpc::methods::GetAddressTxIdsRequest;
 
         use super::*;
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn get_latest_block() {
             let (
                 test_manager,
@@ -1414,7 +1469,7 @@ mod zebrad {
                 None,
                 false,
                 false,
-                Some(services::network::Network::Regtest),
+                Some(NetworkKind::Regtest),
             )
             .await;
             test_manager.local_net.generate_blocks(1).await.unwrap();
@@ -1427,7 +1482,7 @@ mod zebrad {
             assert_eq!(fetch_service_block, state_service_block);
         }
 
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn get_block() {
             let (
                 test_manager,
@@ -1440,7 +1495,7 @@ mod zebrad {
                 None,
                 false,
                 false,
-                Some(services::network::Network::Regtest),
+                Some(NetworkKind::Regtest),
             )
             .await;
             test_manager.local_net.generate_blocks(2).await.unwrap();
@@ -1473,7 +1528,8 @@ mod zebrad {
             assert_eq!(fetch_service_block_by_hash, state_service_block_by_hash);
             assert_eq!(state_service_block_by_hash, state_service_block_by_height)
         }
-        #[tokio::test]
+
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn get_tree_state() {
             let (
                 test_manager,
@@ -1486,7 +1542,7 @@ mod zebrad {
                 None,
                 false,
                 false,
-                Some(services::network::Network::Regtest),
+                Some(NetworkKind::Regtest),
             )
             .await;
             test_manager.local_net.generate_blocks(2).await.unwrap();
@@ -1509,7 +1565,8 @@ mod zebrad {
                 state_service_treestate_by_height
             );
         }
-        #[tokio::test]
+
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn get_subtree_roots() {
             let (
                 test_manager,
@@ -1522,7 +1579,7 @@ mod zebrad {
                 None,
                 false,
                 false,
-                Some(services::network::Network::Regtest),
+                Some(NetworkKind::Regtest),
             )
             .await;
             test_manager.local_net.generate_blocks(5).await.unwrap();
@@ -1552,7 +1609,8 @@ mod zebrad {
                 state_service_sapling_subtree_roots
             );
         }
-        #[tokio::test]
+
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn get_latest_tree_state() {
             let (
                 test_manager,
@@ -1565,7 +1623,7 @@ mod zebrad {
                 None,
                 false,
                 false,
-                Some(services::network::Network::Regtest),
+                Some(NetworkKind::Regtest),
             )
             .await;
             test_manager.local_net.generate_blocks(2).await.unwrap();
@@ -1594,7 +1652,7 @@ mod zebrad {
                 None,
                 false,
                 false,
-                Some(services::network::Network::Regtest),
+                Some(NetworkKind::Regtest),
             )
             .await;
             test_manager.local_net.generate_blocks(6).await.unwrap();
@@ -1644,15 +1702,17 @@ mod zebrad {
             }
         }
 
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn get_block_range_full() {
             get_block_range_helper(false).await;
         }
-        #[tokio::test]
+
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn get_block_range_nullifiers() {
             get_block_range_helper(true).await;
         }
-        #[tokio::test]
+
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn get_transaction() {
             let (
                 mut test_manager,
@@ -1665,7 +1725,7 @@ mod zebrad {
                 None,
                 true,
                 true,
-                Some(services::network::Network::Regtest),
+                Some(NetworkKind::Regtest),
             )
             .await;
             test_manager.local_net.generate_blocks(100).await.unwrap();
@@ -1676,13 +1736,13 @@ mod zebrad {
                 .take()
                 .expect("Clients are not initialized");
             clients.faucet.sync_and_await().await.unwrap();
-            clients.faucet.quick_shield().await.unwrap();
+            clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
 
             test_manager.local_net.generate_blocks(2).await.unwrap();
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
             let block = BlockId {
-                height: 102,
+                height: 103,
                 hash: vec![],
             };
             let state_service_block_by_height = state_service_subscriber
@@ -1707,7 +1767,7 @@ mod zebrad {
             assert_eq!(fetch_service_raw_transaction, state_service_raw_transaction);
         }
 
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn get_taddress_txids() {
             let (
                 mut test_manager,
@@ -1720,7 +1780,7 @@ mod zebrad {
                 None,
                 true,
                 true,
-                Some(services::network::Network::Regtest),
+                Some(NetworkKind::Regtest),
             )
             .await;
 
@@ -1746,7 +1806,7 @@ mod zebrad {
             assert_eq!(fetch_service_taddress_txids, state_service_taddress_txids);
         }
 
-        #[tokio::test]
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn get_address_utxos_stream() {
             let (
                 mut test_manager,
@@ -1759,7 +1819,7 @@ mod zebrad {
                 None,
                 true,
                 true,
-                Some(services::network::Network::Regtest),
+                Some(NetworkKind::Regtest),
             )
             .await;
 
@@ -1798,14 +1858,15 @@ mod zebrad {
                 fetch_service_address_utxos_streamed.first().unwrap().txid,
                 clients
                     .faucet
-                    .transaction_summaries()
+                    .transaction_summaries(false)
                     .await
                     .unwrap()
                     .txids()[1]
                     .as_ref()
             );
         }
-        #[tokio::test]
+
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn get_address_utxos() {
             let (
                 mut test_manager,
@@ -1818,7 +1879,7 @@ mod zebrad {
                 None,
                 true,
                 true,
-                Some(services::network::Network::Regtest),
+                Some(NetworkKind::Regtest),
             )
             .await;
 
@@ -1852,14 +1913,15 @@ mod zebrad {
                     .txid,
                 clients
                     .faucet
-                    .transaction_summaries()
+                    .transaction_summaries(false)
                     .await
                     .unwrap()
                     .txids()[1]
                     .as_ref()
             );
         }
-        #[tokio::test]
+
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn get_taddress_balance() {
             let (
                 mut test_manager,
@@ -1872,7 +1934,7 @@ mod zebrad {
                 None,
                 true,
                 true,
-                Some(services::network::Network::Regtest),
+                Some(NetworkKind::Regtest),
             )
             .await;
 
