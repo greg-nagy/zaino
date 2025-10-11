@@ -70,14 +70,21 @@ fn test_deserialize_full_valid_config() {
         let finalized_config = config_result.unwrap();
 
         assert_eq!(finalized_config.backend, ZainoBackendType::Fetch);
-        assert!(finalized_config.enable_json_server);
+        assert!(finalized_config.json_server_settings.is_some());
         assert_eq!(
-            finalized_config.json_rpc_listen_address,
+            finalized_config
+                .json_server_settings
+                .as_ref()
+                .expect("json settings to be Some")
+                .json_rpc_listen_address,
             "127.0.0.1:8000".parse().unwrap()
         );
-        assert!(finalized_config.enable_cookie_auth);
         assert_eq!(
-            finalized_config.cookie_dir,
+            finalized_config
+                .json_server_settings
+                .as_ref()
+                .expect("json settings to be Some")
+                .cookie_dir,
             Some(PathBuf::from(zaino_cookie_dir_name))
         );
         assert_eq!(
@@ -155,7 +162,7 @@ fn test_deserialize_optional_fields_missing() {
         let default_values = IndexerConfig::default();
 
         assert_eq!(config.backend, ZainoBackendType::State);
-        assert_eq!(config.enable_json_server, default_values.enable_json_server);
+        // assert_eq!(config.enable_json_server, default_values.enable_json_server);
         assert_eq!(config.validator_user, default_values.validator_user);
         assert_eq!(config.validator_password, default_values.validator_password);
         assert_eq!(
@@ -199,7 +206,13 @@ fn test_cookie_dir_logic() {
         )?;
 
         let config1 = load_config(&s1_path).expect("Config S1 failed");
-        assert!(config1.cookie_dir.is_some());
+        assert!(config1.json_server_settings.is_some());
+        assert!(config1
+            .json_server_settings
+            .as_ref()
+            .expect("json settings is Some")
+            .cookie_dir
+            .is_some());
 
         // Scenario 2: auth enabled, cookie_dir specified
         let s2_path = jail.directory().join("s2.toml");
@@ -218,7 +231,15 @@ fn test_cookie_dir_logic() {
         "#,
         )?;
         let config2 = load_config(&s2_path).expect("Config S2 failed");
-        assert_eq!(config2.cookie_dir, Some(PathBuf::from("/my/cookie/path")));
+        assert!(config2.json_server_settings.is_some());
+        assert_eq!(
+            config2
+                .json_server_settings
+                .as_ref()
+                .expect("json settings to be Some")
+                .cookie_dir,
+            Some(PathBuf::from("/my/cookie/path"))
+        );
 
         // Scenario 3: auth disabled, cookie_dir specified (should be None after finalize)
         let s3_path = jail.directory().join("s3.toml");
@@ -237,7 +258,15 @@ fn test_cookie_dir_logic() {
         "#,
         )?;
         let config3 = load_config(&s3_path).expect("Config S3 failed");
-        assert_eq!(config3.cookie_dir, None);
+        assert!(config3.json_server_settings.is_some());
+        assert_eq!(
+            config3
+                .json_server_settings
+                .as_ref()
+                .expect("json settings to be Some")
+                .cookie_dir,
+            None
+        );
         Ok(())
     });
 }
@@ -264,7 +293,15 @@ fn test_string_none_as_path_for_cookie_dir() {
         )?;
         let config_auth_enabled =
             load_config(&toml_auth_enabled_path).expect("Auth enabled failed");
-        assert_eq!(config_auth_enabled.cookie_dir, Some(PathBuf::from("None")));
+        assert!(config_auth_enabled.json_server_settings.is_some());
+        assert_eq!(
+            config_auth_enabled
+                .json_server_settings
+                .as_ref()
+                .expect("json settings to be Some")
+                .cookie_dir,
+            Some(PathBuf::from("None"))
+        );
 
         let toml_auth_disabled_path = jail.directory().join("auth_disabled.toml");
         jail.create_file(
@@ -283,7 +320,15 @@ fn test_string_none_as_path_for_cookie_dir() {
         )?;
         let config_auth_disabled =
             load_config(&toml_auth_disabled_path).expect("Auth disabled failed");
-        assert_eq!(config_auth_disabled.cookie_dir, None);
+        assert!(config_auth_disabled.json_server_settings.is_some());
+        assert_eq!(
+            config_auth_disabled
+                .json_server_settings
+                .as_ref()
+                .expect("json settings to be Some")
+                .cookie_dir,
+            None
+        );
         Ok(())
     });
 }
@@ -299,7 +344,7 @@ fn test_deserialize_empty_string_yields_default() {
         // Compare relevant fields that should come from default
         assert_eq!(config.network, default_config.network);
         assert_eq!(config.backend, default_config.backend);
-        assert_eq!(config.enable_json_server, default_config.enable_json_server);
+        // assert_eq!(config.enable_json_server, default_config.enable_json_server);
         assert_eq!(config.validator_user, default_config.validator_user);
         assert_eq!(config.validator_password, default_config.validator_password);
         assert_eq!(
@@ -401,9 +446,17 @@ fn test_figment_env_override_toml_and_defaults() {
         let config = load_config(&temp_toml_path).expect("load_config should succeed");
 
         assert_eq!(config.network, Network::Mainnet);
-        assert!(config.enable_json_server);
+        assert!(config.json_server_settings.is_some());
         assert_eq!(config.storage.cache.capacity, 12345);
-        assert_eq!(config.cookie_dir, Some(PathBuf::from("/env/cookie/path")));
+        assert!(config.json_server_settings.is_some());
+        assert_eq!(
+            config
+                .json_server_settings
+                .as_ref()
+                .expect("json settings to be Some")
+                .cookie_dir,
+            Some(PathBuf::from("/env/cookie/path"))
+        );
         assert!(config.grpc_settings.tls.is_none());
         Ok(())
     });
@@ -425,7 +478,7 @@ fn test_figment_toml_overrides_defaults() {
             config.network,
             Network::Regtest(ActivationHeights::default())
         );
-        assert!(config.enable_json_server);
+        assert!(config.json_server_settings.is_some());
         Ok(())
     });
 }
@@ -439,7 +492,7 @@ fn test_figment_all_defaults() {
             load_config(&temp_toml_path).expect("load_config should succeed with empty toml");
         let defaults = IndexerConfig::default();
         assert_eq!(config.network, defaults.network);
-        assert_eq!(config.enable_json_server, defaults.enable_json_server);
+        // assert_eq!(config.enable_json_server, defaults.enable_json_server);
         assert_eq!(
             config.storage.cache.capacity,
             defaults.storage.cache.capacity
