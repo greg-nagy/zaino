@@ -482,7 +482,7 @@ impl TestManager {
             let zaino_json_listen_address =
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), zaino_json_listen_port);
             // this cookie dir is generated on the spot, whenever zaino is enabled
-            let zaino_json_server_cookie_dir = Some(default_ephemeral_cookie_path());
+            let zaino_json_server_cookie_dir = default_ephemeral_cookie_path();
 
             // then here we custom-set an entire, whole new config
             let indexer_config = zainodlib::config::IndexerConfig {
@@ -490,7 +490,7 @@ impl TestManager {
                 backend: *backend,
                 json_server_settings: Some(zaino_serve::server::config::JsonRpcConfig {
                     json_rpc_listen_address: zaino_json_listen_address,
-                    cookie_dir: zaino_json_server_cookie_dir.clone(),
+                    cookie_dir: Some(zaino_json_server_cookie_dir.clone()),
                 }),
                 grpc_settings: GrpcConfig {
                     listen_address: zaino_grpc_listen_address,
@@ -525,18 +525,14 @@ impl TestManager {
                 .unwrap();
 
             // NOTE: This is required to give the server time to launch, this is not used in production code but could be rewritten to improve testing efficiency.
-            // TODO try decrementing to one? less?
-            // what about with the $(nproc) stuff?
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
             (
                 Some(zaino_grpc_listen_address),
-                // this is also different than the conceived
                 Some(zaino_json_listen_address),
-                zaino_json_server_cookie_dir,
+                Some(zaino_json_server_cookie_dir),
                 Some(handle),
             )
         } else {
-            // so we already have these types as None
             (None, None, None, None)
         };
         // TODO find out where the not-joinhandle config-stuff is needed. (two socketaddrs and an Option<Pathbuf>.. )
