@@ -596,8 +596,8 @@ impl TestManager {
         network: Option<NetworkKind>,
         chain_cache: Option<PathBuf>,
         enable_zaino: bool,
-        enable_zaino_jsonrpc_server: bool,
-        enable_zaino_jsonrpc_server_cookie_auth: bool,
+        _enable_zaino_jsonrpc_server: bool,
+        _enable_zaino_jsonrpc_server_cookie_auth: bool,
         zaino_no_sync: bool,
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
