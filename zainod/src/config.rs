@@ -65,6 +65,7 @@ pub struct IndexerConfig {
     pub backend: zaino_state::BackendType,
     // TODO later, create what were called "sections"
     /// Enable JsonRPC server.
+    #[serde(default)]
     pub json_server_settings: Option<JsonRpcConfig>,
     // Some is true
     // pub enable_json_server: bool,

@@ -69,14 +69,16 @@ impl GrpcConfig {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct JsonRpcConfig {
     /// Server bind addr.
-    // TODO for this field, assess #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     // LISTENING address for incoming connections. Do we have a destination address,
     // or is that simply a port for our full node?
+    // TODO for this field, assess
+    // #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     pub json_rpc_listen_address: SocketAddr,
 
     // TODO this is the field that actually is the same in the server as the config. Should we these separate?
     // If cookie_dir is Some, cookie auth is on.
     // An empty PathBuf will have an emphemeral path assigned to it when zaino loads the config.
     /// Directory to store authentication cookie file.
+    #[serde(default)]
     pub cookie_dir: Option<PathBuf>,
 }
