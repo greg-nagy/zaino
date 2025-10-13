@@ -599,6 +599,7 @@ impl TestManager {
         _enable_zaino_jsonrpc_server: bool,
         _enable_zaino_jsonrpc_server_cookie_auth: bool,
         zaino_no_sync: bool,
+        // no db
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
         let activation_heights = match validator {
