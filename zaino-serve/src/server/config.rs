@@ -82,3 +82,13 @@ pub struct JsonRpcConfig {
     #[serde(default)]
     pub cookie_dir: Option<PathBuf>,
 }
+
+impl Default for JsonRpcConfig {
+    fn default() -> Self {
+        Self {
+        json_rpc_listen_address:
+        // Safe, minimally connectable default: loopback with ephemeral port
+        "127.0.0.1:0".parse().unwrap(),
+        cookie_dir: None }
+    }
+}
