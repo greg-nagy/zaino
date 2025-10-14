@@ -350,7 +350,7 @@ impl Clients {
     }
 }
 
-/// Configuration data for Zingo-Indexer Tests.
+/// Configuration data for Zaino Tests.
 pub struct TestManager {
     /// Zcash-local-net.
     pub local_net: LocalNet,
@@ -359,14 +359,14 @@ pub struct TestManager {
     /// Network (chain) type:
     pub network: NetworkKind,
     /// Zebrad/Zcashd JsonRpc listen address.
-    pub zebrad_rpc_listen_address: SocketAddr,
+    pub full_node_rpc_listen_address: SocketAddr,
     /// Zebrad/Zcashd gRpc listen address.
-    pub zebrad_grpc_listen_address: SocketAddr,
+    pub full_node_grpc_listen_address: SocketAddr,
     /// Zaino Indexer JoinHandle.
     pub zaino_handle: Option<tokio::task::JoinHandle<Result<(), zainodlib::error::IndexerError>>>,
-    /// Zingo-Indexer JsonRPC listen address.
+    /// Zaino JsonRPC listen address.
     pub zaino_json_rpc_listen_address: Option<SocketAddr>,
-    /// Zingo-Indexer gRPC listen address.
+    /// Zaino gRPC listen address.
     pub zaino_grpc_listen_address: Option<SocketAddr>,
     /// JsonRPC server cookie dir.
     pub json_server_cookie_dir: Option<PathBuf>,
@@ -423,9 +423,9 @@ impl TestManager {
         // Launch LocalNet:
         let rpc_listen_port = portpicker::pick_unused_port().expect("No ports free");
         let grpc_listen_port = portpicker::pick_unused_port().expect("No ports free");
-        let zebrad_rpc_listen_address =
+        let full_node_rpc_listen_address =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rpc_listen_port);
-        let zebrad_grpc_listen_address =
+        let full_node_grpc_listen_address =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), grpc_listen_port);
 
         let validator_config = match validator {
@@ -491,8 +491,8 @@ impl TestManager {
                     listen_address: zaino_grpc_listen_address,
                     tls: None,
                 },
-                validator_listen_address: zebrad_rpc_listen_address,
-                validator_grpc_listen_address: zebrad_grpc_listen_address,
+                validator_listen_address: full_node_rpc_listen_address,
+                validator_grpc_listen_address: full_node_grpc_listen_address,
                 validator_cookie_auth: false,
                 validator_cookie_path: None,
                 validator_user: Some("xxxxxx".to_string()),
@@ -572,8 +572,8 @@ impl TestManager {
             local_net,
             data_dir,
             network: network_kind,
-            zebrad_rpc_listen_address,
-            zebrad_grpc_listen_address,
+            full_node_rpc_listen_address,
+            full_node_grpc_listen_address,
             zaino_handle,
             zaino_json_rpc_listen_address: zaino_json_listen_address,
             zaino_grpc_listen_address,
