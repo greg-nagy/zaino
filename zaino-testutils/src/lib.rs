@@ -18,7 +18,7 @@ use tracing_subscriber::EnvFilter;
 use zaino_common::{
     network::ActivationHeights, CacheConfig, DatabaseConfig, Network, ServiceConfig, StorageConfig,
 };
-use zaino_serve::server::config::{GrpcConfig, JsonRpcConfig};
+use zaino_serve::server::config::{GrpcConfig, JsonRpcServerConfig};
 use zaino_state::BackendType;
 use zainodlib::config::default_ephemeral_cookie_path;
 pub use zcash_local_net as services;
@@ -486,7 +486,7 @@ impl TestManager {
                 // TODO: Make configurable.
                 backend: *backend,
                 json_server_settings: if enable_zaino_jsonrpc_server {
-                    Some(JsonRpcConfig {
+                    Some(JsonRpcServerConfig {
                         json_rpc_listen_address: zaino_json_listen_address,
                         cookie_dir: if enable_zaino_jsonrpc_server_cookie_auth {
                             Some(zaino_json_server_cookie_dir.clone())
