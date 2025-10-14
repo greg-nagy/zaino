@@ -67,10 +67,9 @@ impl GrpcConfig {
 
 /// Configuration data for Zaino's JSON RPC server.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-pub struct JsonRpcConfig {
+pub struct JsonRpcServerConfig {
     /// Server bind addr.
-    // LISTENING address for incoming connections. Do we have a destination address,
-    // or is that simply a port for our full node?
+    // LISTENING address for incoming connections.
     // TODO for this field, assess
     // #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     pub json_rpc_listen_address: SocketAddr,
@@ -83,7 +82,7 @@ pub struct JsonRpcConfig {
     pub cookie_dir: Option<PathBuf>,
 }
 
-impl Default for JsonRpcConfig {
+impl Default for JsonRpcServerConfig {
     fn default() -> Self {
         Self {
         json_rpc_listen_address:
