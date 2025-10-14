@@ -392,7 +392,9 @@ impl TestManager {
         activation_heights: Option<ActivationHeights>,
         chain_cache: Option<PathBuf>,
         enable_zaino: bool,
-        // TODO here
+        // TODO the following two fields involve zaino's json RPC server
+        enable_zaino_jsonrpc_server: bool,
+        enable_zaino_jsonrpc_server_cookie_auth: bool,
         zaino_no_sync: bool,
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
@@ -483,6 +485,8 @@ impl TestManager {
             let indexer_config = zainodlib::config::IndexerConfig {
                 // TODO: Make configurable.
                 backend: *backend,
+                // TODO this needs to be conditional
+                // use Builder pattern
                 json_server_settings: Some(JsonRpcConfig {
                     json_rpc_listen_address: zaino_json_listen_address,
                     cookie_dir: Some(zaino_json_server_cookie_dir.clone()),
@@ -497,11 +501,13 @@ impl TestManager {
                 validator_cookie_path: None,
                 validator_user: Some("xxxxxx".to_string()),
                 validator_password: Some("xxxxxx".to_string()),
+                // TODO also deafault() by hazel a month ago
                 service: ServiceConfig::default(),
                 storage: StorageConfig {
                     cache: CacheConfig::default(),
                     database: DatabaseConfig {
                         path: zaino_db_path,
+                        // TODO this is using default pattern... by hazel a month ago..
                         ..Default::default()
                     },
                 },
@@ -589,6 +595,7 @@ impl TestManager {
     }
 
     /// Helper function to support default test case.
+    // TODO this is impl TestManager
     #[allow(clippy::too_many_arguments)]
     pub async fn launch_with_default_activation_heights(
         validator: &ValidatorKind,
