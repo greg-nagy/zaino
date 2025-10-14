@@ -40,7 +40,7 @@ async fn create_test_manager_and_fetch_services(
 
     println!("Launching zcashd fetch service..");
     let zcashd_fetch_service = FetchService::spawn(FetchServiceConfig::new(
-        test_manager.zebrad_rpc_listen_address,
+        test_manager.full_node_rpc_listen_address,
         false,
         None,
         None,

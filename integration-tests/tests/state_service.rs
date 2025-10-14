@@ -60,7 +60,7 @@ async fn create_test_manager_and_services(
     test_manager.local_net.print_stdout();
 
     let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-        test_manager.zebrad_rpc_listen_address,
+        test_manager.full_node_rpc_listen_address,
         false,
         None,
         None,
@@ -99,8 +99,8 @@ async fn create_test_manager_and_services(
             debug_stop_at_height: None,
             debug_validity_check_interval: None,
         },
-        test_manager.zebrad_rpc_listen_address,
-        test_manager.zebrad_grpc_listen_address,
+        test_manager.full_node_rpc_listen_address,
+        test_manager.full_node_grpc_listen_address,
         false,
         None,
         None,

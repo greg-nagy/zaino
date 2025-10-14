@@ -26,7 +26,7 @@ async fn create_test_manager_and_connector(
 
     let json_service = JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
-            test_manager.zebrad_rpc_listen_address,
+            test_manager.full_node_rpc_listen_address,
             false,
             None,
             Some("xxxxxx".to_string()),
@@ -142,8 +142,8 @@ mod chain_query_interface {
                         debug_stop_at_height: None,
                         debug_validity_check_interval: None,
                     },
-                    test_manager.zebrad_rpc_listen_address,
-                    test_manager.zebrad_grpc_listen_address,
+                    test_manager.full_node_rpc_listen_address,
+                    test_manager.full_node_grpc_listen_address,
                     false,
                     None,
                     None,

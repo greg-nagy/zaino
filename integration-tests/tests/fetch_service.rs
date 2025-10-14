@@ -43,7 +43,7 @@ async fn create_test_manager_and_fetch_service(
     .unwrap();
 
     let fetch_service = FetchService::spawn(FetchServiceConfig::new(
-        test_manager.zebrad_rpc_listen_address,
+        test_manager.full_node_rpc_listen_address,
         false,
         None,
         None,
@@ -184,7 +184,7 @@ async fn fetch_service_get_raw_mempool(validator: &ValidatorKind) {
 
     let json_service = JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
-            test_manager.zebrad_rpc_listen_address,
+            test_manager.full_node_rpc_listen_address,
             false,
             None,
             Some("xxxxxx".to_string()),
@@ -554,7 +554,7 @@ async fn fetch_service_get_latest_block(validator: &ValidatorKind) {
 
     let json_service = JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
-            test_manager.zebrad_rpc_listen_address,
+            test_manager.full_node_rpc_listen_address,
             false,
             None,
             Some("xxxxxx".to_string()),
@@ -594,7 +594,7 @@ async fn assert_fetch_service_difficulty_matches_rpc(validator: &ValidatorKind) 
 
     let jsonrpc_client = JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
-            test_manager.zebrad_rpc_listen_address,
+            test_manager.full_node_rpc_listen_address,
             false,
             None,
             Some("xxxxxx".to_string()),
@@ -619,7 +619,7 @@ async fn assert_fetch_service_peerinfo_matches_rpc(validator: &ValidatorKind) {
 
     let jsonrpc_client = JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
-            test_manager.zebrad_rpc_listen_address,
+            test_manager.full_node_rpc_listen_address,
             false,
             None,
             Some("xxxxxx".to_string()),
@@ -653,7 +653,7 @@ async fn fetch_service_get_block_subsidy(validator: &ValidatorKind) {
 
         let jsonrpc_client = JsonRpSeeConnector::new_with_basic_auth(
             test_node_and_return_url(
-                test_manager.zebrad_rpc_listen_address,
+                test_manager.full_node_rpc_listen_address,
                 false,
                 None,
                 Some("xxxxxx".to_string()),
@@ -1422,7 +1422,7 @@ async fn assert_fetch_service_getnetworksols_matches_rpc(validator: &ValidatorKi
 
     let jsonrpc_client = JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
-            test_manager.zebrad_rpc_listen_address,
+            test_manager.full_node_rpc_listen_address,
             false,
             None,
             Some("xxxxxx".to_string()),
