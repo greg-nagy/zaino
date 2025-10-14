@@ -485,12 +485,18 @@ impl TestManager {
             let indexer_config = zainodlib::config::IndexerConfig {
                 // TODO: Make configurable.
                 backend: *backend,
-                // TODO this needs to be conditional
-                // use Builder pattern
-                json_server_settings: Some(JsonRpcConfig {
-                    json_rpc_listen_address: zaino_json_listen_address,
-                    cookie_dir: Some(zaino_json_server_cookie_dir.clone()),
-                }),
+                json_server_settings: if enable_zaino_jsonrpc_server {
+                    Some(JsonRpcConfig {
+                        json_rpc_listen_address: zaino_json_listen_address,
+                        cookie_dir: if enable_zaino_jsonrpc_server_cookie_auth {
+                            Some(zaino_json_server_cookie_dir.clone())
+                        } else {
+                            None
+                        },
+                    })
+                } else {
+                    None
+                },
                 grpc_settings: GrpcConfig {
                     listen_address: zaino_grpc_listen_address,
                     tls: None,
@@ -501,13 +507,11 @@ impl TestManager {
                 validator_cookie_path: None,
                 validator_user: Some("xxxxxx".to_string()),
                 validator_password: Some("xxxxxx".to_string()),
-                // TODO also deafault() by hazel a month ago
                 service: ServiceConfig::default(),
                 storage: StorageConfig {
                     cache: CacheConfig::default(),
                     database: DatabaseConfig {
                         path: zaino_db_path,
-                        // TODO this is using default pattern... by hazel a month ago..
                         ..Default::default()
                     },
                 },
