@@ -460,12 +460,8 @@ impl TestManager {
         // Launch Zaino:
         let (
             zaino_grpc_listen_address,
-            // TODO there is some mismatch between JsonRpcConfig/JsonRpcServer and GrpcConfig/GrpcServer
-
-            // TODO this can be set to None [ an Option<ScoketAddr> ]- which is different than our Config type representation
-            // ah! but we are _listening_ here, not serving I think.
+            // TODO there is some mismatch between JsonRpcServerConfig/JsonRpcServer and GrpcConfig/GrpcServer
             zaino_json_listen_address,
-            // Option<PathBuf> - like our config.
             zaino_json_server_cookie_dir,
             zaino_handle,
         ) = if enable_zaino {
@@ -607,8 +603,8 @@ impl TestManager {
         network: Option<NetworkKind>,
         chain_cache: Option<PathBuf>,
         enable_zaino: bool,
-        _enable_zaino_jsonrpc_server: bool,
-        _enable_zaino_jsonrpc_server_cookie_auth: bool,
+        enable_zaino_jsonrpc_server: bool,
+        enable_zaino_jsonrpc_server_cookie_auth: bool,
         zaino_no_sync: bool,
         // no db
         enable_clients: bool,
@@ -625,6 +621,8 @@ impl TestManager {
             Some(activation_heights),
             chain_cache,
             enable_zaino,
+            enable_zaino_jsonrpc_server,
+            enable_zaino_jsonrpc_server_cookie_auth,
             zaino_no_sync,
             enable_clients,
         )
