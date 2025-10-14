@@ -21,7 +21,7 @@ use tracing::{error, info};
 use zaino_common::{
     CacheConfig, DatabaseConfig, DatabaseSize, Network, ServiceConfig, StorageConfig,
 };
-use zaino_serve::server::config::{GrpcConfig, JsonRpcConfig};
+use zaino_serve::server::config::{GrpcConfig, JsonRpcServerConfig};
 use zaino_state::{BackendConfig, FetchServiceConfig, StateServiceConfig};
 
 use crate::error::IndexerError;
@@ -66,7 +66,7 @@ pub struct IndexerConfig {
     // TODO later, create what were called "sections"
     /// Enable JsonRPC server.
     #[serde(default)]
-    pub json_server_settings: Option<JsonRpcConfig>,
+    pub json_server_settings: Option<JsonRpcServerConfig>,
     // Some is true
     // pub enable_json_server: bool,
     // /// Server bind addr.
