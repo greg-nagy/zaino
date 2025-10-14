@@ -18,6 +18,8 @@ async fn create_test_manager_and_connector(
         activation_heights,
         chain_cache,
         enable_zaino,
+        false, //enable_zaino_jsonrpc_server: bool,
+        false, //enable_zaino_jsonrpc_server_cookie_auth: bool,
         zaino_no_sync,
         enable_clients,
     )
