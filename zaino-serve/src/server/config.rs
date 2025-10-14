@@ -65,7 +65,7 @@ impl GrpcConfig {
     }
 }
 
-/// Configuration data for Zaino's JSON RPC server.
+/// Configuration data for Zaino's JSON RPC server, capable of servicing clients over TCP.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct JsonRpcServerConfig {
     /// Server bind addr.
