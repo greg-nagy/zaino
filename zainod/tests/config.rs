@@ -33,18 +33,18 @@ fn test_deserialize_full_valid_config() {
         let toml_str = format!(
             r#"
             backend = "fetch"
-            
+
             [json_server_settings]
             json_rpc_listen_address = "127.0.0.1:8000"
             cookie_dir = "{zaino_cookie_dir_name}"
-          
+
             [grpc_settings]
             listen_address = "0.0.0.0:9000"
 
             [grpc_settings.tls]
             cert_path = "{cert_file_name}"
             key_path = "{key_file_name}"
-            
+
             validator_listen_address = "192.168.1.10:18232"
             validator_cookie_auth = true
             validator_cookie_path = "{validator_cookie_file_name}"
@@ -208,7 +208,7 @@ fn test_cookie_dir_logic() {
             [json_server_settings]
             json_rpc_listen_address = "127.0.0.1:8237"
             cookie_dir = ""
-            
+
             grpc_listen_address = "127.0.0.1:8137"
             validator_listen_address = "127.0.0.1:18232"
             zaino_db_path = "/zaino/db"
@@ -233,11 +233,11 @@ fn test_cookie_dir_logic() {
             // removed auth - now we handle this with Some / None
             r#"
             backend = "fetch"
-            
+
             [json_server_settings]
             json_rpc_listen_address = "127.0.0.1:8237"
             cookie_dir = "/my/cookie/path"
-            
+
             grpc_listen_address = "127.0.0.1:8137"
             validator_listen_address = "127.0.0.1:18232"
             zaino_db_path = "/zaino/db"
@@ -275,7 +275,7 @@ fn test_string_none_as_path_for_cookie_dir() {
             [json_server_settings]
             json_rpc_listen_address = "127.0.0.1:8237"
             cookie_dir = ""
-            
+
             grpc_listen_address = "127.0.0.1:8137"
             validator_listen_address = "127.0.0.1:18232"
             zaino_db_path = "/zaino/db"
