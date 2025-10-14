@@ -33,18 +33,6 @@ fn test_deserialize_full_valid_config() {
         let toml_str = format!(
             r#"
             backend = "fetch"
-
-            [json_server_settings]
-            json_rpc_listen_address = "127.0.0.1:8000"
-            cookie_dir = "{zaino_cookie_dir_name}"
-
-            [grpc_settings]
-            listen_address = "0.0.0.0:9000"
-
-            [grpc_settings.tls]
-            cert_path = "{cert_file_name}"
-            key_path = "{key_file_name}"
-
             validator_listen_address = "192.168.1.10:18232"
             validator_cookie_auth = true
             validator_cookie_path = "{validator_cookie_file_name}"
@@ -57,6 +45,17 @@ fn test_deserialize_full_valid_config() {
             no_sync = false
             no_db = false
             slow_sync = false
+
+            [json_server_settings]
+            json_rpc_listen_address = "127.0.0.1:8000"
+            cookie_dir = "{zaino_cookie_dir_name}"
+
+            [grpc_settings]
+            listen_address = "0.0.0.0:9000"
+
+            [grpc_settings.tls]
+            cert_path = "{cert_file_name}"
+            key_path = "{key_file_name}"
         "#
         );
 
@@ -112,7 +111,6 @@ fn test_deserialize_full_valid_config() {
                 .key_path,
             PathBuf::from(key_file_name)
         );
-        // TODO how did I break this
         assert_eq!(
             finalized_config.validator_cookie_path,
             Some(validator_cookie_file_name.to_string())
@@ -143,7 +141,7 @@ fn test_deserialize_full_valid_config() {
             128 * 1024 * 1024 * 1024
         );
         assert!(!finalized_config.no_sync);
-        // assert finalized config > 0
+        // TODO  assert finalized config > 0
         //assert!(!finalized_config.no_db);
 
         Ok(())
@@ -271,16 +269,15 @@ fn test_string_none_as_path_for_cookie_dir() {
             &toml_auth_enabled_path,
             r#"
             backend = "fetch"
-
-            [json_server_settings]
-            json_rpc_listen_address = "127.0.0.1:8237"
-            cookie_dir = ""
-
             grpc_listen_address = "127.0.0.1:8137"
             validator_listen_address = "127.0.0.1:18232"
             zaino_db_path = "/zaino/db"
             zebra_db_path = "/zebra/db"
             network = "Testnet"
+
+            [json_server_settings]
+            json_rpc_listen_address = "127.0.0.1:8237"
+            cookie_dir = ""
         "#,
         )?;
         let config_auth_enabled =
@@ -434,7 +431,7 @@ fn test_figment_env_override_toml_and_defaults() {
             "test_config.toml",
             r#"
             network = "Testnet"
-            json_server_settings = ""
+            json_server_settings = "/replaceme"
         "#,
         )?;
         jail.set_env("ZAINO_NETWORK", "Mainnet");
