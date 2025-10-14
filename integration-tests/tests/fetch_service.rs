@@ -1413,7 +1413,7 @@ async fn fetch_service_get_lightd_info(validator: &ValidatorKind) {
 
 async fn assert_fetch_service_getnetworksols_matches_rpc(validator: &ValidatorKind) {
     let (test_manager, _fetch_service, fetch_service_subscriber) =
-        create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
+        create_test_manager_and_fetch_service(validator, None, true, true, true).await;
 
     let fetch_service_get_networksolps = fetch_service_subscriber
         .get_network_sol_ps(None, None)
