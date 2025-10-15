@@ -2,7 +2,7 @@
 
 use figment::Jail;
 use std::path::PathBuf;
-use zaino_common::Network;
+use zaino_common::{DatabaseSize, Network};
 
 // Use the explicit library name `zainodlib` as defined in Cargo.toml [lib] name.
 use zainodlib::config::{load_config, IndexerConfig};
@@ -140,8 +140,10 @@ fn test_deserialize_full_valid_config() {
             128 * 1024 * 1024 * 1024
         );
         assert!(!finalized_config.no_sync);
-        // TODO  assert finalized config > 0
-        //assert!(!finalized_config.no_db);
+        assert!(match finalized_config.storage.database.size {
+            DatabaseSize::Gb(0) => false,
+            DatabaseSize::Gb(_) => true,
+        });
 
         Ok(())
     });
