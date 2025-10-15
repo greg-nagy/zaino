@@ -25,12 +25,12 @@ use zebra_rpc::client::ValidateAddressResponse;
 use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
     response::{
-        block_subsidy::GetBlockSubsidy, peer_info::GetPeerInfo, GetBalanceError,
-        GetBalanceResponse, GetBlockCountResponse, GetBlockError, GetBlockHash, GetBlockResponse,
-        GetBlockchainInfoResponse, GetInfoResponse, GetMempoolInfoResponse, GetSubtreesError,
-        GetSubtreesResponse, GetTransactionResponse, GetTreestateError, GetTreestateResponse,
-        GetUtxosError, GetUtxosResponse, SendTransactionError, SendTransactionResponse, TxidsError,
-        TxidsResponse,
+        block_header::GetBlockHeader, block_subsidy::GetBlockSubsidy, peer_info::GetPeerInfo,
+        GetBalanceError, GetBalanceResponse, GetBlockCountResponse, GetBlockError, GetBlockHash,
+        GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse, GetMempoolInfoResponse,
+        GetSubtreesError, GetSubtreesResponse, GetTransactionResponse, GetTreestateError,
+        GetTreestateResponse, GetUtxosError, GetUtxosResponse, SendTransactionError,
+        SendTransactionResponse, TxidsError, TxidsResponse,
     },
 };
 
@@ -544,6 +544,19 @@ impl JsonRpSeeConnector {
                 .await
                 .map(GetBlockResponse::Object)
         }
+    }
+
+    // TODO: handle error cases
+    pub async fn get_block_header(
+        &self,
+        hash: String,
+        verbose: bool,
+    ) -> Result<GetBlockHeader, RpcRequestError<Infallible>> {
+        let params = [
+            serde_json::to_value(hash).unwrap(),
+            serde_json::to_value(verbose).unwrap(),
+        ];
+        self.send_request("getblockheader", params).await
     }
 
     /// Returns the hash of the best block (tip) of the longest chain.

@@ -1,5 +1,6 @@
 //! Zcash RPC implementations.
 
+use zaino_fetch::jsonrpsee::response::block_header::GetBlockHeader;
 use zaino_fetch::jsonrpsee::response::block_subsidy::GetBlockSubsidy;
 use zaino_fetch::jsonrpsee::response::peer_info::GetPeerInfo;
 use zaino_fetch::jsonrpsee::response::{GetMempoolInfoResponse, GetNetworkSolPsResponse};
@@ -210,6 +211,13 @@ pub trait ZcashIndexerRpc {
         hash_or_height: String,
         verbosity: Option<u8>,
     ) -> Result<GetBlock, ErrorObjectOwned>;
+
+    #[method(name = "getblockheader")]
+    async fn get_block_header(
+        &self,
+        hash: String,
+        verbose: bool,
+    ) -> Result<GetBlockHeader, ErrorObjectOwned>;
 
     /// Returns all transaction ids in the memory pool, as a JSON array.
     ///
@@ -527,6 +535,24 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
         self.service_subscriber
             .inner_ref()
             .z_get_block(hash_or_height, verbosity)
+            .await
+            .map_err(|e| {
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
+            })
+    }
+
+    async fn get_block_header(
+        &self,
+        hash: String,
+        verbose: bool,
+    ) -> Result<GetBlockHeader, ErrorObjectOwned> {
+        self.service_subscriber
+            .inner_ref()
+            .get_block_header(hash, verbose)
             .await
             .map_err(|e| {
                 ErrorObjectOwned::owned(

@@ -5,9 +5,8 @@ use async_trait::async_trait;
 use tokio::{sync::mpsc, time::timeout};
 use tracing::warn;
 use zaino_fetch::jsonrpsee::response::{
-    block_subsidy::GetBlockSubsidy,
-    peer_info::GetPeerInfo,
-    {GetMempoolInfoResponse, GetNetworkSolPsResponse},
+    block_header::GetBlockHeader, block_subsidy::GetBlockSubsidy, peer_info::GetPeerInfo,
+    GetMempoolInfoResponse, GetNetworkSolPsResponse,
 };
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
@@ -250,6 +249,12 @@ pub trait ZcashIndexer: Send + Sync + 'static {
         &self,
         raw_transaction_hex: String,
     ) -> Result<SentTransactionHash, Self::Error>;
+
+    async fn get_block_header(
+        &self,
+        hash: String,
+        verbose: bool,
+    ) -> Result<GetBlockHeader, Self::Error>;
 
     /// Returns the requested block by hash or height, as a [`GetBlock`] JSON string.
     /// If the block is not in Zebra's state, returns

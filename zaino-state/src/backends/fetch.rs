@@ -23,9 +23,8 @@ use zaino_fetch::{
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
         response::{
-            block_subsidy::GetBlockSubsidy,
-            peer_info::GetPeerInfo,
-            {GetMempoolInfoResponse, GetNetworkSolPsResponse},
+            block_header::GetBlockHeader, block_subsidy::GetBlockSubsidy, peer_info::GetPeerInfo,
+            GetMempoolInfoResponse, GetNetworkSolPsResponse,
         },
     },
 };
@@ -370,6 +369,14 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_block(hash_or_height, verbosity)
             .await?
             .try_into()?)
+    }
+
+    async fn get_block_header(
+        &self,
+        hash: String,
+        verbose: bool,
+    ) -> Result<GetBlockHeader, Self::Error> {
+        Ok(self.fetcher.get_block_header(hash, verbose).await?.into())
     }
 
     /// Returns the hash of the best block (tip) of the longest chain.
