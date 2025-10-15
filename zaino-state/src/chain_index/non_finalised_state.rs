@@ -678,7 +678,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 )))
             })?;
 
-        Self::create_indexed_block_with_required_roots(
+        Self::create_indexed_block_with_optional_roots(
             block,
             &tree_roots,
             *prev_block.chainwork(),
