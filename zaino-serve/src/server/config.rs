@@ -75,7 +75,7 @@ pub struct JsonRpcServerConfig {
 
     // TODO this is the field that actually is the same in the server as the config. Should we these separate?
     /// Directory to store authentication cookie file.
-    /// Enable cookie-based authentication with a valid Some(<PathBuf>) value.
+    /// Enable cookie-based authentication with a valid `Some(<PathBuf>)` value.
     #[serde(default)]
     // An empty PathBuf that is still Some will have an emphemeral path assigned to it when zaino loads the config.
     pub cookie_dir: Option<PathBuf>,
