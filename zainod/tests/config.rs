@@ -258,12 +258,11 @@ fn test_cookie_dir_logic() {
 }
 
 #[test]
-// Tests how `load_config` handles literal string "None" for `cookie_dir`
-// with varying `enable_cookie_auth` states.
+// Tests how `load_config` handles varying `enable_cookie_auth` states.
 fn test_string_none_as_path_for_cookie_dir() {
     Jail::expect_with(|jail| {
         let toml_auth_enabled_path = jail.directory().join("auth_enabled.toml");
-        // TODO first case is cookie auth on but no dir assigned
+        // cookie auth on but no dir assigned
         jail.create_file(
             &toml_auth_enabled_path,
             r#"
@@ -286,13 +285,10 @@ fn test_string_none_as_path_for_cookie_dir() {
             .json_server_settings
             .as_ref()
             .expect("json settings to be Some")
-            // TODO default does add a cookie dir?
-            // I see "/run/user/1000/zaino/.cookie
-            // assigns cookie dir automatically
             .cookie_dir
             .is_some());
 
-        // TODO this case is cookie auth off, no cookie dir
+        // omitting cookie_dir will set it to None
         let toml_auth_disabled_path = jail.directory().join("auth_disabled.toml");
         jail.create_file(
             &toml_auth_disabled_path,
@@ -301,7 +297,6 @@ fn test_string_none_as_path_for_cookie_dir() {
 
             [json_server_settings]
             json_rpc_listen_address = "127.0.0.1:8237"
-            cookie_dir = ""
 
             grpc_listen_address = "127.0.0.1:8137"
             validator_listen_address = "127.0.0.1:18232"
@@ -313,7 +308,6 @@ fn test_string_none_as_path_for_cookie_dir() {
         let config_auth_disabled =
             load_config(&toml_auth_disabled_path).expect("Auth disabled failed");
         assert!(config_auth_disabled.json_server_settings.is_some());
-        // TODO here we see there is an assignment happening somehow. I assume it because of a default
         assert_eq!(
             config_auth_disabled
                 .json_server_settings
