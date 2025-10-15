@@ -2,7 +2,6 @@
 
 use figment::Jail;
 use std::path::PathBuf;
-// use zaino_common::network::ActivationHeights;
 use zaino_common::Network;
 
 // Use the explicit library name `zainodlib` as defined in Cargo.toml [lib] name.
@@ -427,28 +426,34 @@ fn test_parse_zindexer_toml_integration() {
 #[test]
 fn test_figment_env_override_toml_and_defaults() {
     Jail::expect_with(|jail| {
+        // test will fail without a JsonRpcServerConfig being decleared (should default to None)
+        //  valid socket also address (needed for JsonRpcServerConfig struct)
+        // and also a 'dummy' cookie path, as no mention of it makes the value None which cannot be updated via env var
         jail.create_file(
             "test_config.toml",
             r#"
             network = "Testnet"
-            json_server_settings = "/replaceme"
         "#,
         )?;
         jail.set_env("ZAINO_NETWORK", "Mainnet");
         // TODO this:
         // config intended to be no-json-server, testing env variables
         // TODO these have to be used, somehow, somewhere?
-        jail.set_env("ZAINO_ENABLE_JSON_SERVER", "true");
-        jail.set_env("ZAINO_ENABLE_COOKIE_AUTH", "true");
-        jail.set_env("ZAINO_COOKIE_DIR", "/env/cookie/path");
-        // TODO lacking default address
+        //jail.set_env("ZAINO_JSON_SERVER_SETTINGS", "some");
+        jail.set_env(
+            "ZAINO_JSON_SERVER_SETTINGS-JSON_RPC_LISTEN_ADDRESS",
+            "127.0.0.1:0",
+        );
+        //    pub json_rpc_listen_address: SocketAddr,
+        //jail.set_env("ZAINO_ENABLE_COOKIE_AUTH", "true");
+        jail.set_env("ZAINO_JSON_SERVER_SETTINGS-COOKIE_DIR", "/env/cookie/path");
+        //jail.set_env("ZAINO_JSON_SERVER_SETTINGS_COOKIE_DIR", "/env/cookie/path");
         jail.set_env("ZAINO_STORAGE.CACHE.CAPACITY", "12345");
 
         let temp_toml_path = jail.directory().join("test_config.toml");
         let config = load_config(&temp_toml_path).expect("load_config should succeed");
 
         assert_eq!(config.network, Network::Mainnet);
-        assert!(config.json_server_settings.is_some());
         assert_eq!(config.storage.cache.capacity, 12345);
         assert!(config.json_server_settings.is_some());
         assert_eq!(
