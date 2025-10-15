@@ -1,6 +1,7 @@
 //! Zaino config.
 
 use std::{
+    fmt::Display,
     net::{IpAddr, SocketAddr, ToSocketAddrs},
     path::PathBuf,
 };
@@ -329,6 +330,8 @@ pub(crate) fn is_loopback_listen_addr(addr: &SocketAddr) -> bool {
 /// If the file cannot be read, or if its contents cannot be parsed into `IndexerConfig`,
 /// a warning is logged, and a default configuration is returned.
 /// The loaded or default configuration undergoes further checks and finalization.
+// TODO my problems must be here, where configs read in as files are adapted based on env vars
+// see step 3 below
 pub fn load_config(file_path: &PathBuf) -> Result<IndexerConfig, IndexerError> {
     // Configuration sources are layered: Env > TOML > Defaults.
     let figment = Figment::new()
@@ -337,7 +340,7 @@ pub fn load_config(file_path: &PathBuf) -> Result<IndexerConfig, IndexerError> {
         // 2. Override with values from the TOML configuration file.
         .merge(Toml::file(file_path))
         // 3. Override with values from environment variables prefixed with "ZAINO_".
-        .merge(figment::providers::Env::prefixed("ZAINO_"));
+        .merge(figment::providers::Env::prefixed("ZAINO_").split("-"));
 
     match figment.extract::<IndexerConfig>() {
         Ok(mut parsed_config) => {
@@ -368,9 +371,12 @@ pub fn load_config(file_path: &PathBuf) -> Result<IndexerConfig, IndexerError> {
             Ok(parsed_config)
         }
         Err(figment_error) => {
-            error!("Failed to extract configuration: {}", figment_error);
+            error!(
+                "Failed to extract configuration using figment: {}",
+                figment_error
+            );
             Err(IndexerError::ConfigError(format!(
-                "Configuration loading failed for TOML file '{}' (or environment variables). Details: {}",
+                "Zaino configuration loading failed during figment extract '{}' (could be TOML file or environment variables). Details: {}",
                 file_path.display(), figment_error
             )))
         }
