@@ -252,7 +252,7 @@ fn test_cookie_dir_logic() {
                 .cookie_dir,
             Some(PathBuf::from("/my/cookie/path"))
         );
-        // TODO you took out a whole test without switching it to expect to fail
+        // TODO took out a whole test without switching it to expect to fail
         Ok(())
     });
 }
@@ -426,9 +426,6 @@ fn test_parse_zindexer_toml_integration() {
 #[test]
 fn test_figment_env_override_toml_and_defaults() {
     Jail::expect_with(|jail| {
-        // test will fail without a JsonRpcServerConfig being decleared (should default to None)
-        //  valid socket also address (needed for JsonRpcServerConfig struct)
-        // and also a 'dummy' cookie path, as no mention of it makes the value None which cannot be updated via env var
         jail.create_file(
             "test_config.toml",
             r#"
@@ -436,18 +433,12 @@ fn test_figment_env_override_toml_and_defaults() {
         "#,
         )?;
         jail.set_env("ZAINO_NETWORK", "Mainnet");
-        // TODO this:
-        // config intended to be no-json-server, testing env variables
-        // TODO these have to be used, somehow, somewhere?
-        //jail.set_env("ZAINO_JSON_SERVER_SETTINGS", "some");
+        //  valid socket address assigned with env var (needed for valid JsonRpcServerConfig struct)
         jail.set_env(
             "ZAINO_JSON_SERVER_SETTINGS-JSON_RPC_LISTEN_ADDRESS",
             "127.0.0.1:0",
         );
-        //    pub json_rpc_listen_address: SocketAddr,
-        //jail.set_env("ZAINO_ENABLE_COOKIE_AUTH", "true");
         jail.set_env("ZAINO_JSON_SERVER_SETTINGS-COOKIE_DIR", "/env/cookie/path");
-        //jail.set_env("ZAINO_JSON_SERVER_SETTINGS_COOKIE_DIR", "/env/cookie/path");
         jail.set_env("ZAINO_STORAGE.CACHE.CAPACITY", "12345");
 
         let temp_toml_path = jail.directory().join("test_config.toml");
