@@ -727,31 +727,6 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         let block_with_metadata = BlockWithMetadata::new(block, metadata);
         IndexedBlock::try_from(block_with_metadata)
     }
-
-    /// Create IndexedBlock with required tree roots (for finalized state cases)
-    fn create_indexed_block_with_required_roots(
-        block: &zebra_chain::block::Block,
-        tree_roots: &TreeRootData,
-        parent_chainwork: ChainWork,
-        network: Network,
-    ) -> Result<IndexedBlock, String> {
-        let (sapling_root, sapling_size, orchard_root, orchard_size) = tree_roots
-            .clone()
-            .extract_required()
-            .map_err(|e| format!("Missing required tree roots: {}", e))?;
-
-        let metadata = BlockMetadata::new(
-            sapling_root,
-            sapling_size as u32,
-            orchard_root,
-            orchard_size as u32,
-            parent_chainwork,
-            network,
-        );
-
-        let block_with_metadata = BlockWithMetadata::new(block, metadata);
-        IndexedBlock::try_from(block_with_metadata)
-    }
 }
 
 /// Errors that occur during a snapshot update
