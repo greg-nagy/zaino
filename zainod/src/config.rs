@@ -1,17 +1,14 @@
 //! Zaino config.
-
-use std::{
-    fmt::Display,
-    net::{IpAddr, SocketAddr, ToSocketAddrs},
-    path::PathBuf,
-};
-
 use figment::{
     providers::{Format, Serialized, Toml},
     Figment,
 };
-
+use std::{
+    net::{IpAddr, SocketAddr, ToSocketAddrs},
+    path::PathBuf,
+};
 // Added for Serde deserialization helpers
+use crate::error::IndexerError;
 use serde::{
     de::{self, Deserializer},
     Deserialize, Serialize,
@@ -24,8 +21,6 @@ use zaino_common::{
 };
 use zaino_serve::server::config::{GrpcConfig, JsonRpcServerConfig};
 use zaino_state::{BackendConfig, FetchServiceConfig, StateServiceConfig};
-
-use crate::error::IndexerError;
 
 /// Custom deserialization function for `SocketAddr` from a String.
 /// Used by Serde's `deserialize_with`.
