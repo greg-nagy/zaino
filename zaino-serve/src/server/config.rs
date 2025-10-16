@@ -18,7 +18,7 @@ pub struct GrpcTls {
 
 /// Configuration data for Zaino's gRPC server.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-pub struct GrpcConfig {
+pub struct GrpcServerConfig {
     /// gRPC server bind addr.
     // TODO for this field, assess #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     pub listen_address: SocketAddr,
@@ -26,7 +26,7 @@ pub struct GrpcConfig {
     pub tls: Option<GrpcTls>,
 }
 
-impl GrpcConfig {
+impl GrpcServerConfig {
     /// If TLS is enabled, reads the certificate and key files and returns a valid
     /// `ServerTlsConfig`. If TLS is not enabled, returns `Ok(None)`.
     // TODO : redundant?
