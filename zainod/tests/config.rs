@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use zaino_common::{DatabaseSize, Network};
 
 // Use the explicit library name `zainodlib` as defined in Cargo.toml [lib] name.
-use zainodlib::config::{load_config, IndexerConfig};
+use zainodlib::config::{load_config, ZainodConfig};
 use zainodlib::error::IndexerError;
 // If BackendType is used directly in assertions beyond what IndexerConfig holds:
 use zaino_state::BackendType as ZainoBackendType;
@@ -169,7 +169,7 @@ fn test_deserialize_optional_fields_missing() {
         jail.create_file(&temp_toml_path, toml_str)?;
 
         let config = load_config(&temp_toml_path).expect("load_config failed");
-        let default_values = IndexerConfig::default();
+        let default_values = ZainodConfig::default();
 
         assert_eq!(config.backend, ZainoBackendType::State);
         // assert_eq!(config.enable_json_server, default_values.enable_json_server);
@@ -338,7 +338,7 @@ fn test_deserialize_empty_string_yields_default() {
         let empty_toml_path = jail.directory().join("empty.toml");
         jail.create_file(&empty_toml_path, "")?;
         let config = load_config(&empty_toml_path).expect("Empty TOML load failed");
-        let default_config = IndexerConfig::default();
+        let default_config = ZainodConfig::default();
         // Compare relevant fields that should come from default
         assert_eq!(config.network, default_config.network);
         assert_eq!(config.backend, default_config.backend);
@@ -424,7 +424,7 @@ fn test_parse_zindexer_toml_integration() {
             config_result.err()
         );
         let config = config_result.unwrap();
-        let defaults = IndexerConfig::default();
+        let defaults = ZainodConfig::default();
 
         assert_eq!(config.backend, ZainoBackendType::Fetch);
         assert_eq!(
@@ -502,7 +502,7 @@ fn test_figment_all_defaults() {
         let temp_toml_path = jail.directory().join("empty_config.toml");
         let config =
             load_config(&temp_toml_path).expect("load_config should succeed with empty toml");
-        let defaults = IndexerConfig::default();
+        let defaults = ZainodConfig::default();
         assert_eq!(config.network, defaults.network);
         // assert_eq!(config.enable_json_server, defaults.enable_json_server);
         assert_eq!(

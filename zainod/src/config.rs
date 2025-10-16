@@ -55,7 +55,7 @@ where
 /// Config information required for Zaino.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default)]
-pub struct IndexerConfig {
+pub struct ZainodConfig {
     /// Type of backend to be used.
     #[serde(deserialize_with = "deserialize_backendtype_from_string")]
     #[serde(serialize_with = "serialize_backendtype_to_string")]
@@ -103,7 +103,7 @@ pub struct IndexerConfig {
     pub no_sync: bool,
 }
 
-impl IndexerConfig {
+impl ZainodConfig {
     /// Performs checks on config data.
     pub(crate) fn check_config(&self) -> Result<(), IndexerError> {
         // Network type is validated at the type level via Network enum.
@@ -221,7 +221,7 @@ impl IndexerConfig {
     }
 }
 
-impl Default for IndexerConfig {
+impl Default for ZainodConfig {
     fn default() -> Self {
         Self {
             backend: zaino_state::BackendType::Fetch,
@@ -328,17 +328,17 @@ pub(crate) fn is_loopback_listen_addr(addr: &SocketAddr) -> bool {
 /// The loaded or default configuration undergoes further checks and finalization.
 // TODO my problems must be here, where configs read in as files are adapted based on env vars
 // see step 3 below
-pub fn load_config(file_path: &PathBuf) -> Result<IndexerConfig, IndexerError> {
+pub fn load_config(file_path: &PathBuf) -> Result<ZainodConfig, IndexerError> {
     // Configuration sources are layered: Env > TOML > Defaults.
     let figment = Figment::new()
         // 1. Base defaults from `IndexerConfig::default()`.
-        .merge(Serialized::defaults(IndexerConfig::default()))
+        .merge(Serialized::defaults(ZainodConfig::default()))
         // 2. Override with values from the TOML configuration file.
         .merge(Toml::file(file_path))
         // 3. Override with values from environment variables prefixed with "ZAINO_".
         .merge(figment::providers::Env::prefixed("ZAINO_").split("-"));
 
-    match figment.extract::<IndexerConfig>() {
+    match figment.extract::<ZainodConfig>() {
         Ok(mut parsed_config) => {
             // Finalizes the configuration after initial parsing, applying conditional default to json rpc cookie dir,
             // if the assigned pathbuf is empty (cookies enabled but no path defined).
@@ -379,10 +379,10 @@ pub fn load_config(file_path: &PathBuf) -> Result<IndexerConfig, IndexerError> {
     }
 }
 
-impl TryFrom<IndexerConfig> for BackendConfig {
+impl TryFrom<ZainodConfig> for BackendConfig {
     type Error = IndexerError;
 
-    fn try_from(cfg: IndexerConfig) -> Result<Self, Self::Error> {
+    fn try_from(cfg: ZainodConfig) -> Result<Self, Self::Error> {
         match cfg.backend {
             zaino_state::BackendType::State => Ok(BackendConfig::State(StateServiceConfig {
                 validator_state_config: zebra_state::Config {

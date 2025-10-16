@@ -478,7 +478,7 @@ impl TestManager {
             let zaino_json_server_cookie_dir = default_ephemeral_cookie_path();
 
             // then here we custom-set an entire, whole new config
-            let indexer_config = zainodlib::config::IndexerConfig {
+            let indexer_config = zainodlib::config::ZainodConfig {
                 // TODO: Make configurable.
                 backend: *backend,
                 json_server_settings: if enable_zaino_jsonrpc_server {

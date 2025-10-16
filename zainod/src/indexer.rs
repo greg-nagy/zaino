@@ -10,7 +10,7 @@ use zaino_state::{
     ZcashIndexer, ZcashService,
 };
 
-use crate::{config::IndexerConfig, error::IndexerError};
+use crate::{config::ZainodConfig, error::IndexerError};
 
 /// Zaino, the Zingo-Indexer.
 pub struct Indexer<Service: ZcashService + LightWalletService> {
@@ -28,7 +28,7 @@ pub struct Indexer<Service: ZcashService + LightWalletService> {
 ///
 /// Currently only takes an IndexerConfig.
 pub async fn start_indexer(
-    config: IndexerConfig,
+    config: ZainodConfig,
 ) -> Result<tokio::task::JoinHandle<Result<(), IndexerError>>, IndexerError> {
     startup_message();
     info!("Starting Zaino..");
@@ -37,7 +37,7 @@ pub async fn start_indexer(
 
 /// Spawns a new Indexer server.
 pub async fn spawn_indexer(
-    config: IndexerConfig,
+    config: ZainodConfig,
 ) -> Result<tokio::task::JoinHandle<Result<(), IndexerError>>, IndexerError> {
     config.check_config()?;
     info!("Checking connection with node..");
@@ -71,7 +71,7 @@ where
     /// Spawns a new Indexer server.
     pub async fn launch_inner(
         service_config: Service::Config,
-        indexer_config: IndexerConfig,
+        indexer_config: ZainodConfig,
     ) -> Result<tokio::task::JoinHandle<Result<(), IndexerError>>, IndexerError> {
         let service = IndexerService::<Service>::spawn(service_config).await?;
         let json_server = match indexer_config.json_server_settings {
