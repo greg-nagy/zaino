@@ -43,7 +43,6 @@ pub async fn spawn_indexer(
     info!("Checking connection with node..");
     let zebrad_uri = test_node_and_return_url(
         config.validator_jsonrpc_listen_address,
-        config.validator_cookie_auth,
         config.validator_cookie_path.clone(),
         config.validator_user.clone(),
         config.validator_password.clone(),

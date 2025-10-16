@@ -29,7 +29,6 @@ async fn create_test_manager_and_connector(
     let json_service = JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
             test_manager.full_node_rpc_listen_address,
-            false,
             None,
             Some("xxxxxx".to_string()),
             Some("xxxxxx".to_string()),

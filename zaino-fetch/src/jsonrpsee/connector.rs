@@ -226,17 +226,15 @@ impl JsonRpSeeConnector {
     /// Helper function to create from parts of a StateServiceConfig or
     /// FetchServiceConfig
     pub async fn new_from_config_parts(
-        validator_cookie_auth: bool,
         validator_rpc_address: SocketAddr,
         validator_rpc_user: String,
         validator_rpc_password: String,
         validator_cookie_path: Option<String>,
     ) -> Result<Self, TransportError> {
-        match validator_cookie_auth {
+        match validator_cookie_path.is_some() {
             true => JsonRpSeeConnector::new_with_cookie_auth(
                 test_node_and_return_url(
                     validator_rpc_address,
-                    validator_cookie_auth,
                     validator_cookie_path.clone(),
                     None,
                     None,
@@ -251,7 +249,6 @@ impl JsonRpSeeConnector {
             false => JsonRpSeeConnector::new_with_basic_auth(
                 test_node_and_return_url(
                     validator_rpc_address,
-                    false,
                     None,
                     Some(validator_rpc_user.clone()),
                     Some(validator_rpc_password.clone()),
@@ -807,12 +804,11 @@ async fn test_node_connection(url: Url, auth_method: AuthMethod) -> Result<(), T
 /// Tries to connect to zebrad/zcashd using the provided SocketAddr and returns the correct URL.
 pub async fn test_node_and_return_url(
     addr: SocketAddr,
-    rpc_cookie_auth: bool,
     cookie_path: Option<String>,
     user: Option<String>,
     password: Option<String>,
 ) -> Result<Url, TransportError> {
-    let auth_method = match rpc_cookie_auth {
+    let auth_method = match cookie_path.is_some() {
         true => {
             let cookie_file_path_str = cookie_path.expect("validator rpc cookie path missing");
             let cookie_password = read_and_parse_cookie_token(Path::new(&cookie_file_path_str))?;

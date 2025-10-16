@@ -143,7 +143,6 @@ async fn send_to_transparent(validator: &ValidatorKind, backend: &BackendType) {
     let fetch_service = zaino_fetch::jsonrpsee::connector::JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
             test_manager.full_node_rpc_listen_address,
-            false,
             None,
             Some("xxxxxx".to_string()),
             Some("xxxxxx".to_string()),
@@ -438,7 +437,6 @@ async fn monitor_unverified_mempool_for_validator(
     let fetch_service = zaino_fetch::jsonrpsee::connector::JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
             test_manager.full_node_rpc_listen_address,
-            false,
             None,
             Some("xxxxxx".to_string()),
             Some("xxxxxx".to_string()),
