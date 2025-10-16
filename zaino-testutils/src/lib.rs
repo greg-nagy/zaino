@@ -16,7 +16,8 @@ use std::{
 use tempfile::TempDir;
 use tracing_subscriber::EnvFilter;
 use zaino_common::{
-    network::ActivationHeights, CacheConfig, DatabaseConfig, Network, ServiceConfig, StorageConfig,
+    network::ActivationHeights, validator::ValidatorConfig, CacheConfig, DatabaseConfig, Network,
+    ServiceConfig, StorageConfig,
 };
 use zaino_serve::server::config::{GrpcServerConfig, JsonRpcServerConfig};
 use zaino_state::BackendType;
@@ -496,13 +497,13 @@ impl TestManager {
                     listen_address: zaino_grpc_listen_address,
                     tls: None,
                 },
-                validator_settings: ValidatorConfig {}
-                validator_jsonrpc_listen_address: full_node_rpc_listen_address,
-                validator_grpc_listen_address: full_node_grpc_listen_address,
-                validator_cookie_auth: false,
-                validator_cookie_path: None,
-                validator_user: Some("xxxxxx".to_string()),
-                validator_password: Some("xxxxxx".to_string()),
+                validator_settings: ValidatorConfig {
+                    validator_jsonrpc_listen_address: full_node_rpc_listen_address,
+                    validator_grpc_listen_address: full_node_grpc_listen_address,
+                    validator_cookie_path: None,
+                    validator_user: Some("xxxxxx".to_string()),
+                    validator_password: Some("xxxxxx".to_string()),
+                },
                 service: ServiceConfig::default(),
                 storage: StorageConfig {
                     cache: CacheConfig::default(),
