@@ -18,6 +18,7 @@ use tracing::warn;
 use tracing::{error, info};
 use zaino_common::{
     CacheConfig, DatabaseConfig, DatabaseSize, Network, ServiceConfig, StorageConfig,
+    ValidatorConfig,
 };
 use zaino_serve::server::config::{GrpcServerConfig, JsonRpcServerConfig};
 use zaino_state::{BackendConfig, FetchServiceConfig, StateServiceConfig};
@@ -66,22 +67,25 @@ pub struct IndexerConfig {
     // TODO commenting out : for rpc listen #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     /// gRPC server settings including listen addr, tls status, key and cert.
     pub grpc_settings: GrpcServerConfig,
+    // TODO this should be an Option(<ValidatorConfig>)
+    validator_settings: ValidatorConfig,
 
-    /// Full node / validator listen port.
-    #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
-    pub validator_jsonrpc_listen_address: SocketAddr,
-    /// Full node / validator gprc listen port.
-    #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
-    pub validator_grpc_listen_address: SocketAddr,
-    /// Enable validator rpc cookie authentification.
-    pub validator_cookie_auth: bool,
-    /// Path to the validator cookie file.
-    pub validator_cookie_path: Option<String>,
-    /// Full node / validator Username.
-    pub validator_user: Option<String>,
-    /// full node / validator Password.
-    pub validator_password: Option<String>,
-
+    /*
+        /// Full node / validator listen port.
+        #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
+        pub validator_jsonrpc_listen_address: SocketAddr,
+        /// Full node / validator gprc listen port.
+        #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
+        pub validator_grpc_listen_address: SocketAddr,
+        /// Enable validator rpc cookie authentification.
+        pub validator_cookie_auth: bool,
+        /// Path to the validator cookie file.
+        pub validator_cookie_path: Option<String>,
+        /// Full node / validator Username.
+        pub validator_user: Option<String>,
+        /// full node / validator Password.
+        pub validator_password: Option<String>,
+    */
     /// Service-level configuration (timeout, channel size).
     pub service: ServiceConfig,
     /// Storage configuration (cache and database).
@@ -89,6 +93,7 @@ pub struct IndexerConfig {
     /// Block Cache database file path.
     ///
     /// ZebraDB location.
+    // TODO seems to overlap with Storageconfig
     pub zebra_db_path: PathBuf,
     /// Network chain type.
     pub network: Network,
@@ -132,8 +137,8 @@ impl IndexerConfig {
         }
 
         // Check validator cookie authentication settings
-        if self.validator_cookie_auth {
-            if let Some(ref cookie_path) = self.validator_cookie_path {
+        if self.validator_settings.validator_cookie_path.is_some() {
+            if let Some(ref cookie_path) = self.validator_settings.validator_cookie_path {
                 if !std::path::Path::new(cookie_path).exists() {
                     return Err(IndexerError::ConfigError(
                         format!("Validator cookie authentication is enabled, but cookie path '{cookie_path}' does not exist."),
