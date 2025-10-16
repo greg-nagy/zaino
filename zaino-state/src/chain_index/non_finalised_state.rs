@@ -706,6 +706,10 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
     }
 
     /// Create IndexedBlock with optional tree roots (for genesis/sync cases)
+    ///
+    /// TODO: Issue #604 - This uses `unwrap_or_default()` uniformly for both Sapling and Orchard,
+    /// but they have different activation heights. This masks potential bugs and prevents proper
+    /// validation based on network upgrade activation.
     fn create_indexed_block_with_optional_roots(
         block: &zebra_chain::block::Block,
         tree_roots: &TreeRootData,
