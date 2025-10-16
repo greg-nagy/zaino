@@ -25,7 +25,7 @@ pub enum BackendConfig {
 #[derive(Debug, Clone)]
 pub struct StateServiceConfig {
     /// Zebra [`zebra_state::ReadStateService`] config data
-    pub validator_config: zebra_state::Config,
+    pub validator_state_config: zebra_state::Config,
     /// Validator JsonRPC address.
     pub validator_rpc_address: std::net::SocketAddr,
     /// Validator gRPC address.
@@ -54,7 +54,7 @@ impl StateServiceConfig {
     #[allow(clippy::too_many_arguments)]
     // TODO: replace with struct-literal init only?
     pub fn new(
-        validator_config: zebra_state::Config,
+        validator_state_config: zebra_state::Config,
         validator_rpc_address: std::net::SocketAddr,
         validator_indexer_rpc_address: std::net::SocketAddr,
         validator_cookie_auth: bool,
@@ -67,7 +67,7 @@ impl StateServiceConfig {
         no_sync: bool,
     ) -> Self {
         StateServiceConfig {
-            validator_config,
+            validator_state_config,
             validator_rpc_address,
             validator_indexer_rpc_address,
             validator_cookie_auth,
@@ -87,9 +87,10 @@ impl StateServiceConfig {
 pub struct FetchServiceConfig {
     /// Validator JsonRPC address.
     pub validator_rpc_address: std::net::SocketAddr,
-    /// Enable validator rpc cookie authentification.
-    pub validator_cookie_auth: bool,
+    // pub validator_cookie_auth: bool,
+    /// Enable validator rpc cookie authentification with Some.
     /// Path to the validator cookie file.
+    // TODO change to PathBuf
     pub validator_cookie_path: Option<String>,
     /// Validator JsonRPC user.
     pub validator_rpc_user: String,
@@ -112,7 +113,6 @@ impl FetchServiceConfig {
     // TODO: replace with struct-literal init only?
     pub fn new(
         validator_rpc_address: std::net::SocketAddr,
-        validator_cookie_auth: bool,
         validator_cookie_path: Option<String>,
         validator_rpc_user: Option<String>,
         validator_rpc_password: Option<String>,
@@ -123,7 +123,6 @@ impl FetchServiceConfig {
     ) -> Self {
         FetchServiceConfig {
             validator_rpc_address,
-            validator_cookie_auth,
             validator_cookie_path,
             validator_rpc_user: validator_rpc_user.unwrap_or("xxxxxx".to_string()),
             validator_rpc_password: validator_rpc_password.unwrap_or("xxxxxx".to_string()),
