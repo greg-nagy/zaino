@@ -68,7 +68,7 @@ pub struct IndexerConfig {
     /// gRPC server settings including listen addr, tls status, key and cert.
     pub grpc_settings: GrpcServerConfig,
     // TODO this should be an Option(<ValidatorConfig>)
-    validator_settings: ValidatorConfig,
+    pub validator_settings: ValidatorConfig,
 
     /*
         /// Full node / validator listen port.
