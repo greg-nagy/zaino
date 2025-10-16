@@ -12,7 +12,7 @@ use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetInfo};
 
 async fn create_test_manager_and_fetch_services(
-    enable_cookie_auth: bool,
+    _enable_cookie_auth: bool,
     clients: bool,
 ) -> (
     TestManager,
@@ -41,7 +41,6 @@ async fn create_test_manager_and_fetch_services(
     println!("Launching zcashd fetch service..");
     let zcashd_fetch_service = FetchService::spawn(FetchServiceConfig::new(
         test_manager.full_node_rpc_listen_address,
-        false,
         None,
         None,
         None,
@@ -71,7 +70,6 @@ async fn create_test_manager_and_fetch_services(
     let zaino_json_server_address = dbg!(test_manager.zaino_json_rpc_listen_address.unwrap());
     let zaino_fetch_service = FetchService::spawn(FetchServiceConfig::new(
         zaino_json_server_address,
-        enable_cookie_auth,
         test_manager
             .json_server_cookie_dir
             .clone()

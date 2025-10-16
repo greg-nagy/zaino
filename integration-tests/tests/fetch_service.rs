@@ -44,7 +44,6 @@ async fn create_test_manager_and_fetch_service(
 
     let fetch_service = FetchService::spawn(FetchServiceConfig::new(
         test_manager.full_node_rpc_listen_address,
-        false,
         None,
         None,
         None,
