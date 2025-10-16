@@ -96,27 +96,6 @@ impl TreeRootData {
         let (orchard_root, orchard_size) = self.orchard.unwrap_or_default();
         (sapling_root, sapling_size, orchard_root, orchard_size)
     }
-
-    /// Extract with required validation for finalized state use case
-    pub fn extract_required(
-        self,
-    ) -> Result<
-        (
-            zebra_chain::sapling::tree::Root,
-            u64,
-            zebra_chain::orchard::tree::Root,
-            u64,
-        ),
-        String,
-    > {
-        let (sapling_root, sapling_size) = self
-            .sapling
-            .ok_or_else(|| "Missing sapling tree roots".to_string())?;
-        let (orchard_root, orchard_size) = self
-            .orchard
-            .ok_or_else(|| "Missing orchard tree roots".to_string())?;
-        Ok((sapling_root, sapling_size, orchard_root, orchard_size))
-    }
 }
 
 /// Intermediate type to hold block metadata separate from the block itself
