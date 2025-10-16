@@ -12,4 +12,4 @@ pub mod validator;
 pub use network::Network;
 pub use service::ServiceConfig;
 pub use storage::{CacheConfig, DatabaseConfig, DatabaseSize, StorageConfig};
-pub use validator::Validator;
+pub use validator::ValidatorConfig;
