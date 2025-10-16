@@ -111,7 +111,7 @@ fn test_deserialize_full_valid_config() {
             PathBuf::from(key_file_name)
         );
         assert_eq!(
-            finalized_config.validator_cookie_path,
+            finalized_config.validator_settings.validator_cookie_path,
             Some(validator_cookie_file_name.to_string())
         );
         assert_eq!(
@@ -128,9 +128,12 @@ fn test_deserialize_full_valid_config() {
             "0.0.0.0:9000".parse().unwrap()
         );
         assert!(finalized_config.grpc_settings.tls.is_some());
-        assert_eq!(finalized_config.validator_user, Some("user".to_string()));
         assert_eq!(
-            finalized_config.validator_password,
+            finalized_config.validator_settings.validator_user,
+            Some("user".to_string())
+        );
+        assert_eq!(
+            finalized_config.validator_settings.validator_password,
             Some("password".to_string())
         );
         assert_eq!(finalized_config.storage.cache.capacity, 10000);
@@ -170,8 +173,14 @@ fn test_deserialize_optional_fields_missing() {
 
         assert_eq!(config.backend, ZainoBackendType::State);
         // assert_eq!(config.enable_json_server, default_values.enable_json_server);
-        assert_eq!(config.validator_user, default_values.validator_user);
-        assert_eq!(config.validator_password, default_values.validator_password);
+        assert_eq!(
+            config.validator_settings.validator_user,
+            default_values.validator_settings.validator_user
+        );
+        assert_eq!(
+            config.validator_settings.validator_password,
+            default_values.validator_settings.validator_password
+        );
         assert_eq!(
             config.storage.cache.capacity,
             default_values.storage.cache.capacity
@@ -334,8 +343,14 @@ fn test_deserialize_empty_string_yields_default() {
         assert_eq!(config.network, default_config.network);
         assert_eq!(config.backend, default_config.backend);
         // assert_eq!(config.enable_json_server, default_config.enable_json_server);
-        assert_eq!(config.validator_user, default_config.validator_user);
-        assert_eq!(config.validator_password, default_config.validator_password);
+        assert_eq!(
+            config.validator_settings.validator_user,
+            default_config.validator_settings.validator_user
+        );
+        assert_eq!(
+            config.validator_settings.validator_password,
+            default_config.validator_settings.validator_password
+        );
         assert_eq!(
             config.storage.cache.capacity,
             default_config.storage.cache.capacity
@@ -412,7 +427,10 @@ fn test_parse_zindexer_toml_integration() {
         let defaults = IndexerConfig::default();
 
         assert_eq!(config.backend, ZainoBackendType::Fetch);
-        assert_eq!(config.validator_user, defaults.validator_user);
+        assert_eq!(
+            config.validator_settings.validator_user,
+            defaults.validator_settings.validator_user
+        );
 
         Ok(())
     });
