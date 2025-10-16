@@ -4,13 +4,21 @@ use std::{collections::BTreeMap, convert::Infallible};
 
 use serde::{Deserialize, Serialize};
 
+use zebra_rpc::methods::opthex;
+
 use crate::jsonrpsee::connector::ResponseToError;
 
+/// Response to a `getblockheader` RPC request.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetBlockHeader {
+    /// The verbose variant of the response. Returned when `verbose` is set to `true`.
     Verbose(VerboseBlockHeader),
+
+    /// The compact variant of the response. Returned when `verbose` is set to `false`.
     Compact(String),
+
+    /// An unknown response shape.
     Unknown(serde_json::Value),
 }
 
@@ -20,7 +28,8 @@ pub enum GetBlockHeader {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct VerboseBlockHeader {
     /// The hash of the requested block.
-    pub hash: String,
+    #[serde(with = "hex")]
+    pub hash: zebra_chain::block::Hash,
 
     /// The number of confirmations of this block in the best chain,
     /// or -1 if it is not in the best chain.
@@ -34,20 +43,27 @@ pub struct VerboseBlockHeader {
 
     /// The merkle root of the requesteed block.
     #[serde(rename = "merkleroot")]
-    pub merkle_root: String,
+    pub merkle_root: zebra_chain::block::merkle::Root,
 
     /// The blockcommitments field of the requested block. Its interpretation changes
     /// depending on the network and height.
     #[serde(
+        with = "opthex",
         rename = "blockcommitments",
         default,
         skip_serializing_if = "Option::is_none"
     )]
-    pub block_commitments: Option<String>,
+    pub block_commitments: Option<[u8; 32]>,
 
     /// The root of the Sapling commitment tree after applying this block.
-    #[serde(rename = "finalsaplingroot")]
-    pub final_sapling_root: String,
+    #[serde(with = "opthex", rename = "finalsaplingroot")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub final_sapling_root: Option<[u8; 32]>,
+
+    /// The root of the Orchard commitment tree after applying this block.
+    #[serde(with = "opthex", rename = "finalorchardroot")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    final_orchard_root: Option<[u8; 32]>,
 
     /// The block time of the requested block header in non-leap seconds since Jan 1 1970 GMT.
     pub time: i64,
@@ -98,8 +114,12 @@ impl ResponseToError for GetBlockHeader {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
+    use hex::FromHex;
     use serde_json::{json, Value};
+    use zebra_chain::block;
 
     /// Zcashd verbose response.
     fn zcashd_verbose_json() -> &'static str {
@@ -124,6 +144,7 @@ mod tests {
     }
 
     // Zebra verbose response
+    // TODO: Add finalorchardroot
     fn zebra_verbose_json() -> &'static str {
         r#"{
           "hash": "00000000001b76b932f31289beccd3988d098ec3c8c6e4a0c7bcaf52e9bdead1",
@@ -149,13 +170,19 @@ mod tests {
             GetBlockHeader::Verbose(v) => {
                 assert_eq!(
                     v.hash,
-                    "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f"
+                    block::Hash::from_str(
+                        "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f"
+                    )
+                    .unwrap()
                 );
                 assert_eq!(v.confirmations, 10);
                 assert_eq!(v.height, 123_456);
                 assert_eq!(v.version, 4);
-                assert_eq!(v.merkle_root, "aa11merkle");
-                assert_eq!(v.final_sapling_root, "bb22sapling");
+                assert_eq!(
+                    v.merkle_root,
+                    block::merkle::Root::from_hex("aa11merkle").unwrap()
+                );
+                assert_eq!(v.final_sapling_root.unwrap(), "bb22sapling".as_bytes());
                 assert_eq!(v.time, 1_700_000_000);
                 assert_eq!(v.nonce, "11nonce");
                 assert_eq!(v.solution, "22solution");
@@ -185,16 +212,25 @@ mod tests {
             GetBlockHeader::Verbose(v) => {
                 assert_eq!(
                     v.hash,
-                    "00000000001b76b932f31289beccd3988d098ec3c8c6e4a0c7bcaf52e9bdead1"
+                    block::Hash::from_str(
+                        "00000000001b76b932f31289beccd3988d098ec3c8c6e4a0c7bcaf52e9bdead1"
+                    )
+                    .unwrap()
                 );
                 assert_eq!(v.confirmations, 3);
                 assert_eq!(v.height, 42);
                 assert_eq!(v.version, 5);
-                assert_eq!(v.merkle_root, "bb33merkle");
+                assert_eq!(
+                    v.merkle_root,
+                    block::merkle::Root::from_hex("bb33merkle").unwrap()
+                );
 
-                assert_eq!(v.block_commitments.as_deref(), Some("cc44blockcommitments"));
+                assert_eq!(
+                    v.block_commitments.unwrap(),
+                    "cc44blockcommitments".as_bytes()
+                );
 
-                assert_eq!(v.final_sapling_root, "dd55sapling");
+                assert_eq!(v.final_sapling_root.unwrap(), "dd55sapling".as_bytes());
                 assert_eq!(v.time, 1_699_999_999);
                 assert_eq!(v.nonce, "33nonce");
                 assert_eq!(v.solution, "44solution");
@@ -278,12 +314,13 @@ mod tests {
     fn previous_and_next_optional_edges() {
         // Simulate genesis
         let genesis_like = r#"{
-          "hash": "genesis-hash",
+          "hash": "00000000001b76b932f31289beccd3988d098ec3c8c6e4a0c7bcaf52e9bdead1",
           "confirmations": 1,
           "height": 0,
           "version": 4,
-          "merkleroot": "root",
-          "finalsaplingroot": "saproot",
+          "merkleroot": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
+          "finalsaplingroot": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
+          "finalorchardroot": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
           "time": 1477641369,
           "nonce": "nonce",
           "solution": "solution",
@@ -297,7 +334,8 @@ mod tests {
                 assert!(v.previous_block_hash.is_none());
                 assert!(v.next_block_hash.is_none());
             }
-            _ => panic!("expected Verbose variant"),
+            GetBlockHeader::Compact(_) => panic!("expected Verbose variant, got Compact"),
+            GetBlockHeader::Unknown(_) => panic!("expected Verbose variant, got Unknown"),
         }
     }
 }
