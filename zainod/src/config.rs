@@ -19,7 +19,7 @@ use tracing::{error, info};
 use zaino_common::{
     CacheConfig, DatabaseConfig, DatabaseSize, Network, ServiceConfig, StorageConfig,
 };
-use zaino_serve::server::config::{GrpcConfig, JsonRpcServerConfig};
+use zaino_serve::server::config::{GrpcServerConfig, JsonRpcServerConfig};
 use zaino_state::{BackendConfig, FetchServiceConfig, StateServiceConfig};
 
 /// Custom deserialization function for `SocketAddr` from a String.
@@ -60,25 +60,16 @@ pub struct IndexerConfig {
     #[serde(serialize_with = "serialize_backendtype_to_string")]
     pub backend: zaino_state::BackendType,
     // TODO later, create what were called "sections"
-    /// Enable JsonRPC server.
+    /// Enable JsonRPC server with a valid Some value.
     #[serde(default)]
     pub json_server_settings: Option<JsonRpcServerConfig>,
-    // Some is true
-    // pub enable_json_server: bool,
-    // /// Server bind addr.
     // TODO commenting out : for rpc listen #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
-    // pub json_rpc_listen_address: SocketAddr,
-    // /// Enable cookie-based authentication.
-    // pub enable_cookie_auth: bool,
-    // /// Directory to store authentication cookie file.
-    // pub cookie_dir: Option<PathBuf>,
-    // TODO end here, I believe
-    //
     /// gRPC server settings including listen addr, tls status, key and cert.
-    pub grpc_settings: GrpcConfig,
+    pub grpc_settings: GrpcServerConfig,
+
     /// Full node / validator listen port.
     #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
-    pub validator_listen_address: SocketAddr,
+    pub validator_jsonrpc_listen_address: SocketAddr,
     /// Full node / validator gprc listen port.
     #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     pub validator_grpc_listen_address: SocketAddr,
@@ -90,6 +81,7 @@ pub struct IndexerConfig {
     pub validator_user: Option<String>,
     /// full node / validator Password.
     pub validator_password: Option<String>,
+
     /// Service-level configuration (timeout, channel size).
     pub service: ServiceConfig,
     /// Storage configuration (cache and database).
@@ -160,7 +152,7 @@ impl IndexerConfig {
             fetch_socket_addr_from_hostname(&self.grpc_settings.listen_address.to_string())?;
 
         let validator_addr =
-            fetch_socket_addr_from_hostname(&self.validator_listen_address.to_string())?;
+            fetch_socket_addr_from_hostname(&self.validator_jsonrpc_listen_address.to_string())?;
 
         // Ensure validator listen address is private.
         if !is_private_listen_addr(&validator_addr) {
@@ -222,15 +214,11 @@ impl Default for IndexerConfig {
         Self {
             backend: zaino_state::BackendType::Fetch,
             json_server_settings: None,
-            // enable_json_server: false,
-            // json_rpc_listen_address: "127.0.0.1:8237".parse().unwrap(),
-            // enable_cookie_auth: false,
-            // cookie_dir: None,
-            grpc_settings: GrpcConfig {
+            grpc_settings: GrpcServerConfig {
                 listen_address: "127.0.0.1:8137".parse().unwrap(),
                 tls: None,
             },
-            validator_listen_address: "127.0.0.1:18232".parse().unwrap(),
+            validator_jsonrpc_listen_address: "127.0.0.1:18232".parse().unwrap(),
             validator_grpc_listen_address: "127.0.0.1:18230".parse().unwrap(),
             validator_cookie_auth: false,
             validator_cookie_path: None,
@@ -391,7 +379,7 @@ impl TryFrom<IndexerConfig> for BackendConfig {
                     debug_stop_at_height: None,
                     debug_validity_check_interval: None,
                 },
-                validator_rpc_address: cfg.validator_listen_address,
+                validator_rpc_address: cfg.validator_jsonrpc_listen_address,
                 validator_indexer_rpc_address: cfg.validator_grpc_listen_address,
                 validator_cookie_auth: cfg.validator_cookie_auth,
                 validator_cookie_path: cfg.validator_cookie_path,
@@ -406,7 +394,7 @@ impl TryFrom<IndexerConfig> for BackendConfig {
             })),
 
             zaino_state::BackendType::Fetch => Ok(BackendConfig::Fetch(FetchServiceConfig {
-                validator_rpc_address: cfg.validator_listen_address,
+                validator_rpc_address: cfg.validator_jsonrpc_listen_address,
                 validator_cookie_auth: cfg.validator_cookie_auth,
                 validator_cookie_path: cfg.validator_cookie_path,
                 validator_rpc_user: cfg.validator_user.unwrap_or_else(|| "xxxxxx".to_string()),

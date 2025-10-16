@@ -18,7 +18,7 @@ use tracing_subscriber::EnvFilter;
 use zaino_common::{
     network::ActivationHeights, CacheConfig, DatabaseConfig, Network, ServiceConfig, StorageConfig,
 };
-use zaino_serve::server::config::{GrpcConfig, JsonRpcServerConfig};
+use zaino_serve::server::config::{GrpcServerConfig, JsonRpcServerConfig};
 use zaino_state::BackendType;
 use zainodlib::config::default_ephemeral_cookie_path;
 pub use zcash_local_net as services;
@@ -392,7 +392,6 @@ impl TestManager {
         activation_heights: Option<ActivationHeights>,
         chain_cache: Option<PathBuf>,
         enable_zaino: bool,
-        // TODO the following two fields involve zaino's json RPC server
         enable_zaino_jsonrpc_server: bool,
         enable_zaino_jsonrpc_server_cookie_auth: bool,
         zaino_no_sync: bool,
@@ -493,11 +492,11 @@ impl TestManager {
                 } else {
                     None
                 },
-                grpc_settings: GrpcConfig {
+                grpc_settings: GrpcServerConfig {
                     listen_address: zaino_grpc_listen_address,
                     tls: None,
                 },
-                validator_listen_address: full_node_rpc_listen_address,
+                validator_jsonrpc_listen_address: full_node_rpc_listen_address,
                 validator_grpc_listen_address: full_node_grpc_listen_address,
                 validator_cookie_auth: false,
                 validator_cookie_path: None,

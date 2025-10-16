@@ -6,7 +6,7 @@ use tracing::info;
 use zaino_fetch::jsonrpsee::connector::test_node_and_return_url;
 use zaino_serve::server::{
     // TODO see: config here
-    config::GrpcConfig,
+    config::GrpcServerConfig,
     grpc::TonicServer,
     // TODO vs Server here
     jsonrpc::JsonRpcServer,
@@ -48,7 +48,7 @@ pub async fn spawn_indexer(
     config.check_config()?;
     info!("Checking connection with node..");
     let zebrad_uri = test_node_and_return_url(
-        config.validator_listen_address,
+        config.validator_jsonrpc_listen_address,
         config.validator_cookie_auth,
         config.validator_cookie_path.clone(),
         config.validator_user.clone(),
@@ -92,7 +92,7 @@ where
 
         let grpc_server = TonicServer::spawn(
             service.inner_ref().get_subscriber(),
-            GrpcConfig {
+            GrpcServerConfig {
                 listen_address: indexer_config.grpc_settings.listen_address,
                 tls: indexer_config.grpc_settings.tls,
             },

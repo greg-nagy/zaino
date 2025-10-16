@@ -10,7 +10,7 @@ use zaino_state::{AtomicStatus, IndexerSubscriber, LightWalletIndexer, StatusTyp
 
 use crate::{
     rpc::GrpcClient,
-    server::{config::GrpcConfig, error::ServerError},
+    server::{config::GrpcServerConfig, error::ServerError},
 };
 
 /// LightWallet server capable of servicing clients over TCP.
@@ -32,7 +32,7 @@ impl TonicServer {
     /// - Checks for shutdown signal, shutting down server if received.
     pub async fn spawn<Indexer: ZcashIndexer + LightWalletIndexer>(
         service_subscriber: IndexerSubscriber<Indexer>,
-        server_config: GrpcConfig,
+        server_config: GrpcServerConfig,
     ) -> Result<Self, ServerError> {
         let status = AtomicStatus::new(StatusType::Spawning);
 
