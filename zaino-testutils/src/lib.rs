@@ -496,7 +496,7 @@ impl TestManager {
                     listen_address: zaino_grpc_listen_address,
                     tls: None,
                 },
-                validator_settings: ValidatorTestConfig
+                validator_settings: ValidatorConfig {}
                 validator_jsonrpc_listen_address: full_node_rpc_listen_address,
                 validator_grpc_listen_address: full_node_grpc_listen_address,
                 validator_cookie_auth: false,
