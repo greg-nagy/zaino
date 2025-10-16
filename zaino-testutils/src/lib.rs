@@ -137,7 +137,7 @@ pub enum ValidatorKind {
 }
 
 /// Config for validators.
-pub enum ValidatorConfig {
+pub enum ValidatorTestConfig {
     /// Zcashd Config.
     ZcashdConfig(ZcashdConfig),
     /// Zebrad Config.
@@ -170,7 +170,7 @@ impl zcash_local_net::validator::Validator for LocalNet {
     const CONFIG_FILENAME: &str = "";
     const PROCESS: zcash_local_net::Process = zcash_local_net::Process::Empty; // todo
 
-    type Config = ValidatorConfig;
+    type Config = ValidatorTestConfig;
 
     fn default_test_config() -> Self::Config {
         todo!()
@@ -194,7 +194,7 @@ impl zcash_local_net::validator::Validator for LocalNet {
     {
         async move {
             match config {
-                ValidatorConfig::ZcashdConfig(cfg) => {
+                ValidatorTestConfig::ZcashdConfig(cfg) => {
                     let net = zcash_local_net::LocalNet::<
                         zcash_local_net::indexer::Empty,
                         zcash_local_net::validator::Zcashd,
@@ -204,7 +204,7 @@ impl zcash_local_net::validator::Validator for LocalNet {
                     .await;
                     Ok(LocalNet::Zcashd(net))
                 }
-                ValidatorConfig::ZebradConfig(cfg) => {
+                ValidatorTestConfig::ZebradConfig(cfg) => {
                     let net = zcash_local_net::LocalNet::<
                         zcash_local_net::indexer::Empty,
                         zcash_local_net::validator::Zebrad,
@@ -435,7 +435,7 @@ impl TestManager {
                 cfg.rpc_listen_port = Some(rpc_listen_port);
                 cfg.configured_activation_heights = activation_heights.into();
                 cfg.chain_cache = chain_cache.clone();
-                ValidatorConfig::ZcashdConfig(cfg)
+                ValidatorTestConfig::ZcashdConfig(cfg)
             }
             ValidatorKind::Zebrad => {
                 let mut cfg = ZebradConfig::default_test();
@@ -444,7 +444,7 @@ impl TestManager {
                 cfg.configured_activation_heights = activation_heights.into();
                 cfg.chain_cache = chain_cache.clone();
                 cfg.network = network_kind;
-                ValidatorConfig::ZebradConfig(cfg)
+                ValidatorTestConfig::ZebradConfig(cfg)
             }
         };
         let local_net = LocalNet::launch(validator_config).await.unwrap();
@@ -496,6 +496,7 @@ impl TestManager {
                     listen_address: zaino_grpc_listen_address,
                     tls: None,
                 },
+                validator_settings: ValidatorTestConfig
                 validator_jsonrpc_listen_address: full_node_rpc_listen_address,
                 validator_grpc_listen_address: full_node_grpc_listen_address,
                 validator_cookie_auth: false,
