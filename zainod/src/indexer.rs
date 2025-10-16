@@ -1,16 +1,10 @@
-//! Zingo-Indexer implementation.
+//! Zaino : Zingo-Indexer implementation.
 
 use tokio::time::Instant;
 use tracing::info;
 
 use zaino_fetch::jsonrpsee::connector::test_node_and_return_url;
-use zaino_serve::server::{
-    // TODO see: config here
-    config::GrpcServerConfig,
-    grpc::TonicServer,
-    // TODO vs Server here
-    jsonrpc::JsonRpcServer,
-};
+use zaino_serve::server::{config::GrpcServerConfig, grpc::TonicServer, jsonrpc::JsonRpcServer};
 use zaino_state::{
     BackendConfig, FetchService, IndexerService, LightWalletService, StateService, StatusType,
     ZcashIndexer, ZcashService,
@@ -18,7 +12,7 @@ use zaino_state::{
 
 use crate::{config::IndexerConfig, error::IndexerError};
 
-/// Zingo-Indexer.
+/// Zaino, the Zingo-Indexer.
 pub struct Indexer<Service: ZcashService + LightWalletService> {
     /// JsonRPC server.
     ///
