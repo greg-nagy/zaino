@@ -156,8 +156,12 @@ impl IndexerConfig {
         let grpc_addr =
             fetch_socket_addr_from_hostname(&self.grpc_settings.listen_address.to_string())?;
 
-        let validator_addr =
-            fetch_socket_addr_from_hostname(&self.validator_jsonrpc_listen_address.to_string())?;
+        let validator_addr = fetch_socket_addr_from_hostname(
+            &self
+                .validator_settings
+                .validator_jsonrpc_listen_address
+                .to_string(),
+        )?;
 
         // Ensure validator listen address is private.
         if !is_private_listen_addr(&validator_addr) {
@@ -176,7 +180,9 @@ impl IndexerConfig {
             }
 
             // Ensure validator rpc cookie authentication is used when connecting to non-loopback addresses.
-            if !is_loopback_listen_addr(&validator_addr) && !self.validator_cookie_auth {
+            if !is_loopback_listen_addr(&validator_addr)
+                && self.validator_settings.validator_cookie_path.is_none()
+            {
                 return Err(IndexerError::ConfigError(
                 "Validator listen address is not loopback, so cookie authentication must be enabled."
                     .to_string(),
@@ -223,12 +229,13 @@ impl Default for IndexerConfig {
                 listen_address: "127.0.0.1:8137".parse().unwrap(),
                 tls: None,
             },
-            validator_jsonrpc_listen_address: "127.0.0.1:18232".parse().unwrap(),
-            validator_grpc_listen_address: "127.0.0.1:18230".parse().unwrap(),
-            validator_cookie_auth: false,
-            validator_cookie_path: None,
-            validator_user: Some("xxxxxx".to_string()),
-            validator_password: Some("xxxxxx".to_string()),
+            validator_settings: ValidatorConfig {
+                validator_grpc_listen_address: "127.0.0.1:18230".parse().unwrap(),
+                validator_jsonrpc_listen_address: "127.0.0.1:18232".parse().unwrap(),
+                validator_cookie_path: None,
+                validator_user: Some("xxxxxx".to_string()),
+                validator_password: Some("xxxxxx".to_string()),
+            },
             service: ServiceConfig::default(),
             storage: StorageConfig {
                 cache: CacheConfig::default(),
@@ -377,19 +384,22 @@ impl TryFrom<IndexerConfig> for BackendConfig {
     fn try_from(cfg: IndexerConfig) -> Result<Self, Self::Error> {
         match cfg.backend {
             zaino_state::BackendType::State => Ok(BackendConfig::State(StateServiceConfig {
-                validator_config: zebra_state::Config {
+                validator_state_config: zebra_state::Config {
                     cache_dir: cfg.zebra_db_path.clone(),
                     ephemeral: false,
                     delete_old_database: true,
                     debug_stop_at_height: None,
                     debug_validity_check_interval: None,
                 },
-                validator_rpc_address: cfg.validator_jsonrpc_listen_address,
-                validator_indexer_rpc_address: cfg.validator_grpc_listen_address,
-                validator_cookie_auth: cfg.validator_cookie_auth,
-                validator_cookie_path: cfg.validator_cookie_path,
-                validator_rpc_user: cfg.validator_user.unwrap_or_else(|| "xxxxxx".to_string()),
+                validator_rpc_address: cfg.validator_settings.validator_jsonrpc_listen_address,
+                validator_indexer_rpc_address: cfg.validator_settings.validator_grpc_listen_address,
+                validator_cookie_path: cfg.validator_settings.validator_cookie_path,
+                validator_rpc_user: cfg
+                    .validator_settings
+                    .validator_user
+                    .unwrap_or_else(|| "xxxxxx".to_string()),
                 validator_rpc_password: cfg
+                    .validator_settings
                     .validator_password
                     .unwrap_or_else(|| "xxxxxx".to_string()),
                 service: cfg.service,
@@ -399,11 +409,14 @@ impl TryFrom<IndexerConfig> for BackendConfig {
             })),
 
             zaino_state::BackendType::Fetch => Ok(BackendConfig::Fetch(FetchServiceConfig {
-                validator_rpc_address: cfg.validator_jsonrpc_listen_address,
-                validator_cookie_auth: cfg.validator_cookie_auth,
-                validator_cookie_path: cfg.validator_cookie_path,
-                validator_rpc_user: cfg.validator_user.unwrap_or_else(|| "xxxxxx".to_string()),
+                validator_rpc_address: cfg.validator_settings.validator_jsonrpc_listen_address,
+                validator_cookie_path: cfg.validator_settings.validator_cookie_path,
+                validator_rpc_user: cfg
+                    .validator_settings
+                    .validator_user
+                    .unwrap_or_else(|| "xxxxxx".to_string()),
                 validator_rpc_password: cfg
+                    .validator_settings
                     .validator_password
                     .unwrap_or_else(|| "xxxxxx".to_string()),
                 service: cfg.service,
