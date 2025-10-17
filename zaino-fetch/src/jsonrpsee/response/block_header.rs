@@ -155,15 +155,15 @@ mod tests {
           "confirmations": 3,
           "height": 42,
           "version": 5,
-          "merkleroot": "bb33merkle",
-          "blockcommitments": "cc44blockcommitments",
-          "finalsaplingroot": "dd55sapling",
+          "merkleroot": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
+          "blockcommitments": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
+          "finalsaplingroot": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
           "time": 1699999999,
           "nonce": "33nonce",
           "solution": "44solution",
           "bits": "1c654321",
           "difficulty": 7890.123,
-          "previousblockhash": "prevhash0042"
+          "previousblockhash": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f"
         }"#
     }
 
@@ -235,21 +235,20 @@ mod tests {
 
     #[test]
     fn deserialize_verbose_zebra_includes_blockcommitments_and_omits_chainwork() {
-        let block_header: GetBlockHeader = serde_json::from_str(zebra_verbose_json()).unwrap();
-        match block_header {
-            GetBlockHeader::Verbose(v) => {
+        match serde_json::from_str::<VerboseBlockHeader>(zebra_verbose_json()) {
+            Ok(block_header) => {
                 assert_eq!(
-                    v.hash,
+                    block_header.hash,
                     block::Hash::from_str(
                         "00000000001b76b932f31289beccd3988d098ec3c8c6e4a0c7bcaf52e9bdead1"
                     )
                     .unwrap()
                 );
-                assert_eq!(v.confirmations, 3);
-                assert_eq!(v.height, 42);
-                assert_eq!(v.version, 5);
+                assert_eq!(block_header.confirmations, 3);
+                assert_eq!(block_header.height, 42);
+                assert_eq!(block_header.version, 5);
                 assert_eq!(
-                    v.merkle_root,
+                    block_header.merkle_root,
                     block::merkle::Root::from_hex(
                         "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f"
                     )
@@ -257,30 +256,46 @@ mod tests {
                 );
 
                 assert_eq!(
-                    v.block_commitments.unwrap(),
-                    "cc44blockcommitments".as_bytes()
+                    block_header.block_commitments.unwrap(),
+                    <[u8; 32]>::from_hex(
+                        "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f"
+                    )
+                    .unwrap()
                 );
 
                 assert_eq!(
-                    v.final_sapling_root.unwrap(),
-                    "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f".as_bytes()
+                    block_header.final_sapling_root.unwrap(),
+                    <[u8; 32]>::from_hex(
+                        "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f"
+                    )
+                    .unwrap()
                 );
-                assert_eq!(v.time, 1_699_999_999);
-                assert_eq!(v.nonce, "33nonce");
-                assert_eq!(v.solution, "44solution");
-                assert_eq!(v.bits, "1c654321");
-                assert!((v.difficulty - 7890.123).abs() < f64::EPSILON);
+                assert_eq!(block_header.time, 1_699_999_999);
+                assert_eq!(block_header.nonce, "33nonce");
+                assert_eq!(block_header.solution, "44solution");
+                assert_eq!(block_header.bits, "1c654321");
+                assert!((block_header.difficulty - 7890.123).abs() < f64::EPSILON);
 
-                assert!(v.chainwork.is_none());
+                assert!(block_header.chainwork.is_none());
 
                 // Zebra always sets previous
-                assert_eq!(v.previous_block_hash.as_deref(), Some("prevhash0042"));
-                assert!(v.next_block_hash.is_none());
+                assert_eq!(
+                    block_header.previous_block_hash.as_deref(),
+                    Some("000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f")
+                );
+                assert!(block_header.next_block_hash.is_none());
 
                 // No extras
-                assert!(v.extra.is_empty());
+                assert!(block_header.extra.is_empty());
             }
-            _ => panic!("expected Verbose variant"),
+            Err(e) => {
+                panic!(
+                    "VerboseBlockHeader failed at {}:{} — {}",
+                    e.line(),
+                    e.column(),
+                    e
+                );
+            }
         }
     }
 
@@ -323,7 +338,9 @@ mod tests {
 
         assert_eq!(
             header_object.get("blockcommitments"),
-            Some(&json!("cc44blockcommitments"))
+            Some(&json!(
+                "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f"
+            ))
         );
     }
 
