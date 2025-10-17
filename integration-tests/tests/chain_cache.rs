@@ -60,7 +60,7 @@ mod chain_query_interface {
             types::{BestChainLocation, TransactionHash},
             NodeBackedChainIndex, NodeBackedChainIndexSubscriber,
         },
-        workbench::{
+        test_dependencies::{
             chain_index::{self, ChainIndex},
             BlockCacheConfig,
         },

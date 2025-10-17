@@ -54,9 +54,9 @@ pub(crate) mod local_cache;
 
 pub use chain_index::mempool::{MempoolKey, MempoolValue};
 
-#[cfg(feature = "workbench")]
+#[cfg(feature = "test_dependencies")]
 /// allow public access to additional APIs, for testing
-pub mod workbench {
+pub mod test_depenedencies {
     /// Testing export of chain_index
     pub mod chain_index {
         pub use crate::chain_index::*;
