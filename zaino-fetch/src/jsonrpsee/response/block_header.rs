@@ -9,6 +9,7 @@ use zebra_rpc::methods::opthex;
 use crate::jsonrpsee::connector::{ResponseToError, RpcError};
 
 /// Response to a `getblockheader` RPC request.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetBlockHeader {
