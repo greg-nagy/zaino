@@ -376,7 +376,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
         hash: String,
         verbose: bool,
     ) -> Result<GetBlockHeader, Self::Error> {
-        Ok(self.fetcher.get_block_header(hash, verbose).await?.into())
+        Ok(self.fetcher.get_block_header(hash, verbose).await?)
     }
 
     /// Returns the hash of the best block (tip) of the longest chain.

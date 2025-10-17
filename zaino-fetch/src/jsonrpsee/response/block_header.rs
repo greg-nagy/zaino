@@ -1,6 +1,6 @@
 //! Types associated with the `getblockheader` RPC request.
 
-use std::{collections::BTreeMap, convert::Infallible};
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
