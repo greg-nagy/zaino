@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use zebra_rpc::methods::opthex;
 
-use crate::jsonrpsee::connector::ResponseToError;
+use crate::jsonrpsee::connector::{ResponseToError, RpcError};
 
 /// Response to a `getblockheader` RPC request.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -20,6 +20,18 @@ pub enum GetBlockHeader {
 
     /// An unknown response shape.
     Unknown(serde_json::Value),
+}
+
+/// Error type for the `getblockheader` RPC request.
+#[derive(Debug, thiserror::Error)]
+pub enum GetBlockHeaderError {
+    /// Verbosity not valid
+    #[error("Invalid verbosity: {0}")]
+    InvalidVerbosity(i8),
+
+    /// The requested block hash or height could not be found
+    #[error("Block not found: {0}")]
+    MissingBlock(String),
 }
 
 /// Verbose response to a `getblockheader` RPC request.
@@ -113,7 +125,21 @@ pub struct VerboseBlockHeader {
 }
 
 impl ResponseToError for GetBlockHeader {
-    type RpcError = Infallible;
+    type RpcError = GetBlockHeaderError;
+}
+
+impl TryFrom<RpcError> for GetBlockHeaderError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        // If the block is not in Zebra's state, returns
+        // [error code `-8`.](https://github.com/zcash/zcash/issues/5758)
+        if value.code == -8 {
+            Ok(Self::MissingBlock(value.message))
+        } else {
+            Err(value)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -148,7 +174,6 @@ mod tests {
     }
 
     // Zebra verbose response
-    // TODO: Add finalorchardroot
     fn zebra_verbose_json() -> &'static str {
         r#"{
           "hash": "00000000001b76b932f31289beccd3988d098ec3c8c6e4a0c7bcaf52e9bdead1",
@@ -158,6 +183,7 @@ mod tests {
           "merkleroot": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
           "blockcommitments": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
           "finalsaplingroot": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
+          "finalorchardroot": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
           "time": 1699999999,
           "nonce": "33nonce",
           "solution": "44solution",
@@ -265,6 +291,14 @@ mod tests {
 
                 assert_eq!(
                     block_header.final_sapling_root.unwrap(),
+                    <[u8; 32]>::from_hex(
+                        "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f"
+                    )
+                    .unwrap()
+                );
+
+                assert_eq!(
+                    block_header.final_orchard_root.unwrap(),
                     <[u8; 32]>::from_hex(
                         "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f"
                     )

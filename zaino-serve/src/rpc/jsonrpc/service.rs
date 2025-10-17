@@ -212,6 +212,17 @@ pub trait ZcashIndexerRpc {
         verbosity: Option<u8>,
     ) -> Result<GetBlock, ErrorObjectOwned>;
 
+    /// If verbose is false, returns a string that is serialized, hex-encoded data for blockheader 'hash'.
+    /// If verbose is true, returns an Object with information about blockheader <hash>.
+    ///
+    /// # Parameters
+    ///
+    /// - hash: (string, required) The block hash
+    /// - verbose: (boolean, optional, default=true) true for a json object, false for the hex encoded data
+    ///
+    /// zcashd reference: [`getblockheader`](https://zcash.github.io/rpc/getblockheader.html)
+    /// method: post
+    /// tags: blockchain
     #[method(name = "getblockheader")]
     async fn get_block_header(
         &self,
