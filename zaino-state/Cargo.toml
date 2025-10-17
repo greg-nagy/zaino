@@ -10,7 +10,7 @@ version = { workspace = true }
 
 [features]
 # (Work)bench - Exposes internal functionality for testing.
-bench = []
+workbench = []
 
 [dependencies]
 zaino-common = { workspace = true }
