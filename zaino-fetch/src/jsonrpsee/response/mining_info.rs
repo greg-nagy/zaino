@@ -207,7 +207,7 @@ mod tests {
         assert_eq!(wire.networkhashps, None);
 
         assert_eq!(wire.chain, "");
-        assert_eq!(wire.testnet, false);
+        assert!(!wire.testnet);
 
         assert_eq!(wire.difficulty, None);
         assert_eq!(wire.errors, None);
