@@ -42,7 +42,7 @@ pub struct VerboseBlockHeader {
     pub version: u32,
 
     /// The merkle root of the requesteed block.
-    #[serde(rename = "merkleroot")]
+    #[serde(with = "hex", rename = "merkleroot")]
     pub merkle_root: zebra_chain::block::merkle::Root,
 
     /// The blockcommitments field of the requested block. Its interpretation changes
@@ -61,8 +61,12 @@ pub struct VerboseBlockHeader {
     pub final_sapling_root: Option<[u8; 32]>,
 
     /// The root of the Orchard commitment tree after applying this block.
-    #[serde(with = "opthex", rename = "finalorchardroot")]
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        with = "opthex",
+        rename = "finalorchardroot",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     final_orchard_root: Option<[u8; 32]>,
 
     /// The block time of the requested block header in non-leap seconds since Jan 1 1970 GMT.
@@ -128,16 +132,16 @@ mod tests {
           "confirmations": 10,
           "height": 123456,
           "version": 4,
-          "merkleroot": "aa11merkle",
-          "finalsaplingroot": "bb22sapling",
+          "merkleroot": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
+          "finalsaplingroot": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
           "time": 1700000000,
           "nonce": "11nonce",
           "solution": "22solution",
           "bits": "1d00ffff",
           "difficulty": 123456.789,
           "chainwork": "0000000000000000000000000000000000000000000000000000000000001234",
-          "previousblockhash": "prevhash0001",
-          "nextblockhash": "nexthash0001",
+          "previousblockhash": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
+          "nextblockhash": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
           "mediantime": 1700000500,
           "nTx": 12
         }"#
@@ -165,43 +169,67 @@ mod tests {
 
     #[test]
     fn deserialize_verbose_zcashd_includes_chainwork_and_extra() {
-        let block_header: GetBlockHeader = serde_json::from_str(zcashd_verbose_json()).unwrap();
-        match block_header {
-            GetBlockHeader::Verbose(v) => {
+        match serde_json::from_str::<VerboseBlockHeader>(zcashd_verbose_json()) {
+            Ok(block_header) => {
                 assert_eq!(
-                    v.hash,
+                    block_header.hash,
                     block::Hash::from_str(
                         "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f"
                     )
                     .unwrap()
                 );
-                assert_eq!(v.confirmations, 10);
-                assert_eq!(v.height, 123_456);
-                assert_eq!(v.version, 4);
+                assert_eq!(block_header.confirmations, 10);
+                assert_eq!(block_header.height, 123_456);
+                assert_eq!(block_header.version, 4);
                 assert_eq!(
-                    v.merkle_root,
-                    block::merkle::Root::from_hex("aa11merkle").unwrap()
+                    block_header.merkle_root,
+                    block::merkle::Root::from_hex(
+                        "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f"
+                    )
+                    .unwrap()
                 );
-                assert_eq!(v.final_sapling_root.unwrap(), "bb22sapling".as_bytes());
-                assert_eq!(v.time, 1_700_000_000);
-                assert_eq!(v.nonce, "11nonce");
-                assert_eq!(v.solution, "22solution");
-                assert_eq!(v.bits, "1d00ffff");
-                assert!((v.difficulty - 123_456.789).abs() < f64::EPSILON);
+                assert_eq!(
+                    block_header.final_sapling_root.unwrap(),
+                    <[u8; 32]>::from_hex(
+                        "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f"
+                    )
+                    .unwrap()
+                );
+                assert_eq!(block_header.time, 1_700_000_000);
+                assert_eq!(block_header.nonce, "11nonce");
+                assert_eq!(block_header.solution, "22solution");
+                assert_eq!(block_header.bits, "1d00ffff");
+                assert!((block_header.difficulty - 123_456.789).abs() < f64::EPSILON);
 
                 assert_eq!(
-                    v.chainwork.as_deref(),
+                    block_header.chainwork.as_deref(),
                     Some("0000000000000000000000000000000000000000000000000000000000001234")
                 );
 
-                assert_eq!(v.previous_block_hash.as_deref(), Some("prevhash0001"));
-                assert_eq!(v.next_block_hash.as_deref(), Some("nexthash0001"));
+                assert_eq!(
+                    block_header.previous_block_hash.as_deref(),
+                    Some("000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f")
+                );
+                assert_eq!(
+                    block_header.next_block_hash.as_deref(),
+                    Some("000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f")
+                );
 
                 // Extras
-                assert_eq!(v.extra.get("mediantime"), Some(&json!(1_700_000_500)));
-                assert_eq!(v.extra.get("nTx"), Some(&json!(12)));
+                assert_eq!(
+                    block_header.extra.get("mediantime"),
+                    Some(&json!(1_700_000_500))
+                );
+                assert_eq!(block_header.extra.get("nTx"), Some(&json!(12)));
             }
-            _ => panic!("expected Verbose variant"),
+            Err(e) => {
+                panic!(
+                    "VerboseBlockHeader failed at {}:{} — {}",
+                    e.line(),
+                    e.column(),
+                    e
+                );
+            }
         }
     }
 
@@ -222,7 +250,10 @@ mod tests {
                 assert_eq!(v.version, 5);
                 assert_eq!(
                     v.merkle_root,
-                    block::merkle::Root::from_hex("bb33merkle").unwrap()
+                    block::merkle::Root::from_hex(
+                        "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f"
+                    )
+                    .unwrap()
                 );
 
                 assert_eq!(
@@ -230,7 +261,10 @@ mod tests {
                     "cc44blockcommitments".as_bytes()
                 );
 
-                assert_eq!(v.final_sapling_root.unwrap(), "dd55sapling".as_bytes());
+                assert_eq!(
+                    v.final_sapling_root.unwrap(),
+                    "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f".as_bytes()
+                );
                 assert_eq!(v.time, 1_699_999_999);
                 assert_eq!(v.nonce, "33nonce");
                 assert_eq!(v.solution, "44solution");
@@ -328,14 +362,19 @@ mod tests {
           "difficulty": 1.0
         }"#;
 
-        let block_header: GetBlockHeader = serde_json::from_str(genesis_like).unwrap();
-        match block_header {
-            GetBlockHeader::Verbose(v) => {
-                assert!(v.previous_block_hash.is_none());
-                assert!(v.next_block_hash.is_none());
+        match serde_json::from_str::<VerboseBlockHeader>(genesis_like) {
+            Ok(block_header) => {
+                assert!(block_header.previous_block_hash.is_none());
+                assert!(block_header.next_block_hash.is_none());
             }
-            GetBlockHeader::Compact(_) => panic!("expected Verbose variant, got Compact"),
-            GetBlockHeader::Unknown(_) => panic!("expected Verbose variant, got Unknown"),
+            Err(e) => {
+                panic!(
+                    "VerboseBlockHeader failed at {}:{} — {}",
+                    e.line(),
+                    e.column(),
+                    e
+                );
+            }
         }
     }
 }
