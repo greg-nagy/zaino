@@ -250,8 +250,8 @@ pub trait ZcashIndexer: Send + Sync + 'static {
         raw_transaction_hex: String,
     ) -> Result<SentTransactionHash, Self::Error>;
 
-    /// If verbose is false, returns a string that is serialized, hex-encoded data for blockheader 'hash'.
-    /// If verbose is true, returns an Object with information about blockheader <hash>.
+    /// If verbose is false, returns a string that is serialized, hex-encoded data for blockheader `hash`.
+    /// If verbose is true, returns an Object with information about blockheader `hash`.
     ///
     /// # Parameters
     ///

@@ -212,8 +212,8 @@ pub trait ZcashIndexerRpc {
         verbosity: Option<u8>,
     ) -> Result<GetBlock, ErrorObjectOwned>;
 
-    /// If verbose is false, returns a string that is serialized, hex-encoded data for blockheader 'hash'.
-    /// If verbose is true, returns an Object with information about blockheader <hash>.
+    /// If verbose is false, returns a string that is serialized, hex-encoded data for blockheader `hash`.
+    /// If verbose is true, returns an Object with information about blockheader `hash`.
     ///
     /// # Parameters
     ///
