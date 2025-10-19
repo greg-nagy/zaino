@@ -196,7 +196,7 @@ mod tests {
     }
 
     #[test]
-    fn minimal_payload_defaults_zebrad() {
+    fn minimal_payload_defaults() {
         let blocks = r#"{ "blocks": 0 }"#;
         let wire: GetMiningInfoWire = serde_json::from_str(blocks).unwrap();
 
@@ -227,13 +227,13 @@ mod tests {
         assert_eq!(mining_info.current_block_size, wire.current_block_size);
         assert_eq!(mining_info.current_block_tx, wire.current_block_tx);
 
-        assert_eq!(mining_info.network_solution_rate, Some(1_234));
-        assert_eq!(mining_info.network_hash_rate, Some(5_678));
+        assert_eq!(mining_info.network_solution_rate, wire.networksolps);
+        assert_eq!(mining_info.network_hash_rate, wire.networkhashps);
 
-        assert_eq!(mining_info.chain, "main");
+        assert_eq!(mining_info.chain, wire.chain);
         assert!(!mining_info.testnet);
-        assert_eq!(mining_info.difficulty, None);
-        assert_eq!(mining_info.errors, None);
+        assert_eq!(mining_info.difficulty, wire.difficulty);
+        assert_eq!(mining_info.errors, wire.errors);
         assert!(mining_info.extras.contains_key("somefuture"));
     }
 
@@ -242,17 +242,17 @@ mod tests {
         let wire: GetMiningInfoWire = serde_json::from_str(&zcashd_json()).unwrap();
         let mining_info: MiningInfo = wire.clone().into();
 
-        assert_eq!(mining_info.tip_height, 765_432);
-        assert_eq!(mining_info.current_block_size, Some(999_999));
-        assert_eq!(mining_info.current_block_tx, Some(99));
+        assert_eq!(mining_info.tip_height, wire.tip_height);
+        assert_eq!(mining_info.current_block_size, wire.current_block_size);
+        assert_eq!(mining_info.current_block_tx, wire.current_block_tx);
 
-        assert_eq!(mining_info.network_solution_rate, Some(1_000_000));
-        assert_eq!(mining_info.network_hash_rate, Some(2_000_000));
+        assert_eq!(mining_info.network_solution_rate, wire.networksolps);
+        assert_eq!(mining_info.network_hash_rate, wire.networkhashps);
 
-        assert_eq!(mining_info.chain, "main");
+        assert_eq!(mining_info.chain, wire.chain);
         assert!(!mining_info.testnet);
-        assert_eq!(mining_info.difficulty, Some(100_000.0));
-        assert_eq!(mining_info.errors.as_deref(), Some(""));
+        assert_eq!(mining_info.difficulty, wire.difficulty);
+        assert_eq!(mining_info.errors, wire.errors);
     }
 
     #[test]
