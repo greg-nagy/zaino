@@ -46,9 +46,9 @@ pub struct StateServiceConfig {
     pub storage: StorageConfig,
     /// Network type.
     pub network: Network,
-    /// Disables internal sync and stops zaino waiting on server sync.
-    /// Used for testing.
-    pub no_sync: bool,
+    // /// Disables internal sync and stops zaino waiting on server sync.
+    // /// Used for testing.
+    // pub no_sync: bool,
 }
 
 impl StateServiceConfig {
@@ -66,7 +66,7 @@ impl StateServiceConfig {
         service: ServiceConfig,
         storage: StorageConfig,
         network: Network,
-        no_sync: bool,
+        // no_sync: bool,
     ) -> Self {
         StateServiceConfig {
             validator_state_config,
@@ -79,11 +79,12 @@ impl StateServiceConfig {
             service,
             storage,
             network,
-            no_sync,
+            // no_sync,
         }
     }
 }
 
+// TODO should this live in another module?
 /// Holds config data for [crate::FetchService].
 #[derive(Debug, Clone)]
 pub struct FetchServiceConfig {
@@ -103,9 +104,9 @@ pub struct FetchServiceConfig {
     pub storage: StorageConfig,
     /// Network type.
     pub network: Network,
-    /// Disables internal sync and stops zaino waiting on server sync.
-    /// Used for testing.
-    pub no_sync: bool,
+    // /// Disables internal sync and stops zaino waiting on server sync.
+    // /// Used for testing.
+    // pub no_sync: bool,
 }
 
 impl FetchServiceConfig {
@@ -120,7 +121,7 @@ impl FetchServiceConfig {
         service: ServiceConfig,
         storage: StorageConfig,
         network: Network,
-        no_sync: bool,
+        // no_sync: bool,
     ) -> Self {
         FetchServiceConfig {
             validator_rpc_address,
@@ -130,7 +131,7 @@ impl FetchServiceConfig {
             service,
             storage,
             network,
-            no_sync,
+            // no_sync,
         }
     }
 }
@@ -145,20 +146,20 @@ pub struct BlockCacheConfig {
     pub db_version: u32,
     /// Network type.
     pub network: Network,
-    /// Stops zaino waiting on server sync.
-    /// Used for testing.
-    pub no_sync: bool,
+    // /// Stops zaino waiting on server sync.
+    // /// Used for testing.
+    // pub no_sync: bool,
 }
 
 impl BlockCacheConfig {
     /// Returns a new instance of [`BlockCacheConfig`].
     #[allow(dead_code)]
-    pub fn new(storage: StorageConfig, db_version: u32, network: Network, no_sync: bool) -> Self {
+    pub fn new(storage: StorageConfig, db_version: u32, network: Network, _no_sync: bool) -> Self {
         BlockCacheConfig {
             storage,
             db_version,
             network,
-            no_sync,
+            // no_sync,
         }
     }
 }
@@ -170,7 +171,7 @@ impl From<StateServiceConfig> for BlockCacheConfig {
             // TODO: update zaino configs to include db version.
             db_version: 1,
             network: value.network,
-            no_sync: value.no_sync,
+            // no_sync: value.no_sync,
         }
     }
 }
@@ -182,7 +183,7 @@ impl From<FetchServiceConfig> for BlockCacheConfig {
             // TODO: update zaino configs to include db version.
             db_version: 1,
             network: value.network,
-            no_sync: value.no_sync,
+            // no_sync: value.no_sync,
         }
     }
 }

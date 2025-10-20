@@ -36,7 +36,6 @@ fn test_deserialize_full_valid_config() {
             zebra_db_path = "{zebra_db_dir_name}"
             db_size = 100
             network = "Mainnet"
-            no_sync = false
             no_db = false
             slow_sync = false
 
@@ -143,7 +142,7 @@ fn test_deserialize_full_valid_config() {
             finalized_config.storage.database.size.to_byte_count(),
             128 * 1024 * 1024 * 1024
         );
-        assert!(!finalized_config.no_sync);
+        // assert!(!finalized_config.no_sync);
         assert!(match finalized_config.storage.database.size {
             DatabaseSize::Gb(0) => false,
             DatabaseSize::Gb(_) => true,
@@ -194,7 +193,7 @@ fn test_deserialize_optional_fields_missing() {
             config.storage.database.size,
             default_values.storage.database.size
         );
-        assert_eq!(config.no_sync, default_values.no_sync);
+        // assert_eq!(config.no_sync, default_values.no_sync);
         // TODO db = 0
         //assert_eq!(config.no_db, default_values.no_db);
         Ok(())
@@ -364,7 +363,7 @@ fn test_deserialize_empty_string_yields_default() {
             config.storage.database.size,
             default_config.storage.database.size
         );
-        assert_eq!(config.no_sync, default_config.no_sync);
+        // assert_eq!(config.no_sync, default_config.no_sync);
         // db = 0
         // assert_eq!(config.no_db, default_config.no_db);
         Ok(())

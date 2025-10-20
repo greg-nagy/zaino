@@ -66,10 +66,10 @@ pub struct ZainodConfig {
     pub zebra_db_path: PathBuf,
     /// Network chain type.
     pub network: Network,
-    /// Disables internal sync and stops zaino waiting on server sync.
-    /// Used for testing.
-    // TODO rename disable_internal_sync
-    pub no_sync: bool,
+    // /// Disables internal sync and stops zaino waiting on server sync.
+    // /// Used for testing.
+    // // TODO rename disable_internal_sync
+    // pub no_sync: bool,
 }
 
 impl ZainodConfig {
@@ -216,7 +216,7 @@ impl Default for ZainodConfig {
             },
             zebra_db_path: default_zebra_db_path().unwrap(),
             network: Network::Testnet,
-            no_sync: false,
+            // no_sync: false,
         }
     }
 }
@@ -375,7 +375,7 @@ impl TryFrom<ZainodConfig> for BackendConfig {
                 service: cfg.service,
                 storage: cfg.storage,
                 network: cfg.network,
-                no_sync: cfg.no_sync,
+                // no_sync: cfg.no_sync,
             })),
 
             zaino_state::BackendType::Fetch => Ok(BackendConfig::Fetch(FetchServiceConfig {
@@ -392,7 +392,7 @@ impl TryFrom<ZainodConfig> for BackendConfig {
                 service: cfg.service,
                 storage: cfg.storage,
                 network: cfg.network,
-                no_sync: cfg.no_sync,
+                // no_sync: cfg.no_sync,
             })),
         }
     }

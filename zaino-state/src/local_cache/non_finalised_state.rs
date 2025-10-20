@@ -372,11 +372,12 @@ impl NonFinalisedState {
     /// Waits for server to sync with p2p network.
     pub async fn wait_on_server(&self) -> Result<(), NonFinalisedStateError> {
         // If no_db is active wait for server to sync with p2p network.
-        let mybool = match self.config.storage.database.size {
+        let no_db = match self.config.storage.database.size {
             zaino_common::DatabaseSize::Gb(0) => true,
             zaino_common::DatabaseSize::Gb(_) => false,
         };
-        if mybool && !self.config.network.to_zebra_network().is_regtest() && !self.config.no_sync {
+        if no_db && !self.config.network.to_zebra_network().is_regtest() {
+            // && !self.config.no_sync {
             self.status.store(StatusType::Syncing);
             loop {
                 let blockchain_info = self.fetcher.get_blockchain_info().await.map_err(|e| {

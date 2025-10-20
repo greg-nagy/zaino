@@ -82,8 +82,7 @@ mod mockchain_tests {
             },
             db_version: 1,
             network: Network::Regtest(ActivationHeights::default()),
-
-            no_sync: false,
+            // no_sync: false,
         };
 
         let indexer = NodeBackedChainIndex::new(source.clone(), config)
