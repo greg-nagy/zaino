@@ -159,7 +159,7 @@ impl ZcashService for StateService {
 
     /// Initializes a new StateService instance and starts sync process.
     async fn spawn(config: StateServiceConfig) -> Result<Self, StateServiceError> {
-        info!("Launching Chain Fetch Service..");
+        info!("Spawning State Service..");
 
         let rpc_client = JsonRpSeeConnector::new_from_config_parts(
             config.validator_rpc_address,
@@ -211,7 +211,7 @@ impl ZcashService for StateService {
             init_read_state_with_syncer(
                 config.validator_state_config.clone(),
                 &config.network.to_zebra_network(),
-                config.validator_indexer_rpc_address,
+                config.validator_grpc_address,
             )
             .await??;
 
