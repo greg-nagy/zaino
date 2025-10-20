@@ -2,11 +2,11 @@
 //!
 //! TODO: - Add option for http connector.
 //!       - Refactor JsonRPSeecConnectorError into concrete error types and implement fmt::display [<https://github.com/zingolabs/zaino/issues/67>].
-
 use base64::{engine::general_purpose, Engine};
 use http::Uri;
 use reqwest::{Client, ClientBuilder, Url};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::{
     any::type_name,
     convert::Infallible,
@@ -229,7 +229,7 @@ impl JsonRpSeeConnector {
         validator_rpc_address: SocketAddr,
         validator_rpc_user: String,
         validator_rpc_password: String,
-        validator_cookie_path: Option<String>,
+        validator_cookie_path: Option<PathBuf>,
     ) -> Result<Self, TransportError> {
         match validator_cookie_path.is_some() {
             true => JsonRpSeeConnector::new_with_cookie_auth(
@@ -804,13 +804,14 @@ async fn test_node_connection(url: Url, auth_method: AuthMethod) -> Result<(), T
 /// Tries to connect to zebrad/zcashd using the provided SocketAddr and returns the correct URL.
 pub async fn test_node_and_return_url(
     addr: SocketAddr,
-    cookie_path: Option<String>,
+    cookie_path: Option<PathBuf>,
     user: Option<String>,
     password: Option<String>,
 ) -> Result<Url, TransportError> {
     let auth_method = match cookie_path.is_some() {
         true => {
             let cookie_file_path_str = cookie_path.expect("validator rpc cookie path missing");
+
             let cookie_password = read_and_parse_cookie_token(Path::new(&cookie_file_path_str))?;
             AuthMethod::Cookie {
                 cookie: cookie_password,
