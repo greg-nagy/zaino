@@ -370,6 +370,8 @@ pub struct TestManager {
     /// Zaino gRPC listen address.
     pub zaino_grpc_listen_address: Option<SocketAddr>,
     /// JsonRPC server cookie dir.
+    // TODO ambiguity
+    // TODO PATH to validator cookie file!???!
     pub json_server_cookie_dir: Option<PathBuf>,
     /// Zingolib lightclients.
     pub clients: Option<Clients>,
@@ -474,21 +476,25 @@ impl TestManager {
             // set to localhost with the newly generated port
             let zaino_json_listen_address =
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), zaino_json_listen_port);
-            // this cookie dir is generated on the spot, whenever zaino is enabled
-            let zaino_json_server_cookie_dir = default_ephemeral_cookie_path();
 
-            // then here we custom-set an entire, whole new config
+            // this cookie dir is generated on the spot, whenever zaino is enabled
+            let mut zaino_json_server_cookie_dir: Option<PathBuf> = None;
+            if enable_zaino_jsonrpc_server_cookie_auth {
+                zaino_json_server_cookie_dir = Some(default_ephemeral_cookie_path());
+            }
+
+            dbg!(
+                "zaino_json_server_cookie_dir =========== {}",
+                &zaino_json_server_cookie_dir
+            );
+
             let indexer_config = zainodlib::config::ZainodConfig {
                 // TODO: Make configurable.
                 backend: *backend,
                 json_server_settings: if enable_zaino_jsonrpc_server {
                     Some(JsonRpcServerConfig {
                         json_rpc_listen_address: zaino_json_listen_address,
-                        cookie_dir: if enable_zaino_jsonrpc_server_cookie_auth {
-                            Some(zaino_json_server_cookie_dir.clone())
-                        } else {
-                            None
-                        },
+                        cookie_dir: zaino_json_server_cookie_dir.clone(),
                     })
                 } else {
                     None
@@ -531,20 +537,15 @@ impl TestManager {
             (
                 Some(zaino_grpc_listen_address),
                 Some(zaino_json_listen_address),
-                Some(zaino_json_server_cookie_dir),
+                zaino_json_server_cookie_dir,
                 Some(handle),
             )
         } else {
             (None, None, None, None)
         };
-        // TODO find out where the not-joinhandle config-stuff is needed. (two socketaddrs and an Option<Pathbuf>.. )
-        // are all of these in the config?
-
         // TODO by here we've already generated a JoinHandle.
         // pub zaino_handle: Option<tokio::task::JoinHandle<Result<(), zainodlib::error::IndexerError>>>,
         // along with two listen addresses and a cookie_dir.
-        // these should be separated out, I'm almost sure.
-        //
 
         // Launch Zingolib Lightclients:
         let clients = if enable_clients {
@@ -574,7 +575,10 @@ impl TestManager {
         } else {
             None
         };
-
+        dbg!(
+            "zaino_json_server_cookie_dir: {:?}",
+            zaino_json_server_cookie_dir.clone()
+        );
         let test_manager = Self {
             local_net,
             data_dir,
@@ -596,10 +600,9 @@ impl TestManager {
     }
 
     /// Helper function to support default test case.
-    // TODO this is impl TestManager
     #[allow(clippy::too_many_arguments)]
     pub async fn launch_with_default_activation_heights(
-        validator: &ValidatorKind,
+        validator_kind: &ValidatorKind,
         backend: &BackendType,
         network: Option<NetworkKind>,
         chain_cache: Option<PathBuf>,
@@ -607,22 +610,22 @@ impl TestManager {
         enable_zaino_jsonrpc_server: bool,
         enable_zaino_jsonrpc_server_cookie_auth: bool,
         zaino_no_sync: bool,
-        // no db
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
-        let activation_heights = match validator {
+        let activation_heights = match validator_kind {
             ValidatorKind::Zebrad => ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
             ValidatorKind::Zcashd => ActivationHeights::default(),
         };
 
         Self::launch(
-            validator,
+            validator_kind,
             backend,
             network,
             Some(activation_heights),
             chain_cache,
             enable_zaino,
             enable_zaino_jsonrpc_server,
+            // TODO : in our tests, is always set to false
             enable_zaino_jsonrpc_server_cookie_auth,
             zaino_no_sync,
             enable_clients,
