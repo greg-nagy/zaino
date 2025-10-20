@@ -32,11 +32,6 @@ fn test_deserialize_full_valid_config() {
         let toml_str = format!(
             r#"
             backend = "fetch"
-            validator_listen_address = "192.168.1.10:18232"
-            validator_cookie_auth = true
-            validator_cookie_path = "{validator_cookie_file_name}"
-            validator_user = "user"
-            validator_password = "password"
             storage.database.path = "{zaino_db_dir_name}"
             zebra_db_path = "{zebra_db_dir_name}"
             db_size = 100
@@ -44,6 +39,12 @@ fn test_deserialize_full_valid_config() {
             no_sync = false
             no_db = false
             slow_sync = false
+
+            [validator_settings]
+            validator_jsonrpc_listen_address = "192.168.1.10:18232"
+            validator_cookie_path = "{validator_cookie_file_name}"
+            validator_user = "user"
+            validator_password = "password"
 
             [json_server_settings]
             json_rpc_listen_address = "127.0.0.1:8000"
@@ -112,7 +113,7 @@ fn test_deserialize_full_valid_config() {
         );
         assert_eq!(
             finalized_config.validator_settings.validator_cookie_path,
-            Some(validator_cookie_file_name.to_string())
+            Some(PathBuf::from(validator_cookie_file_name))
         );
         assert_eq!(
             finalized_config.storage.database.path,
