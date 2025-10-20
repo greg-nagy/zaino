@@ -23,19 +23,6 @@ use zaino_common::{
 use zaino_serve::server::config::{GrpcServerConfig, JsonRpcServerConfig};
 use zaino_state::{BackendConfig, FetchServiceConfig, StateServiceConfig};
 
-/*
-/// Custom deserialization function for `SocketAddr` from a String.
-/// Used by Serde's `deserialize_with`.
-fn deserialize_socketaddr_from_string<'de, D>(deserializer: D) -> Result<SocketAddr, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-    fetch_socket_addr_from_hostname(&s)
-        .map_err(|e| de::Error::custom(format!("Invalid socket address string '{s}': {e}")))
-}
-*/
-
 /// Custom deserialization function for `BackendType` from a String.
 /// Used by Serde's `deserialize_with`.
 fn deserialize_backendtype_from_string<'de, D>(
