@@ -24,7 +24,6 @@ async fn create_test_manager_and_fetch_service(
     chain_cache: Option<std::path::PathBuf>,
     enable_zaino: bool,
     zaino_no_sync: bool,
-    //zaino_no_db: bool,
     enable_clients: bool,
 ) -> (TestManager, FetchService, FetchServiceSubscriber) {
     let test_manager = TestManager::launch_with_default_activation_heights(
@@ -36,7 +35,6 @@ async fn create_test_manager_and_fetch_service(
         false,
         false,
         zaino_no_sync,
-        //zaino_no_db,
         enable_clients,
     )
     .await
@@ -61,7 +59,6 @@ async fn create_test_manager_and_fetch_service(
             ..Default::default()
         },
         Network::Regtest(ActivationHeights::default()),
-        // true,
         true,
     ))
     .await

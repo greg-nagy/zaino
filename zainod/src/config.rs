@@ -49,7 +49,6 @@ pub struct ZainodConfig {
     #[serde(deserialize_with = "deserialize_backendtype_from_string")]
     #[serde(serialize_with = "serialize_backendtype_to_string")]
     pub backend: zaino_state::BackendType,
-    // TODO later, create what were called "sections"
     /// Enable JsonRPC server with a valid Some value.
     #[serde(default)]
     pub json_server_settings: Option<JsonRpcServerConfig>,
@@ -69,6 +68,7 @@ pub struct ZainodConfig {
     pub network: Network,
     /// Disables internal sync and stops zaino waiting on server sync.
     /// Used for testing.
+    // TODO rename disable_internal_sync
     pub no_sync: bool,
 }
 

@@ -195,7 +195,7 @@ fn test_deserialize_optional_fields_missing() {
             default_values.storage.database.size
         );
         assert_eq!(config.no_sync, default_values.no_sync);
-        // db = 0
+        // TODO db = 0
         //assert_eq!(config.no_db, default_values.no_db);
         Ok(())
     });
