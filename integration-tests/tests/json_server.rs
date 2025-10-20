@@ -11,8 +11,9 @@ use zaino_testutils::{TestManager, ValidatorKind};
 use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetInfo};
 
+// TODO has many [17] references, in which enable_cookie_auth is ALWAYS false.
 async fn create_test_manager_and_fetch_services(
-    _enable_cookie_auth: bool,
+    enable_cookie_auth: bool,
     clients: bool,
 ) -> (
     TestManager,
@@ -29,6 +30,8 @@ async fn create_test_manager_and_fetch_services(
         None,
         true,
         true,
+        // enable_zaino_jsonrpc_server_cookie_auth: bool,
+        // TODO AFAIK, this is _always_ false
         enable_cookie_auth,
         true,
         clients,
@@ -67,16 +70,19 @@ async fn create_test_manager_and_fetch_services(
     tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
     println!("Launching zaino fetch service..");
-    let zaino_json_server_address = dbg!(test_manager.zaino_json_rpc_listen_address.unwrap());
     let zaino_fetch_service = FetchService::spawn(FetchServiceConfig::new(
-        zaino_json_server_address,
-        test_manager
-            .json_server_cookie_dir
-            .clone()
-            .map(|p| p.to_string_lossy().into_owned()),
+        // validator_rpc_address: std::net::SocketAddr,
+        test_manager.full_node_rpc_listen_address,
+        // zaino_json_server_address,
+        // validator_cookie_path: Option<String>,
+        test_manager.json_server_cookie_dir.clone(),
+        // validator_rpc_user: Option<String>,
         None,
+        // validator_rpc_password: Option<String>,
         None,
+        // service: ServiceConfig,
         ServiceConfig::default(),
+        // storage: StorageConfig,
         StorageConfig {
             database: DatabaseConfig {
                 path: test_manager
@@ -89,7 +95,9 @@ async fn create_test_manager_and_fetch_services(
             },
             ..Default::default()
         },
+        // network: Network,
         zaino_common::Network::Regtest(ActivationHeights::default()),
+        // no_sync: bool,
         true,
     ))
     .await
@@ -108,10 +116,9 @@ async fn create_test_manager_and_fetch_services(
     )
 }
 
-async fn launch_json_server_check_info(enable_cookie_auth: bool) {
+async fn launch_json_server_check_info() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
-        create_test_manager_and_fetch_services(enable_cookie_auth, false).await;
-
+        create_test_manager_and_fetch_services(false, false).await;
     let zcashd_info = dbg!(zcashd_subscriber.get_info().await.unwrap());
     let zcashd_blockchain_info = dbg!(zcashd_subscriber.get_blockchain_info().await.unwrap());
     let zaino_info = dbg!(zaino_subscriber.get_info().await.unwrap());
@@ -670,12 +677,12 @@ mod zcashd {
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn check_info_no_cookie() {
-            launch_json_server_check_info(false).await;
+            launch_json_server_check_info().await;
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn check_info_with_cookie() {
-            launch_json_server_check_info(false).await;
+            launch_json_server_check_info().await;
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
