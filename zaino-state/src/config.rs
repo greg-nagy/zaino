@@ -1,5 +1,6 @@
 //! Holds config data for Zaino-State services.
 
+use std::path::PathBuf;
 use zaino_common::{Network, ServiceConfig, StorageConfig};
 
 #[derive(Debug, Clone, serde::Deserialize, PartialEq, Copy)]
@@ -29,11 +30,12 @@ pub struct StateServiceConfig {
     /// Validator JsonRPC address.
     pub validator_rpc_address: std::net::SocketAddr,
     /// Validator gRPC address.
-    pub validator_indexer_rpc_address: std::net::SocketAddr,
-    // pub validator_cookie_auth: bool,
-    /// Enable validator rpc cookie authentification with Some.
+    pub validator_grpc_address: std::net::SocketAddr,
+    /// Validator cookie auth.
+    pub validator_cookie_auth: bool,
     /// Path to the validator cookie file.
-    pub validator_cookie_path: Option<String>,
+    /// Enable validator rpc cookie authentification with Some.
+    pub validator_cookie_path: Option<PathBuf>,
     /// Validator JsonRPC user.
     pub validator_rpc_user: String,
     /// Validator JsonRPC password.
@@ -56,8 +58,9 @@ impl StateServiceConfig {
     pub fn new(
         validator_state_config: zebra_state::Config,
         validator_rpc_address: std::net::SocketAddr,
-        validator_indexer_rpc_address: std::net::SocketAddr,
-        validator_cookie_path: Option<String>,
+        validator_grpc_address: std::net::SocketAddr,
+        validator_cookie_auth: bool,
+        validator_cookie_path: Option<PathBuf>,
         validator_rpc_user: Option<String>,
         validator_rpc_password: Option<String>,
         service: ServiceConfig,
@@ -68,7 +71,8 @@ impl StateServiceConfig {
         StateServiceConfig {
             validator_state_config,
             validator_rpc_address,
-            validator_indexer_rpc_address,
+            validator_grpc_address,
+            validator_cookie_auth,
             validator_cookie_path,
             validator_rpc_user: validator_rpc_user.unwrap_or("xxxxxx".to_string()),
             validator_rpc_password: validator_rpc_password.unwrap_or("xxxxxx".to_string()),
@@ -88,8 +92,7 @@ pub struct FetchServiceConfig {
     // pub validator_cookie_auth: bool,
     /// Enable validator rpc cookie authentification with Some.
     /// Path to the validator cookie file.
-    // TODO change to PathBuf
-    pub validator_cookie_path: Option<String>,
+    pub validator_cookie_path: Option<PathBuf>,
     /// Validator JsonRPC user.
     pub validator_rpc_user: String,
     /// Validator JsonRPC password.
@@ -111,7 +114,7 @@ impl FetchServiceConfig {
     // TODO: replace with struct-literal init only?
     pub fn new(
         validator_rpc_address: std::net::SocketAddr,
-        validator_cookie_path: Option<String>,
+        validator_cookie_path: Option<PathBuf>,
         validator_rpc_user: Option<String>,
         validator_rpc_password: Option<String>,
         service: ServiceConfig,
