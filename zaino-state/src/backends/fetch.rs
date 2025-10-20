@@ -84,7 +84,7 @@ pub struct FetchService {
 impl ZcashService for FetchService {
     type Subscriber = FetchServiceSubscriber;
     type Config = FetchServiceConfig;
-    /// Initializes a new StateService instance and starts sync process.
+    /// Initializes a new FetchService instance and starts sync process.
     async fn spawn(config: FetchServiceConfig) -> Result<Self, FetchServiceError> {
         info!("Launching Chain Fetch Service..");
 
