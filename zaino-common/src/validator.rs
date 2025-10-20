@@ -20,7 +20,6 @@ pub struct ValidatorConfig {
 
     /// Enable validator rpc cookie authentication with Some
     /// Path to the validator cookie file.
-    // TODO changed to PathBuf
     pub validator_cookie_path: Option<PathBuf>,
     /// Full node / validator Username.
     pub validator_user: Option<String>,
