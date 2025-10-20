@@ -23,6 +23,7 @@ use zaino_common::{
 use zaino_serve::server::config::{GrpcServerConfig, JsonRpcServerConfig};
 use zaino_state::{BackendConfig, FetchServiceConfig, StateServiceConfig};
 
+/*
 /// Custom deserialization function for `SocketAddr` from a String.
 /// Used by Serde's `deserialize_with`.
 fn deserialize_socketaddr_from_string<'de, D>(deserializer: D) -> Result<SocketAddr, D::Error>
@@ -33,6 +34,7 @@ where
     fetch_socket_addr_from_hostname(&s)
         .map_err(|e| de::Error::custom(format!("Invalid socket address string '{s}': {e}")))
 }
+*/
 
 /// Custom deserialization function for `BackendType` from a String.
 /// Used by Serde's `deserialize_with`.
@@ -64,29 +66,10 @@ pub struct ZainodConfig {
     /// Enable JsonRPC server with a valid Some value.
     #[serde(default)]
     pub json_server_settings: Option<JsonRpcServerConfig>,
-    // TODO commenting out : for rpc listen #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     /// gRPC server settings including listen addr, tls status, key and cert.
     pub grpc_settings: GrpcServerConfig,
-    // TODO this should be an Option(<ValidatorConfig>)
     /// Full node / validator configuration settings.
     pub validator_settings: ValidatorConfig,
-
-    /*
-        /// Full node / validator listen port.
-        #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
-        pub validator_jsonrpc_listen_address: SocketAddr,
-        /// Full node / validator gprc listen port.
-        #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
-        pub validator_grpc_listen_address: SocketAddr,
-        /// Enable validator rpc cookie authentification.
-        pub validator_cookie_auth: bool,
-        /// Path to the validator cookie file.
-        pub validator_cookie_path: Option<String>,
-        /// Full node / validator Username.
-        pub validator_user: Option<String>,
-        /// full node / validator Password.
-        pub validator_password: Option<String>,
-    */
     /// Service-level configuration (timeout, channel size).
     pub service: ServiceConfig,
     /// Storage configuration (cache and database).
@@ -94,7 +77,6 @@ pub struct ZainodConfig {
     /// Block Cache database file path.
     ///
     /// ZebraDB location.
-    // TODO seems to overlap with Storageconfig
     pub zebra_db_path: PathBuf,
     /// Network chain type.
     pub network: Network,
@@ -142,7 +124,7 @@ impl ZainodConfig {
             if let Some(ref cookie_path) = self.validator_settings.validator_cookie_path {
                 if !std::path::Path::new(cookie_path).exists() {
                     return Err(IndexerError::ConfigError(
-                        format!("Validator cookie authentication is enabled, but cookie path '{cookie_path}' does not exist."),
+                        format!("Validator cookie authentication is enabled, but cookie path '{:?}' does not exist.", cookie_path),
                     ));
                 }
             } else {
@@ -325,9 +307,8 @@ pub(crate) fn is_loopback_listen_addr(addr: &SocketAddr) -> bool {
 ///
 /// If the file cannot be read, or if its contents cannot be parsed into `IndexerConfig`,
 /// a warning is logged, and a default configuration is returned.
+/// Finally there is an override of the config using environmental variables.
 /// The loaded or default configuration undergoes further checks and finalization.
-// TODO my problems must be here, where configs read in as files are adapted based on env vars
-// see step 3 below
 pub fn load_config(file_path: &PathBuf) -> Result<ZainodConfig, IndexerError> {
     // Configuration sources are layered: Env > TOML > Defaults.
     let figment = Figment::new()
@@ -393,7 +374,8 @@ impl TryFrom<ZainodConfig> for BackendConfig {
                     debug_validity_check_interval: None,
                 },
                 validator_rpc_address: cfg.validator_settings.validator_jsonrpc_listen_address,
-                validator_indexer_rpc_address: cfg.validator_settings.validator_grpc_listen_address,
+                validator_grpc_address: cfg.validator_settings.validator_grpc_listen_address,
+                validator_cookie_auth: cfg.validator_settings.validator_cookie_path.is_some(),
                 validator_cookie_path: cfg.validator_settings.validator_cookie_path,
                 validator_rpc_user: cfg
                     .validator_settings
