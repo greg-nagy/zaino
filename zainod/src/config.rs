@@ -66,10 +66,6 @@ pub struct ZainodConfig {
     pub zebra_db_path: PathBuf,
     /// Network chain type.
     pub network: Network,
-    // /// Disables internal sync and stops zaino waiting on server sync.
-    // /// Used for testing.
-    // // TODO rename disable_internal_sync
-    // pub no_sync: bool,
 }
 
 impl ZainodConfig {
@@ -216,7 +212,6 @@ impl Default for ZainodConfig {
             },
             zebra_db_path: default_zebra_db_path().unwrap(),
             network: Network::Testnet,
-            // no_sync: false,
         }
     }
 }
@@ -294,7 +289,7 @@ pub(crate) fn is_loopback_listen_addr(addr: &SocketAddr) -> bool {
 ///
 /// If the file cannot be read, or if its contents cannot be parsed into `IndexerConfig`,
 /// a warning is logged, and a default configuration is returned.
-/// Finally there is an override of the config using environmental variables.
+/// Finally, there is an override of the config using environmental variables.
 /// The loaded or default configuration undergoes further checks and finalization.
 pub fn load_config(file_path: &PathBuf) -> Result<ZainodConfig, IndexerError> {
     // Configuration sources are layered: Env > TOML > Defaults.
@@ -308,8 +303,6 @@ pub fn load_config(file_path: &PathBuf) -> Result<ZainodConfig, IndexerError> {
 
     match figment.extract::<ZainodConfig>() {
         Ok(mut parsed_config) => {
-            // Finalizes the configuration after initial parsing, applying conditional default to json rpc cookie dir,
-            // if the assigned pathbuf is empty (cookies enabled but no path defined).
             if parsed_config
                 .json_server_settings
                 .clone()
@@ -319,6 +312,7 @@ pub fn load_config(file_path: &PathBuf) -> Result<ZainodConfig, IndexerError> {
                             .cookie_dir
                             .expect("cookie_dir to be Some")
                             .as_os_str()
+                            // if the assigned pathbuf is empty (cookies enabled but no path defined).
                             .is_empty()
                 })
             {
@@ -375,7 +369,6 @@ impl TryFrom<ZainodConfig> for BackendConfig {
                 service: cfg.service,
                 storage: cfg.storage,
                 network: cfg.network,
-                // no_sync: cfg.no_sync,
             })),
 
             zaino_state::BackendType::Fetch => Ok(BackendConfig::Fetch(FetchServiceConfig {
@@ -392,7 +385,6 @@ impl TryFrom<ZainodConfig> for BackendConfig {
                 service: cfg.service,
                 storage: cfg.storage,
                 network: cfg.network,
-                // no_sync: cfg.no_sync,
             })),
         }
     }
