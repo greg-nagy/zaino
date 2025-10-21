@@ -174,7 +174,6 @@ mod chain_query_interface {
                     },
                     db_version: 1,
                     network: zaino_common::Network::Regtest(activation_heights),
-                    // no_sync: false,
                 };
                 let chain_index = NodeBackedChainIndex::new(
                     ValidatorConnector::State(chain_index::source::State {
@@ -210,7 +209,6 @@ mod chain_query_interface {
                     },
                     db_version: 1,
                     network: zaino_common::Network::Regtest(activation_heights),
-                    // no_sync: false,
                 };
                 let chain_index = NodeBackedChainIndex::new(
                     ValidatorConnector::Fetch(json_service.clone()),
