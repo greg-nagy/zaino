@@ -13,10 +13,7 @@ use crate::{
     server::{config::GrpcServerConfig, error::ServerError},
 };
 
-/// LightWallet server capable of servicing clients over TCP.
-// TODO rename to gRPC server?
-// also, why no listen address?
-// below, it's taken straight from the config.
+/// LightWallet gRPC server capable of servicing clients over TCP.
 pub struct TonicServer {
     /// Current status of the server.
     pub status: AtomicStatus,
