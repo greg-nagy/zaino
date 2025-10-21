@@ -46,9 +46,6 @@ pub struct StateServiceConfig {
     pub storage: StorageConfig,
     /// Network type.
     pub network: Network,
-    // /// Disables internal sync and stops zaino waiting on server sync.
-    // /// Used for testing.
-    // pub no_sync: bool,
 }
 
 impl StateServiceConfig {
@@ -66,7 +63,6 @@ impl StateServiceConfig {
         service: ServiceConfig,
         storage: StorageConfig,
         network: Network,
-        // no_sync: bool,
     ) -> Self {
         StateServiceConfig {
             validator_state_config,
@@ -79,7 +75,6 @@ impl StateServiceConfig {
             service,
             storage,
             network,
-            // no_sync,
         }
     }
 }
@@ -104,15 +99,11 @@ pub struct FetchServiceConfig {
     pub storage: StorageConfig,
     /// Network type.
     pub network: Network,
-    // /// Disables internal sync and stops zaino waiting on server sync.
-    // /// Used for testing.
-    // pub no_sync: bool,
 }
 
 impl FetchServiceConfig {
     /// Returns a new instance of [`FetchServiceConfig`].
     #[allow(clippy::too_many_arguments)]
-    // TODO: replace with struct-literal init only?
     pub fn new(
         validator_rpc_address: std::net::SocketAddr,
         validator_cookie_path: Option<PathBuf>,
@@ -121,7 +112,6 @@ impl FetchServiceConfig {
         service: ServiceConfig,
         storage: StorageConfig,
         network: Network,
-        // no_sync: bool,
     ) -> Self {
         FetchServiceConfig {
             validator_rpc_address,
@@ -131,7 +121,6 @@ impl FetchServiceConfig {
             service,
             storage,
             network,
-            // no_sync,
         }
     }
 }
@@ -146,9 +135,6 @@ pub struct BlockCacheConfig {
     pub db_version: u32,
     /// Network type.
     pub network: Network,
-    // /// Stops zaino waiting on server sync.
-    // /// Used for testing.
-    // pub no_sync: bool,
 }
 
 impl BlockCacheConfig {
@@ -159,7 +145,6 @@ impl BlockCacheConfig {
             storage,
             db_version,
             network,
-            // no_sync,
         }
     }
 }
@@ -171,7 +156,6 @@ impl From<StateServiceConfig> for BlockCacheConfig {
             // TODO: update zaino configs to include db version.
             db_version: 1,
             network: value.network,
-            // no_sync: value.no_sync,
         }
     }
 }
@@ -183,7 +167,6 @@ impl From<FetchServiceConfig> for BlockCacheConfig {
             // TODO: update zaino configs to include db version.
             db_version: 1,
             network: value.network,
-            // no_sync: value.no_sync,
         }
     }
 }
