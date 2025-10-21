@@ -34,7 +34,6 @@ async fn create_test_manager_and_fetch_service(
         enable_zaino,
         false,
         false,
-        // zaino_no_sync,
         enable_clients,
     )
     .await
@@ -59,7 +58,6 @@ async fn create_test_manager_and_fetch_service(
             ..Default::default()
         },
         Network::Regtest(ActivationHeights::default()),
-        // true,
     ))
     .await
     .unwrap();
