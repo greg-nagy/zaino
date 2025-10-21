@@ -34,7 +34,6 @@ async fn create_test_manager_and_services(
         enable_zaino,
         false,
         false,
-        // true,
         enable_clients,
     )
     .await
@@ -78,7 +77,6 @@ async fn create_test_manager_and_services(
             ..Default::default()
         },
         network_type,
-        // zaino_sync_bool,
     ))
     .await
     .unwrap();
@@ -118,7 +116,6 @@ async fn create_test_manager_and_services(
             ..Default::default()
         },
         network_type,
-        // true,
     ))
     .await
     .unwrap();
