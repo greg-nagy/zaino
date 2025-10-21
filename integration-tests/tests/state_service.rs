@@ -39,21 +39,18 @@ async fn create_test_manager_and_services(
     .await
     .unwrap();
 
-    let (network_type, _zaino_sync_bool) = match network {
+    let network_type = match network {
         Some(NetworkKind::Mainnet) => {
             println!("Waiting for validator to spawn..");
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-            (zaino_common::Network::Mainnet, false)
+            zaino_common::Network::Mainnet
         }
         Some(NetworkKind::Testnet) => {
             println!("Waiting for validator to spawn..");
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-            (zaino_common::Network::Testnet, false)
+            zaino_common::Network::Testnet
         }
-        _ => (
-            zaino_common::Network::Regtest(ActivationHeights::default()),
-            true,
-        ),
+        _ => zaino_common::Network::Regtest(ActivationHeights::default()),
     };
 
     test_manager.local_net.print_stdout();
