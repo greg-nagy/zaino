@@ -9,7 +9,7 @@ use crate::{
     AddrScript, BlockHash, BlockHeaderData, CommitmentTreeData, FixedEncodedLen, Height,
     IndexedBlock, OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList,
     StatusType, TransparentCompactTx, TransparentTxList, TxLocation, TxidList,
-    ZainoVersionedSerialise,
+    ZainoVersionedSerde,
 };
 
 use async_trait::async_trait;
@@ -165,7 +165,7 @@ impl DbMetadata {
     }
 }
 
-impl ZainoVersionedSerialise for DbMetadata {
+impl ZainoVersionedSerde for DbMetadata {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
@@ -278,7 +278,7 @@ impl DbVersion {
     }
 }
 
-impl ZainoVersionedSerialise for DbVersion {
+impl ZainoVersionedSerde for DbVersion {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
@@ -346,7 +346,7 @@ impl fmt::Display for MigrationStatus {
     }
 }
 
-impl ZainoVersionedSerialise for MigrationStatus {
+impl ZainoVersionedSerde for MigrationStatus {
     const VERSION: u8 = version::V1;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
