@@ -12,7 +12,7 @@ backend = "fetch"
 [json_server_settings]
   # JsonRPC server listen addr. Required if json_server_settings is Some.
   json_rpc_listen_address = "127.0.0.1:8237"
-  
+
   # Some enables cookie-based authentication for JsonRPC server.
   # An empty PathBuf that is still Some will have a default emphemeral path assigned to it when zaino loads the config.
   # (e.g., /tmp/zaino/.cookie or XDG_RUNTIME_DIR) will be used.
@@ -61,7 +61,7 @@ backend = "fetch"
     # Optional. Enable user / pass authentication with Some
     # full node / validator Password.
     # validator_password: ""
-    # 
+    #
 #  Service-level configuration (timeout, channel size).
 #  Required.
 #  [service]
@@ -70,11 +70,11 @@ backend = "fetch"
 #  Storage configuration (cache and database).
 #  Required.
 #  [storage]
-# 
+#
 #  ZebraDB location.
 #  PathBuf, Required.
 #  zebra_db_path = ""
-# 
+#
 #  Network chain type.
 #  Required.
 #  Network chain type (Mainnet, Testnet, Regtest).
