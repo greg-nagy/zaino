@@ -17,6 +17,8 @@ default-filter = """
 path = "junit.xml"
 
 [profile.quick]
+# Use this profile for a fast check verifying the absence of regressions. Our best assurance against
+# false negatives is to run the entire test suite.
 test-threads = "num-cpus"
 fail-fast = true # If a test fails against this profile, that's a surprise to be investigated
 # Excludes tests that fail in low-resource environments. Flakey test are listed at the beginning
