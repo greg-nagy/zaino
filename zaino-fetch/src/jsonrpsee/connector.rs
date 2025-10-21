@@ -223,8 +223,7 @@ impl JsonRpSeeConnector {
         })
     }
 
-    /// Helper function to create from parts of a StateServiceConfig or
-    /// FetchServiceConfig
+    /// Helper function to create from parts of a StateServiceConfig or FetchServiceConfig
     pub async fn new_from_config_parts(
         validator_rpc_address: SocketAddr,
         validator_rpc_user: String,
@@ -271,7 +270,6 @@ impl JsonRpSeeConnector {
     }
 
     /// Sends a jsonRPC request and returns the response.
-    ///
     /// NOTE: This function currently resends the call up to 5 times on a server response of "Work queue depth exceeded".
     ///       This is because the node's queue can become overloaded and stop servicing RPCs.
     async fn send_request<
@@ -811,7 +809,6 @@ pub async fn test_node_and_return_url(
     let auth_method = match cookie_path.is_some() {
         true => {
             let cookie_file_path_str = cookie_path.expect("validator rpc cookie path missing");
-
             let cookie_password = read_and_parse_cookie_token(Path::new(&cookie_file_path_str))?;
             AuthMethod::Cookie {
                 cookie: cookie_password,
