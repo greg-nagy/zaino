@@ -13,7 +13,6 @@ async fn create_test_manager_and_block_cache(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
     enable_zaino: bool,
-    // zaino_no_sync: bool,
     enable_clients: bool,
 ) -> (
     TestManager,
@@ -35,7 +34,6 @@ async fn create_test_manager_and_block_cache(
         enable_zaino,
         false, //enable_zaino_jsonrpc_server: bool,
         false, //enable_zaino_jsonrpc_server_cookie_auth: bool,
-        // zaino_no_sync,
         enable_clients,
     )
     .await
@@ -73,7 +71,6 @@ async fn create_test_manager_and_block_cache(
         },
         db_version: 1,
         network: network.into(),
-        // no_sync: zaino_no_sync,
     };
 
     let block_cache = BlockCache::spawn(&json_service, None, block_cache_config)
