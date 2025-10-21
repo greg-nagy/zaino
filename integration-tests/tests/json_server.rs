@@ -33,7 +33,6 @@ async fn create_test_manager_and_fetch_services(
         // enable_zaino_jsonrpc_server_cookie_auth: bool,
         // TODO AFAIK, this is _always_ false
         enable_cookie_auth,
-        // true,
         clients,
     )
     .await
@@ -61,7 +60,6 @@ async fn create_test_manager_and_fetch_services(
             ..Default::default()
         },
         zaino_common::Network::Regtest(ActivationHeights::default()),
-        // true,
     ))
     .await
     .unwrap();
@@ -96,10 +94,7 @@ async fn create_test_manager_and_fetch_services(
             },
             ..Default::default()
         },
-        // network: Network,
         zaino_common::Network::Regtest(ActivationHeights::default()),
-        // no_sync: bool,
-        // true,
     ))
     .await
     .unwrap();
