@@ -19,8 +19,10 @@ path = "junit.xml"
 [profile.quick]
 test-threads = "num-cpus"
 fail-fast = true # If a test fails against this profile, that's a surprise to be investigated
-# Excludes tests that fail in low-resource environments
-#  on a framework laptop 12th Gen Intel(R) Core(TM) i7-1280P
+# Excludes tests that fail in low-resource environments. Flakey test are listed at the beginning
+# of the expression, slow at the end.  If a slow and flakey test is discovered it should be included
+# in the flakey category.
+#  On a developer laptop:
 #  flakey 52 ==  tests fail at least once 
 #  slow   32 ==  >60s runtime  
 default-filter = """
