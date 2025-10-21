@@ -26,7 +26,7 @@ fail-fast = true # If a test fails against this profile, that's a surprise to be
 # in the flakey category.
 #  On a developer laptop:
 #  flakey 53 ==  tests fail at least once
-#  slow   32 ==  >60s runtime  
+#  slow   32 ==  >60s runtime
 default-filter = """
     not (
         test(=chain_query_interface::find_fork_point_zcashd) |
