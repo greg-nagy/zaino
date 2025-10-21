@@ -8,7 +8,6 @@ async fn create_test_manager_and_connector(
     activation_heights: Option<ActivationHeights>,
     chain_cache: Option<std::path::PathBuf>,
     enable_zaino: bool,
-    // zaino_no_sync: bool,
     enable_clients: bool,
 ) -> (TestManager, JsonRpSeeConnector) {
     let test_manager = TestManager::launch(
@@ -20,7 +19,6 @@ async fn create_test_manager_and_connector(
         enable_zaino,
         false, //enable_zaino_jsonrpc_server: bool,
         false, //enable_zaino_jsonrpc_server_cookie_auth: bool,
-        // zaino_no_sync,
         enable_clients,
     )
     .await
@@ -74,7 +72,6 @@ mod chain_query_interface {
         validator: &ValidatorKind,
         chain_cache: Option<std::path::PathBuf>,
         enable_zaino: bool,
-        // no_sync
         enable_clients: bool,
     ) -> (
         TestManager,
@@ -117,7 +114,6 @@ mod chain_query_interface {
             Some(activation_heights),
             chain_cache.clone(),
             enable_zaino,
-            // zaino_no_sync,
             enable_clients,
         )
         .await;
@@ -163,7 +159,6 @@ mod chain_query_interface {
                         },
                     },
                     network.into(),
-                    // true,
                 ))
                 .await
                 .unwrap();
