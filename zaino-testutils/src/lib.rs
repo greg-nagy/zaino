@@ -162,6 +162,7 @@ impl zcash_local_net::validator::Validator for LocalNet {
         todo!()
     }
 
+    // TODO many of these matches could be less verbose, perhaps by defining a into-inner kind of fuction.
     fn get_activation_heights(
         &self,
     ) -> zebra_chain::parameters::testnet::ConfiguredActivationHeights {
@@ -639,7 +640,6 @@ mod launch_testmanager {
                 false,
                 false,
                 false,
-                // true,
                 false,
             )
             .await
@@ -662,7 +662,6 @@ mod launch_testmanager {
                 false,
                 false,
                 false,
-                // true,
                 false,
             )
             .await
@@ -691,7 +690,6 @@ mod launch_testmanager {
                 false,
                 false,
                 false,
-                // true,
                 false,
             )
             .await
@@ -714,7 +712,6 @@ mod launch_testmanager {
                 true,
                 false,
                 false,
-                // true,
                 false,
             )
             .await
@@ -741,7 +738,6 @@ mod launch_testmanager {
                 true,
                 false,
                 false,
-                // true,
                 true,
             )
             .await
@@ -769,7 +765,6 @@ mod launch_testmanager {
                 true,
                 false,
                 false,
-                // true,
                 true,
             )
             .await
@@ -819,7 +814,6 @@ mod launch_testmanager {
                     false,
                     false,
                     false,
-                    // true,
                     false,
                 )
                 .await
@@ -842,7 +836,6 @@ mod launch_testmanager {
                     false,
                     false,
                     false,
-                    // true,
                     false,
                 )
                 .await
@@ -871,7 +864,6 @@ mod launch_testmanager {
                     false,
                     false,
                     false,
-                    // true,
                     false,
                 )
                 .await
@@ -894,7 +886,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    // true,
                     false,
                 )
                 .await
@@ -921,7 +912,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    // true,
                     true,
                 )
                 .await
@@ -949,7 +939,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    // true,
                     true,
                 )
                 .await
@@ -996,7 +985,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    // true,
                     true,
                 )
                 .await
@@ -1098,7 +1086,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    // true,
                     true,
                 )
                 .await
@@ -1130,7 +1117,6 @@ mod launch_testmanager {
                     false,
                     false,
                     false,
-                    // true,
                     false,
                 )
                 .await
@@ -1153,7 +1139,6 @@ mod launch_testmanager {
                     false,
                     false,
                     false,
-                    // true,
                     false,
                 )
                 .await
@@ -1182,7 +1167,6 @@ mod launch_testmanager {
                     false,
                     false,
                     false,
-                    // true,
                     false,
                 )
                 .await
@@ -1205,7 +1189,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    // true,
                     false,
                 )
                 .await
@@ -1232,7 +1215,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    // true,
                     true,
                 )
                 .await
@@ -1260,7 +1242,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    // true,
                     true,
                 )
                 .await
@@ -1308,7 +1289,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    // true,
                     true,
                 )
                 .await
@@ -1408,7 +1388,6 @@ mod launch_testmanager {
                     true,
                     false,
                     false,
-                    // true,
                     true,
                 )
                 .await
