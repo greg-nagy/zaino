@@ -5,9 +5,21 @@ on:
     - cron: '30 3 * * *'
   workflow_dispatch:
 
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.MINIO_ACCESS_KEY }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.MINIO_SECRET_KEY }}
+  AWS_REGION: us-east-1
+  CACHE_ENDPOINT: gh-cache-hl.minio-tenants.svc.cluster.local
+  CACHE_PORT: 9000
+  CACHE_BUCKET: gha-cache-bucket
+  INSECURE_CACHE: true
+
 jobs:
   pr-checks:
     uses: ./.github/workflows/ci.yml
+
+  compute-tag:
+    uses: ./.github/workflows/compute-tag.yml
 
   cargo-hack-build:
     name: Cargo Hack Build
