@@ -16,8 +16,8 @@ use std::{
 use tempfile::TempDir;
 use tracing_subscriber::EnvFilter;
 use zaino_common::{
-    network::ActivationHeights, network::ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
-    validator::ValidatorConfig, CacheConfig, DatabaseConfig, Network, ServiceConfig, StorageConfig,
+    network::ActivationHeights, validator::ValidatorConfig, CacheConfig, DatabaseConfig, Network,
+    ServiceConfig, StorageConfig,
 };
 use zaino_serve::server::config::{GrpcServerConfig, JsonRpcServerConfig};
 use zaino_state::BackendType;
@@ -250,6 +250,7 @@ impl zcash_local_net::validator::Validator for LocalNet {
     }
 
     fn config_dir(&self) -> &TempDir {
+        // TODO crufty
         match self {
             LocalNet::Zcashd(net) => net.validator().config_dir(),
             LocalNet::Zebrad(net) => net.validator().config_dir(),
@@ -382,7 +383,6 @@ impl TestManager {
         enable_zaino: bool,
         enable_zaino_jsonrpc_server: bool,
         enable_zaino_jsonrpc_server_cookie_auth: bool,
-        // zaino_no_sync: bool,
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
         if (validator == &ValidatorKind::Zcashd) && (backend == &BackendType::State) {
@@ -505,7 +505,6 @@ impl TestManager {
                 },
                 zebra_db_path,
                 network: zaino_network_kind,
-                // no_sync: zaino_no_sync,
             };
             // TODO we create the handle here, with indexer_config.
             // I think we could possibly ... spit out the indexer stuff if we need it later, piece by piece?
@@ -584,38 +583,6 @@ impl TestManager {
         Ok(test_manager)
     }
 
-    /// Helper function to support default test case.
-    #[allow(clippy::too_many_arguments)]
-    pub async fn launch_with_default_activation_heights(
-        validator_kind: &ValidatorKind,
-        backend: &BackendType,
-        network: Option<NetworkKind>,
-        chain_cache: Option<PathBuf>,
-        enable_zaino: bool,
-        enable_zaino_jsonrpc_server: bool,
-        enable_zaino_jsonrpc_server_cookie_auth: bool,
-        enable_clients: bool,
-    ) -> Result<Self, std::io::Error> {
-        let activation_heights = match validator_kind {
-            ValidatorKind::Zebrad => ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
-            ValidatorKind::Zcashd => ActivationHeights::default(),
-        };
-
-        Self::launch(
-            validator_kind,
-            backend,
-            network,
-            Some(activation_heights),
-            chain_cache,
-            enable_zaino,
-            enable_zaino_jsonrpc_server,
-            // TODO : in our tests, is always set to false
-            enable_zaino_jsonrpc_server_cookie_auth,
-            enable_clients,
-        )
-        .await
-    }
-
     /// Generates `blocks` regtest blocks.
     /// Adds a delay between blocks to allow zaino / zebra to catch up with test.
     pub async fn generate_blocks_with_delay(&self, blocks: u32) {
@@ -644,6 +611,7 @@ impl Drop for TestManager {
 #[cfg(test)]
 mod launch_testmanager {
 
+    use zaino_common::network::ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS;
     use zcash_client_backend::proto::service::compact_tx_streamer_client::CompactTxStreamerClient;
     use zingo_netutils::{GetClientError, GrpcConnector, UnderlyingService};
 
