@@ -281,19 +281,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: MinIO Cache (cargo + target)
-        uses: tespkg/actions-cache@v1
-        with:
-          endpoint: ${{ env.CACHE_ENDPOINT }}
-          port: ${{ env.CACHE_PORT }}
-          bucket: ${{ env.CACHE_BUCKET }}
-          insecure: ${{ env.INSECURE_CACHE }}
-          key: cargo-deps-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-deps-
-          path: |
-            ~/.cargo
-            target
-
       - name: Check trailing whitespace
         run: ./utils/trailing-whitespace.sh reject
         working-directory: .
@@ -307,6 +294,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: MinIO Cache (cargo + target)
+        uses: tespkg/actions-cache@v1
+        with:
+          endpoint: ${{ env.CACHE_ENDPOINT }}
+          port: ${{ env.CACHE_PORT }}
+          bucket: ${{ env.CACHE_BUCKET }}
+          insecure: ${{ env.INSECURE_CACHE }}
+          key: cargo-deps-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-deps-
+          path: |
+            ~/.cargo
+            target
 
       - name: Install protoc
         run: |
