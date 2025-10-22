@@ -12,7 +12,7 @@ use crate::{
     chain_index::{source::BlockchainSource, types::GENESIS_HEIGHT},
     config::BlockCacheConfig,
     error::FinalisedStateError,
-    BlockHash, ChainBlock, ChainWork, Height,
+    BlockHash, BlockMetadata, BlockWithMetadata, ChainWork, Height, IndexedBlock,
 };
 
 use async_trait::async_trait;
@@ -187,16 +187,22 @@ impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
                     ))
                             })?;
 
-                        let chain_block = ChainBlock::try_from((
-                            block.as_ref(),
+                        let metadata = BlockMetadata::new(
                             sapling_root,
                             sapling_root_size as u32,
                             orchard_root,
                             orchard_root_size as u32,
-                            &parent_chain_work,
-                            &cfg.network,
-                        ))
-                        .map_err(FinalisedStateError::Custom)?;
+                            parent_chain_work,
+                            cfg.network.to_zebra_network(),
+                        );
+
+                        let block_with_metadata = BlockWithMetadata::new(block.as_ref(), metadata);
+                        let chain_block =
+                            IndexedBlock::try_from(block_with_metadata).map_err(|_| {
+                                FinalisedStateError::Custom(
+                                    "Failed to build chain block".to_string(),
+                                )
+                            })?;
 
                         parent_chain_work = *chain_block.chainwork();
 
@@ -241,12 +247,12 @@ impl<T: BlockchainSource> Migration<T> for Migration0_0_0To1_0_0 {
             }
 
             // Now safe to delete old database files
-            let db_path_dir = match cfg.network.kind() {
+            let db_path_dir = match cfg.network.to_zebra_network().kind() {
                 NetworkKind::Mainnet => "live",
                 NetworkKind::Testnet => "test",
                 NetworkKind::Regtest => "local",
             };
-            let db_path = cfg.db_path.join(db_path_dir);
+            let db_path = cfg.storage.database.path.join(db_path_dir);
 
             info!("Wiping v0 database from disk.");
 
