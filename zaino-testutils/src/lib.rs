@@ -586,9 +586,6 @@ impl TestManager {
 
     /// Helper function to support default test case.
     #[allow(clippy::too_many_arguments)]
-    // TODO it all comes through here.. to this to make a testmanager...
-    // and this is like a SHIM to account for different defaults, depending on which validtor_kind (full node) is being used.
-    // so really we only need this because the activation heights are (presumably) different!?
     pub async fn launch_with_default_activation_heights(
         validator_kind: &ValidatorKind,
         backend: &BackendType,
@@ -597,16 +594,8 @@ impl TestManager {
         enable_zaino: bool,
         enable_zaino_jsonrpc_server: bool,
         enable_zaino_jsonrpc_server_cookie_auth: bool,
-        // zaino_no_sync: bool,
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
-        // These are the same lol
-        println!(
-            "CONST {:?} , default:  {:?}",
-            ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
-            ActivationHeights::default()
-        );
-        // panic!("came to the wrong hood this time");
         let activation_heights = match validator_kind {
             ValidatorKind::Zebrad => ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
             ValidatorKind::Zcashd => ActivationHeights::default(),
@@ -622,7 +611,6 @@ impl TestManager {
             enable_zaino_jsonrpc_server,
             // TODO : in our tests, is always set to false
             enable_zaino_jsonrpc_server_cookie_auth,
-            // zaino_no_sync,
             enable_clients,
         )
         .await
