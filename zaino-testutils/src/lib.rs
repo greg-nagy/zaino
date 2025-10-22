@@ -662,10 +662,11 @@ mod launch_testmanager {
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         pub(crate) async fn basic() {
-            let mut test_manager = TestManager::launch_with_default_activation_heights(
+            let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
+                Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                 None,
                 false,
                 false,
@@ -684,10 +685,11 @@ mod launch_testmanager {
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         pub(crate) async fn generate_blocks() {
-            let mut test_manager = TestManager::launch_with_default_activation_heights(
+            let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
+                Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                 None,
                 false,
                 false,
@@ -712,10 +714,11 @@ mod launch_testmanager {
         #[ignore = "chain cache needs development"]
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         pub(crate) async fn with_chain() {
-            let mut test_manager = TestManager::launch_with_default_activation_heights(
+            let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
+                Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                 ZCASHD_CHAIN_CACHE_DIR.clone(),
                 false,
                 false,
@@ -734,10 +737,11 @@ mod launch_testmanager {
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         pub(crate) async fn zaino() {
-            let mut test_manager = TestManager::launch_with_default_activation_heights(
+            let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
+                Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                 None,
                 true,
                 false,
@@ -760,10 +764,11 @@ mod launch_testmanager {
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         pub(crate) async fn zaino_clients() {
-            let mut test_manager = TestManager::launch_with_default_activation_heights(
+            let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
+                Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                 None,
                 true,
                 false,
@@ -787,10 +792,11 @@ mod launch_testmanager {
         /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         pub(crate) async fn zaino_clients_receive_mining_reward() {
-            let mut test_manager = TestManager::launch_with_default_activation_heights(
+            let mut test_manager = TestManager::launch(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
+                Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                 None,
                 true,
                 false,
@@ -836,10 +842,11 @@ mod launch_testmanager {
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn basic() {
-                let mut test_manager = TestManager::launch_with_default_activation_heights(
+                let mut test_manager = TestManager::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
+                    Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     false,
                     false,
@@ -858,10 +865,11 @@ mod launch_testmanager {
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn generate_blocks() {
-                let mut test_manager = TestManager::launch_with_default_activation_heights(
+                let mut test_manager = TestManager::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
+                    Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     false,
                     false,
@@ -886,10 +894,11 @@ mod launch_testmanager {
             #[ignore = "chain cache needs development"]
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn with_chain() {
-                let mut test_manager = TestManager::launch_with_default_activation_heights(
+                let mut test_manager = TestManager::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
+                    Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     ZEBRAD_CHAIN_CACHE_DIR.clone(),
                     false,
                     false,
@@ -908,10 +917,11 @@ mod launch_testmanager {
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn zaino() {
-                let mut test_manager = TestManager::launch_with_default_activation_heights(
+                let mut test_manager = TestManager::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
+                    Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     true,
                     false,
@@ -934,10 +944,11 @@ mod launch_testmanager {
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn zaino_clients() {
-                let mut test_manager = TestManager::launch_with_default_activation_heights(
+                let mut test_manager = TestManager::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
+                    Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     true,
                     false,
@@ -961,10 +972,11 @@ mod launch_testmanager {
             /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn zaino_clients_receive_mining_reward() {
-                let mut test_manager = TestManager::launch_with_default_activation_heights(
+                let mut test_manager = TestManager::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
+                    Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     true,
                     false,
@@ -1007,10 +1019,11 @@ mod launch_testmanager {
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn zaino_clients_receive_mining_reward_and_send() {
-                let mut test_manager = TestManager::launch_with_default_activation_heights(
+                let mut test_manager = TestManager::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
+                    Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     true,
                     false,
@@ -1108,10 +1121,11 @@ mod launch_testmanager {
             #[ignore = "requires fully synced testnet."]
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn zaino_testnet() {
-                let mut test_manager = TestManager::launch_with_default_activation_heights(
+                let mut test_manager = TestManager::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     Some(NetworkKind::Testnet),
+                    Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     ZEBRAD_TESTNET_CACHE_DIR.clone(),
                     true,
                     false,
@@ -1139,10 +1153,11 @@ mod launch_testmanager {
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn basic() {
-                let mut test_manager = TestManager::launch_with_default_activation_heights(
+                let mut test_manager = TestManager::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
+                    Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     false,
                     false,
@@ -1161,10 +1176,11 @@ mod launch_testmanager {
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn generate_blocks() {
-                let mut test_manager = TestManager::launch_with_default_activation_heights(
+                let mut test_manager = TestManager::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
+                    Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     false,
                     false,
@@ -1189,10 +1205,11 @@ mod launch_testmanager {
             #[ignore = "chain cache needs development"]
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn with_chain() {
-                let mut test_manager = TestManager::launch_with_default_activation_heights(
+                let mut test_manager = TestManager::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
+                    Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     ZEBRAD_CHAIN_CACHE_DIR.clone(),
                     false,
                     false,
@@ -1211,10 +1228,11 @@ mod launch_testmanager {
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn zaino() {
-                let mut test_manager = TestManager::launch_with_default_activation_heights(
+                let mut test_manager = TestManager::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
+                    Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     true,
                     false,
@@ -1237,10 +1255,11 @@ mod launch_testmanager {
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn zaino_clients() {
-                let mut test_manager = TestManager::launch_with_default_activation_heights(
+                let mut test_manager = TestManager::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
+                    Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     true,
                     false,
@@ -1264,10 +1283,11 @@ mod launch_testmanager {
             /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn zaino_clients_receive_mining_reward() {
-                let mut test_manager = TestManager::launch_with_default_activation_heights(
+                let mut test_manager = TestManager::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
+                    Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     true,
                     false,
@@ -1311,10 +1331,11 @@ mod launch_testmanager {
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn zaino_clients_receive_mining_reward_and_send() {
-                let mut test_manager = TestManager::launch_with_default_activation_heights(
+                let mut test_manager = TestManager::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
+                    Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     true,
                     false,
@@ -1410,10 +1431,11 @@ mod launch_testmanager {
             #[ignore = "requires fully synced testnet."]
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
             pub(crate) async fn zaino_testnet() {
-                let mut test_manager = TestManager::launch_with_default_activation_heights(
+                let mut test_manager = TestManager::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     Some(NetworkKind::Testnet),
+                    Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     ZEBRAD_TESTNET_CACHE_DIR.clone(),
                     true,
                     false,
