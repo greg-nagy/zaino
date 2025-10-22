@@ -1,4 +1,4 @@
-use zaino_common::network::ActivationHeights;
+use zaino_common::network::{ActivationHeights, ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS};
 use zaino_common::{DatabaseConfig, ServiceConfig, StorageConfig};
 use zaino_state::BackendType;
 use zaino_state::{
@@ -26,10 +26,11 @@ async fn create_test_manager_and_services(
     StateService,
     StateServiceSubscriber,
 ) {
-    let test_manager = TestManager::launch_with_default_activation_heights(
+    let test_manager = TestManager::launch(
         validator,
         &BackendType::Fetch,
         network,
+        Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
         chain_cache.clone(),
         enable_zaino,
         false,
