@@ -19,6 +19,7 @@ use zebra_rpc::client::ValidateAddressResponse;
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetBlock, GetBlockHash};
 use zip32::AccountId;
 
+// TODO one unused var in tuple across 47 uses.
 async fn create_test_manager_and_fetch_service(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
@@ -26,7 +27,7 @@ async fn create_test_manager_and_fetch_service(
     _zaino_no_sync: bool,
     enable_clients: bool,
 ) -> (TestManager, FetchService, FetchServiceSubscriber) {
-    // TODO first in return is the testmanager, everything else depends on it
+    // TODO launch sets us up for subsequent steps
     let test_manager = TestManager::launch(
         validator,
         &BackendType::Fetch,
