@@ -27,8 +27,9 @@ use zaino_fetch::{
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
         response::{
-            block_header::GetBlockHeader, block_subsidy::GetBlockSubsidy, peer_info::GetPeerInfo,
-            GetMempoolInfoResponse, GetNetworkSolPsResponse, GetSubtreesResponse,
+            block_header::GetBlockHeader, block_subsidy::GetBlockSubsidy,
+            mining_info::GetMiningInfoWire, peer_info::GetPeerInfo, GetMempoolInfoResponse,
+            GetNetworkSolPsResponse, GetSubtreesResponse,
         },
     },
 };
@@ -1180,6 +1181,10 @@ impl ZcashIndexer for StateServiceSubscriber {
             sapling,
             orchard,
         ))
+    }
+
+    async fn get_mining_info(&self) -> Result<GetMiningInfoWire, Self::Error> {
+        Ok(self.rpc_client.get_mining_info().await?)
     }
 
     // No request parameters.

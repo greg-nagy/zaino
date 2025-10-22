@@ -6,6 +6,7 @@
 pub mod block_header;
 pub mod block_subsidy;
 pub mod common;
+pub mod mining_info;
 pub mod peer_info;
 
 use std::{convert::Infallible, num::ParseIntError};
