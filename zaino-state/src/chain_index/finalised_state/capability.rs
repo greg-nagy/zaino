@@ -8,8 +8,7 @@ use crate::{
     read_fixed_le, read_u32_le, read_u8, version, write_fixed_le, write_u32_le, write_u8,
     AddrScript, BlockHash, BlockHeaderData, CommitmentTreeData, FixedEncodedLen, Height,
     IndexedBlock, OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList,
-    StatusType, TransparentCompactTx, TransparentTxList, TxLocation, TxidList,
-    ZainoVersionedSerde,
+    StatusType, TransparentCompactTx, TransparentTxList, TxLocation, TxidList, ZainoVersionedSerde,
 };
 
 use async_trait::async_trait;
