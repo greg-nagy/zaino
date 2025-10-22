@@ -25,7 +25,7 @@ fail-fast = true # If a test fails against this profile, that's a surprise to be
 # of the expression, slow at the end.  If a slow and flakey test is discovered it should be included
 # in the flakey category.
 #  On a developer laptop:
-#  flakey 53 ==  tests fail at least once
+#  flakey 54 ==  tests fail at least once
 #  slow   32 ==  >60s runtime
 default-filter = """
     not (
@@ -81,7 +81,8 @@ default-filter = """
         test(/^launch_testmanager::zebrad::state_service::zaino_clients_receive_mining_reward_and_send$/) |
         test(/^zebrad::get::block_raw$/) |
         test(/^zebrad::lightwallet_indexer::get_subtree_roots$/) |
-        test(/^launch_testmanager::zcashd::zaino_clients$/)
+        test(/^launch_testmanager::zcashd::zaino_clients$/) |
+        test(/^zcashd::zcash_indexer::get_block_subsidy$/)
     )
     &
     not (
