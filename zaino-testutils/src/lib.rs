@@ -16,8 +16,8 @@ use std::{
 use tempfile::TempDir;
 use tracing_subscriber::EnvFilter;
 use zaino_common::{
-    network::ActivationHeights, validator::ValidatorConfig, CacheConfig, DatabaseConfig, Network,
-    ServiceConfig, StorageConfig,
+    network::ActivationHeights, network::ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
+    validator::ValidatorConfig, CacheConfig, DatabaseConfig, Network, ServiceConfig, StorageConfig,
 };
 use zaino_serve::server::config::{GrpcServerConfig, JsonRpcServerConfig};
 use zaino_state::BackendType;
@@ -31,21 +31,6 @@ pub use zingolib::get_base_address_macro;
 pub use zingolib::lightclient::LightClient;
 pub use zingolib::testutils::lightclient::from_inputs;
 use zingolib::testutils::scenarios::ClientBuilder;
-
-// TODO: update zebra to allow full nu6.1 test support
-/// Temporary default zebrad activation height until zaino is updated to next zebra release (or latest main).
-pub const ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS: ActivationHeights = ActivationHeights {
-    overwinter: Some(1),
-    before_overwinter: Some(1),
-    sapling: Some(1),
-    blossom: Some(1),
-    heartwood: Some(1),
-    canopy: Some(1),
-    nu5: Some(2),
-    nu6: Some(2),
-    nu6_1: Some(1000),
-    nu7: None,
-};
 
 /// Helper to get the test binary path from the TEST_BINARIES_DIR env var.
 fn binary_path(binary_name: &str) -> Option<PathBuf> {
@@ -601,6 +586,9 @@ impl TestManager {
 
     /// Helper function to support default test case.
     #[allow(clippy::too_many_arguments)]
+    // TODO it all comes through here.. to this to make a testmanager...
+    // and this is like a SHIM to account for different defaults, depending on which validtor_kind (full node) is being used.
+    // so really we only need this because the activation heights are (presumably) different!?
     pub async fn launch_with_default_activation_heights(
         validator_kind: &ValidatorKind,
         backend: &BackendType,
@@ -612,6 +600,13 @@ impl TestManager {
         // zaino_no_sync: bool,
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
+        // These are the same lol
+        println!(
+            "CONST {:?} , default:  {:?}",
+            ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
+            ActivationHeights::default()
+        );
+        // panic!("came to the wrong hood this time");
         let activation_heights = match validator_kind {
             ValidatorKind::Zebrad => ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
             ValidatorKind::Zcashd => ActivationHeights::default(),
