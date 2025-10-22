@@ -11,6 +11,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tower::{Service, ServiceExt as _};
 use zaino_common::network::ActivationHeights;
+use zaino_common::network::ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS;
 use zaino_common::DatabaseConfig;
 use zaino_common::ServiceConfig;
 use zaino_common::StorageConfig;
@@ -54,10 +55,11 @@ async fn create_test_manager_and_services(
     enable_clients: bool,
     network: Option<NetworkKind>,
 ) -> (TestManager, StateService, StateServiceSubscriber) {
-    let test_manager = TestManager::launch_with_default_activation_heights(
+    let test_manager = TestManager::launch(
         validator,
         &BackendType::Fetch,
         network,
+        Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
         chain_cache.clone(),
         enable_zaino,
         false,

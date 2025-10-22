@@ -1,6 +1,6 @@
 //! Tests that compare the output of both `zcashd` and `zainod` through `FetchService`.
 
-use zaino_common::network::ActivationHeights;
+use zaino_common::network::{ActivationHeights, ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS};
 use zaino_common::{DatabaseConfig, ServiceConfig, StorageConfig};
 use zaino_state::{
     BackendType, FetchService, FetchServiceConfig, FetchServiceSubscriber, ZcashIndexer,
@@ -23,10 +23,11 @@ async fn create_test_manager_and_fetch_services(
     FetchServiceSubscriber,
 ) {
     println!("Launching test manager..");
-    let test_manager = TestManager::launch_with_default_activation_heights(
+    let test_manager = TestManager::launch(
         &ValidatorKind::Zcashd,
         &BackendType::Fetch,
         None,
+        Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
         None,
         true,
         true,

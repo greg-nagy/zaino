@@ -1,7 +1,7 @@
 //! These tests compare the output of `FetchService` with the output of `JsonRpcConnector`.
 
 use futures::StreamExt as _;
-use zaino_common::network::ActivationHeights;
+use zaino_common::network::{ActivationHeights, ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS};
 use zaino_common::{DatabaseConfig, Network, ServiceConfig, StorageConfig};
 use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
 use zaino_proto::proto::service::{
@@ -26,10 +26,15 @@ async fn create_test_manager_and_fetch_service(
     _zaino_no_sync: bool,
     enable_clients: bool,
 ) -> (TestManager, FetchService, FetchServiceSubscriber) {
-    let test_manager = TestManager::launch_with_default_activation_heights(
+    // TODO first in return is the testmanager, everything else depends on it
+    let test_manager = TestManager::launch(
         validator,
         &BackendType::Fetch,
         None,
+        // TODO just like launch, but w/o one var.
+        // between 3 + 4 are activation heights...
+        // Some(ZEBRAD_CONST) wherever this launch_with_default is used
+        Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
         chain_cache,
         enable_zaino,
         false,
@@ -39,6 +44,7 @@ async fn create_test_manager_and_fetch_service(
     .await
     .unwrap();
 
+    // TODO fetch_service leans on the established test manager to populate its fields.
     let fetch_service = FetchService::spawn(FetchServiceConfig::new(
         test_manager.full_node_rpc_listen_address,
         None,
@@ -61,7 +67,9 @@ async fn create_test_manager_and_fetch_service(
     ))
     .await
     .unwrap();
+    // TODO subscriber leans on the fetch service
     let subscriber = fetch_service.get_subscriber().inner();
+    // TODO and here's the return
     (test_manager, fetch_service, subscriber)
 }
 
@@ -604,14 +612,13 @@ async fn assert_fetch_service_difficulty_matches_rpc(validator: &ValidatorKind) 
 
 async fn assert_fetch_service_mininginfo_matches_rpc(validator: &ValidatorKind) {
     let (test_manager, _fetch_service, fetch_service_subscriber) =
-        create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
+        create_test_manager_and_fetch_service(validator, None, true, true, true).await;
 
     let fetch_service_mining_info = fetch_service_subscriber.get_mining_info().await.unwrap();
 
     let jsonrpc_client = JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
-            test_manager.zebrad_rpc_listen_address,
-            false,
+            test_manager.full_node_rpc_listen_address,
             None,
             Some("xxxxxx".to_string()),
             Some("xxxxxx".to_string()),
