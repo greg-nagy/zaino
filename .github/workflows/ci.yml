@@ -300,7 +300,10 @@ jobs:
 
   cargo-hack-check:
     name: Cargo Hack Check
-    runs-on: ubuntu-24.04
+    needs: compute-tag
+    container:
+      image: zingodevops/zaino-ci:${{ needs.compute-tag.outputs.image-tag }}
+    runs-on: arc-sh-runners
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
