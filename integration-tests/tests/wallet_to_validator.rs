@@ -2,6 +2,7 @@
 
 #![forbid(unsafe_code)]
 
+use zaino_common::network::{ActivationHeights, ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS};
 use zaino_fetch::jsonrpsee::connector::test_node_and_return_url;
 use zaino_state::BackendType;
 use zaino_testutils::from_inputs;
@@ -10,8 +11,16 @@ use zaino_testutils::ValidatorKind;
 use zip32::AccountId;
 
 async fn connect_to_node_get_info_for_validator(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::launch_with_default_activation_heights(
-        validator, backend, None, None, true, false, false, true,
+    let mut test_manager = TestManager::launch(
+        validator,
+        backend,
+        None,
+        Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
+        None,
+        true,
+        false,
+        false,
+        true,
     )
     .await
     .unwrap();
@@ -27,8 +36,16 @@ async fn connect_to_node_get_info_for_validator(validator: &ValidatorKind, backe
 }
 
 async fn send_to_orchard(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::launch_with_default_activation_heights(
-        validator, backend, None, None, true, false, false, true,
+    let mut test_manager = TestManager::launch(
+        validator,
+        backend,
+        None,
+        Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
+        None,
+        true,
+        false,
+        false,
+        true,
     )
     .await
     .unwrap();
@@ -70,8 +87,16 @@ async fn send_to_orchard(validator: &ValidatorKind, backend: &BackendType) {
 }
 
 async fn send_to_sapling(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::launch_with_default_activation_heights(
-        validator, backend, None, None, true, false, false, true,
+    let mut test_manager = TestManager::launch(
+        validator,
+        backend,
+        None,
+        Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
+        None,
+        true,
+        false,
+        false,
+        true,
     )
     .await
     .unwrap();
@@ -113,8 +138,16 @@ async fn send_to_sapling(validator: &ValidatorKind, backend: &BackendType) {
 }
 
 async fn send_to_transparent(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::launch_with_default_activation_heights(
-        validator, backend, None, None, true, false, false, true,
+    let mut test_manager = TestManager::launch(
+        validator,
+        backend,
+        None,
+        Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
+        None,
+        true,
+        false,
+        false,
+        true,
     )
     .await
     .unwrap();
@@ -216,8 +249,16 @@ async fn send_to_transparent(validator: &ValidatorKind, backend: &BackendType) {
 }
 
 async fn send_to_all(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::launch_with_default_activation_heights(
-        validator, backend, None, None, true, false, false, true,
+    let mut test_manager = TestManager::launch(
+        validator,
+        backend,
+        None,
+        Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
+        None,
+        true,
+        false,
+        false,
+        true,
     )
     .await
     .unwrap();
@@ -307,8 +348,16 @@ async fn send_to_all(validator: &ValidatorKind, backend: &BackendType) {
 }
 
 async fn shield_for_validator(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::launch_with_default_activation_heights(
-        validator, backend, None, None, true, false, false, true,
+    let mut test_manager = TestManager::launch(
+        validator,
+        backend,
+        None,
+        Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
+        None,
+        true,
+        false,
+        false,
+        true,
     )
     .await
     .unwrap();
@@ -383,8 +432,16 @@ async fn monitor_unverified_mempool_for_validator(
     validator: &ValidatorKind,
     backend: &BackendType,
 ) {
-    let mut test_manager = TestManager::launch_with_default_activation_heights(
-        validator, backend, None, None, true, false, false, true,
+    let mut test_manager = TestManager::launch(
+        validator,
+        backend,
+        None,
+        Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
+        None,
+        true,
+        false,
+        false,
+        true,
     )
     .await
     .unwrap();
