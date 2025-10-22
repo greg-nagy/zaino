@@ -31,9 +31,6 @@ async fn create_test_manager_and_fetch_service(
         validator,
         &BackendType::Fetch,
         None,
-        // TODO just like launch, but w/o one var.
-        // between 3 + 4 are activation heights...
-        // Some(ZEBRAD_CONST) wherever this launch_with_default is used
         Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
         chain_cache,
         enable_zaino,
