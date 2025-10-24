@@ -69,20 +69,13 @@ async fn create_test_manager_and_fetch_services(
     tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
     println!("Launching zaino fetch service..");
+
     let zaino_fetch_service = FetchService::spawn(FetchServiceConfig::new(
-        // validator_rpc_address: std::net::SocketAddr,
         test_manager.full_node_rpc_listen_address,
-        // zaino_json_server_address,
-        // validator_cookie_path: Option<String>,
-        // TODO this is suspect.
         test_manager.json_server_cookie_dir.clone(),
-        // validator_rpc_user: Option<String>,
         None,
-        // validator_rpc_password: Option<String>,
         None,
-        // service: ServiceConfig,
         ServiceConfig::default(),
-        // storage: StorageConfig,
         StorageConfig {
             database: DatabaseConfig {
                 path: test_manager
