@@ -264,6 +264,22 @@ fn test_cookie_dir_logic() {
                 .cookie_dir,
             Some(PathBuf::from("/my/cookie/path"))
         );
+        let s3_path = jail.directory().join("s3.toml");
+        jail.create_file(
+            &s3_path,
+            r#"
+            backend = "fetch"
+            
+            [json_server_settings]
+            json_rpc_listen_address = "127.0.0.1:8237"
+
+            grpc_listen_address = "127.0.0.1:8137"
+            validator_listen_address = "127.0.0.1:18232"
+            zaino_db_path = "/zaino/db"
+            zebra_db_path = "/zebra/db"
+            network = "Testnet"
+        "#,
+        )?;
         let config3 = load_config(&s3_path).expect("Config S3 failed");
         assert!(config3
             .json_server_settings
