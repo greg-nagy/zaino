@@ -8512,7 +8512,6 @@ dependencies = [
  "zcash_local_net",
  "zcash_protocol 0.6.1 (git+https://github.com/zcash/librustzcash?rev=d387aed7e04e881dbe30c6ff8b26a96c834c094b)",
  "zebra-chain",
- "zingo_common_components 0.1.0 (git+https://github.com/zingolabs/zingo-common.git?tag=zingo_common_components_v0.1.0)",
  "zingo_netutils 0.1.0 (git+https://github.com/zingolabs/zingo-common.git?tag=zingo_common_components_v0.1.0)",
  "zingo_test_vectors 0.0.1 (git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.1.0)",
  "zingolib",
@@ -8847,7 +8846,7 @@ dependencies = [
  "zebra-chain",
  "zebra-node-services",
  "zebra-rpc",
- "zingo_common_components 0.1.0 (git+https://github.com/zingolabs/zingo-common.git?rev=23814ee904ee64913585c0b8f871c6dbd94504c6)",
+ "zingo_common_components",
 ]
 
 [[package]]
@@ -9562,14 +9561,6 @@ source = "git+https://github.com/zingolabs/zingolib.git?rev=f88e1d76ea244d6cc48d
 dependencies = [
  "byteorder",
  "zcash_primitives 0.24.0",
-]
-
-[[package]]
-name = "zingo_common_components"
-version = "0.1.0"
-source = "git+https://github.com/zingolabs/zingo-common.git?tag=zingo_common_components_v0.1.0#7407028a9c561561d174740e70170c4c20529bcd"
-dependencies = [
- "zebra-chain",
 ]
 
 [[package]]
