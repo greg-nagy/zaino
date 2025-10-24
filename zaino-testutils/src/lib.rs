@@ -162,7 +162,6 @@ impl zcash_local_net::validator::Validator for LocalNet {
         todo!()
     }
 
-    // TODO many of these matches could be less verbose, perhaps by defining a into-inner kind of fuction.
     fn get_activation_heights(
         &self,
     ) -> zebra_chain::parameters::testnet::ConfiguredActivationHeights {
@@ -251,7 +250,6 @@ impl zcash_local_net::validator::Validator for LocalNet {
     }
 
     fn config_dir(&self) -> &TempDir {
-        // TODO crufty
         match self {
             LocalNet::Zcashd(net) => net.validator().config_dir(),
             LocalNet::Zebrad(net) => net.validator().config_dir(),
@@ -357,13 +355,6 @@ pub struct TestManager {
     /// Zaino gRPC listen address.
     pub zaino_grpc_listen_address: Option<SocketAddr>,
     /// JsonRPC server cookie dir.
-    // TODO ambiguity
-    // TODO
-    // looking for:
-    //         test_manager.json_server_cookie_dir.clone(),
-    // is it a validator cookie path?!
-    // TODO PATH to validator cookie file!???!
-    // this really seems like a ZAINO server system piece.
     pub json_server_cookie_dir: Option<PathBuf>,
     /// Zingolib lightclients.
     pub clients: Option<Clients>,
@@ -453,7 +444,6 @@ impl TestManager {
         // Launch Zaino:
         let (
             zaino_grpc_listen_address,
-            // TODO there is some mismatch between JsonRpcServerConfig/JsonRpcServer and GrpcConfig/GrpcServer
             zaino_json_listen_address,
             zaino_json_server_cookie_dir,
             zaino_handle,
@@ -468,12 +458,6 @@ impl TestManager {
             if enable_zaino_jsonrpc_server_cookie_auth {
                 zaino_json_server_cookie_dir = Some(default_ephemeral_cookie_path());
             }
-
-            dbg!(
-                "zaino_json_server_cookie_dir =========== {}",
-                &zaino_json_server_cookie_dir
-            );
-
             let indexer_config = zainodlib::config::ZainodConfig {
                 // TODO: Make configurable.
                 backend: *backend,
@@ -507,12 +491,6 @@ impl TestManager {
                 zebra_db_path,
                 network: zaino_network_kind,
             };
-            // TODO we create the handle here, with indexer_config.
-            // I think we could possibly ... spit out the indexer stuff if we need it later, piece by piece?
-            // ie, just return the handle and the config
-            //
-            // so... we need indexer_config to launch the handle. But maybe we should separate this out?
-            // step one, set config, step two spawn indexer
             let handle = zainodlib::indexer::spawn_indexer(indexer_config)
                 .await
                 .unwrap();
@@ -528,10 +506,6 @@ impl TestManager {
         } else {
             (None, None, None, None)
         };
-        // TODO by here we've already generated a JoinHandle.
-        // pub zaino_handle: Option<tokio::task::JoinHandle<Result<(), zainodlib::error::IndexerError>>>,
-        // along with two listen addresses and a cookie_dir.
-
         // Launch Zingolib Lightclients:
         let clients = if enable_clients {
             let mut client_builder = ClientBuilder::new(
@@ -560,10 +534,6 @@ impl TestManager {
         } else {
             None
         };
-        dbg!(
-            "zaino_json_server_cookie_dir: {:?}",
-            zaino_json_server_cookie_dir.clone()
-        );
         let test_manager = Self {
             local_net,
             data_dir,
@@ -573,7 +543,6 @@ impl TestManager {
             zaino_handle,
             zaino_json_rpc_listen_address: zaino_json_listen_address,
             zaino_grpc_listen_address,
-            // TODO here, it's defined as zaino json server cookie dir...
             json_server_cookie_dir: zaino_json_server_cookie_dir,
             clients,
         };

@@ -69,7 +69,6 @@ async fn create_test_manager_and_fetch_services(
     tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
     println!("Launching zaino fetch service..");
-
     let zaino_fetch_service = FetchService::spawn(FetchServiceConfig::new(
         test_manager.full_node_rpc_listen_address,
         test_manager.json_server_cookie_dir.clone(),

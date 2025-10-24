@@ -7,19 +7,12 @@ use std::path::PathBuf;
 
 /// Validator (full-node) type for Zaino configuration.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
-// #[serde(from = "ValidatorDeserialize")]
 pub struct ValidatorConfig {
-    // jsonrpc and grpc addresses always known.
     /// Full node / validator gprc listen port.
-    //#[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     pub validator_grpc_listen_address: SocketAddr,
-
     /// Full node / validator listen port.
-    // #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     pub validator_jsonrpc_listen_address: SocketAddr,
-
-    /// Enable validator rpc cookie authentication with Some
-    /// Path to the validator cookie file.
+    /// Path to the validator cookie file. Enable validator rpc cookie authentication with Some.
     pub validator_cookie_path: Option<PathBuf>,
     /// Full node / validator Username.
     pub validator_user: Option<String>,

@@ -6,8 +6,7 @@ use tonic::transport::{Identity, ServerTlsConfig};
 
 use super::error::ServerError;
 
-/// when a Zaino is configured with gRPC tls, it has paths to key and certificate.
-/// gRPC TLS settings
+/// Settings for a Zaino configured with gRPC TLS: paths to key and certificate.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct GrpcTls {
     /// Path to the TLS certificate file in PEM format.
@@ -20,7 +19,6 @@ pub struct GrpcTls {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct GrpcServerConfig {
     /// gRPC server bind addr.
-    // TODO for this field, assess #[serde(deserialize_with = "deserialize_socketaddr_from_string")]
     pub listen_address: SocketAddr,
     /// Enables TLS.
     pub tls: Option<GrpcTls>,
@@ -29,7 +27,6 @@ pub struct GrpcServerConfig {
 impl GrpcServerConfig {
     /// If TLS is enabled, reads the certificate and key files and returns a valid
     /// `ServerTlsConfig`. If TLS is not enabled, returns `Ok(None)`.
-    // TODO : redundant?
     pub async fn get_valid_tls(&self) -> Result<Option<ServerTlsConfig>, ServerError> {
         match self.tls.clone() {
             Some(tls) => {
@@ -46,16 +43,12 @@ impl GrpcServerConfig {
                     ));
                 }
                 let key_path = tls.key_path;
-
-                // Read the certificate and key files asynchronously.
                 let cert = tokio::fs::read(cert_path).await.map_err(|e| {
                     ServerError::ServerConfigError(format!("Failed to read TLS certificate: {e}"))
                 })?;
                 let key = tokio::fs::read(key_path).await.map_err(|e| {
                     ServerError::ServerConfigError(format!("Failed to read TLS key: {e}"))
                 })?;
-
-                // Build the identity and TLS configuration.
                 let tls_id = Identity::from_pem(cert, key);
                 let tls_config = ServerTlsConfig::new().identity(tls_id);
                 Ok(Some(tls_config))
@@ -71,8 +64,7 @@ pub struct JsonRpcServerConfig {
     /// Server bind addr.
     pub json_rpc_listen_address: SocketAddr,
 
-    /// Directory to store authentication cookie file.
-    /// Enable cookie-based authentication with a valid `Some(<PathBuf>)` value.
+    /// Enable cookie-based authentication with a valid `Some(<PathBuf>)` value: Directory to store authentication cookie file.
     /// An empty PathBuf that is still Some will have an emphemeral path assigned to it when zaino loads the config.
     #[serde(default)]
     pub cookie_dir: Option<PathBuf>,

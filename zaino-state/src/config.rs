@@ -33,8 +33,7 @@ pub struct StateServiceConfig {
     pub validator_grpc_address: std::net::SocketAddr,
     /// Validator cookie auth.
     pub validator_cookie_auth: bool,
-    /// Path to the validator cookie file.
-    /// Enable validator rpc cookie authentification with Some.
+    /// Enable validator rpc cookie authentification with Some: Path to the validator cookie file.
     pub validator_cookie_path: Option<PathBuf>,
     /// Validator JsonRPC user.
     pub validator_rpc_user: String,
@@ -79,14 +78,12 @@ impl StateServiceConfig {
     }
 }
 
-// TODO should this live in another module?
 /// Holds config data for [crate::FetchService].
 #[derive(Debug, Clone)]
 pub struct FetchServiceConfig {
     /// Validator JsonRPC address.
     pub validator_rpc_address: std::net::SocketAddr,
-    /// Enable validator rpc cookie authentification with Some.
-    /// Path to the validator cookie file.
+    /// Enable validator rpc cookie authentification with Some: path to the validator cookie file.
     pub validator_cookie_path: Option<PathBuf>,
     /// Validator JsonRPC user.
     pub validator_rpc_user: String,

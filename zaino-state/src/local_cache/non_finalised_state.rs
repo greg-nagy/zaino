@@ -377,7 +377,6 @@ impl NonFinalisedState {
             zaino_common::DatabaseSize::Gb(_) => false,
         };
         if no_db && !self.config.network.to_zebra_network().is_regtest() {
-            // && !self.config.no_sync {
             self.status.store(StatusType::Syncing);
             loop {
                 let blockchain_info = self.fetcher.get_blockchain_info().await.map_err(|e| {

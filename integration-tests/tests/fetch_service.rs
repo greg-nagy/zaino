@@ -27,7 +27,6 @@ async fn create_test_manager_and_fetch_service(
     _zaino_no_sync: bool,
     enable_clients: bool,
 ) -> (TestManager, FetchService, FetchServiceSubscriber) {
-    // TODO launch sets us up for subsequent steps
     let test_manager = TestManager::launch(
         validator,
         &BackendType::Fetch,
@@ -42,7 +41,6 @@ async fn create_test_manager_and_fetch_service(
     .await
     .unwrap();
 
-    // TODO fetch_service leans on the established test manager to populate its fields.
     let fetch_service = FetchService::spawn(FetchServiceConfig::new(
         test_manager.full_node_rpc_listen_address,
         None,
@@ -65,9 +63,7 @@ async fn create_test_manager_and_fetch_service(
     ))
     .await
     .unwrap();
-    // TODO subscriber leans on the fetch service
     let subscriber = fetch_service.get_subscriber().inner();
-    // TODO and here's the return
     (test_manager, fetch_service, subscriber)
 }
 

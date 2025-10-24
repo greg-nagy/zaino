@@ -31,7 +31,6 @@ pub(crate) async fn spawn_v0_zaino_db(
         },
         db_version: 0,
         network: Network::Regtest(ActivationHeights::default()),
-        // no_sync: false,
     };
 
     let zaino_db = ZainoDB::spawn(config, source).await.unwrap();
@@ -206,7 +205,6 @@ async fn save_db_to_file_and_reload() {
         },
         db_version: 0,
         network: Network::Regtest(ActivationHeights::default()),
-        // no_sync: false,
     };
 
     let source = build_mockchain_source(blocks.clone());

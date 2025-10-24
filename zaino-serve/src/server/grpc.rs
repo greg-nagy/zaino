@@ -56,7 +56,6 @@ impl TonicServer {
         };
         let server_future = server_builder
             .add_service(svc)
-            // here, it's taken straight from the config.
             .serve_with_shutdown(server_config.listen_address, shutdown_signal);
 
         let task_status = status.clone();
