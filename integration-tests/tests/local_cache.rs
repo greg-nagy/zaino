@@ -18,7 +18,7 @@ async fn create_test_manager_and_block_cache(
     enable_zaino: bool,
     enable_clients: bool,
 ) -> (
-    TestManager,
+    TestManager<FetchService>,
     JsonRpSeeConnector,
     BlockCache,
     BlockCacheSubscriber,
@@ -28,7 +28,7 @@ async fn create_test_manager_and_block_cache(
         ValidatorKind::Zcashd => ActivationHeights::default(),
     };
 
-    let test_manager = TestManager::launch(
+    let test_manager = TestManager::<FetchService>::launch(
         validator,
         &BackendType::Fetch,
         None,
@@ -102,17 +102,7 @@ async fn launch_local_cache_process_n_block_batches(validator: &ValidatorKind, b
     let finalised_state_subscriber = block_cache_subscriber.finalised_state.take().unwrap();
 
     for _ in 1..=batches {
-        // Generate blocks
-        //
-        // NOTE: Generating blocks with zcashd blocks the tokio main thread???, stopping background processes from running,
-        //       for this reason we generate blocks 1 at a time and sleep to let other tasks run.
-        for height in 1..=100 {
-            println!("Generating block at height: {height}");
-            test_manager.local_net.generate_blocks(1).await.unwrap();
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        }
-
-        tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+        test_manager.generate_blocks_and_poll(100).await;
 
         // Check chain height in validator, non-finalised state and finalised state.
         let validator_height = dbg!(json_service.get_blockchain_info().await.unwrap().blocks.0);

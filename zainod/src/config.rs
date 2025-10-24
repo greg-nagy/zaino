@@ -349,46 +349,61 @@ impl TryFrom<ZainodConfig> for BackendConfig {
     #[allow(deprecated)]
     fn try_from(cfg: ZainodConfig) -> Result<Self, Self::Error> {
         match cfg.backend {
-            zaino_state::BackendType::State => Ok(BackendConfig::State(StateServiceConfig {
-                validator_state_config: zebra_state::Config {
-                    cache_dir: cfg.zebra_db_path.clone(),
-                    ephemeral: false,
-                    delete_old_database: true,
-                    debug_stop_at_height: None,
-                    debug_validity_check_interval: None,
-                },
-                validator_rpc_address: cfg.validator_settings.validator_jsonrpc_listen_address,
-                validator_grpc_address: cfg.validator_settings.validator_grpc_listen_address,
-                validator_cookie_auth: cfg.validator_settings.validator_cookie_path.is_some(),
-                validator_cookie_path: cfg.validator_settings.validator_cookie_path,
-                validator_rpc_user: cfg
-                    .validator_settings
-                    .validator_user
-                    .unwrap_or_else(|| "xxxxxx".to_string()),
-                validator_rpc_password: cfg
-                    .validator_settings
-                    .validator_password
-                    .unwrap_or_else(|| "xxxxxx".to_string()),
-                service: cfg.service,
-                storage: cfg.storage,
-                network: cfg.network,
-            })),
+            zaino_state::BackendType::State => {
+                Ok(BackendConfig::State(StateServiceConfig::from(cfg)))
+            }
+            zaino_state::BackendType::Fetch => {
+                Ok(BackendConfig::Fetch(FetchServiceConfig::from(cfg)))
+            }
+        }
+    }
+}
 
-            zaino_state::BackendType::Fetch => Ok(BackendConfig::Fetch(FetchServiceConfig {
-                validator_rpc_address: cfg.validator_settings.validator_jsonrpc_listen_address,
-                validator_cookie_path: cfg.validator_settings.validator_cookie_path,
-                validator_rpc_user: cfg
-                    .validator_settings
-                    .validator_user
-                    .unwrap_or_else(|| "xxxxxx".to_string()),
-                validator_rpc_password: cfg
-                    .validator_settings
-                    .validator_password
-                    .unwrap_or_else(|| "xxxxxx".to_string()),
-                service: cfg.service,
-                storage: cfg.storage,
-                network: cfg.network,
-            })),
+impl From<IndexerConfig> for StateServiceConfig {
+    fn from(cfg: IndexerConfig) -> Self {
+        StateServiceConfig {
+            validator_state_config: zebra_state::Config {
+                cache_dir: cfg.zebra_db_path.clone(),
+                ephemeral: false,
+                delete_old_database: true,
+                debug_stop_at_height: None,
+                debug_validity_check_interval: None,
+            },
+            validator_rpc_address: cfg.validator_settings.validator_jsonrpc_listen_address,
+            validator_grpc_address: cfg.validator_settings.validator_grpc_listen_address,
+            validator_cookie_auth: cfg.validator_settings.validator_cookie_path.is_some(),
+            validator_cookie_path: cfg.validator_settings.validator_cookie_path,
+            validator_rpc_user: cfg
+                .validator_settings
+                .validator_user
+                .unwrap_or_else(|| "xxxxxx".to_string()),
+            validator_rpc_password: cfg
+                .validator_settings
+                .validator_password
+                .unwrap_or_else(|| "xxxxxx".to_string()),
+            service: cfg.service,
+            storage: cfg.storage,
+            network: cfg.network,
+        }
+    }
+}
+
+impl From<IndexerConfig> for FetchServiceConfig {
+    fn from(cfg: IndexerConfig) -> Self {
+        FetchServiceConfig {
+            validator_rpc_address: cfg.validator_settings.validator_jsonrpc_listen_address,
+            validator_cookie_path: cfg.validator_settings.validator_cookie_path,
+            validator_rpc_user: cfg
+                .validator_settings
+                .validator_user
+                .unwrap_or_else(|| "xxxxxx".to_string()),
+            validator_rpc_password: cfg
+                .validator_settings
+                .validator_password
+                .unwrap_or_else(|| "xxxxxx".to_string()),
+            service: cfg.service,
+            storage: cfg.storage,
+            network: cfg.network,
         }
     }
 }

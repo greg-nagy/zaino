@@ -17,14 +17,14 @@ use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetInfo};
 async fn create_test_manager_and_fetch_services(
     clients: bool,
 ) -> (
-    TestManager,
+    TestManager<FetchService>,
     FetchService,
     FetchServiceSubscriber,
     FetchService,
     FetchServiceSubscriber,
 ) {
     println!("Launching test manager..");
-    let test_manager = TestManager::launch(
+    let test_manager = TestManager::<FetchService>::launch_with_default_activation_heights(
         &ValidatorKind::Zcashd,
         &BackendType::Fetch,
         None,
@@ -289,8 +289,9 @@ async fn z_get_address_balance_inner() {
     )
     .await
     .unwrap();
-    test_manager.local_net.generate_blocks(1).await.unwrap();
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    test_manager
+        .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
+        .await;
 
     clients.recipient.sync_and_await().await.unwrap();
     let recipient_balance = clients
@@ -382,8 +383,9 @@ async fn get_raw_mempool_inner() {
         .take()
         .expect("Clients are not initialized");
 
-    test_manager.local_net.generate_blocks(1).await.unwrap();
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    test_manager
+        .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
+        .await;
 
     clients.faucet.sync_and_await().await.unwrap();
 
@@ -421,8 +423,9 @@ async fn get_mempool_info_inner() {
         .take()
         .expect("Clients are not initialized");
 
-    test_manager.local_net.generate_blocks(1).await.unwrap();
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    test_manager
+        .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
+        .await;
 
     clients.faucet.sync_and_await().await.unwrap();
 
@@ -464,8 +467,9 @@ async fn z_get_treestate_inner() {
         .await
         .unwrap();
 
-    test_manager.local_net.generate_blocks(1).await.unwrap();
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    test_manager
+        .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
+        .await;
 
     let zcashd_treestate = dbg!(zcashd_subscriber
         .z_get_treestate("2".to_string())
@@ -498,8 +502,9 @@ async fn z_get_subtrees_by_index_inner() {
         .await
         .unwrap();
 
-    test_manager.local_net.generate_blocks(1).await.unwrap();
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    test_manager
+        .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
+        .await;
 
     let zcashd_subtrees = dbg!(zcashd_subscriber
         .z_get_subtrees_by_index("orchard".to_string(), NoteCommitmentSubtreeIndex(0), None)
@@ -532,8 +537,9 @@ async fn get_raw_transaction_inner() {
         .await
         .unwrap();
 
-    test_manager.local_net.generate_blocks(1).await.unwrap();
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    test_manager
+        .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
+        .await;
 
     test_manager.local_net.print_stdout();
 
@@ -570,8 +576,9 @@ async fn get_address_tx_ids_inner() {
     )
     .await
     .unwrap();
-    test_manager.local_net.generate_blocks(1).await.unwrap();
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    test_manager
+        .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
+        .await;
 
     let chain_height = zcashd_subscriber
         .block_cache
@@ -627,8 +634,9 @@ async fn z_get_address_utxos_inner() {
     )
     .await
     .unwrap();
-    test_manager.local_net.generate_blocks(1).await.unwrap();
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    test_manager
+        .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
+        .await;
 
     clients.faucet.sync_and_await().await.unwrap();
 
@@ -709,7 +717,9 @@ mod zcashd {
 
                 assert_eq!(zcashd_difficulty, zaino_difficulty);
 
-                test_manager.local_net.generate_blocks(1).await.unwrap();
+                test_manager
+                    .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
+                    .await;
             }
 
             test_manager.close().await;
@@ -754,7 +764,9 @@ mod zcashd {
 
             assert_eq!(zcashd_peer_info, zaino_peer_info);
 
-            test_manager.local_net.generate_blocks(1).await.unwrap();
+            test_manager
+                .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
+                .await;
 
             test_manager.close().await;
         }
@@ -769,7 +781,9 @@ mod zcashd {
                 zaino_subscriber,
             ) = create_test_manager_and_fetch_services(false).await;
 
-            test_manager.local_net.generate_blocks(1).await.unwrap();
+            test_manager
+                .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
+                .await;
 
             let zcashd_block_subsidy = zcashd_subscriber.get_block_subsidy(1).await.unwrap();
             let zaino_block_subsidy = zaino_subscriber.get_block_subsidy(1).await.unwrap();

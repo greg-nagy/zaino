@@ -1,6 +1,6 @@
 use zaino_common::network::ActivationHeights;
 use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
-use zaino_state::BackendType;
+use zaino_state::{BackendType, FetchService};
 use zaino_testutils::{TestManager, Validator as _, ValidatorKind};
 
 async fn create_test_manager_and_connector(
@@ -9,8 +9,8 @@ async fn create_test_manager_and_connector(
     chain_cache: Option<std::path::PathBuf>,
     enable_zaino: bool,
     enable_clients: bool,
-) -> (TestManager, JsonRpSeeConnector) {
-    let test_manager = TestManager::launch(
+) -> (TestManager<FetchService>, JsonRpSeeConnector) {
+    let test_manager = TestManager::<FetchService>::launch(
         validator,
         &BackendType::Fetch,
         None,
@@ -75,14 +75,14 @@ mod chain_query_interface {
         enable_zaino: bool,
         enable_clients: bool,
     ) -> (
-        TestManager,
+        TestManager<FetchService>,
         JsonRpSeeConnector,
         Option<StateService>,
         NodeBackedChainIndex,
         NodeBackedChainIndexSubscriber,
     ) {
         // until zaino is switched over to using chain index we will keep these activation heights separate.
-        // TODO: unify acitvation heights after switchover to chain index
+        // FIXME: unify acitvation heights after switchover to chain index
         let activation_heights = match validator {
             ValidatorKind::Zebrad => ActivationHeights {
                 overwinter: Some(1),
@@ -239,8 +239,9 @@ mod chain_query_interface {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
             create_test_manager_and_chain_index(validator, None, false, false).await;
 
-        // this delay had to increase. Maybe we tweak sync loop rerun time?
-        test_manager.generate_blocks_with_delay(5).await;
+        test_manager
+            .generate_blocks_and_poll_chain_index(5, &indexer)
+            .await;
         let snapshot = indexer.snapshot_nonfinalized_state();
         assert_eq!(snapshot.as_ref().blocks.len(), 8);
         let range = indexer
@@ -281,9 +282,13 @@ mod chain_query_interface {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
             create_test_manager_and_chain_index(validator, None, false, false).await;
 
-        // this delay had to increase. Maybe we tweak sync loop rerun time?
-        test_manager.generate_blocks_with_delay(5).await;
+        test_manager
+            .generate_blocks_and_poll_chain_index(5, &indexer)
+            .await;
         let snapshot = indexer.snapshot_nonfinalized_state();
+        for block in snapshot.blocks.values() {
+            dbg!(block.height());
+        }
         assert_eq!(snapshot.as_ref().blocks.len(), 8);
         for block_hash in snapshot.heights_to_hashes.values() {
             // As all blocks are currently on the main chain,
@@ -313,8 +318,9 @@ mod chain_query_interface {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
             create_test_manager_and_chain_index(validator, None, false, false).await;
 
-        // this delay had to increase. Maybe we tweak sync loop rerun time?
-        test_manager.generate_blocks_with_delay(5).await;
+        test_manager
+            .generate_blocks_and_poll_chain_index(5, &indexer)
+            .await;
         let snapshot = indexer.snapshot_nonfinalized_state();
         assert_eq!(snapshot.as_ref().blocks.len(), 8);
         for (txid, height) in snapshot.blocks.values().flat_map(|block| {
@@ -367,12 +373,11 @@ mod chain_query_interface {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
             create_test_manager_and_chain_index(validator, None, false, false).await;
         let snapshot = indexer.snapshot_nonfinalized_state();
-        // I don't know where this second block is generated. Somewhere in the
-        // guts of create_test_manager_and_chain_index
         assert_eq!(snapshot.as_ref().blocks.len(), 3);
 
-        // this delay had to increase. Maybe we tweak sync loop rerun time?
-        test_manager.generate_blocks_with_delay(5).await;
+        test_manager
+            .generate_blocks_and_poll_chain_index(5, &indexer)
+            .await;
         let snapshot = indexer.snapshot_nonfinalized_state();
         assert_eq!(snapshot.as_ref().blocks.len(), 8);
         for (txid, height, block_hash) in snapshot.blocks.values().flat_map(|block| {
@@ -407,8 +412,9 @@ mod chain_query_interface {
         let (test_manager, json_service, _option_state_service, _chain_index, indexer) =
             create_test_manager_and_chain_index(validator, None, false, false).await;
 
-        // this delay had to increase. Maybe we tweak sync loop rerun time?
-        test_manager.generate_blocks_with_delay(5).await;
+        test_manager
+            .generate_blocks_and_poll_chain_index(5, &indexer)
+            .await;
         {
             let chain_height =
                 Height::try_from(json_service.get_blockchain_info().await.unwrap().blocks.0)
@@ -417,7 +423,9 @@ mod chain_query_interface {
             assert_eq!(chain_height, indexer_height);
         }
 
-        test_manager.generate_blocks_with_delay(150).await;
+        test_manager
+            .generate_blocks_and_poll_chain_index(150, &indexer)
+            .await;
 
         tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
 
