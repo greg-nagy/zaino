@@ -142,7 +142,6 @@ fn test_deserialize_full_valid_config() {
             finalized_config.storage.database.size.to_byte_count(),
             128 * 1024 * 1024 * 1024
         );
-        // assert!(!finalized_config.no_sync);
         assert!(match finalized_config.storage.database.size {
             DatabaseSize::Gb(0) => false,
             DatabaseSize::Gb(_) => true,
@@ -172,7 +171,10 @@ fn test_deserialize_optional_fields_missing() {
         let default_values = ZainodConfig::default();
 
         assert_eq!(config.backend, ZainoBackendType::State);
-        // assert_eq!(config.enable_json_server, default_values.enable_json_server);
+        assert_eq!(
+            config.json_server_settings.is_some(),
+            default_values.json_server_settings.is_some()
+        );
         assert_eq!(
             config.validator_settings.validator_user,
             default_values.validator_settings.validator_user
@@ -193,9 +195,10 @@ fn test_deserialize_optional_fields_missing() {
             config.storage.database.size,
             default_values.storage.database.size
         );
-        // assert_eq!(config.no_sync, default_values.no_sync);
-        // TODO db = 0
-        //assert_eq!(config.no_db, default_values.no_db);
+        assert_eq!(
+            config.storage.database.size.to_byte_count(),
+            default_values.storage.database.size.to_byte_count()
+        );
         Ok(())
     });
 }
@@ -209,7 +212,6 @@ fn test_cookie_dir_logic() {
         let s1_path = jail.directory().join("s1.toml");
         jail.create_file(
             &s1_path,
-            // TODO check gRPC config as well
             r#"
             backend = "fetch"
 
@@ -238,7 +240,6 @@ fn test_cookie_dir_logic() {
         let s2_path = jail.directory().join("s2.toml");
         jail.create_file(
             &s2_path,
-            // removed auth - now we handle this with Some / None
             r#"
             backend = "fetch"
 
@@ -263,13 +264,17 @@ fn test_cookie_dir_logic() {
                 .cookie_dir,
             Some(PathBuf::from("/my/cookie/path"))
         );
-        // TODO took out a whole test without switching it to expect to fail
+        let config3 = load_config(&s3_path).expect("Config S3 failed");
+        assert!(config3
+            .json_server_settings
+            .expect("json server settings to unwrap in config S3")
+            .cookie_dir
+            .is_none());
         Ok(())
     });
 }
 
 #[test]
-// Tests how `load_config` handles varying `enable_cookie_auth` states.
 fn test_string_none_as_path_for_cookie_dir() {
     Jail::expect_with(|jail| {
         let toml_auth_enabled_path = jail.directory().join("auth_enabled.toml");
@@ -342,7 +347,10 @@ fn test_deserialize_empty_string_yields_default() {
         // Compare relevant fields that should come from default
         assert_eq!(config.network, default_config.network);
         assert_eq!(config.backend, default_config.backend);
-        // assert_eq!(config.enable_json_server, default_config.enable_json_server);
+        assert_eq!(
+            config.json_server_settings.is_some(),
+            default_config.json_server_settings.is_some()
+        );
         assert_eq!(
             config.validator_settings.validator_user,
             default_config.validator_settings.validator_user
@@ -363,9 +371,10 @@ fn test_deserialize_empty_string_yields_default() {
             config.storage.database.size,
             default_config.storage.database.size
         );
-        // assert_eq!(config.no_sync, default_config.no_sync);
-        // db = 0
-        // assert_eq!(config.no_db, default_config.no_db);
+        assert_eq!(
+            config.storage.database.size.to_byte_count(),
+            default_config.storage.database.size.to_byte_count()
+        );
         Ok(())
     });
 }
@@ -447,7 +456,6 @@ fn test_figment_env_override_toml_and_defaults() {
         "#,
         )?;
         jail.set_env("ZAINO_NETWORK", "Mainnet");
-        //  valid socket address assigned with env var (needed for valid JsonRpcServerConfig struct)
         jail.set_env(
             "ZAINO_JSON_SERVER_SETTINGS-JSON_RPC_LISTEN_ADDRESS",
             "127.0.0.1:0",
@@ -488,7 +496,6 @@ fn test_figment_toml_overrides_defaults() {
         "#,
         )?;
         let temp_toml_path = jail.directory().join("test_config.toml");
-
         // a json_server_setting without a listening address is forbidden
         assert!(load_config(&temp_toml_path).is_err());
         Ok(())
@@ -504,7 +511,10 @@ fn test_figment_all_defaults() {
             load_config(&temp_toml_path).expect("load_config should succeed with empty toml");
         let defaults = ZainodConfig::default();
         assert_eq!(config.network, defaults.network);
-        // assert_eq!(config.enable_json_server, defaults.enable_json_server);
+        assert_eq!(
+            config.json_server_settings.is_some(),
+            defaults.json_server_settings.is_some()
+        );
         assert_eq!(
             config.storage.cache.capacity,
             defaults.storage.cache.capacity
