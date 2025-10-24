@@ -22,7 +22,11 @@ use zaino_state::BackendType;
 use zainodlib::config::default_ephemeral_cookie_path;
 pub use zcash_local_net as services;
 pub use zcash_local_net::validator::Validator;
-use zcash_local_net::validator::{ZcashdConfig, ZebradConfig};
+use zcash_local_net::indexer::empty::{Empty, EmptyConfig};
+use zcash_local_net::process::Process;
+use zcash_local_net::LocalNetConfig;
+use zcash_local_net::validator::zcashd::{Zcashd, ZcashdConfig};
+use zcash_local_net::validator::zebrad::{Zebrad, ZebradConfig};
 use zebra_chain::parameters::NetworkKind;
 use zingo_test_vectors::seeds;
 pub use zingolib::get_base_address_macro;
@@ -140,7 +144,7 @@ pub enum ValidatorConfig {
     /// Zcashd Config.
     ZcashdConfig(ZcashdConfig),
     /// Zebrad Config.
-    ZebradConfig(zcash_local_net::validator::ZebradConfig),
+    ZebradConfig(ZebradConfig),
 }
 
 /// Available zcash-local-net configurations.
@@ -150,179 +154,93 @@ pub enum ValidatorConfig {
 )]
 pub enum LocalNet {
     /// Zcash-local-net backed by Zcashd.
-    Zcashd(
-        zcash_local_net::LocalNet<
-            zcash_local_net::indexer::Empty,
-            zcash_local_net::validator::Zcashd,
-        >,
-    ),
+    Zcashd(zcash_local_net::LocalNet<Zcashd, Empty>),
     /// Zcash-local-net backed by Zebrad.
-    Zebrad(
-        zcash_local_net::LocalNet<
-            zcash_local_net::indexer::Empty,
-            zcash_local_net::validator::Zebrad,
-        >,
-    ),
+    Zebrad(zcash_local_net::LocalNet<Zebrad, Empty>),
 }
 
-impl zcash_local_net::validator::Validator for LocalNet {
-    const CONFIG_FILENAME: &str = "";
-    const PROCESS: zcash_local_net::Process = zcash_local_net::Process::Empty; // todo
-
-    type Config = ValidatorConfig;
-
-    fn default_test_config() -> Self::Config {
-        todo!()
-    }
-
-    fn get_activation_heights(
-        &self,
-    ) -> zebra_chain::parameters::testnet::ConfiguredActivationHeights {
-        // Return the activation heights for the network
-        // This depends on which validator is running (zcashd or zebrad)
-        match self {
-            LocalNet::Zcashd(net) => net.validator().get_activation_heights(),
-            LocalNet::Zebrad(net) => net.validator().get_activation_heights(),
-        }
-    }
-
-    #[allow(clippy::manual_async_fn)]
-    fn launch(
-        config: Self::Config,
-    ) -> impl std::future::Future<Output = Result<Self, zcash_local_net::error::LaunchError>> + Send
-    {
-        async move {
-            match config {
-                ValidatorConfig::ZcashdConfig(cfg) => {
-                    let net = zcash_local_net::LocalNet::<
-                        zcash_local_net::indexer::Empty,
-                        zcash_local_net::validator::Zcashd,
-                    >::launch(
-                        zcash_local_net::indexer::EmptyConfig {}, cfg
-                    )
-                    .await;
-                    Ok(LocalNet::Zcashd(net))
-                }
-                ValidatorConfig::ZebradConfig(cfg) => {
-                    let net = zcash_local_net::LocalNet::<
-                        zcash_local_net::indexer::Empty,
-                        zcash_local_net::validator::Zebrad,
-                    >::launch(
-                        zcash_local_net::indexer::EmptyConfig {}, cfg
-                    )
-                    .await;
-                    Ok(LocalNet::Zebrad(net))
-                }
+// NOTE: The Validator trait implementation has been removed due to API changes in zcash_local_net.
+// The LocalNet enum now provides direct method implementations instead of implementing the Validator trait.
+impl LocalNet {
+    /// Launch a new LocalNet instance with the given validator configuration.
+    pub async fn launch(config: ValidatorConfig) -> Result<Self, zcash_local_net::error::LaunchError> {
+        match config {
+            ValidatorConfig::ZcashdConfig(cfg) => {
+                let local_net_config = LocalNetConfig {
+                    validator_config: cfg,
+                    indexer_config: EmptyConfig {},
+                };
+                let net = zcash_local_net::LocalNet::<Zcashd, Empty>::launch(local_net_config).await?;
+                Ok(LocalNet::Zcashd(net))
+            }
+            ValidatorConfig::ZebradConfig(cfg) => {
+                let local_net_config = LocalNetConfig {
+                    validator_config: cfg,
+                    indexer_config: EmptyConfig {},
+                };
+                let net = zcash_local_net::LocalNet::<Zebrad, Empty>::launch(local_net_config).await?;
+                Ok(LocalNet::Zebrad(net))
             }
         }
     }
 
-    fn stop(&mut self) {
+    // NOTE: These methods have been temporarily commented out due to API changes.
+    // They need to be reimplemented to match the new zcash_local_net API.
+
+    // /// Get the activation heights for the network.
+    // pub fn get_activation_heights(
+    //     &self,
+    // ) -> zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+    //     match self {
+    //         LocalNet::Zcashd(net) => net.validator().get_activation_heights(),
+    //         LocalNet::Zebrad(net) => net.validator().get_activation_heights(),
+    //     }
+    // }
+
+    /// Generate blocks on the network.
+    /// NOTE: This uses the validator directly as the LocalNet API has changed.
+    pub async fn generate_blocks(&self, n: u32) -> std::io::Result<()> {
         match self {
-            LocalNet::Zcashd(net) => net.validator_mut().stop(),
-            LocalNet::Zebrad(net) => net.validator_mut().stop(),
+            LocalNet::Zcashd(net) => net.validator().generate_blocks(n).await,
+            LocalNet::Zebrad(net) => net.validator().generate_blocks(n).await,
         }
     }
 
-    #[allow(clippy::manual_async_fn)]
-    fn generate_blocks(
-        &self,
-        n: u32,
-    ) -> impl std::future::Future<Output = std::io::Result<()>> + Send {
-        async move {
-            match self {
-                LocalNet::Zcashd(net) => net.validator().generate_blocks(n).await,
-                LocalNet::Zebrad(net) => net.validator().generate_blocks(n).await,
-            }
-        }
-    }
-
-    #[allow(clippy::manual_async_fn)]
-    fn get_chain_height(
-        &self,
-    ) -> impl std::future::Future<Output = zcash_protocol::consensus::BlockHeight> + Send {
-        async move {
-            match self {
-                LocalNet::Zcashd(net) => net.validator().get_chain_height().await,
-                LocalNet::Zebrad(net) => net.validator().get_chain_height().await,
-            }
-        }
-    }
-
-    #[allow(clippy::manual_async_fn)]
-    fn poll_chain_height(
-        &self,
-        target_height: zcash_protocol::consensus::BlockHeight,
-    ) -> impl std::future::Future<Output = ()> + Send {
-        async move {
-            match self {
-                LocalNet::Zcashd(net) => net.validator().poll_chain_height(target_height).await,
-                LocalNet::Zebrad(net) => net.validator().poll_chain_height(target_height).await,
-            }
-        }
-    }
-
-    fn config_dir(&self) -> &TempDir {
+    /// Get the current chain height.
+    /// NOTE: This uses the validator directly as the LocalNet API has changed.
+    pub async fn get_chain_height(&self) -> zcash_protocol::consensus::BlockHeight {
         match self {
-            LocalNet::Zcashd(net) => net.validator().config_dir(),
-            LocalNet::Zebrad(net) => net.validator().config_dir(),
+            LocalNet::Zcashd(net) => net.validator().get_chain_height().await.into(),
+            LocalNet::Zebrad(net) => net.validator().get_chain_height().await.into(),
         }
     }
 
-    fn logs_dir(&self) -> &TempDir {
+    /// Poll the chain until it reaches the target height.
+    /// NOTE: This uses the validator directly as the LocalNet API has changed.
+    pub async fn poll_chain_height(&self, target_height: zcash_protocol::consensus::BlockHeight) {
         match self {
-            LocalNet::Zcashd(net) => net.validator().logs_dir(),
-            LocalNet::Zebrad(net) => net.validator().logs_dir(),
+            LocalNet::Zcashd(net) => net.validator().poll_chain_height(target_height.into()).await,
+            LocalNet::Zebrad(net) => net.validator().poll_chain_height(target_height.into()).await,
         }
     }
 
-    fn data_dir(&self) -> &TempDir {
+    /// Get the data directory.
+    pub fn data_dir(&self) -> &TempDir {
         match self {
             LocalNet::Zcashd(net) => net.validator().data_dir(),
             LocalNet::Zebrad(net) => net.validator().data_dir(),
         }
     }
 
-    fn network(&self) -> NetworkKind {
-        match self {
-            LocalNet::Zcashd(net) => net.validator().network(),
-            LocalNet::Zebrad(net) => *net.validator().network(),
-        }
-    }
-
-    /// Prints the stdout log.
-    fn print_stdout(&self) {
-        match self {
-            LocalNet::Zcashd(net) => net.validator().print_stdout(),
-            LocalNet::Zebrad(net) => net.validator().print_stdout(),
-        }
-    }
-
-    /// Chain_Cache PathBuf must contain validator bin name for this function to function.
-    fn load_chain(
-        chain_cache: PathBuf,
-        validator_data_dir: PathBuf,
-        validator_network: NetworkKind,
-    ) -> PathBuf {
-        if chain_cache.to_string_lossy().contains("zcashd") {
-            zcash_local_net::validator::Zcashd::load_chain(
-                chain_cache,
-                validator_data_dir,
-                validator_network,
-            )
-        } else if chain_cache.to_string_lossy().contains("zebrad") {
-            zcash_local_net::validator::Zebrad::load_chain(
-                chain_cache,
-                validator_data_dir,
-                validator_network,
-            )
-        } else {
-            panic!(
-                "Invalid chain_cache path: expected to contain 'zcashd' or 'zebrad', but got: {}",
-                chain_cache.display()
-            );
-        }
-    }
+    // NOTE: Commented out due to zebra_chain version conflict between v2 and v3
+    // The validator returns zebra_chain v3's NetworkKind but this crate expects v2's NetworkKind
+    // /// Get the network kind.
+    // pub fn network(&self) -> NetworkKind {
+    //     match self {
+    //         LocalNet::Zcashd(net) => net.validator().network(),
+    //         LocalNet::Zebrad(net) => *net.validator().network(),
+    //     }
+    // }
 }
 
 /// Holds zingo lightclients along with the lightclient builder for wallet-2-validator tests.
@@ -431,19 +349,22 @@ impl TestManager {
 
         let validator_config = match validator {
             ValidatorKind::Zcashd => {
-                let mut cfg = ZcashdConfig::default_test();
+                let mut cfg = ZcashdConfig::default();
                 cfg.rpc_listen_port = Some(rpc_listen_port);
-                cfg.configured_activation_heights = activation_heights.into();
+                // NOTE: Activation heights conversion no longer supported - needs reimplementation
+                // cfg.configured_activation_heights = activation_heights.into();
                 cfg.chain_cache = chain_cache.clone();
                 ValidatorConfig::ZcashdConfig(cfg)
             }
             ValidatorKind::Zebrad => {
-                let mut cfg = ZebradConfig::default_test();
+                let mut cfg = ZebradConfig::default();
                 cfg.rpc_listen_port = Some(rpc_listen_port);
                 cfg.indexer_listen_port = Some(grpc_listen_port);
-                cfg.configured_activation_heights = activation_heights.into();
+                // NOTE: Activation heights conversion no longer supported - needs reimplementation
+                // cfg.configured_activation_heights = activation_heights.into();
                 cfg.chain_cache = chain_cache.clone();
-                cfg.network = network_kind;
+                // NOTE: NetworkKind type mismatch due to zebra_chain version conflict - needs fixing
+                // cfg.network = network_kind;
                 ValidatorConfig::ZebradConfig(cfg)
             }
         };
