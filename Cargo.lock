@@ -2979,9 +2979,9 @@ dependencies = [
  "zaino-proto",
  "zaino-state",
  "zaino-testutils",
- "zebra-chain 2.0.0",
- "zebra-rpc 2.0.1",
- "zebra-state 2.0.0",
+ "zebra-chain 3.0.0",
+ "zebra-rpc 3.0.0",
+ "zebra-state 3.0.0",
  "zip32",
 ]
 
@@ -8595,7 +8595,7 @@ version = "0.1.2"
 dependencies = [
  "serde",
  "thiserror 1.0.69",
- "zebra-chain 2.0.0",
+ "zebra-chain 3.0.0",
 ]
 
 [[package]]
@@ -8621,8 +8621,8 @@ dependencies = [
  "url",
  "zaino-proto",
  "zaino-testvectors",
- "zebra-chain 2.0.0",
- "zebra-rpc 2.0.1",
+ "zebra-chain 3.0.0",
+ "zebra-rpc 3.0.0",
 ]
 
 [[package]]
@@ -8650,8 +8650,8 @@ dependencies = [
  "zaino-fetch",
  "zaino-proto",
  "zaino-state",
- "zebra-chain 2.0.0",
- "zebra-rpc 2.0.1",
+ "zebra-chain 3.0.0",
+ "zebra-rpc 3.0.0",
 ]
 
 [[package]]
@@ -8699,9 +8699,9 @@ dependencies = [
  "zcash_primitives 0.24.1",
  "zcash_protocol 0.6.2",
  "zcash_transparent 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "zebra-chain 2.0.0",
- "zebra-rpc 2.0.1",
- "zebra-state 2.0.0",
+ "zebra-chain 3.0.0",
+ "zebra-rpc 3.0.0",
+ "zebra-state 3.0.0",
 ]
 
 [[package]]
@@ -8724,7 +8724,7 @@ dependencies = [
  "zcash_client_backend 0.19.1 (git+https://github.com/zcash/librustzcash?rev=d387aed7e04e881dbe30c6ff8b26a96c834c094b)",
  "zcash_local_net",
  "zcash_protocol 0.6.1",
- "zebra-chain 2.0.0",
+ "zebra-chain 3.0.0",
  "zingo_netutils 0.1.0 (git+https://github.com/zingolabs/zingo-common.git?branch=dev)",
  "zingo_test_vectors 0.0.1 (git+https://github.com/zingolabs/infrastructure.git?branch=dev)",
  "zingolib",
@@ -8755,8 +8755,8 @@ dependencies = [
  "zaino-fetch",
  "zaino-serve",
  "zaino-state",
- "zebra-chain 2.0.0",
- "zebra-state 2.0.0",
+ "zebra-chain 3.0.0",
+ "zebra-state 3.0.0",
 ]
 
 [[package]]

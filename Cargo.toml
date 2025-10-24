@@ -33,9 +33,9 @@ zcash_primitives = "0.24"
 zcash_transparent = "0.4"
 
 # Zebra
-zebra-chain = "2.0"
-zebra-state = "2.0"
-zebra-rpc = "2.0"
+zebra-chain = "3.0"
+zebra-state = "3.0"
+zebra-rpc = "3.0"
 
 # Runtime
 tokio = { version = "1.38", features = ["full"] }
