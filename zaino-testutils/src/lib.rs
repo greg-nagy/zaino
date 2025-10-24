@@ -358,7 +358,12 @@ pub struct TestManager {
     pub zaino_grpc_listen_address: Option<SocketAddr>,
     /// JsonRPC server cookie dir.
     // TODO ambiguity
+    // TODO
+    // looking for:
+    //         test_manager.json_server_cookie_dir.clone(),
+    // is it a validator cookie path?!
     // TODO PATH to validator cookie file!???!
+    // this really seems like a ZAINO server system piece.
     pub json_server_cookie_dir: Option<PathBuf>,
     /// Zingolib lightclients.
     pub clients: Option<Clients>,
@@ -456,14 +461,9 @@ impl TestManager {
             let zaino_grpc_listen_port = portpicker::pick_unused_port().expect("No ports free");
             let zaino_grpc_listen_address =
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), zaino_grpc_listen_port);
-
-            // generating port on the spot
             let zaino_json_listen_port = portpicker::pick_unused_port().expect("No ports free");
-            // set to localhost with the newly generated port
             let zaino_json_listen_address =
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), zaino_json_listen_port);
-
-            // this cookie dir is generated on the spot, whenever zaino is enabled
             let mut zaino_json_server_cookie_dir: Option<PathBuf> = None;
             if enable_zaino_jsonrpc_server_cookie_auth {
                 zaino_json_server_cookie_dir = Some(default_ephemeral_cookie_path());
@@ -573,6 +573,7 @@ impl TestManager {
             zaino_handle,
             zaino_json_rpc_listen_address: zaino_json_listen_address,
             zaino_grpc_listen_address,
+            // TODO here, it's defined as zaino json server cookie dir...
             json_server_cookie_dir: zaino_json_server_cookie_dir,
             clients,
         };

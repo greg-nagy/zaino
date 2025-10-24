@@ -85,7 +85,6 @@ impl StateServiceConfig {
 pub struct FetchServiceConfig {
     /// Validator JsonRPC address.
     pub validator_rpc_address: std::net::SocketAddr,
-    // pub validator_cookie_auth: bool,
     /// Enable validator rpc cookie authentification with Some.
     /// Path to the validator cookie file.
     pub validator_cookie_path: Option<PathBuf>,
