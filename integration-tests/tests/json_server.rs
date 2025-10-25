@@ -11,7 +11,6 @@ use zaino_testutils::{TestManager, ValidatorKind};
 use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetInfo};
 
-// TODO has many [17] references, in which enable_cookie_auth is ALWAYS false.
 async fn create_test_manager_and_fetch_services(
     enable_cookie_auth: bool,
     clients: bool,
@@ -31,8 +30,6 @@ async fn create_test_manager_and_fetch_services(
         None,
         true,
         true,
-        // enable_zaino_jsonrpc_server_cookie_auth: bool,
-        // TODO AFAIK, this is _always_ false
         enable_cookie_auth,
         clients,
     )
