@@ -269,7 +269,7 @@ fn test_cookie_dir_logic() {
             &s3_path,
             r#"
             backend = "fetch"
-            
+
             [json_server_settings]
             json_rpc_listen_address = "127.0.0.1:8237"
 
