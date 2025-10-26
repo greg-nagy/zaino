@@ -27,7 +27,7 @@ struct BlockHeaderData {
     /// a free field. The only constraint is that it must be at least `4` when
     /// interpreted as an `i32`.
     ///
-    /// Size [bytes]: 4
+    /// Size \[bytes\]: 4
     version: i32,
 
     /// The hash of the previous block, used to create a chain of blocks back to
@@ -36,7 +36,7 @@ struct BlockHeaderData {
     /// This ensures no previous block can be changed without also changing this
     /// block's header.
     ///
-    /// Size [bytes]: 32
+    /// Size \[bytes\]: 32
     hash_prev_block: Vec<u8>,
 
     /// The root of the Bitcoin-inherited transaction Merkle tree, binding the
@@ -48,21 +48,21 @@ struct BlockHeaderData {
     /// transactions with the same Merkle root, although only one set will be
     /// valid.
     ///
-    /// Size [bytes]: 32
+    /// Size \[bytes\]: 32
     hash_merkle_root: Vec<u8>,
 
-    /// [Pre-Sapling] A reserved field which should be ignored.
-    /// [Sapling onward] The root LEBS2OSP_256(rt) of the Sapling note
+    /// \[Pre-Sapling\] A reserved field which should be ignored.
+    /// \[Sapling onward\] The root LEBS2OSP_256(rt) of the Sapling note
     /// commitment tree corresponding to the final Sapling treestate of this
     /// block.
     ///
-    /// Size [bytes]: 32
+    /// Size \[bytes\]: 32
     hash_final_sapling_root: Vec<u8>,
 
     /// The block timestamp is a Unix epoch time (UTC) when the miner
     /// started hashing the header (according to the miner).
     ///
-    /// Size [bytes]: 4
+    /// Size \[bytes\]: 4
     time: u32,
 
     /// An encoded version of the target threshold this block's header
@@ -74,19 +74,19 @@ struct BlockHeaderData {
     ///
     /// [Bitcoin-nBits](https://bitcoin.org/en/developer-reference#target-nbits)
     ///
-    /// Size [bytes]: 4
+    /// Size \[bytes\]: 4
     n_bits_bytes: Vec<u8>,
 
     /// An arbitrary field that miners can change to modify the header
     /// hash in order to produce a hash less than or equal to the
     /// target threshold.
     ///
-    /// Size [bytes]: 32
+    /// Size \[bytes\]: 32
     nonce: Vec<u8>,
 
     /// The Equihash solution.
     ///
-    /// Size [bytes]: CompactLength
+    /// Size \[bytes\]: CompactLength
     solution: Vec<u8>,
 }
 
@@ -253,7 +253,7 @@ impl FullBlockHeader {
 pub struct FullBlock {
     /// The block header, containing block metadata.
     ///
-    /// Size [bytes]: 140+CompactLength
+    /// Size \[bytes\]: 140+CompactLength
     hdr: FullBlockHeader,
 
     /// The block transactions.
@@ -327,7 +327,7 @@ impl ParseFromSlice for FullBlock {
 /// Genesis block special case.
 ///
 /// From LightWalletD:
-/// see https://github.com/zcash/lightwalletd/issues/17#issuecomment-467110828.
+/// see <https://github.com/zcash/lightwalletd/issues/17#issuecomment-467110828>.
 const GENESIS_TARGET_DIFFICULTY: u32 = 520617983;
 
 impl FullBlock {
@@ -447,50 +447,5 @@ impl<'de> serde::Deserialize<'de> for FullTransaction {
         D: serde::Deserializer<'de>,
     {
         todo!()
-    }
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
-pub struct BlockDeltas {
-    pub hash: String,
-    pub confirmations: i64,
-    pub size: i64,
-    pub height: u32,
-    pub version: u32,
-
-    #[serde(rename = "merkleroot")]
-    pub merkle_root: String,
-
-    /// TODO: double check that `FullTransaction` is the correct type
-    pub deltas: Vec<BlockDelta>,
-    pub time: i64,
-    pub mediantime: i64,
-    pub nonce: String,
-    pub bits: String,
-    pub difficulty: f64,
-    // `chainwork` would be here, but Zebra does not plan to support it
-    // pub chainwork: Vec<u8>,
-    pub previousblockhash: String,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub nextblockhash: Option<String>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
-pub struct BlockDelta {
-    pub txid: String,
-    pub index: u32,
-    pub inputs: Vec<serde_json::Value>,
-    pub outputs: Vec<serde_json::Value>,
-}
-
-impl Default for BlockDelta {
-    fn default() -> Self {
-        Self {
-            txid: "".to_string(),
-            index: 0,
-            inputs: vec![],
-            outputs: vec![],
-        }
     }
 }
