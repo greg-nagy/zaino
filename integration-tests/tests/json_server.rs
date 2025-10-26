@@ -12,7 +12,6 @@ use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetInfo};
 
 async fn create_test_manager_and_fetch_services(
-    enable_cookie_auth: bool,
     clients: bool,
 ) -> (
     TestManager,
@@ -29,8 +28,12 @@ async fn create_test_manager_and_fetch_services(
         Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
         None,
         true,
+        // TODO this is the only place enable_zaino_jsonrpc_server: bool, is true
+        // test_manger used throughout integration tests json_servers
         true,
-        enable_cookie_auth,
+        // TODO this is the only place where this is not hard-coded false with launch()
+        // but is always false because it is always set as false above with create_test_manager_and_fetch_services() !
+        false,
         clients,
     )
     .await
@@ -104,7 +107,7 @@ async fn create_test_manager_and_fetch_services(
 
 async fn launch_json_server_check_info() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
-        create_test_manager_and_fetch_services(false, false).await;
+        create_test_manager_and_fetch_services(false).await;
     let zcashd_info = dbg!(zcashd_subscriber.get_info().await.unwrap());
     let zcashd_blockchain_info = dbg!(zcashd_subscriber.get_blockchain_info().await.unwrap());
     let zaino_info = dbg!(zaino_subscriber.get_info().await.unwrap());
@@ -209,7 +212,7 @@ async fn launch_json_server_check_info() {
 
 async fn get_best_blockhash_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
-        create_test_manager_and_fetch_services(false, false).await;
+        create_test_manager_and_fetch_services(false).await;
 
     let zcashd_bbh = dbg!(zcashd_subscriber.get_best_blockhash().await.unwrap());
     let zaino_bbh = dbg!(zaino_subscriber.get_best_blockhash().await.unwrap());
@@ -221,7 +224,7 @@ async fn get_best_blockhash_inner() {
 
 async fn get_block_count_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
-        create_test_manager_and_fetch_services(false, false).await;
+        create_test_manager_and_fetch_services(false).await;
 
     let zcashd_block_count = dbg!(zcashd_subscriber.get_block_count().await.unwrap());
     let zaino_block_count = dbg!(zaino_subscriber.get_block_count().await.unwrap());
@@ -233,7 +236,7 @@ async fn get_block_count_inner() {
 
 async fn validate_address_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
-        create_test_manager_and_fetch_services(false, false).await;
+        create_test_manager_and_fetch_services(false).await;
 
     // Using a testnet transparent address
     let address_string = "tmHMBeeYRuc2eVicLNfP15YLxbQsooCA6jb";
@@ -272,7 +275,7 @@ async fn validate_address_inner() {
 
 async fn z_get_address_balance_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
-        create_test_manager_and_fetch_services(false, true).await;
+        create_test_manager_and_fetch_services(true).await;
 
     let mut clients = test_manager
         .clients
@@ -333,7 +336,7 @@ async fn z_get_address_balance_inner() {
 
 async fn z_get_block_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
-        create_test_manager_and_fetch_services(false, false).await;
+        create_test_manager_and_fetch_services(false).await;
 
     let zcashd_block_raw = dbg!(zcashd_subscriber
         .z_get_block("1".to_string(), Some(0))
@@ -374,7 +377,7 @@ async fn z_get_block_inner() {
 
 async fn get_raw_mempool_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
-        create_test_manager_and_fetch_services(false, true).await;
+        create_test_manager_and_fetch_services(true).await;
 
     let mut clients = test_manager
         .clients
@@ -413,7 +416,7 @@ async fn get_raw_mempool_inner() {
 
 async fn get_mempool_info_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
-        create_test_manager_and_fetch_services(false, true).await;
+        create_test_manager_and_fetch_services(true).await;
 
     let mut clients = test_manager
         .clients
@@ -449,7 +452,7 @@ async fn get_mempool_info_inner() {
 
 async fn z_get_treestate_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
-        create_test_manager_and_fetch_services(false, true).await;
+        create_test_manager_and_fetch_services(true).await;
 
     let mut clients = test_manager
         .clients
@@ -483,7 +486,7 @@ async fn z_get_treestate_inner() {
 
 async fn z_get_subtrees_by_index_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
-        create_test_manager_and_fetch_services(false, true).await;
+        create_test_manager_and_fetch_services(true).await;
 
     let mut clients = test_manager
         .clients
@@ -517,7 +520,7 @@ async fn z_get_subtrees_by_index_inner() {
 
 async fn get_raw_transaction_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
-        create_test_manager_and_fetch_services(false, true).await;
+        create_test_manager_and_fetch_services(true).await;
 
     let mut clients = test_manager
         .clients
@@ -553,7 +556,7 @@ async fn get_raw_transaction_inner() {
 
 async fn get_address_tx_ids_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
-        create_test_manager_and_fetch_services(false, true).await;
+        create_test_manager_and_fetch_services(true).await;
 
     let mut clients = test_manager
         .clients
@@ -610,7 +613,7 @@ async fn get_address_tx_ids_inner() {
 
 async fn z_get_address_utxos_inner() {
     let (mut test_manager, _zcashd_service, zcashd_subscriber, _zaino_service, zaino_subscriber) =
-        create_test_manager_and_fetch_services(false, true).await;
+        create_test_manager_and_fetch_services(true).await;
 
     let mut clients = test_manager
         .clients
@@ -698,7 +701,7 @@ mod zcashd {
                 zcashd_subscriber,
                 _zaino_service,
                 zaino_subscriber,
-            ) = create_test_manager_and_fetch_services(false, false).await;
+            ) = create_test_manager_and_fetch_services(false).await;
 
             const BLOCK_LIMIT: i32 = 10;
 
@@ -722,7 +725,7 @@ mod zcashd {
                 zcashd_subscriber,
                 _zaino_service,
                 zaino_subscriber,
-            ) = create_test_manager_and_fetch_services(false, false).await;
+            ) = create_test_manager_and_fetch_services(false).await;
 
             const BLOCK_LIMIT: i32 = 10;
 
@@ -746,7 +749,7 @@ mod zcashd {
                 zcashd_subscriber,
                 _zaino_service,
                 zaino_subscriber,
-            ) = create_test_manager_and_fetch_services(false, false).await;
+            ) = create_test_manager_and_fetch_services(false).await;
 
             let zcashd_peer_info = zcashd_subscriber.get_peer_info().await.unwrap();
             let zaino_peer_info = zaino_subscriber.get_peer_info().await.unwrap();
@@ -766,7 +769,7 @@ mod zcashd {
                 zcashd_subscriber,
                 _zaino_service,
                 zaino_subscriber,
-            ) = create_test_manager_and_fetch_services(false, false).await;
+            ) = create_test_manager_and_fetch_services(false).await;
 
             test_manager.local_net.generate_blocks(1).await.unwrap();
 

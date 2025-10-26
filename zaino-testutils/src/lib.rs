@@ -378,7 +378,9 @@ impl TestManager {
         activation_heights: Option<ActivationHeights>,
         chain_cache: Option<PathBuf>,
         enable_zaino: bool,
+        // targeting
         enable_zaino_jsonrpc_server: bool,
+        // this is also always false, except one (tests json_server)
         enable_zaino_jsonrpc_server_cookie_auth: bool,
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
