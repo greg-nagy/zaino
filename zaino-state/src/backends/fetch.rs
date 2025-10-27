@@ -377,6 +377,8 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// zcashd reference: [`getblockdeltas`](https://zcash.github.io/rpc/getblockdeltas.html)
     /// method: post
     /// tags: blockchain
+    ///
+    /// Note: This method has only been implemented in `zcashd`. Zebra has no intention of supporting it.
     async fn get_block_deltas(&self, hash: String) -> Result<BlockDeltas, Self::Error> {
         Ok(self.fetcher.get_block_deltas(hash).await?.into())
     }
