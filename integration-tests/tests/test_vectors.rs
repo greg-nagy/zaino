@@ -63,7 +63,6 @@ async fn create_test_manager_and_services(
         chain_cache.clone(),
         enable_zaino,
         false,
-        false,
         enable_clients,
     )
     .await
