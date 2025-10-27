@@ -28,12 +28,7 @@ async fn create_test_manager_and_fetch_services(
         Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
         None,
         true,
-        // TODO this is the only place enable_zaino_jsonrpc_server: bool, is true
-        // test_manger used throughout integration tests json_servers
         true,
-        // TODO this is the only place where this is not hard-coded false with launch()
-        // but is always false because it is always set as false above with create_test_manager_and_fetch_services() !
-        false,
         clients,
     )
     .await
