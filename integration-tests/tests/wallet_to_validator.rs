@@ -19,7 +19,6 @@ async fn connect_to_node_get_info_for_validator(validator: &ValidatorKind, backe
         None,
         true,
         false,
-        false,
         true,
     )
     .await
@@ -43,7 +42,6 @@ async fn send_to_orchard(validator: &ValidatorKind, backend: &BackendType) {
         Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
         None,
         true,
-        false,
         false,
         true,
     )
@@ -95,7 +93,6 @@ async fn send_to_sapling(validator: &ValidatorKind, backend: &BackendType) {
         None,
         true,
         false,
-        false,
         true,
     )
     .await
@@ -145,7 +142,6 @@ async fn send_to_transparent(validator: &ValidatorKind, backend: &BackendType) {
         Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
         None,
         true,
-        false,
         false,
         true,
     )
@@ -257,7 +253,6 @@ async fn send_to_all(validator: &ValidatorKind, backend: &BackendType) {
         None,
         true,
         false,
-        false,
         true,
     )
     .await
@@ -356,7 +351,6 @@ async fn shield_for_validator(validator: &ValidatorKind, backend: &BackendType) 
         None,
         true,
         false,
-        false,
         true,
     )
     .await
@@ -439,7 +433,6 @@ async fn monitor_unverified_mempool_for_validator(
         Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
         None,
         true,
-        false,
         false,
         true,
     )
