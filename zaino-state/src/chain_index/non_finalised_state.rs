@@ -1,11 +1,8 @@
 use super::{finalised_state::ZainoDB, source::BlockchainSource};
 use crate::{
-    chain_index::types::{self, BlockHash, Height, TransactionHash, GENESIS_HEIGHT},
+    chain_index::types::{self, BlockHash, BlockMetadata, BlockWithMetadata, Height, TreeRootData},
     error::FinalisedStateError,
-    BlockData, BlockIndex, ChainBlock, ChainWork, CommitmentTreeData, CommitmentTreeRoots,
-    CommitmentTreeSizes, CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend,
-    CompactTxData, OrchardCompactTx, SaplingCompactTx, TransparentCompactTx, TxInCompact,
-    TxOutCompact,
+    ChainWork, IndexedBlock,
 };
 use arc_swap::ArcSwap;
 use futures::lock::Mutex;
@@ -21,14 +18,14 @@ pub struct NonFinalizedState<Source: BlockchainSource> {
     /// We need access to the validator's best block hash, as well
     /// as a source of blocks
     pub(super) source: Source,
-    staged: Mutex<mpsc::Receiver<ChainBlock>>,
-    staging_sender: mpsc::Sender<ChainBlock>,
+    staged: Mutex<mpsc::Receiver<IndexedBlock>>,
+    staging_sender: mpsc::Sender<IndexedBlock>,
     /// This lock should not be exposed to consumers. Rather,
     /// clone the Arc and offer that. This means we can overwrite the arc
     /// without interfering with readers, who will hold a stale copy
     current: ArcSwap<NonfinalizedBlockCacheSnapshot>,
     /// Used mostly to determine activation heights
-    network: Network,
+    pub(crate) network: Network,
     /// Listener used to detect non-best-chain blocks, if available
     #[allow(clippy::type_complexity)]
     nfs_change_listener: Option<
@@ -38,6 +35,15 @@ pub struct NonFinalizedState<Source: BlockchainSource> {
     >,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+/// created for NonfinalizedBlockCacheSnapshot best_tip field for naming fields
+pub struct BestTip {
+    /// from chain_index types
+    pub height: Height,
+    /// from chain_index types
+    pub blockhash: BlockHash,
+}
+
 #[derive(Debug)]
 /// A snapshot of the nonfinalized state as it existed when this was created.
 pub struct NonfinalizedBlockCacheSnapshot {
@@ -45,12 +51,14 @@ pub struct NonfinalizedBlockCacheSnapshot {
     /// this includes all blocks on-chain, as well as
     /// all blocks known to have been on-chain before being
     /// removed by a reorg. Blocks reorged away have no height.
-    pub blocks: HashMap<BlockHash, ChainBlock>,
+    pub blocks: HashMap<BlockHash, IndexedBlock>,
     /// hashes indexed by height
     pub heights_to_hashes: HashMap<Height, BlockHash>,
     // Do we need height here?
     /// The highest known block
-    pub best_tip: (Height, BlockHash),
+    // best_tip is a BestTip, which contains
+    // a Height, and a BlockHash as named fields.
+    pub best_tip: BestTip,
 }
 
 #[derive(Debug)]
@@ -122,7 +130,54 @@ pub enum InitError {
     InitalBlockMissingHeight,
 }
 
+/// Staging infrastructure for block processing
+struct StagingChannel {
+    receiver: Mutex<mpsc::Receiver<IndexedBlock>>,
+    sender: mpsc::Sender<IndexedBlock>,
+}
+
+impl StagingChannel {
+    /// Create new staging channel with the given buffer size
+    fn new(buffer_size: usize) -> Self {
+        let (sender, receiver) = mpsc::channel(buffer_size);
+        Self {
+            receiver: Mutex::new(receiver),
+            sender,
+        }
+    }
+}
+
 /// This is the core of the concurrent block cache.
+impl BestTip {
+    /// Create a BestTip from an IndexedBlock
+    fn from_block(block: &IndexedBlock) -> Result<Self, InitError> {
+        let height = block.height().ok_or(InitError::InitalBlockMissingHeight)?;
+        let blockhash = *block.hash();
+        Ok(Self { height, blockhash })
+    }
+}
+
+impl NonfinalizedBlockCacheSnapshot {
+    /// Create initial snapshot from a single block
+    fn from_initial_block(block: IndexedBlock) -> Result<Self, InitError> {
+        let best_tip = BestTip::from_block(&block)?;
+        let hash = *block.hash();
+        let height = best_tip.height;
+
+        let mut blocks = HashMap::new();
+        let mut heights_to_hashes = HashMap::new();
+
+        blocks.insert(hash, block);
+        heights_to_hashes.insert(height, hash);
+
+        Ok(Self {
+            blocks,
+            heights_to_hashes,
+            best_tip,
+        })
+    }
+}
+
 impl<Source: BlockchainSource> NonFinalizedState<Source> {
     /// Create a nonfinalized state, in a coherent initial state
     ///
@@ -132,221 +187,139 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
     pub async fn initialize(
         source: Source,
         network: Network,
-        start_block: Option<ChainBlock>,
+        start_block: Option<IndexedBlock>,
     ) -> Result<Self, InitError> {
-        // TODO: Consider arbitrary buffer length
         info!("Initialising non-finalised state.");
-        let (staging_sender, staging_receiver) = mpsc::channel(100);
-        let staged = Mutex::new(staging_receiver);
-        let chainblock = match start_block {
-            Some(block) => block,
-            None => {
-                let genesis_block = source
-                    .get_block(HashOrHeight::Height(zebra_chain::block::Height(0)))
-                    .await
-                    .map_err(|e| InitError::InvalidNodeData(Box::new(e)))?
-                    .ok_or_else(|| InitError::InvalidNodeData(Box::new(MissingGenesisBlock)))?;
-                let (sapling_root_and_len, orchard_root_and_len) = source
-                    .get_commitment_tree_roots(genesis_block.hash().into())
-                    .await
-                    .map_err(|e| InitError::InvalidNodeData(Box::new(e)))?;
-                let ((sapling_root, sapling_size), (orchard_root, orchard_size)) = (
-                    sapling_root_and_len.unwrap_or_default(),
-                    orchard_root_and_len.unwrap_or_default(),
-                );
 
-                let data = BlockData {
-                    version: genesis_block.header.version,
-                    time: genesis_block.header.time.timestamp(),
-                    merkle_root: genesis_block.header.merkle_root.0,
-                    bits: u32::from_be_bytes(
-                        genesis_block
-                            .header
-                            .difficulty_threshold
-                            .bytes_in_display_order(),
-                    ),
-                    block_commitments: match genesis_block
-                        .commitment(&network)
-                        .map_err(|e| InitError::InvalidNodeData(Box::new(e)))?
-                    {
-                        zebra_chain::block::Commitment::PreSaplingReserved(bytes) => bytes,
-                        zebra_chain::block::Commitment::FinalSaplingRoot(root) => root.into(),
-                        zebra_chain::block::Commitment::ChainHistoryActivationReserved => [0; 32],
-                        zebra_chain::block::Commitment::ChainHistoryRoot(
-                            chain_history_mmr_root_hash,
-                        ) => chain_history_mmr_root_hash.bytes_in_serialized_order(),
-                        zebra_chain::block::Commitment::ChainHistoryBlockTxAuthCommitment(
-                            chain_history_block_tx_auth_commitment_hash,
-                        ) => {
-                            chain_history_block_tx_auth_commitment_hash.bytes_in_serialized_order()
-                        }
-                    },
+        // Set up staging channel for block processing
+        let staging_channel = StagingChannel::new(100);
 
-                    nonce: *genesis_block.header.nonce,
-                    solution: genesis_block.header.solution.into(),
-                };
+        // Resolve the initial block (provided or genesis)
+        let initial_block = Self::resolve_initial_block(&source, &network, start_block).await?;
 
-                let mut transactions = Vec::new();
-                for (i, trnsctn) in genesis_block.transactions.iter().enumerate() {
-                    let transparent = TransparentCompactTx::new(
-                        trnsctn
-                            .inputs()
-                            .iter()
-                            .filter_map(|input| {
-                                input.outpoint().map(|outpoint| {
-                                    TxInCompact::new(outpoint.hash.0, outpoint.index)
-                                })
-                            })
-                            .collect(),
-                        trnsctn
-                            .outputs()
-                            .iter()
-                            .filter_map(|output| {
-                                TxOutCompact::try_from((
-                                    u64::from(output.value),
-                                    output.lock_script.as_raw_bytes(),
-                                ))
-                                .ok()
-                            })
-                            .collect(),
-                    );
+        // Create initial snapshot from the block
+        let snapshot = NonfinalizedBlockCacheSnapshot::from_initial_block(initial_block)?;
 
-                    let sapling = SaplingCompactTx::new(
-                        Some(i64::from(trnsctn.sapling_value_balance().sapling_amount())),
-                        trnsctn
-                            .sapling_nullifiers()
-                            .map(|nf| CompactSaplingSpend::new(*nf.0))
-                            .collect(),
-                        trnsctn
-                            .sapling_outputs()
-                            .map(|output| {
-                                CompactSaplingOutput::new(
-                                    output.cm_u.to_bytes(),
-                                    <[u8; 32]>::from(output.ephemeral_key),
-                                    // This unwrap is unnecessary, but to remove it one would need to write
-                                    // a new array of [input[0], input[1]..] and enumerate all 52 elements
-                                    //
-                                    // This would be uglier than the unwrap
-                                    <[u8; 580]>::from(output.enc_ciphertext)[..52]
-                                        .try_into()
-                                        .unwrap(),
-                                )
-                            })
-                            .collect(),
-                    );
-                    let orchard = OrchardCompactTx::new(
-                        Some(i64::from(trnsctn.orchard_value_balance().orchard_amount())),
-                        trnsctn
-                            .orchard_actions()
-                            .map(|action| {
-                                CompactOrchardAction::new(
-                                    <[u8; 32]>::from(action.nullifier),
-                                    <[u8; 32]>::from(action.cm_x),
-                                    <[u8; 32]>::from(action.ephemeral_key),
-                                    // This unwrap is unnecessary, but to remove it one would need to write
-                                    // a new array of [input[0], input[1]..] and enumerate all 52 elements
-                                    //
-                                    // This would be uglier than the unwrap
-                                    <[u8; 580]>::from(action.enc_ciphertext)[..52]
-                                        .try_into()
-                                        .unwrap(),
-                                )
-                            })
-                            .collect(),
-                    );
+        // Set up optional listener
+        let nfs_change_listener = Self::setup_listener(&source).await;
 
-                    let txdata = CompactTxData::new(
-                        i as u64,
-                        TransactionHash(trnsctn.hash().0),
-                        transparent,
-                        sapling,
-                        orchard,
-                    );
-                    transactions.push(txdata);
-                }
-
-                let height = Some(GENESIS_HEIGHT);
-                let hash = BlockHash::from(genesis_block.hash());
-                let parent_hash = BlockHash::from(genesis_block.header.previous_block_hash);
-                let chainwork = ChainWork::from(U256::from(
-                    genesis_block
-                        .header
-                        .difficulty_threshold
-                        .to_work()
-                        .ok_or_else(|| {
-                            InitError::InvalidNodeData(Box::new(InvalidData(format!(
-                                "Invalid work field of block {hash} {height:?}"
-                            ))))
-                        })?
-                        .as_u128(),
-                ));
-
-                let index = BlockIndex {
-                    hash,
-                    parent_hash,
-                    chainwork,
-                    height,
-                };
-
-                //TODO: Is a default (zero) root correct?
-                let commitment_tree_roots = CommitmentTreeRoots::new(
-                    <[u8; 32]>::from(sapling_root),
-                    <[u8; 32]>::from(orchard_root),
-                );
-
-                let commitment_tree_size =
-                    CommitmentTreeSizes::new(sapling_size as u32, orchard_size as u32);
-
-                let commitment_tree_data =
-                    CommitmentTreeData::new(commitment_tree_roots, commitment_tree_size);
-
-                ChainBlock {
-                    index,
-                    data,
-                    transactions,
-                    commitment_tree_data,
-                }
-            }
-        };
-        let height = chainblock
-            .height()
-            .ok_or(InitError::InitalBlockMissingHeight)?;
-        let best_tip = (height, chainblock.index().hash);
-
-        let mut blocks = HashMap::new();
-        let mut heights_to_hashes = HashMap::new();
-        let hash = chainblock.index().hash;
-        blocks.insert(hash, chainblock);
-        heights_to_hashes.insert(height, hash);
-
-        let current = ArcSwap::new(Arc::new(NonfinalizedBlockCacheSnapshot {
-            blocks,
-            heights_to_hashes,
-            best_tip,
-        }));
-
-        let nfs_change_listener = source
-            .nonfinalized_listener()
-            .await
-            .ok()
-            .flatten()
-            .map(Mutex::new);
         Ok(Self {
             source,
-            staged,
-            staging_sender,
-            current,
+            staged: staging_channel.receiver,
+            staging_sender: staging_channel.sender,
+            current: ArcSwap::new(Arc::new(snapshot)),
             network,
             nfs_change_listener,
         })
     }
 
+    /// Fetch the genesis block and convert it to IndexedBlock
+    async fn get_genesis_indexed_block(
+        source: &Source,
+        network: &Network,
+    ) -> Result<IndexedBlock, InitError> {
+        let genesis_block = source
+            .get_block(HashOrHeight::Height(zebra_chain::block::Height(0)))
+            .await
+            .map_err(|e| InitError::InvalidNodeData(Box::new(e)))?
+            .ok_or_else(|| InitError::InvalidNodeData(Box::new(MissingGenesisBlock)))?;
+
+        let (sapling_root_and_len, orchard_root_and_len) = source
+            .get_commitment_tree_roots(genesis_block.hash().into())
+            .await
+            .map_err(|e| InitError::InvalidNodeData(Box::new(e)))?;
+
+        let tree_roots = TreeRootData {
+            sapling: sapling_root_and_len,
+            orchard: orchard_root_and_len,
+        };
+
+        // For genesis block, chainwork is just the block's own work (no previous blocks)
+        let genesis_work = ChainWork::from(U256::from(
+            genesis_block
+                .header
+                .difficulty_threshold
+                .to_work()
+                .ok_or_else(|| {
+                    InitError::InvalidNodeData(Box::new(InvalidData(
+                        "Invalid work field of genesis block".to_string(),
+                    )))
+                })?
+                .as_u128(),
+        ));
+
+        Self::create_indexed_block_with_optional_roots(
+            genesis_block.as_ref(),
+            &tree_roots,
+            genesis_work,
+            network.clone(),
+        )
+        .map_err(|e| InitError::InvalidNodeData(Box::new(InvalidData(e))))
+    }
+
+    /// Resolve the initial block - either use provided block or fetch genesis
+    async fn resolve_initial_block(
+        source: &Source,
+        network: &Network,
+        start_block: Option<IndexedBlock>,
+    ) -> Result<IndexedBlock, InitError> {
+        match start_block {
+            Some(block) => Ok(block),
+            None => Self::get_genesis_indexed_block(source, network).await,
+        }
+    }
+
+    /// Set up the optional non-finalized change listener
+    async fn setup_listener(
+        source: &Source,
+    ) -> Option<
+        Mutex<
+            tokio::sync::mpsc::Receiver<(zebra_chain::block::Hash, Arc<zebra_chain::block::Block>)>,
+        >,
+    > {
+        source
+            .nonfinalized_listener()
+            .await
+            .ok()
+            .flatten()
+            .map(Mutex::new)
+    }
+
     /// sync to the top of the chain, trimming to the finalised tip.
     pub(super) async fn sync(&self, finalized_db: Arc<ZainoDB>) -> Result<(), SyncError> {
         let initial_state = self.get_snapshot();
-        let mut new_blocks = Vec::new();
         let mut nonbest_blocks = HashMap::new();
+
+        // Fetch main chain blocks and handle reorgs
+        let new_blocks = self
+            .fetch_main_chain_blocks(&initial_state, &mut nonbest_blocks)
+            .await?;
+
+        // Stage and update new blocks
+        self.stage_new_blocks(new_blocks, &finalized_db).await?;
+
+        // Handle non-finalized change listener
+        self.handle_nfs_change_listener(&mut nonbest_blocks).await?;
+
+        // Update finalized state
+        self.update(finalized_db.clone()).await?;
+
+        // Process non-best chain blocks
+        self.process_nonbest_blocks(nonbest_blocks, &finalized_db)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Fetch main chain blocks and handle reorgs
+    async fn fetch_main_chain_blocks(
+        &self,
+        initial_state: &NonfinalizedBlockCacheSnapshot,
+        nonbest_blocks: &mut HashMap<zebra_chain::block::Hash, Arc<zebra_chain::block::Block>>,
+    ) -> Result<Vec<IndexedBlock>, SyncError> {
+        let mut new_blocks = Vec::new();
         let mut best_tip = initial_state.best_tip;
+
         // currently this only gets main-chain blocks
         // once readstateservice supports serving sidechain data, this
         // must be rewritten to match
@@ -356,7 +329,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         while let Some(block) = self
             .source
             .get_block(HashOrHeight::Height(zebra_chain::block::Height(
-                u32::from(best_tip.0) + 1,
+                u32::from(best_tip.height) + 1,
             )))
             .await
             .map_err(|e| {
@@ -366,63 +339,87 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 )))
             })?
         {
-            // If this block is next in the chain, we sync it as normal
             let parent_hash = BlockHash::from(block.header.previous_block_hash);
-            if parent_hash == best_tip.1 {
+            if parent_hash == best_tip.blockhash {
+                // Normal chain progression
                 let prev_block = match new_blocks.last() {
                     Some(block) => block,
-                    None => initial_state.blocks.get(&best_tip.1).ok_or_else(|| {
-                        SyncError::ReorgFailure(format!(
-                            "found blocks {:?}, expected block {:?}",
-                            initial_state
-                                .blocks
-                                .values()
-                                .map(|block| (block.index().hash(), block.index().height()))
-                                .collect::<Vec<_>>(),
-                            best_tip
-                        ))
-                    })?,
+                    None => initial_state
+                        .blocks
+                        .get(&best_tip.blockhash)
+                        .ok_or_else(|| {
+                            SyncError::ReorgFailure(format!(
+                                "found blocks {:?}, expected block {:?}",
+                                initial_state
+                                    .blocks
+                                    .values()
+                                    .map(|block| (block.index().hash(), block.index().height()))
+                                    .collect::<Vec<_>>(),
+                                best_tip
+                            ))
+                        })?,
                 };
                 let chainblock = self.block_to_chainblock(prev_block, &block).await?;
                 info!(
                     "syncing block {} at height {}",
                     &chainblock.index().hash(),
-                    best_tip.0 + 1
+                    best_tip.height + 1
                 );
-                best_tip = (best_tip.0 + 1, *chainblock.hash());
+                best_tip = BestTip {
+                    height: best_tip.height + 1,
+                    blockhash: *chainblock.hash(),
+                };
                 new_blocks.push(chainblock.clone());
             } else {
-                info!("Reorg detected at height {}", best_tip.0 + 1);
-                let mut next_height_down = best_tip.0 - 1;
-                // If not, there's been a reorg, and we need to adjust our best-tip
-                let prev_hash = loop {
-                    if next_height_down == Height(0) {
-                        return Err(SyncError::ReorgFailure(
-                            "attempted to reorg below chain genesis".to_string(),
-                        ));
-                    }
-                    match initial_state
-                        .blocks
-                        .values()
-                        .find(|block| block.height() == Some(next_height_down))
-                        .map(ChainBlock::hash)
-                    {
-                        Some(hash) => break hash,
-                        // There is a hole in our database.
-                        // TODO: An error return may be more appropriate here
-                        None => next_height_down = next_height_down - 1,
-                    }
-                };
-
-                best_tip = (next_height_down, *prev_hash);
-                // We can't calculate things like chainwork until we
-                // know the parent block
-                // this is done separately, after we've updated with the
-                // best chain blocks
+                // Handle reorg
+                info!("Reorg detected at height {}", best_tip.height + 1);
+                best_tip = self.handle_reorg(initial_state, best_tip)?;
                 nonbest_blocks.insert(block.hash(), block);
             }
         }
 
+        Ok(new_blocks)
+    }
+
+    /// Handle a blockchain reorg by finding the common ancestor
+    fn handle_reorg(
+        &self,
+        initial_state: &NonfinalizedBlockCacheSnapshot,
+        current_tip: BestTip,
+    ) -> Result<BestTip, SyncError> {
+        let mut next_height_down = current_tip.height - 1;
+
+        let prev_hash = loop {
+            if next_height_down == Height(0) {
+                return Err(SyncError::ReorgFailure(
+                    "attempted to reorg below chain genesis".to_string(),
+                ));
+            }
+            match initial_state
+                .blocks
+                .values()
+                .find(|block| block.height() == Some(next_height_down))
+                .map(IndexedBlock::hash)
+            {
+                Some(hash) => break hash,
+                // There is a hole in our database.
+                // TODO: An error return may be more appropriate here
+                None => next_height_down = next_height_down - 1,
+            }
+        };
+
+        Ok(BestTip {
+            height: next_height_down,
+            blockhash: *prev_hash,
+        })
+    }
+
+    /// Stage new blocks and update the cache
+    async fn stage_new_blocks(
+        &self,
+        new_blocks: Vec<IndexedBlock>,
+        finalized_db: &Arc<ZainoDB>,
+    ) -> Result<(), SyncError> {
         for block in new_blocks {
             if let Err(e) = self
                 .sync_stage_update_loop(block, finalized_db.clone())
@@ -431,37 +428,54 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
                 return Err(e.into());
             }
         }
+        Ok(())
+    }
 
-        if let Some(ref listener) = self.nfs_change_listener {
-            let Some(mut listener) = listener.try_lock() else {
-                warn!("Error fetching non-finalized change listener");
-                return Err(SyncError::CompetingSyncProcess);
-            };
-            loop {
-                match listener.try_recv() {
-                    Ok((hash, block)) => {
-                        if !self
-                            .current
-                            .load()
-                            .blocks
-                            .contains_key(&types::BlockHash(hash.0))
-                        {
-                            nonbest_blocks.insert(block.hash(), block);
-                        }
+    /// Handle non-finalized change listener events
+    async fn handle_nfs_change_listener(
+        &self,
+        nonbest_blocks: &mut HashMap<zebra_chain::block::Hash, Arc<zebra_chain::block::Block>>,
+    ) -> Result<(), SyncError> {
+        let Some(ref listener) = self.nfs_change_listener else {
+            return Ok(());
+        };
+
+        let Some(mut listener) = listener.try_lock() else {
+            warn!("Error fetching non-finalized change listener");
+            return Err(SyncError::CompetingSyncProcess);
+        };
+
+        loop {
+            match listener.try_recv() {
+                Ok((hash, block)) => {
+                    if !self
+                        .current
+                        .load()
+                        .blocks
+                        .contains_key(&types::BlockHash(hash.0))
+                    {
+                        nonbest_blocks.insert(block.hash(), block);
                     }
-                    Err(mpsc::error::TryRecvError::Empty) => break,
-                    Err(e @ mpsc::error::TryRecvError::Disconnected) => {
-                        return Err(SyncError::ZebradConnectionError(
-                            NodeConnectionError::UnrecoverableError(Box::new(e)),
-                        ))
-                    }
+                }
+                Err(mpsc::error::TryRecvError::Empty) => break,
+                Err(e @ mpsc::error::TryRecvError::Disconnected) => {
+                    return Err(SyncError::ZebradConnectionError(
+                        NodeConnectionError::UnrecoverableError(Box::new(e)),
+                    ))
                 }
             }
         }
+        Ok(())
+    }
 
-        self.update(finalized_db.clone()).await?;
-
+    /// Process non-best chain blocks iteratively
+    async fn process_nonbest_blocks(
+        &self,
+        mut nonbest_blocks: HashMap<zebra_chain::block::Hash, Arc<zebra_chain::block::Block>>,
+        finalized_db: &Arc<ZainoDB>,
+    ) -> Result<(), SyncError> {
         let mut nonbest_chainblocks = HashMap::new();
+
         loop {
             let (next_up, later): (Vec<_>, Vec<_>) = nonbest_blocks
                 .into_iter()
@@ -516,7 +530,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
 
     async fn sync_stage_update_loop(
         &self,
-        block: ChainBlock,
+        block: IndexedBlock,
         finalized_db: Arc<ZainoDB>,
     ) -> Result<(), UpdateError> {
         if let Err(e) = self.stage(block.clone()) {
@@ -534,13 +548,16 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
     }
 
     /// Stage a block
-    fn stage(&self, block: ChainBlock) -> Result<(), Box<mpsc::error::TrySendError<ChainBlock>>> {
+    fn stage(
+        &self,
+        block: IndexedBlock,
+    ) -> Result<(), Box<mpsc::error::TrySendError<IndexedBlock>>> {
         self.staging_sender.try_send(block).map_err(Box::new)
     }
 
     /// Add all blocks from the staging area, and save a new cache snapshot, trimming block below the finalised tip.
     async fn update(&self, finalized_db: Arc<ZainoDB>) -> Result<(), UpdateError> {
-        let mut new = HashMap::<BlockHash, ChainBlock>::new();
+        let mut new = HashMap::<BlockHash, IndexedBlock>::new();
         let mut staged = self.staged.lock().await;
         loop {
             match staged.try_recv() {
@@ -580,7 +597,10 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
 
         let best_tip = blocks.iter().fold(snapshot.best_tip, |acc, (hash, block)| {
             match block.index().height() {
-                Some(height) if height > acc.0 => (height, (*hash)),
+                Some(working_height) if working_height > acc.height => BestTip {
+                    height: working_height,
+                    blockhash: *hash,
+                },
                 _ => acc,
             }
         });
@@ -588,7 +608,7 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
         let heights_to_hashes = blocks
             .iter()
             .filter_map(|(hash, chainblock)| {
-                chainblock.index().height.map(|height| (height, *hash))
+                chainblock.index().height().map(|height| (height, *hash))
             })
             .collect();
 
@@ -608,20 +628,28 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
 
             // Log chain tip change
             if new_best_tip != stale_best_tip {
-                if new_best_tip.0 > stale_best_tip.0 {
+                if new_best_tip.height > stale_best_tip.height {
                     info!(
                         "non-finalized tip advanced: Height: {} -> {}, Hash: {} -> {}",
-                        stale_best_tip.0, new_best_tip.0, stale_best_tip.1, new_best_tip.1,
+                        stale_best_tip.height,
+                        new_best_tip.height,
+                        stale_best_tip.blockhash,
+                        new_best_tip.blockhash,
                     );
-                } else if new_best_tip.0 == stale_best_tip.0 && new_best_tip.1 != stale_best_tip.1 {
+                } else if new_best_tip.height == stale_best_tip.height
+                    && new_best_tip.blockhash != stale_best_tip.blockhash
+                {
                     info!(
                         "non-finalized tip reorg at height {}: Hash: {} -> {}",
-                        new_best_tip.0, stale_best_tip.1, new_best_tip.1,
+                        new_best_tip.height, stale_best_tip.blockhash, new_best_tip.blockhash,
                     );
-                } else if new_best_tip.0 < stale_best_tip.0 {
+                } else if new_best_tip.height < stale_best_tip.height {
                     info!(
                         "non-finalized tip rollback from height {} to {}, Hash: {} -> {}",
-                        stale_best_tip.0, new_best_tip.0, stale_best_tip.1, new_best_tip.1,
+                        stale_best_tip.height,
+                        new_best_tip.height,
+                        stale_best_tip.blockhash,
+                        new_best_tip.blockhash,
                     );
                 }
             }
@@ -638,37 +666,70 @@ impl<Source: BlockchainSource> NonFinalizedState<Source> {
 
     async fn block_to_chainblock(
         &self,
-        prev_block: &ChainBlock,
+        prev_block: &IndexedBlock,
         block: &zebra_chain::block::Block,
-    ) -> Result<ChainBlock, SyncError> {
-        let (sapling_root_and_len, orchard_root_and_len) = self
-            .source
-            .get_commitment_tree_roots(block.hash().into())
+    ) -> Result<IndexedBlock, SyncError> {
+        let tree_roots = self
+            .get_tree_roots_from_source(block.hash().into())
             .await
             .map_err(|e| {
                 SyncError::ZebradConnectionError(NodeConnectionError::UnrecoverableError(Box::new(
-                    e,
+                    InvalidData(format!("{}", e)),
                 )))
             })?;
-        let ((sapling_root, sapling_size), (orchard_root, orchard_size)) = (
-            sapling_root_and_len.unwrap_or_default(),
-            orchard_root_and_len.unwrap_or_default(),
-        );
 
-        ChainBlock::try_from((
+        Self::create_indexed_block_with_optional_roots(
             block,
-            sapling_root,
-            sapling_size as u32,
-            orchard_root,
-            orchard_size as u32,
-            prev_block.chainwork(),
-            &self.network,
-        ))
+            &tree_roots,
+            *prev_block.chainwork(),
+            self.network.clone(),
+        )
         .map_err(|e| {
             SyncError::ZebradConnectionError(NodeConnectionError::UnrecoverableError(Box::new(
                 InvalidData(e),
             )))
         })
+    }
+
+    /// Get commitment tree roots from the blockchain source
+    async fn get_tree_roots_from_source(
+        &self,
+        block_hash: BlockHash,
+    ) -> Result<TreeRootData, super::source::BlockchainSourceError> {
+        let (sapling_root_and_len, orchard_root_and_len) =
+            self.source.get_commitment_tree_roots(block_hash).await?;
+
+        Ok(TreeRootData {
+            sapling: sapling_root_and_len,
+            orchard: orchard_root_and_len,
+        })
+    }
+
+    /// Create IndexedBlock with optional tree roots (for genesis/sync cases)
+    ///
+    /// TODO: Issue #604 - This uses `unwrap_or_default()` uniformly for both Sapling and Orchard,
+    /// but they have different activation heights. This masks potential bugs and prevents proper
+    /// validation based on network upgrade activation.
+    fn create_indexed_block_with_optional_roots(
+        block: &zebra_chain::block::Block,
+        tree_roots: &TreeRootData,
+        parent_chainwork: ChainWork,
+        network: Network,
+    ) -> Result<IndexedBlock, String> {
+        let (sapling_root, sapling_size, orchard_root, orchard_size) =
+            tree_roots.clone().extract_with_defaults();
+
+        let metadata = BlockMetadata::new(
+            sapling_root,
+            sapling_size as u32,
+            orchard_root,
+            orchard_size as u32,
+            parent_chainwork,
+            network,
+        );
+
+        let block_with_metadata = BlockWithMetadata::new(block, metadata);
+        IndexedBlock::try_from(block_with_metadata)
     }
 }
 

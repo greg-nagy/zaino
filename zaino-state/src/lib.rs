@@ -42,21 +42,21 @@ pub use chain_index::non_finalised_state::{
 };
 // NOTE: Should these be pub at all?
 pub use chain_index::types::{
-    AddrHistRecord, AddrScript, BlockData, BlockHash, BlockHeaderData, BlockIndex, ChainBlock,
-    ChainWork, CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes, CompactOrchardAction,
-    CompactSaplingOutput, CompactSaplingSpend, CompactTxData, Height, OrchardCompactTx,
-    OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList, ScriptType, ShardIndex, ShardRoot,
-    TransactionHash, TransparentCompactTx, TransparentTxList, TxInCompact, TxLocation,
-    TxOutCompact, TxidList,
+    AddrHistRecord, AddrScript, BlockData, BlockHash, BlockHeaderData, BlockIndex, BlockMetadata,
+    BlockWithMetadata, ChainWork, CommitmentTreeData, CommitmentTreeRoots, CommitmentTreeSizes,
+    CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactTxData, Height,
+    IndexedBlock, OrchardCompactTx, OrchardTxList, Outpoint, SaplingCompactTx, SaplingTxList,
+    ScriptType, ShardIndex, ShardRoot, TransactionHash, TransparentCompactTx, TransparentTxList,
+    TreeRootData, TxInCompact, TxLocation, TxOutCompact, TxidList,
 };
 
 pub(crate) mod local_cache;
 
 pub use chain_index::mempool::{MempoolKey, MempoolValue};
 
-#[cfg(feature = "bench")]
+#[cfg(feature = "test_dependencies")]
 /// allow public access to additional APIs, for testing
-pub mod bench {
+pub mod test_dependencies {
     /// Testing export of chain_index
     pub mod chain_index {
         pub use crate::chain_index::*;

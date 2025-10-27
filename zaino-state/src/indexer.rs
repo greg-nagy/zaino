@@ -4,7 +4,12 @@
 use async_trait::async_trait;
 use tokio::{sync::mpsc, time::timeout};
 use tracing::warn;
-use zaino_fetch::jsonrpsee::response::GetMempoolInfoResponse;
+use zaino_fetch::jsonrpsee::response::{
+    block_subsidy::GetBlockSubsidy,
+    mining_info::GetMiningInfoWire,
+    peer_info::GetPeerInfo,
+    {GetMempoolInfoResponse, GetNetworkSolPsResponse},
+};
 use zaino_proto::proto::{
     compact_formats::CompactBlock,
     service::{
@@ -172,6 +177,17 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// tags: blockchain
     async fn get_difficulty(&self) -> Result<f64, Self::Error>;
 
+    /// Returns block subsidy reward, taking into account the mining slow start and the founders reward, of block at index provided.
+    ///
+    /// zcashd reference: [`getblocksubsidy`](https://zcash.github.io/rpc/getblocksubsidy.html)
+    /// method: post
+    /// tags: blockchain
+    ///
+    /// # Parameters
+    ///
+    /// - `height`: (number, optional) The block height. If not provided, defaults to the current height of the chain.
+    async fn get_block_subsidy(&self, height: u32) -> Result<GetBlockSubsidy, Self::Error>;
+
     /// Returns details on the active state of the TX memory pool.
     ///
     /// zcashd reference: [`getmempoolinfo`](https://zcash.github.io/rpc/getmempoolinfo.html)
@@ -180,6 +196,14 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     ///
     /// Original implementation: [`getmempoolinfo`](https://github.com/zcash/zcash/blob/18238d90cd0b810f5b07d5aaa1338126aa128c06/src/rpc/blockchain.cpp#L1555)
     async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error>;
+
+    /// Returns data about each connected network node as a json array of objects.
+    ///
+    /// zcashd reference: [`getpeerinfo`](https://zcash.github.io/rpc/getpeerinfo.html)
+    /// tags: network
+    ///
+    /// Current `zebrad` does not include the same fields as `zcashd`.
+    async fn get_peer_info(&self) -> Result<GetPeerInfo, Self::Error>;
 
     /// Returns the total balance of a provided `addresses` in an [`AddressBalance`] instance.
     ///
@@ -408,6 +432,30 @@ pub trait ZcashIndexer: Send + Sync + 'static {
         address_strings: AddressStrings,
     ) -> Result<Vec<GetAddressUtxos>, Self::Error>;
 
+    /// Returns a json object containing mining-related information.
+    ///
+    /// `zcashd` reference (may be outdated): [`getmininginfo`](https://zcash.github.io/rpc/getmininginfo.html)
+    async fn get_mining_info(&self) -> Result<GetMiningInfoWire, Self::Error>;
+
+    /// Returns the estimated network solutions per second based on the last n blocks.
+    ///
+    /// zcashd reference: [`getnetworksolps`](https://zcash.github.io/rpc/getnetworksolps.html)
+    /// method: post
+    /// tags: blockchain
+    ///
+    /// This RPC is implemented in the [mining.cpp](https://github.com/zcash/zcash/blob/d00fc6f4365048339c83f463874e4d6c240b63af/src/rpc/mining.cpp#L104)
+    /// file of the Zcash repository. The Zebra implementation can be found [here](https://github.com/ZcashFoundation/zebra/blob/19bca3f1159f9cb9344c9944f7e1cb8d6a82a07f/zebra-rpc/src/methods.rs#L2687).
+    ///
+    /// # Parameters
+    ///
+    /// - `blocks`: (number, optional, default=120) Number of blocks, or -1 for blocks over difficulty averaging window.
+    /// - `height`: (number, optional, default=-1) To estimate network speed at the time of a specific block height.
+    async fn get_network_sol_ps(
+        &self,
+        blocks: Option<i32>,
+        height: Option<i32>,
+    ) -> Result<GetNetworkSolPsResponse, Self::Error>;
+
     /// Helper function to get the chain height
     async fn chain_height(&self) -> Result<Height, Self::Error>;
 
@@ -470,7 +518,8 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     }
 }
 
-/// LightWallet RPC method signatures.
+/// Light Client Protocol gRPC method signatures.
+/// For more information, see [the lightwallet protocol](https://github.com/zcash/lightwallet-protocol/blob/180717dfa21f3cbf063b8a1ad7697ccba7f5b054/walletrpc/service.proto#L181).
 ///
 /// Doc comments taken from Zaino-Proto for consistency.
 #[async_trait]
@@ -730,6 +779,7 @@ pub trait LightWalletIndexer: Send + Sync + Clone + ZcashIndexer + 'static {
     /// NOTE: Currently unimplemented in Zaino.
     async fn ping(&self, request: Duration) -> Result<PingResponse, Self::Error>;
 }
+
 /// Zcash Service functionality.
 #[async_trait]
 pub trait LightWalletService: Sized + ZcashService<Subscriber: LightWalletIndexer> {}
