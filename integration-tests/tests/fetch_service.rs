@@ -35,7 +35,6 @@ async fn create_test_manager_and_fetch_service(
         chain_cache,
         enable_zaino,
         false,
-        false,
         enable_clients,
     )
     .await
