@@ -1,5 +1,7 @@
 use std::convert::Infallible;
 
+use zebra_chain::amount::{Amount, NonNegative};
+
 use crate::jsonrpsee::connector::ResponseToError;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
@@ -22,31 +24,37 @@ pub struct BlockDeltas {
     pub difficulty: f64,
     // `chainwork` would be here, but Zebra does not plan to support it
     // pub chainwork: Vec<u8>,
-    pub previousblockhash: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previousblockhash: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub nextblockhash: Option<String>,
+}
+
+impl ResponseToError for BlockDeltas {
+    type RpcError = Infallible;
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct BlockDelta {
     pub txid: String,
     pub index: u32,
-    pub inputs: Vec<serde_json::Value>,
-    pub outputs: Vec<serde_json::Value>,
+    pub inputs: Vec<InputDelta>,
+    pub outputs: Vec<OutputDelta>,
 }
 
-impl Default for BlockDelta {
-    fn default() -> Self {
-        Self {
-            txid: "".to_string(),
-            index: 0,
-            inputs: vec![],
-            outputs: vec![],
-        }
-    }
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct InputDelta {
+    pub address: String,
+    pub satoshis: Amount,
+    pub index: u32,
+    pub prevtxid: String,
+    pub prevout: u32,
 }
 
-impl ResponseToError for BlockDeltas {
-    type RpcError = Infallible;
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct OutputDelta {
+    pub address: String,
+    pub satoshis: Amount<NonNegative>,
+    pub index: u32,
 }
