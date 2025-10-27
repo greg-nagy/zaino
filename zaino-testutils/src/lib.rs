@@ -21,7 +21,6 @@ use zaino_common::{
 };
 use zaino_serve::server::config::{GrpcServerConfig, JsonRpcServerConfig};
 use zaino_state::BackendType;
-use zainodlib::config::default_ephemeral_cookie_path;
 pub use zcash_local_net as services;
 pub use zcash_local_net::validator::Validator;
 use zcash_local_net::validator::{ZcashdConfig, ZebradConfig};
@@ -378,10 +377,7 @@ impl TestManager {
         activation_heights: Option<ActivationHeights>,
         chain_cache: Option<PathBuf>,
         enable_zaino: bool,
-        // targeting
         enable_zaino_jsonrpc_server: bool,
-        // this is also always false, except one (tests json_server)
-        enable_zaino_jsonrpc_server_cookie_auth: bool,
         enable_clients: bool,
     ) -> Result<Self, std::io::Error> {
         if (validator == &ValidatorKind::Zcashd) && (backend == &BackendType::State) {
@@ -456,10 +452,7 @@ impl TestManager {
             let zaino_json_listen_port = portpicker::pick_unused_port().expect("No ports free");
             let zaino_json_listen_address =
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), zaino_json_listen_port);
-            let mut zaino_json_server_cookie_dir: Option<PathBuf> = None;
-            if enable_zaino_jsonrpc_server_cookie_auth {
-                zaino_json_server_cookie_dir = Some(default_ephemeral_cookie_path());
-            }
+            let zaino_json_server_cookie_dir: Option<PathBuf> = None;
             let indexer_config = zainodlib::config::ZainodConfig {
                 // TODO: Make configurable.
                 backend: *backend,
@@ -612,7 +605,6 @@ mod launch_testmanager {
                 false,
                 false,
                 false,
-                false,
             )
             .await
             .unwrap();
@@ -631,7 +623,6 @@ mod launch_testmanager {
                 None,
                 Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                 None,
-                false,
                 false,
                 false,
                 false,
@@ -662,7 +653,6 @@ mod launch_testmanager {
                 false,
                 false,
                 false,
-                false,
             )
             .await
             .unwrap();
@@ -682,7 +672,6 @@ mod launch_testmanager {
                 Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                 None,
                 true,
-                false,
                 false,
                 false,
             )
@@ -709,7 +698,6 @@ mod launch_testmanager {
                 None,
                 true,
                 false,
-                false,
                 true,
             )
             .await
@@ -735,7 +723,6 @@ mod launch_testmanager {
                 Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                 None,
                 true,
-                false,
                 false,
                 true,
             )
@@ -786,7 +773,6 @@ mod launch_testmanager {
                     false,
                     false,
                     false,
-                    false,
                 )
                 .await
                 .unwrap();
@@ -805,7 +791,6 @@ mod launch_testmanager {
                     None,
                     Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
-                    false,
                     false,
                     false,
                     false,
@@ -836,7 +821,6 @@ mod launch_testmanager {
                     false,
                     false,
                     false,
-                    false,
                 )
                 .await
                 .unwrap();
@@ -856,7 +840,6 @@ mod launch_testmanager {
                     Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     true,
-                    false,
                     false,
                     false,
                 )
@@ -883,7 +866,6 @@ mod launch_testmanager {
                     None,
                     true,
                     false,
-                    false,
                     true,
                 )
                 .await
@@ -909,7 +891,6 @@ mod launch_testmanager {
                     Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     true,
-                    false,
                     false,
                     true,
                 )
@@ -955,7 +936,6 @@ mod launch_testmanager {
                     Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     true,
-                    false,
                     false,
                     true,
                 )
@@ -1056,7 +1036,6 @@ mod launch_testmanager {
                     Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     ZEBRAD_TESTNET_CACHE_DIR.clone(),
                     true,
-                    false,
                     false,
                     true,
                 )
@@ -1089,7 +1068,6 @@ mod launch_testmanager {
                     false,
                     false,
                     false,
-                    false,
                 )
                 .await
                 .unwrap();
@@ -1108,7 +1086,6 @@ mod launch_testmanager {
                     None,
                     Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
-                    false,
                     false,
                     false,
                     false,
@@ -1139,7 +1116,6 @@ mod launch_testmanager {
                     false,
                     false,
                     false,
-                    false,
                 )
                 .await
                 .unwrap();
@@ -1159,7 +1135,6 @@ mod launch_testmanager {
                     Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     true,
-                    false,
                     false,
                     false,
                 )
@@ -1186,7 +1161,6 @@ mod launch_testmanager {
                     None,
                     true,
                     false,
-                    false,
                     true,
                 )
                 .await
@@ -1212,7 +1186,6 @@ mod launch_testmanager {
                     Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     true,
-                    false,
                     false,
                     true,
                 )
@@ -1259,7 +1232,6 @@ mod launch_testmanager {
                     Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     None,
                     true,
-                    false,
                     false,
                     true,
                 )
@@ -1358,7 +1330,6 @@ mod launch_testmanager {
                     Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
                     ZEBRAD_TESTNET_CACHE_DIR.clone(),
                     true,
-                    false,
                     false,
                     true,
                 )
