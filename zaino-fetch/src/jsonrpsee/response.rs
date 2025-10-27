@@ -1076,7 +1076,14 @@ impl<'de> serde::Deserialize<'de> for GetTransactionResponse {
                 Some(h) if h < -1 => {
                     return Err(DeserError::custom("invalid height returned in block"))
                 }
-                Some(h) => Some(h as u32),
+                Some(h) => match TryInto::<i32>::try_into(h) {
+                    Ok(h) => Some(h),
+                    Err(e) => {
+                        return Err(DeserError::custom(
+                            "invalid height returned in block: `{h}`",
+                        ))
+                    }
+                },
             };
 
             macro_rules! get_tx_value_fields{
