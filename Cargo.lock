@@ -2964,6 +2964,7 @@ dependencies = [
  "zaino-proto",
  "zaino-state",
  "zaino-testutils",
+ "zcash_local_net",
  "zebra-chain",
  "zebra-rpc",
  "zebra-state",

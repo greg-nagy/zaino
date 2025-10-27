@@ -8,6 +8,7 @@ use zaino_state::{
 };
 use zaino_testutils::{from_inputs, Validator as _};
 use zaino_testutils::{TestManager, ValidatorKind};
+use zcash_local_net::validator::Zcashd;
 use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetInfo};
 
@@ -22,7 +23,7 @@ async fn create_test_manager_and_fetch_services(
     FetchServiceSubscriber,
 ) {
     println!("Launching test manager..");
-    let test_manager = TestManager::launch_with_default_activation_heights(
+    let test_manager = TestManager::launch_with_default_activation_heights::<Zcashd>(
         &ValidatorKind::Zcashd,
         &BackendType::Fetch,
         None,

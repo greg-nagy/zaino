@@ -27,8 +27,9 @@ use zaino_state::{
 };
 use zaino_testutils::from_inputs;
 use zaino_testutils::test_vectors::transactions::get_test_vectors;
-use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind};
+use zcash_local_net::validator::Validator;
+use zcash_local_net::validator::Zebrad;
 use zebra_chain::parameters::NetworkKind;
 use zebra_chain::serialization::{ZcashDeserialize, ZcashSerialize};
 use zebra_rpc::methods::GetAddressUtxos;
@@ -47,14 +48,14 @@ macro_rules! expected_read_response {
     };
 }
 
-async fn create_test_manager_and_services(
+async fn create_test_manager_and_services<V: Validator>(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
     enable_zaino: bool,
     enable_clients: bool,
     network: Option<NetworkKind>,
 ) -> (TestManager, StateService, StateServiceSubscriber) {
-    let test_manager = TestManager::launch_with_default_activation_heights(
+    let test_manager = TestManager::launch_with_default_activation_heights::<V>(
         validator,
         &BackendType::Fetch,
         network,
@@ -138,7 +139,8 @@ async fn create_test_manager_and_services(
 #[ignore = "Not a test! Used to build test vector data for zaino_state::chain_index unit tests."]
 async fn create_200_block_regtest_chain_vectors() {
     let (mut test_manager, _state_service, state_service_subscriber) =
-        create_test_manager_and_services(&ValidatorKind::Zebrad, None, true, true, None).await;
+        create_test_manager_and_services::<Zebrad>(&ValidatorKind::Zebrad, None, true, true, None)
+            .await;
 
     let mut clients = test_manager
         .clients
