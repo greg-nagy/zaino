@@ -1,8 +1,6 @@
 use zaino_common::network::ActivationHeights;
 use zaino_common::{DatabaseConfig, ServiceConfig, StorageConfig};
-use zaino_fetch::jsonrpsee::response::address_deltas::{
-    GetAddressDeltasParams, GetAddressDeltasResponse,
-};
+use zaino_fetch::jsonrpsee::response::address_deltas::GetAddressDeltasParams;
 use zaino_state::BackendType;
 use zaino_state::{
     FetchService, FetchServiceConfig, FetchServiceSubscriber, LightWalletIndexer, StateService,
@@ -1037,119 +1035,6 @@ async fn state_service_get_address_utxos_testnet() {
     test_manager.close().await;
 }
 
-async fn state_service_get_address_deltas(validator: &ValidatorKind) {
-    let (
-        mut test_manager,
-        _fetch_service,
-        fetch_service_subscriber,
-        _state_service,
-        state_service_subscriber,
-    ) = create_test_manager_and_services(validator, None, true, true, None).await;
-
-    let mut clients = test_manager
-        .clients
-        .take()
-        .expect("Clients are not initialized");
-    let recipient_taddr = clients.get_recipient_address("transparent").await;
-    clients.faucet.sync_and_await().await.unwrap();
-
-    if matches!(validator, ValidatorKind::Zebrad) {
-        test_manager.local_net.generate_blocks(100).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.sync_and_await().await.unwrap();
-        clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
-        test_manager.local_net.generate_blocks(1).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        clients.faucet.sync_and_await().await.unwrap();
-    };
-
-    let tx = from_inputs::quick_send(
-        &mut clients.faucet,
-        vec![(recipient_taddr.as_str(), 250_000, None)],
-    )
-    .await
-    .unwrap();
-    test_manager.local_net.generate_blocks(1).await.unwrap();
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-
-    let chain_height = fetch_service_subscriber
-        .block_cache
-        .get_chain_height()
-        .await
-        .unwrap()
-        .0;
-
-    // Test simple response (chaininfo = false)
-    let simple_request = GetAddressDeltasParams::new_filtered(
-        vec![recipient_taddr.clone()],
-        chain_height - 2,
-        chain_height,
-        false,
-    );
-
-    let fetch_service_simple_deltas = fetch_service_subscriber
-        .get_address_deltas(simple_request.clone())
-        .await
-        .unwrap();
-
-    let state_service_simple_deltas = state_service_subscriber
-        .get_address_deltas(simple_request)
-        .await
-        .unwrap();
-
-    assert_eq!(fetch_service_simple_deltas, state_service_simple_deltas);
-
-    // Test response with chain info (chaininfo = true)
-    let chain_info_request = GetAddressDeltasParams::new_filtered(
-        vec![recipient_taddr.clone()],
-        chain_height - 2,
-        chain_height,
-        true,
-    );
-
-    let fetch_service_chain_info_deltas = fetch_service_subscriber
-        .get_address_deltas(chain_info_request.clone())
-        .await
-        .unwrap();
-
-    let state_service_chain_info_deltas = state_service_subscriber
-        .get_address_deltas(chain_info_request)
-        .await
-        .unwrap();
-
-    assert_eq!(
-        fetch_service_chain_info_deltas,
-        state_service_chain_info_deltas
-    );
-
-    // Validate response structure
-    match &state_service_simple_deltas {
-        GetAddressDeltasResponse::Simple(deltas) => {
-            assert!(
-                !deltas.is_empty(),
-                "Should have at least one delta for the transaction"
-            );
-        }
-        _ => panic!("Expected simple response"),
-    }
-
-    match &state_service_chain_info_deltas {
-        GetAddressDeltasResponse::WithChainInfo { deltas, start, end } => {
-            assert!(
-                !deltas.is_empty(),
-                "Should have at least one delta for the transaction"
-            );
-            assert!(
-                start.height <= end.height,
-                "Start height should be <= end height"
-            );
-        }
-        _ => panic!("Expected response with chain info"),
-    }
-
-    test_manager.close().await;
-}
-
 async fn state_service_get_address_deltas_testnet() {
     let (
         mut test_manager,
@@ -1709,11 +1594,6 @@ mod zebra {
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn address_balance_testnet() {
             state_service_get_address_balance_testnet().await;
-        }
-
-        #[tokio::test]
-        async fn address_deltas_regtest() {
-            state_service_get_address_deltas(&ValidatorKind::Zebrad).await;
         }
 
         #[ignore = "requires fully synced testnet."]

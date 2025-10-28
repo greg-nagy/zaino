@@ -972,7 +972,6 @@ impl ZcashIndexer for StateServiceSubscriber {
         &self,
         params: GetAddressDeltasParams,
     ) -> Result<GetAddressDeltasResponse, Self::Error> {
-        // 1) Extract fields (string form => full range & no chain info)
         let (addresses, start_raw, end_raw, chain_info) = match &params {
             GetAddressDeltasParams::Filtered {
                 addresses,
@@ -993,24 +992,14 @@ impl ZcashIndexer for StateServiceSubscriber {
             start = tip;
         }
 
-        // 3) Fetch txs for the inclusive range [start..=end]
-        //    (If your provider already interprets end=0 as tip, you can pass start_raw/end_raw.)
         let transactions = self
-            .get_taddress_txs(
-                addresses.clone(),
-                start.0,
-                end.0,
-                /*confirmed_only=*/ true,
-            )
+            .get_taddress_txs(addresses.clone(), start.0, end.0, true)
             .await?;
 
-        // 4) Build deltas (confirmed-only). If your provider might return mempool entries,
-        //    add `.filter(|tx| tx.height().unwrap_or(0) > 0)` before processing.
         let mut deltas =
             GetAddressDeltasResponse::process_transactions_to_deltas(&transactions, &addresses);
 
-        // 5) zcashd-like ordering: (height ASC, blockindex ASC, index ASC)
-        //    If you can fill block_index earlier, great; if not, None sorts last for stability.
+        // zcashd-like ordering
         deltas.sort_by_key(|d| (d.height, d.block_index.unwrap_or(u32::MAX), d.index));
 
         if chain_info && start > Height(0) && end > Height(0) {

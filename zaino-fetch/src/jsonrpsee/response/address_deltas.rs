@@ -124,67 +124,6 @@ impl GetAddressDeltasResponse {
         deltas.sort_by_key(|d| (d.height, d.block_index.unwrap_or(u32::MAX), d.index));
         deltas
     }
-
-    /// Build the final response with zcashd-compatible gating of chainInfo.
-    /// - `tip_height`: latest block height
-    /// - `block_hash_by_height`: returns the hex hash for a given height
-    pub fn from_params_and_deltas(
-        params: &GetAddressDeltasParams,
-        mut deltas: Vec<AddressDelta>,
-        tip_height: u32,
-        block_hash_by_height: impl Fn(u32) -> Option<String>,
-    ) -> Result<Self, String> {
-        // (Optional) ensure zcashd-like ordering if you haven't already sorted earlier.
-        deltas.sort_by_key(|d| (d.height, d.block_index.unwrap_or(u32::MAX), d.index));
-
-        // Pull start/end/flag from params; string form implies full range & no chain info.
-        let (start_raw, end_raw, chain_info) = match params {
-            GetAddressDeltasParams::Filtered {
-                start,
-                end,
-                chain_info,
-                ..
-            } => (*start, *end, *chain_info),
-            GetAddressDeltasParams::Address(_) => (0, 0, false),
-        };
-
-        // Normalize like zcashd: end==0 → tip; start>tip → tip (inclusive range elsewhere).
-        let mut start = start_raw;
-        let mut end = end_raw;
-        if end == 0 {
-            end = tip_height;
-        }
-        if start > tip_height {
-            start = tip_height;
-        }
-
-        // Gate: only return object if chainInfo && start>0 && end>0; else array.
-        let wants_chain_object = chain_info && start > 0 && end > 0;
-        if !wants_chain_object {
-            return Ok(GetAddressDeltasResponse::Simple(deltas));
-        }
-
-        // When returning object: enforce in-range and include hashes.
-        if start > tip_height || end > tip_height {
-            return Err("Start or end is outside chain range".into());
-        }
-        let start_hash =
-            block_hash_by_height(start).ok_or_else(|| "missing start block hash".to_string())?;
-        let end_hash =
-            block_hash_by_height(end).ok_or_else(|| "missing end block hash".to_string())?;
-
-        Ok(GetAddressDeltasResponse::WithChainInfo {
-            deltas,
-            start: BlockInfo {
-                hash: start_hash,
-                height: start,
-            },
-            end: BlockInfo {
-                hash: end_hash,
-                height: end,
-            },
-        })
-    }
 }
 
 impl ResponseToError for GetAddressDeltasResponse {
@@ -299,9 +238,6 @@ impl BlockInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::{json, Value};
-
-    // ---------- helpers ----------
 
     fn sample_delta_with_block_index(i: u32, bi: Option<u32>) -> AddressDelta {
         AddressDelta {
@@ -314,235 +250,274 @@ mod tests {
         }
     }
 
-    // ---------- GetAddressDeltasParams (serde) ----------
+    mod serde {
+        mod params {
+            use serde_json::{json, Value};
 
-    #[test]
-    fn params_deser_filtered_with_camel_case_and_defaults() {
-        // zcashd-compatible flag casing: "chainInfo"
-        let v = json!({
-            "addresses": ["tmA", "tmB"],
-            "start": 1000,
-            "end": 0,
-            "chainInfo": true
-        });
+            use crate::jsonrpsee::response::address_deltas::GetAddressDeltasParams;
 
-        let p: GetAddressDeltasParams = serde_json::from_value(v).expect("deserialize Filtered");
-        match p {
-            GetAddressDeltasParams::Filtered {
-                addresses,
-                start,
-                end,
-                chain_info,
-            } => {
-                assert_eq!(addresses, vec!["tmA".to_string(), "tmB".to_string()]);
-                assert_eq!(start, 1000);
-                assert_eq!(end, 0); // interpretation to tip handled elsewhere
-                assert!(chain_info);
+            #[test]
+            fn params_deser_filtered_with_camel_case_and_defaults() {
+                let json_value = json!({
+                    "addresses": ["tmA", "tmB"],
+                    "start": 1000,
+                    "end": 0,
+                    "chainInfo": true
+                });
+
+                let params: GetAddressDeltasParams =
+                    serde_json::from_value(json_value).expect("deserialize Filtered");
+                match params {
+                    GetAddressDeltasParams::Filtered {
+                        addresses,
+                        start,
+                        end,
+                        chain_info,
+                    } => {
+                        assert_eq!(addresses, vec!["tmA".to_string(), "tmB".to_string()]);
+                        assert_eq!(start, 1000);
+                        assert_eq!(end, 0);
+                        assert!(chain_info);
+                    }
+                    _ => panic!("expected Filtered variant"),
+                }
             }
-            _ => panic!("expected Filtered variant"),
-        }
-    }
 
-    #[test]
-    fn params_deser_filtered_defaults_when_missing() {
-        // Only required field is addresses; others default to 0/false.
-        let v = json!({ "addresses": ["tmOnly"] });
-        let p: GetAddressDeltasParams =
-            serde_json::from_value(v).expect("deserialize Filtered minimal");
-        match p {
-            GetAddressDeltasParams::Filtered {
-                addresses,
-                start,
-                end,
-                chain_info,
-            } => {
-                assert_eq!(addresses, vec!["tmOnly".to_string()]);
-                assert_eq!(start, 0);
-                assert_eq!(end, 0);
-                assert!(!chain_info);
+            #[test]
+            fn params_deser_filtered_defaults_when_missing() {
+                // Only required field is addresses. Others default to 0/false.
+                let json_value = json!({ "addresses": ["tmOnly"] });
+                let params: GetAddressDeltasParams =
+                    serde_json::from_value(json_value).expect("deserialize Filtered minimal");
+                match params {
+                    GetAddressDeltasParams::Filtered {
+                        addresses,
+                        start,
+                        end,
+                        chain_info,
+                    } => {
+                        assert_eq!(addresses, vec!["tmOnly".to_string()]);
+                        assert_eq!(start, 0);
+                        assert_eq!(end, 0);
+                        assert!(!chain_info);
+                    }
+                    _ => panic!("expected Filtered variant"),
+                }
             }
-            _ => panic!("expected Filtered variant"),
-        }
-    }
 
-    #[test]
-    fn params_deser_single_address_variant() {
-        let v = Value::String("tmSingleAddress".into());
-        let p: GetAddressDeltasParams = serde_json::from_value(v).expect("deserialize Address");
-        match p {
-            GetAddressDeltasParams::Address(s) => assert_eq!(s, "tmSingleAddress"),
-            _ => panic!("expected Address variant"),
-        }
-    }
-
-    #[test]
-    fn params_ser_filtered_has_expected_keys_no_block_index() {
-        let p = GetAddressDeltasParams::new_filtered(vec!["tmA".into()], 100, 200, true);
-        let j = serde_json::to_value(&p).expect("serialize");
-        let obj = j.as_object().expect("object");
-        assert!(obj.get("addresses").is_some());
-        assert_eq!(obj.get("start").and_then(Value::as_u64), Some(100));
-        assert_eq!(obj.get("end").and_then(Value::as_u64), Some(200));
-        // Accept either "chainInfo" (preferred) or "chain_info" if casing changes later.
-        assert!(obj.get("chainInfo").is_some() || obj.get("chain_info").is_some());
-        // Critically: no block_index in params
-        assert!(obj.get("block_index").is_none());
-        assert!(obj.get("blockindex").is_none());
-    }
-
-    // ---------- AddressDelta (serde) ----------
-
-    #[test]
-    fn address_delta_ser_deser_roundtrip_with_block_index() {
-        let d0 = sample_delta_with_block_index(0, Some(7));
-        let j = serde_json::to_string(&d0).expect("serialize delta");
-        let d1: AddressDelta = serde_json::from_str(&j).expect("deserialize delta");
-        assert_eq!(d0, d1);
-
-        // And ensure JSON contains the key with the value
-        let v: Value = serde_json::from_str(&j).unwrap();
-        assert_eq!(v.get("block_index").and_then(Value::as_u64), Some(7));
-    }
-
-    #[test]
-    fn address_delta_ser_deser_roundtrip_without_block_index() {
-        let d0 = sample_delta_with_block_index(1, None);
-        let j = serde_json::to_string(&d0).expect("serialize delta");
-        let d1: AddressDelta = serde_json::from_str(&j).expect("deserialize delta");
-        assert_eq!(d0, d1);
-
-        // Depending on whether you add `#[serde(skip_serializing_if = "Option::is_none")]`,
-        // "block_index" may be omitted or present as null. Accept either.
-        let v: Value = serde_json::from_str(&j).unwrap();
-        match v.get("block_index") {
-            None => { /* omitted: good */ }
-            Some(val) => assert!(val.is_null(), "if present, it should be null when None"),
-        }
-    }
-
-    // ---------- GetAddressDeltasResponse (serde) ----------
-
-    #[test]
-    fn response_ser_simple_array_shape_includes_delta_block_index() {
-        let deltas = vec![
-            sample_delta_with_block_index(0, Some(2)),
-            sample_delta_with_block_index(1, None),
-        ];
-        let resp = GetAddressDeltasResponse::Simple(deltas.clone());
-        let v = serde_json::to_value(&resp).expect("serialize response");
-        assert!(v.is_array(), "Simple response must be a JSON array");
-        let arr = v.as_array().unwrap();
-        assert_eq!(arr.len(), deltas.len());
-        // First delta has block_index=2
-        assert_eq!(arr[0].get("block_index").and_then(Value::as_u64), Some(2));
-        // Second delta may omit or null block_index
-        match arr[1].get("block_index") {
-            None => {}
-            Some(val) => assert!(val.is_null()),
-        }
-    }
-
-    #[test]
-    fn response_ser_with_chain_info_shape_deltas_carry_block_index() {
-        let deltas = vec![
-            sample_delta_with_block_index(2, Some(5)),
-            sample_delta_with_block_index(3, None),
-        ];
-        let start = BlockInfo {
-            hash: "00..aa".into(),
-            height: 1000,
-        };
-        let end = BlockInfo {
-            hash: "00..bb".into(),
-            height: 2000,
-        };
-        let resp = GetAddressDeltasResponse::WithChainInfo { deltas, start, end };
-
-        let v = serde_json::to_value(&resp).expect("serialize response");
-        let obj = v.as_object().expect("object");
-        assert!(obj.get("deltas").is_some());
-        assert!(obj.get("start").is_some());
-        assert!(obj.get("end").is_some());
-
-        let ds = obj.get("deltas").unwrap().as_array().expect("deltas array");
-        // First delta has block_index=5
-        assert_eq!(ds[0].get("block_index").and_then(Value::as_u64), Some(5));
-        // Second delta may omit or null block_index
-        match ds[1].get("block_index") {
-            None => {}
-            Some(val) => assert!(val.is_null()),
-        }
-
-        // Ensure there's no root-level block index
-        assert!(obj.get("block_index").is_none());
-        assert!(obj.get("blockindex").is_none());
-    }
-
-    #[test]
-    fn response_deser_simple_from_array_with_and_without_block_index() {
-        let v = json!([
-            {
-                "satoshis": 1000,
-                "txid": "deadbeef00",
-                "index": 0,
-                "height": 123456,
-                "address": "tmX",
-                "block_index": 9
-            },
-            {
-                "satoshis": -500,
-                "txid": "deadbeef01",
-                "index": 1,
-                "height": 123457,
-                "address": "tmY"
-                // block_index missing
+            #[test]
+            fn params_deser_single_address_variant() {
+                let json_value = Value::String("tmSingleAddress".into());
+                let params: GetAddressDeltasParams =
+                    serde_json::from_value(json_value).expect("deserialize Address");
+                match params {
+                    GetAddressDeltasParams::Address(s) => assert_eq!(s, "tmSingleAddress"),
+                    _ => panic!("expected Address variant"),
+                }
             }
-        ]);
-        let resp: GetAddressDeltasResponse = serde_json::from_value(v).expect("deserialize simple");
-        match resp {
-            GetAddressDeltasResponse::Simple(ds) => {
-                assert_eq!(ds.len(), 2);
-                assert_eq!(ds[0].txid, "deadbeef00");
-                assert_eq!(ds[0].block_index, Some(9));
-                assert_eq!(ds[1].txid, "deadbeef01");
-                assert_eq!(ds[1].block_index, None);
-            }
-            _ => panic!("expected Simple variant"),
-        }
-    }
 
-    #[test]
-    fn response_deser_with_chain_info_from_object_delays_block_index_per_delta() {
-        let v = json!({
-            "deltas": [{
-                "satoshis": -500,
-                "txid": "deadbeef02",
-                "index": 1,
-                "height": 123457,
-                "address": "tmY",
-                "block_index": 4
-            }, {
-                "satoshis": 2500,
-                "txid": "deadbeef03",
-                "index": 2,
-                "height": 123458,
-                "address": "tmZ"
-                // no block_index
-            }],
-            "start": { "hash": "aa", "height": 1000 },
-            "end":   { "hash": "bb", "height": 2000 }
-        });
-        let resp: GetAddressDeltasResponse =
-            serde_json::from_value(v).expect("deserialize with chain info");
-        match resp {
-            GetAddressDeltasResponse::WithChainInfo { deltas, start, end } => {
-                assert_eq!(deltas.len(), 2);
-                assert_eq!(deltas[0].block_index, Some(4));
-                assert_eq!(deltas[1].block_index, None);
-                assert_eq!(start.height, 1000);
-                assert_eq!(end.height, 2000);
+            #[test]
+            fn params_ser_filtered_has_expected_keys_no_block_index() {
+                let params =
+                    GetAddressDeltasParams::new_filtered(vec!["tmA".into()], 100, 200, true);
+                let json_value = serde_json::to_value(&params).expect("serialize");
+                let json_object = json_value.as_object().expect("object");
+                assert!(json_object.get("addresses").is_some());
+                assert_eq!(json_object.get("start").and_then(Value::as_u64), Some(100));
+                assert_eq!(json_object.get("end").and_then(Value::as_u64), Some(200));
+                assert!(json_object.get("chainInfo").is_some());
+
+                // Critically: no blockindex in params
+                assert!(json_object.get("blockindex").is_none());
             }
-            _ => panic!("expected WithChainInfo variant"),
+        }
+        mod address_delta {
+            use serde_json::Value;
+
+            use crate::jsonrpsee::response::address_deltas::{
+                tests::sample_delta_with_block_index, AddressDelta,
+            };
+
+            #[test]
+            fn address_delta_ser_deser_roundtrip_with_block_index() {
+                let delta_0 = sample_delta_with_block_index(0, Some(7));
+                let json_str = serde_json::to_string(&delta_0).expect("serialize delta");
+                let delta_1: AddressDelta =
+                    serde_json::from_str(&json_str).expect("deserialize delta");
+                assert_eq!(delta_0, delta_1);
+
+                // JSON contains the key with the value
+                let json_value: Value = serde_json::from_str(&json_str).unwrap();
+                assert_eq!(
+                    json_value.get("blockindex").and_then(Value::as_u64),
+                    Some(7)
+                );
+            }
+
+            #[test]
+            fn address_delta_ser_deser_roundtrip_without_block_index() {
+                let delta_0 = sample_delta_with_block_index(1, None);
+                let json_str = serde_json::to_string(&delta_0).expect("serialize delta");
+                let delta_1: AddressDelta =
+                    serde_json::from_str(&json_str).expect("deserialize delta");
+                assert_eq!(delta_0, delta_1);
+
+                let json_value: Value = serde_json::from_str(&json_str).unwrap();
+                match json_value.get("blockindex") {
+                    None => {} // Omitted
+                    Some(val) => assert!(val.is_null(), "if present, it should be null when None"),
+                }
+            }
+        }
+
+        mod response {
+            use serde_json::{json, Value};
+
+            use crate::jsonrpsee::response::address_deltas::{
+                tests::sample_delta_with_block_index, BlockInfo, GetAddressDeltasResponse,
+            };
+
+            #[test]
+            fn response_ser_simple_array_shape_includes_delta_block_index() {
+                let deltas = vec![
+                    sample_delta_with_block_index(0, Some(2)),
+                    sample_delta_with_block_index(1, None),
+                ];
+                let resp = GetAddressDeltasResponse::Simple(deltas.clone());
+                let json_value = serde_json::to_value(&resp).expect("serialize response");
+                assert!(
+                    json_value.is_array(),
+                    "Simple response must be a JSON array"
+                );
+                let json_array = json_value.as_array().unwrap();
+                assert_eq!(json_array.len(), deltas.len());
+
+                // First delta has blockindex = 2
+                assert_eq!(
+                    json_array[0].get("blockindex").and_then(Value::as_u64),
+                    Some(2)
+                );
+
+                // Second delta may omit or null blockindex
+                match json_array[1].get("blockindex") {
+                    None => {}
+                    Some(val) => assert!(val.is_null()),
+                }
+            }
+
+            #[test]
+            fn response_ser_with_chain_info_shape_deltas_carry_block_index() {
+                let source_deltas = vec![
+                    sample_delta_with_block_index(2, Some(5)),
+                    sample_delta_with_block_index(3, None),
+                ];
+                let start = BlockInfo {
+                    hash: "00..aa".into(),
+                    height: 1000,
+                };
+                let end = BlockInfo {
+                    hash: "00..bb".into(),
+                    height: 2000,
+                };
+                let response = GetAddressDeltasResponse::WithChainInfo {
+                    deltas: source_deltas,
+                    start,
+                    end,
+                };
+
+                let json_value = serde_json::to_value(&response).expect("serialize response");
+                let json_object = json_value.as_object().expect("object");
+                assert!(json_object.get("deltas").is_some());
+                assert!(json_object.get("start").is_some());
+                assert!(json_object.get("end").is_some());
+
+                let deltas = json_object
+                    .get("deltas")
+                    .unwrap()
+                    .as_array()
+                    .expect("deltas array");
+
+                // First delta has blockindex=5
+                assert_eq!(deltas[0].get("blockindex").and_then(Value::as_u64), Some(5));
+
+                // Second delta may omit or null blockindex
+                match deltas[1].get("blockindex") {
+                    None => {}
+                    Some(val) => assert!(val.is_null()),
+                }
+
+                assert!(json_object.get("blockindex").is_none());
+                assert!(json_object.get("blockindex").is_none());
+            }
+
+            #[test]
+            fn response_deser_simple_from_array_with_and_without_block_index() {
+                let deltas_source = json!([
+                    {
+                        "satoshis": 1000,
+                        "txid": "deadbeef00",
+                        "index": 0,
+                        "height": 123456,
+                        "address": "tmX",
+                        "blockindex": 9
+                    },
+                    {
+                        "satoshis": -500,
+                        "txid": "deadbeef01",
+                        "index": 1,
+                        "height": 123457,
+                        "address": "tmY"
+                        // blockindex missing
+                    }
+                ]);
+                let response: GetAddressDeltasResponse =
+                    serde_json::from_value(deltas_source).expect("deserialize simple");
+                match response {
+                    GetAddressDeltasResponse::Simple(ds) => {
+                        assert_eq!(ds.len(), 2);
+                        assert_eq!(ds[0].txid, "deadbeef00");
+                        assert_eq!(ds[0].block_index, Some(9));
+                        assert_eq!(ds[1].txid, "deadbeef01");
+                        assert_eq!(ds[1].block_index, None);
+                    }
+                    _ => panic!("expected Simple variant"),
+                }
+            }
+
+            #[test]
+            fn response_deser_with_chain_info_from_object_delays_block_index_per_delta() {
+                let deltas_source = json!({
+                    "deltas": [{
+                        "satoshis": -500,
+                        "txid": "deadbeef02",
+                        "index": 1,
+                        "height": 123457,
+                        "address": "tmY",
+                        "blockindex": 4
+                    }, {
+                        "satoshis": 2500,
+                        "txid": "deadbeef03",
+                        "index": 2,
+                        "height": 123458,
+                        "address": "tmZ"
+                        // no blockindex
+                    }],
+                    "start": { "hash": "aa", "height": 1000 },
+                    "end":   { "hash": "bb", "height": 2000 }
+                });
+                let response: GetAddressDeltasResponse =
+                    serde_json::from_value(deltas_source).expect("deserialize with chain info");
+                match response {
+                    GetAddressDeltasResponse::WithChainInfo { deltas, start, end } => {
+                        assert_eq!(deltas.len(), 2);
+                        assert_eq!(deltas[0].block_index, Some(4));
+                        assert_eq!(deltas[1].block_index, None);
+                        assert_eq!(start.height, 1000);
+                        assert_eq!(end.height, 2000);
+                    }
+                    _ => panic!("expected WithChainInfo variant"),
+                }
+            }
         }
     }
 }
