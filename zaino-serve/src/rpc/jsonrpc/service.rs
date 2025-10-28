@@ -1,14 +1,19 @@
 //! Zcash RPC implementations.
 
-use zaino_fetch::jsonrpsee::response::GetMempoolInfoResponse;
+use zaino_fetch::jsonrpsee::response::block_subsidy::GetBlockSubsidy;
+use zaino_fetch::jsonrpsee::response::mining_info::GetMiningInfoWire;
+use zaino_fetch::jsonrpsee::response::peer_info::GetPeerInfo;
+use zaino_fetch::jsonrpsee::response::{GetMempoolInfoResponse, GetNetworkSolPsResponse};
 use zaino_state::{LightWalletIndexer, ZcashIndexer};
 
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
-
+use zebra_rpc::client::{
+    GetBlockchainInfoResponse, GetSubtreesByIndexResponse, GetTreestateResponse,
+    ValidateAddressResponse,
+};
 use zebra_rpc::methods::{
-    trees::{GetSubtrees, GetTreestate},
     AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
-    GetBlockChainInfo, GetBlockHash, GetInfo, GetRawTransaction, SentTransactionHash,
+    GetBlockHash, GetInfo, GetRawTransaction, SentTransactionHash,
 };
 
 use jsonrpsee::types::ErrorObjectOwned;
@@ -38,7 +43,7 @@ pub trait ZcashIndexerRpc {
     #[method(name = "getinfo")]
     async fn get_info(&self) -> Result<GetInfo, ErrorObjectOwned>;
 
-    /// Returns blockchain state information, as a [`GetBlockChainInfo`] JSON struct.
+    /// Returns blockchain state information, as a [`GetBlockchainInfoResponse`] JSON struct.
     ///
     /// zcashd reference: [`getblockchaininfo`](https://zcash.github.io/rpc/getblockchaininfo.html)
     /// method: post
@@ -46,10 +51,10 @@ pub trait ZcashIndexerRpc {
     ///
     /// # Notes
     ///
-    /// Some fields from the zcashd reference are missing from Zebra's [`GetBlockChainInfo`]. It only contains the fields
+    /// Some fields from the zcashd reference are missing from Zebra's [`GetBlockchainInfoResponse`]. It only contains the fields
     /// [required for lightwalletd support.](https://github.com/zcash/lightwalletd/blob/v0.4.9/common/common.go#L72-L89)
     #[method(name = "getblockchaininfo")]
-    async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, ErrorObjectOwned>;
+    async fn get_blockchain_info(&self) -> Result<GetBlockchainInfoResponse, ErrorObjectOwned>;
 
     /// Returns details on the active state of the TX memory pool.
     ///
@@ -60,6 +65,12 @@ pub trait ZcashIndexerRpc {
     /// Canonical source code implementation: [`getmempoolinfo`](https://github.com/zcash/zcash/blob/18238d90cd0b810f5b07d5aaa1338126aa128c06/src/rpc/blockchain.cpp#L1555)
     #[method(name = "getmempoolinfo")]
     async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, ErrorObjectOwned>;
+
+    /// Returns a json object containing mining-related information.
+    ///
+    /// `zcashd` reference (may be outdated): [`getmininginfo`](https://zcash.github.io/rpc/getmininginfo.html)
+    #[method(name = "getmininginfo")]
+    async fn get_mining_info(&self) -> Result<GetMiningInfoWire, ErrorObjectOwned>;
 
     /// Returns the hash of the best block (tip) of the longest chain.
     /// zcashd reference: [`getbestblockhash`](https://zcash.github.io/rpc/getbestblockhash.html)
@@ -84,6 +95,27 @@ pub trait ZcashIndexerRpc {
     #[method(name = "getdifficulty")]
     async fn get_difficulty(&self) -> Result<f64, ErrorObjectOwned>;
 
+    /// Returns data about each connected network node as a json array of objects.
+    ///
+    /// zcashd reference: [`getpeerinfo`](https://zcash.github.io/rpc/getpeerinfo.html)
+    /// tags: network
+    ///
+    /// Current `zebrad` does not include the same fields as `zcashd`.
+    #[method(name = "getpeerinfo")]
+    async fn get_peer_info(&self) -> Result<GetPeerInfo, ErrorObjectOwned>;
+
+    /// Returns block subsidy reward, taking into account the mining slow start and the founders reward, of block at index provided.
+    ///
+    /// zcashd reference: [`getblocksubsidy`](https://zcash.github.io/rpc/getblocksubsidy.html)
+    /// method: post
+    /// tags: blockchain
+    ///
+    /// # Parameters
+    ///
+    /// - `height`: (number, optional) The block height. If not provided, defaults to the current height of the chain.
+    #[method(name = "getblocksubsidy")]
+    async fn get_block_subsidy(&self, height: u32) -> Result<GetBlockSubsidy, ErrorObjectOwned>;
+
     /// Returns the current block count in the best valid block chain.
     ///
     /// zcashd reference: [`getblockcount`](https://zcash.github.io/rpc/getblockcount.html)
@@ -91,6 +123,20 @@ pub trait ZcashIndexerRpc {
     /// tags: blockchain
     #[method(name = "getblockcount")]
     async fn get_block_count(&self) -> Result<Height, ErrorObjectOwned>;
+
+    /// Return information about the given Zcash address.
+    ///
+    /// # Parameters
+    /// - `address`: (string, required, example="tmHMBeeYRuc2eVicLNfP15YLxbQsooCA6jb") The Zcash transparent address to validate.
+    ///
+    /// zcashd reference: [`validateaddress`](https://zcash.github.io/rpc/validateaddress.html)
+    /// method: post
+    /// tags: blockchain
+    #[method(name = "validateaddress")]
+    async fn validate_address(
+        &self,
+        address: String,
+    ) -> Result<ValidateAddressResponse, ErrorObjectOwned>;
 
     /// Returns the total balance of a provided `addresses` in an [`AddressBalance`] instance.
     ///
@@ -200,7 +246,7 @@ pub trait ZcashIndexerRpc {
     async fn z_get_treestate(
         &self,
         hash_or_height: String,
-    ) -> Result<GetTreestate, ErrorObjectOwned>;
+    ) -> Result<GetTreestateResponse, ErrorObjectOwned>;
 
     /// Returns information about a range of Sapling or Orchard subtrees.
     ///
@@ -226,7 +272,7 @@ pub trait ZcashIndexerRpc {
         pool: String,
         start_index: NoteCommitmentSubtreeIndex,
         limit: Option<NoteCommitmentSubtreeIndex>,
-    ) -> Result<GetSubtrees, ErrorObjectOwned>;
+    ) -> Result<GetSubtreesByIndexResponse, ErrorObjectOwned>;
 
     /// Returns the raw transaction data, as a [`GetRawTransaction`] JSON string or structure.
     ///
@@ -296,8 +342,24 @@ pub trait ZcashIndexerRpc {
         &self,
         address_strings: AddressStrings,
     ) -> Result<Vec<GetAddressUtxos>, ErrorObjectOwned>;
-}
 
+    /// Returns the estimated network solutions per second based on the last n blocks.
+    ///
+    /// zcashd reference: [`getnetworksolps`](https://zcash.github.io/rpc/getnetworksolps.html)
+    /// method: post
+    /// tags: blockchain
+    ///
+    /// # Parameters
+    ///
+    /// - `blocks`: (number, optional, default=120) Number of blocks, or -1 for blocks over difficulty averaging window.
+    /// - `height`: (number, optional, default=-1) To estimate network speed at the time of a specific block height.
+    #[method(name = "getnetworksolps")]
+    async fn get_network_sol_ps(
+        &self,
+        blocks: Option<i32>,
+        height: Option<i32>,
+    ) -> Result<GetNetworkSolPsResponse, ErrorObjectOwned>;
+}
 /// Uses ErrorCode::InvalidParams as this is converted to zcash legacy "minsc" ErrorCode in RPC middleware.
 #[jsonrpsee::core::async_trait]
 impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonRpcClient<Indexer> {
@@ -315,6 +377,21 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
             })
     }
 
+    async fn get_mining_info(&self) -> Result<GetMiningInfoWire, ErrorObjectOwned> {
+        Ok(self
+            .service_subscriber
+            .inner_ref()
+            .get_mining_info()
+            .await
+            .map_err(|e| {
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
+            })?)
+    }
+
     async fn get_best_blockhash(&self) -> Result<GetBlockHash, ErrorObjectOwned> {
         self.service_subscriber
             .inner_ref()
@@ -329,7 +406,7 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
             })
     }
 
-    async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, ErrorObjectOwned> {
+    async fn get_blockchain_info(&self) -> Result<GetBlockchainInfoResponse, ErrorObjectOwned> {
         self.service_subscriber
             .inner_ref()
             .get_blockchain_info()
@@ -371,10 +448,55 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
             })
     }
 
+    async fn get_peer_info(&self) -> Result<GetPeerInfo, ErrorObjectOwned> {
+        self.service_subscriber
+            .inner_ref()
+            .get_peer_info()
+            .await
+            .map_err(|e| {
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
+            })
+    }
+
+    async fn get_block_subsidy(&self, height: u32) -> Result<GetBlockSubsidy, ErrorObjectOwned> {
+        self.service_subscriber
+            .inner_ref()
+            .get_block_subsidy(height)
+            .await
+            .map_err(|e| {
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
+            })
+    }
+
     async fn get_block_count(&self) -> Result<Height, ErrorObjectOwned> {
         self.service_subscriber
             .inner_ref()
             .get_block_count()
+            .await
+            .map_err(|e| {
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
+            })
+    }
+
+    async fn validate_address(
+        &self,
+        address: String,
+    ) -> Result<ValidateAddressResponse, ErrorObjectOwned> {
+        self.service_subscriber
+            .inner_ref()
+            .validate_address(address)
             .await
             .map_err(|e| {
                 ErrorObjectOwned::owned(
@@ -454,7 +576,7 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
     async fn z_get_treestate(
         &self,
         hash_or_height: String,
-    ) -> Result<GetTreestate, ErrorObjectOwned> {
+    ) -> Result<GetTreestateResponse, ErrorObjectOwned> {
         self.service_subscriber
             .inner_ref()
             .z_get_treestate(hash_or_height)
@@ -473,7 +595,7 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
         pool: String,
         start_index: NoteCommitmentSubtreeIndex,
         limit: Option<NoteCommitmentSubtreeIndex>,
-    ) -> Result<GetSubtrees, ErrorObjectOwned> {
+    ) -> Result<GetSubtreesByIndexResponse, ErrorObjectOwned> {
         self.service_subscriber
             .inner_ref()
             .z_get_subtrees_by_index(pool, start_index, limit)
@@ -529,6 +651,37 @@ impl<Indexer: ZcashIndexer + LightWalletIndexer> ZcashIndexerRpcServer for JsonR
         self.service_subscriber
             .inner_ref()
             .z_get_address_utxos(address_strings)
+            .await
+            .map_err(|e| {
+                ErrorObjectOwned::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "Internal server error",
+                    Some(e.to_string()),
+                )
+            })
+    }
+
+    /// Returns the estimated network solutions per second based on the last n blocks.
+    ///
+    /// zcashd reference: [`getnetworksolps`](https://zcash.github.io/rpc/getnetworksolps.html)
+    /// method: post
+    /// tags: blockchain
+    ///
+    /// This RPC is implemented in the [mining.cpp](https://github.com/zcash/zcash/blob/d00fc6f4365048339c83f463874e4d6c240b63af/src/rpc/mining.cpp#L104)
+    /// file of the Zcash repository. The Zebra implementation can be found [here](https://github.com/ZcashFoundation/zebra/blob/19bca3f1159f9cb9344c9944f7e1cb8d6a82a07f/zebra-rpc/src/methods.rs#L2687).
+    ///
+    /// # Parameters
+    ///
+    /// - `blocks`: (number, optional, default=120) Number of blocks, or -1 for blocks over difficulty averaging window.
+    /// - `height`: (number, optional, default=-1) To estimate network speed at the time of a specific block height.
+    async fn get_network_sol_ps(
+        &self,
+        blocks: Option<i32>,
+        height: Option<i32>,
+    ) -> Result<GetNetworkSolPsResponse, ErrorObjectOwned> {
+        self.service_subscriber
+            .inner_ref()
+            .get_network_sol_ps(blocks, height)
             .await
             .map_err(|e| {
                 ErrorObjectOwned::owned(

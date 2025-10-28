@@ -9,17 +9,24 @@ use tracing::{info, warn};
 use zebra_state::HashOrHeight;
 
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
-use zebra_rpc::methods::{
-    trees::{GetSubtrees, GetTreestate},
-    AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
-    GetBlockChainInfo, GetBlockHash, GetInfo, GetRawTransaction, SentTransactionHash,
+use zebra_rpc::{
+    client::{GetSubtreesByIndexResponse, GetTreestateResponse, ValidateAddressResponse},
+    methods::{
+        AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
+        GetBlockHashResponse, GetBlockchainInfoResponse, GetInfo, GetRawTransaction,
+        SentTransactionHash,
+    },
 };
 
 use zaino_fetch::{
     chain::{transaction::FullTransaction, utils::ParseFromSlice},
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
-        response::{GetAddressDeltasRequest, GetAddressDeltasResponse, GetMempoolInfoResponse},
+        response::{
+            block_subsidy::GetBlockSubsidy, mining_info::GetMiningInfoWire, peer_info::GetPeerInfo,
+            GetAddressDeltasRequest, GetAddressDeltasResponse, GetMempoolInfoResponse,
+            GetNetworkSolPsResponse,
+        },
     },
 };
 
@@ -33,7 +40,10 @@ use zaino_proto::proto::{
 };
 
 use crate::{
-    chain_index::mempool::{Mempool, MempoolSubscriber},
+    chain_index::{
+        mempool::{Mempool, MempoolSubscriber},
+        source::ValidatorConnector,
+    },
     config::FetchServiceConfig,
     error::{BlockCacheError, FetchServiceError},
     indexer::{
@@ -63,7 +73,7 @@ pub struct FetchService {
     /// Local compact block cache.
     block_cache: BlockCache,
     /// Internal mempool.
-    mempool: Mempool,
+    mempool: Mempool<ValidatorConnector>,
     /// Service metadata.
     data: ServiceMetadata,
     /// StateService config data.
@@ -90,7 +100,7 @@ impl ZcashService for FetchService {
         let zebra_build_data = fetcher.get_info().await?;
         let data = ServiceMetadata::new(
             get_build_info(),
-            config.network.clone(),
+            config.network.to_zebra_network(),
             zebra_build_data.build,
             zebra_build_data.subversion,
         );
@@ -102,7 +112,9 @@ impl ZcashService for FetchService {
                 FetchServiceError::BlockCacheError(BlockCacheError::Custom(e.to_string()))
             })?;
 
-        let mempool = Mempool::spawn(&fetcher, None).await.map_err(|e| {
+        let mempool_source = ValidatorConnector::Fetch(fetcher.clone());
+
+        let mempool = Mempool::spawn(mempool_source, None).await.map_err(|e| {
             FetchServiceError::BlockCacheError(BlockCacheError::Custom(e.to_string()))
         })?;
 
@@ -178,6 +190,11 @@ impl FetchServiceSubscriber {
 
         mempool_status.combine(block_cache_status)
     }
+
+    /// Returns the network type running.
+    pub fn network(&self) -> zaino_common::Network {
+        self.config.network
+    }
 }
 
 #[async_trait]
@@ -221,7 +238,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
         Ok(self.fetcher.get_info().await?.into())
     }
 
-    /// Returns blockchain state information, as a [`GetBlockChainInfo`] JSON struct.
+    /// Returns blockchain state information, as a [`GetBlockchainInfoResponse`] JSON struct.
     ///
     /// zcashd reference: [`getblockchaininfo`](https://zcash.github.io/rpc/getblockchaininfo.html)
     /// method: post
@@ -229,9 +246,9 @@ impl ZcashIndexer for FetchServiceSubscriber {
     ///
     /// # Notes
     ///
-    /// Some fields from the zcashd reference are missing from Zebra's [`GetBlockChainInfo`]. It only contains the fields
+    /// Some fields from the zcashd reference are missing from Zebra's [`GetBlockchainInfoResponse`]. It only contains the fields
     /// [required for lightwalletd support.](https://github.com/zcash/lightwalletd/blob/v0.4.9/common/common.go#L72-L89)
-    async fn get_blockchain_info(&self) -> Result<GetBlockChainInfo, Self::Error> {
+    async fn get_blockchain_info(&self) -> Result<GetBlockchainInfoResponse, Self::Error> {
         Ok(self
             .fetcher
             .get_blockchain_info()
@@ -256,7 +273,11 @@ impl ZcashIndexer for FetchServiceSubscriber {
     ///
     /// Zebra does not support this RPC call directly.
     async fn get_mempool_info(&self) -> Result<GetMempoolInfoResponse, Self::Error> {
-        Ok(self.fetcher.get_mempool_info().await?)
+        Ok(self.mempool.get_mempool_info().await?)
+    }
+
+    async fn get_peer_info(&self) -> Result<GetPeerInfo, Self::Error> {
+        Ok(self.fetcher.get_peer_info().await?)
     }
 
     /// Returns the proof-of-work difficulty as a multiple of the minimum difficulty.
@@ -266,6 +287,10 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// tags: blockchain
     async fn get_difficulty(&self) -> Result<f64, Self::Error> {
         Ok(self.fetcher.get_difficulty().await?.0)
+    }
+
+    async fn get_block_subsidy(&self, height: u32) -> Result<GetBlockSubsidy, Self::Error> {
+        Ok(self.fetcher.get_block_subsidy(height).await?)
     }
 
     /// Returns the total balance of a provided `addresses` in an [`AddressBalance`] instance.
@@ -369,6 +394,10 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .try_into()?)
     }
 
+    async fn get_mining_info(&self) -> Result<GetMiningInfoWire, Self::Error> {
+        Ok(self.fetcher.get_mining_info().await?)
+    }
+
     /// Returns the hash of the best block (tip) of the longest chain.
     /// online zcashd reference: [`getbestblockhash`](https://zcash.github.io/rpc/getbestblockhash.html)
     /// The zcashd doc reference above says there are no parameters and the result is a "hex" (string) of the block hash hex encoded.
@@ -388,7 +417,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// [In the rpc definition](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/common.h#L48) there are no required params, or optional params.
     /// [The function in rpc/blockchain.cpp](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L325)
     /// where `return chainActive.Tip()->GetBlockHash().GetHex();` is the [return expression](https://github.com/zcash/zcash/blob/654a8be2274aa98144c80c1ac459400eaf0eacbe/src/rpc/blockchain.cpp#L339)returning a `std::string`
-    async fn get_best_blockhash(&self) -> Result<GetBlockHash, Self::Error> {
+    async fn get_best_blockhash(&self) -> Result<GetBlockHashResponse, Self::Error> {
         Ok(self.fetcher.get_best_blockhash().await?.into())
     }
 
@@ -399,6 +428,21 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// tags: blockchain
     async fn get_block_count(&self) -> Result<Height, Self::Error> {
         Ok(self.fetcher.get_block_count().await?.into())
+    }
+
+    /// Return information about the given Zcash address.
+    ///
+    /// # Parameters
+    /// - `address`: (string, required, example="tmHMBeeYRuc2eVicLNfP15YLxbQsooCA6jb") The Zcash transparent address to validate.
+    ///
+    /// zcashd reference: [`validateaddress`](https://zcash.github.io/rpc/validateaddress.html)
+    /// method: post
+    /// tags: blockchain
+    async fn validate_address(
+        &self,
+        address: String,
+    ) -> Result<ValidateAddressResponse, Self::Error> {
+        Ok(self.fetcher.validate_address(address).await?)
     }
 
     /// Returns all transaction ids in the memory pool, as a JSON array.
@@ -413,7 +457,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_mempool()
             .await
             .into_iter()
-            .map(|(key, _)| key.0)
+            .map(|(key, _)| key.txid)
             .collect())
     }
 
@@ -433,7 +477,10 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// negative where -1 is the last known valid block". On the other hand,
     /// `lightwalletd` only uses positive heights, so Zebra does not support
     /// negative heights.
-    async fn z_get_treestate(&self, hash_or_height: String) -> Result<GetTreestate, Self::Error> {
+    async fn z_get_treestate(
+        &self,
+        hash_or_height: String,
+    ) -> Result<GetTreestateResponse, Self::Error> {
         Ok(self
             .fetcher
             .get_treestate(hash_or_height)
@@ -464,7 +511,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
         pool: String,
         start_index: NoteCommitmentSubtreeIndex,
         limit: Option<NoteCommitmentSubtreeIndex>,
-    ) -> Result<GetSubtrees, Self::Error> {
+    ) -> Result<GetSubtreesByIndexResponse, Self::Error> {
         Ok(self
             .fetcher
             .get_subtrees_by_index(pool, start_index.0, limit.map(|limit_index| limit_index.0))
@@ -566,6 +613,27 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .into_iter()
             .map(|utxos| utxos.into())
             .collect())
+    }
+
+    /// Returns the estimated network solutions per second based on the last n blocks.
+    ///
+    /// zcashd reference: [`getnetworksolps`](https://zcash.github.io/rpc/getnetworksolps.html)
+    /// method: post
+    /// tags: blockchain
+    ///
+    /// This RPC is implemented in the [mining.cpp](https://github.com/zcash/zcash/blob/d00fc6f4365048339c83f463874e4d6c240b63af/src/rpc/mining.cpp#L104)
+    /// file of the Zcash repository. The Zebra implementation can be found [here](https://github.com/ZcashFoundation/zebra/blob/19bca3f1159f9cb9344c9944f7e1cb8d6a82a07f/zebra-rpc/src/methods.rs#L2687).
+    ///
+    /// # Parameters
+    ///
+    /// - `blocks`: (number, optional, default=120) Number of blocks, or -1 for blocks over difficulty averaging window.
+    /// - `height`: (number, optional, default=-1) To estimate network speed at the time of a specific block height.
+    async fn get_network_sol_ps(
+        &self,
+        blocks: Option<i32>,
+        height: Option<i32>,
+    ) -> Result<GetNetworkSolPsResponse, Self::Error> {
+        Ok(self.fetcher.get_network_sol_ps(blocks, height).await?)
     }
 }
 
@@ -715,8 +783,8 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         };
         let chain_height = self.block_cache.get_chain_height().await?.0;
         let fetch_service_clone = self.clone();
-        let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
+        let service_timeout = self.config.service.timeout;
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service.channel_size as usize);
         tokio::spawn(async move {
             let timeout = timeout(time::Duration::from_secs((service_timeout*4) as u64), async {
                     for height in start..=end {
@@ -811,8 +879,8 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         };
         let chain_height = self.block_cache.get_chain_height().await?.0;
         let fetch_service_clone = self.clone();
-        let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
+        let service_timeout = self.config.service.timeout;
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service.channel_size as usize);
         tokio::spawn(async move {
             let timeout = timeout(
                 time::Duration::from_secs((service_timeout * 4) as u64),
@@ -871,7 +939,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             let tx = self.get_raw_transaction(hash_hex, Some(1)).await?;
 
             let (hex, height) = if let GetRawTransaction::Object(tx_object) = tx {
-                (tx_object.hex, tx_object.height)
+                (tx_object.hex().clone(), tx_object.height())
             } else {
                 return Err(FetchServiceError::TonicStatusError(
                     tonic::Status::not_found("Error: Transaction not received"),
@@ -901,7 +969,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
         Ok(SendResponse {
             error_code: 0,
-            error_message: tx_output.inner().to_string(),
+            error_message: tx_output.hash().to_string(),
         })
     }
 
@@ -913,8 +981,8 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         let chain_height = self.chain_height().await?;
         let txids = self.get_taddress_txids_helper(request).await?;
         let fetch_service_clone = self.clone();
-        let service_timeout = self.config.service_timeout;
-        let (transmitter, receiver) = mpsc::channel(self.config.service_channel_size as usize);
+        let service_timeout = self.config.service.timeout;
+        let (transmitter, receiver) = mpsc::channel(self.config.service.channel_size as usize);
         tokio::spawn(async move {
             let timeout = timeout(
                 time::Duration::from_secs((service_timeout * 4) as u64),
@@ -953,14 +1021,9 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
     /// Returns the total balance for a list of taddrs
     async fn get_taddress_balance(&self, request: AddressList) -> Result<Balance, Self::Error> {
-        let taddrs = AddressStrings::new_valid(request.addresses).map_err(|err_obj| {
-            FetchServiceError::RpcError(RpcError::new_from_errorobject(
-                err_obj,
-                "Error in Validator",
-            ))
-        })?;
+        let taddrs = AddressStrings::new(request.addresses);
         let balance = self.z_get_address_balance(taddrs).await?;
-        let checked_balance: i64 = match i64::try_from(balance.balance) {
+        let checked_balance: i64 = match i64::try_from(balance.balance()) {
             Ok(balance) => balance,
             Err(_) => {
                 return Err(FetchServiceError::TonicStatusError(tonic::Status::unknown(
@@ -979,9 +1042,9 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         mut request: AddressStream,
     ) -> Result<Balance, Self::Error> {
         let fetch_service_clone = self.clone();
-        let service_timeout = self.config.service_timeout;
+        let service_timeout = self.config.service.timeout;
         let (channel_tx, mut channel_rx) =
-            mpsc::channel::<String>(self.config.service_channel_size as usize);
+            mpsc::channel::<String>(self.config.service.channel_size as usize);
         let fetcher_task_handle = tokio::spawn(async move {
             let fetcher_timeout = timeout(
                 time::Duration::from_secs((service_timeout * 4) as u64),
@@ -990,16 +1053,10 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                     loop {
                         match channel_rx.recv().await {
                             Some(taddr) => {
-                                let taddrs =
-                                    AddressStrings::new_valid(vec![taddr]).map_err(|err_obj| {
-                                        FetchServiceError::RpcError(RpcError::new_from_errorobject(
-                                            err_obj,
-                                            "Error in Validator",
-                                        ))
-                                    })?;
+                                let taddrs = AddressStrings::new(vec![taddr]);
                                 let balance =
                                     fetch_service_clone.z_get_address_balance(taddrs).await?;
-                                total_balance += balance.balance;
+                                total_balance += balance.balance();
                             }
                             None => {
                                 return Ok(total_balance);
@@ -1099,77 +1156,65 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             .collect();
 
         let mempool = self.mempool.clone();
-        let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
+        let service_timeout = self.config.service.timeout;
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service.channel_size as usize);
         tokio::spawn(async move {
             let timeout = timeout(
-                time::Duration::from_secs((service_timeout*4) as u64),
+                time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
-                    for (txid, transaction) in mempool.get_filtered_mempool(exclude_txids).await {
-                        match transaction.0 {
-                            GetRawTransaction::Object(transaction_object) => {
-                                let txid_bytes = match hex::decode(txid.0) {
-                                    Ok(bytes) => bytes,
-                                    Err(e) => {
-                                        if channel_tx
-                                            .send(Err(tonic::Status::unknown(e.to_string())))
-                                            .await
-                                            .is_err()
-                                        {
-                                            break;
-                                        } else {
-                                            continue;
-                                        }
-                                    }
-                                };
-                                match <FullTransaction as ParseFromSlice>::parse_from_slice(
-                                    transaction_object.hex.as_ref(),
-                                    Some(vec!(txid_bytes)), None)
+                    for (mempool_key, mempool_value) in
+                        mempool.get_filtered_mempool(exclude_txids).await
+                    {
+                        let txid_bytes = match hex::decode(mempool_key.txid) {
+                            Ok(bytes) => bytes,
+                            Err(error) => {
+                                if channel_tx
+                                    .send(Err(tonic::Status::unknown(error.to_string())))
+                                    .await
+                                    .is_err()
                                 {
-                                    Ok(transaction) => {
-                                        // ParseFromSlice returns any data left after the conversion to a
-                                        // FullTransaction, If the conversion has succeeded this should be empty.
-                                        if transaction.0.is_empty() {
-                                            if channel_tx.send(
-                                                transaction
+                                    break;
+                                } else {
+                                    continue;
+                                }
+                            }
+                        };
+                        match <FullTransaction as ParseFromSlice>::parse_from_slice(
+                            mempool_value.serialized_tx.as_ref().as_ref(),
+                            Some(vec![txid_bytes]),
+                            None,
+                        ) {
+                            Ok(transaction) => {
+                                // ParseFromSlice returns any data left after the conversion to a
+                                // FullTransaction, If the conversion has succeeded this should be empty.
+                                if transaction.0.is_empty() {
+                                    if channel_tx
+                                        .send(
+                                            transaction
                                                 .1
                                                 .to_compact(0)
-                                                .map_err(|e| {
-                                                    tonic::Status::unknown(
-                                                        e.to_string()
-                                                    )
-                                                })
-                                            ).await.is_err() {
-                                                break
-                                            }
-                                        } else {
-                                            // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                                            if channel_tx
-                                                .send(Err(tonic::Status::unknown("Error: ")))
-                                                .await
-                                                .is_err()
-                                            {
-                                                break;
-                                            }
-                                        }
-                                            }
-                                    Err(e) => {
-                                        // TODO: Hide server error from clients before release. Currently useful for dev purposes.
-                                        if channel_tx
-                                            .send(Err(tonic::Status::unknown(e.to_string())))
-                                            .await
-                                            .is_err()
-                                        {
-                                            break;
-                                        }
+                                                .map_err(|e| tonic::Status::unknown(e.to_string())),
+                                        )
+                                        .await
+                                        .is_err()
+                                    {
+                                        break;
+                                    }
+                                } else {
+                                    // TODO: Hide server error from clients before release. Currently useful for dev purposes.
+                                    if channel_tx
+                                        .send(Err(tonic::Status::unknown("Error: ")))
+                                        .await
+                                        .is_err()
+                                    {
+                                        break;
                                     }
                                 }
                             }
-                            GetRawTransaction::Raw(_) => {
+                            Err(e) => {
+                                // TODO: Hide server error from clients before release. Currently useful for dev purposes.
                                 if channel_tx
-                                    .send(Err(tonic::Status::internal(
-                                        "Error: Received raw transaction type, this should not be impossible.",
-                                    )))
+                                    .send(Err(tonic::Status::unknown(e.to_string())))
                                     .await
                                     .is_err()
                                 {
@@ -1201,54 +1246,43 @@ impl LightWalletIndexer for FetchServiceSubscriber {
     /// there are mempool transactions. It will close the returned stream when a new block is mined.
     async fn get_mempool_stream(&self) -> Result<RawTransactionStream, Self::Error> {
         let mut mempool = self.mempool.clone();
-        let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
+        let service_timeout = self.config.service.timeout;
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service.channel_size as usize);
         let mempool_height = self.block_cache.get_chain_height().await?.0;
         tokio::spawn(async move {
             let timeout = timeout(
-                time::Duration::from_secs((service_timeout*6) as u64),
+                time::Duration::from_secs((service_timeout * 6) as u64),
                 async {
-                    let (mut mempool_stream, _mempool_handle) =
-                        match mempool.get_mempool_stream().await {
-                            Ok(stream) => stream,
-                            Err(e) => {
-                                warn!("Error fetching stream from mempool: {:?}", e);
-                                channel_tx
-                                    .send(Err(tonic::Status::internal(
-                                        "Error getting mempool stream",
-                                    )))
-                                    .await
-                                    .ok();
-                                return;
-                            }
-                        };
+                    let (mut mempool_stream, _mempool_handle) = match mempool
+                        .get_mempool_stream(None)
+                        .await
+                    {
+                        Ok(stream) => stream,
+                        Err(e) => {
+                            warn!("Error fetching stream from mempool: {:?}", e);
+                            channel_tx
+                                .send(Err(tonic::Status::internal("Error getting mempool stream")))
+                                .await
+                                .ok();
+                            return;
+                        }
+                    };
                     while let Some(result) = mempool_stream.recv().await {
                         match result {
                             Ok((_mempool_key, mempool_value)) => {
-                                match mempool_value.0 {
-                                    GetRawTransaction::Object(transaction_object) => {
-                                        if channel_tx
-                                            .send(Ok(RawTransaction {
-                                                data: transaction_object.hex.as_ref().to_vec(),
-                                                height: mempool_height as u64,
-                                            }))
-                                            .await
-                                            .is_err()
-                                        {
-                                            break;
-                                        }
-                                    }
-                                    GetRawTransaction::Raw(_) => {
-                                        if channel_tx
-                                            .send(Err(tonic::Status::internal(
-                                                "Error: Received raw transaction type, this should not be impossible.",
-                                            )))
-                                            .await
-                                            .is_err()
-                                        {
-                                            break;
-                                        }
-                                    }
+                                if channel_tx
+                                    .send(Ok(RawTransaction {
+                                        data: mempool_value
+                                            .serialized_tx
+                                            .as_ref()
+                                            .as_ref()
+                                            .to_vec(),
+                                        height: mempool_height as u64,
+                                    }))
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
                                 }
                             }
                             Err(e) => {
@@ -1316,7 +1350,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             Ok(state) => {
                 let (hash, height, time, sapling, orchard) = state.into_parts();
                 Ok(TreeState {
-                    network: chain_info.chain(),
+                    network: chain_info.chain().clone(),
                     height: height.0 as u64,
                     hash: hash.to_string(),
                     time,
@@ -1343,7 +1377,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             Ok(state) => {
                 let (hash, height, time, sapling, orchard) = state.into_parts();
                 Ok(TreeState {
-                    network: chain_info.chain(),
+                    network: chain_info.chain().clone(),
                     height: height.0 as u64,
                     hash: hash.to_string(),
                     time,
@@ -1362,8 +1396,8 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
     fn timeout_channel_size(&self) -> (u32, u32) {
         (
-            self.config.service_timeout,
-            self.config.service_channel_size,
+            self.config.service.timeout,
+            self.config.service.channel_size,
         )
     }
 
@@ -1376,17 +1410,12 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         &self,
         request: GetAddressUtxosArg,
     ) -> Result<GetAddressUtxosReplyList, Self::Error> {
-        let taddrs = AddressStrings::new_valid(request.addresses).map_err(|err_obj| {
-            FetchServiceError::RpcError(RpcError::new_from_errorobject(
-                err_obj,
-                "Error in Validator",
-            ))
-        })?;
+        let taddrs = AddressStrings::new(request.addresses);
         let utxos = self.z_get_address_utxos(taddrs).await?;
         let mut address_utxos: Vec<GetAddressUtxosReply> = Vec::new();
         let mut entries: u32 = 0;
         for utxo in utxos {
-            let (address, txid, output_index, script, satoshis, height) = utxo.into_parts();
+            let (address, tx_hash, output_index, script, satoshis, height) = utxo.into_parts();
             if (height.0 as u64) < request.start_height {
                 continue;
             }
@@ -1412,7 +1441,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             };
             let utxo_reply = GetAddressUtxosReply {
                 address: address.to_string(),
-                txid: txid.0.to_vec(),
+                txid: tx_hash.0.to_vec(),
                 index: checked_index,
                 script: script.as_raw_bytes().to_vec(),
                 value_zat: checked_satoshis,
@@ -1432,22 +1461,17 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         &self,
         request: GetAddressUtxosArg,
     ) -> Result<UtxoReplyStream, Self::Error> {
-        let taddrs = AddressStrings::new_valid(request.addresses).map_err(|err_obj| {
-            FetchServiceError::RpcError(RpcError::new_from_errorobject(
-                err_obj,
-                "Error in Validator",
-            ))
-        })?;
+        let taddrs = AddressStrings::new(request.addresses);
         let utxos = self.z_get_address_utxos(taddrs).await?;
-        let service_timeout = self.config.service_timeout;
-        let (channel_tx, channel_rx) = mpsc::channel(self.config.service_channel_size as usize);
+        let service_timeout = self.config.service.timeout;
+        let (channel_tx, channel_rx) = mpsc::channel(self.config.service.channel_size as usize);
         tokio::spawn(async move {
             let timeout = timeout(
                 time::Duration::from_secs((service_timeout * 4) as u64),
                 async {
                     let mut entries: u32 = 0;
                     for utxo in utxos {
-                        let (address, txid, output_index, script, satoshis, height) =
+                        let (address, tx_hash, output_index, script, satoshis, height) =
                             utxo.into_parts();
                         if (height.0 as u64) < request.start_height {
                             continue;
@@ -1480,7 +1504,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                         };
                         let utxo_reply = GetAddressUtxosReply {
                             address: address.to_string(),
-                            txid: txid.0.to_vec(),
+                            txid: tx_hash.0.to_vec(),
                             index: checked_index,
                             script: script.as_raw_bytes().to_vec(),
                             value_zat: checked_satoshis,
@@ -1534,7 +1558,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
             version: self.data.build_info().version(),
             vendor: "ZingoLabs ZainoD".to_string(),
             taddr_support: true,
-            chain_name: blockchain_info.chain(),
+            chain_name: blockchain_info.chain().clone(),
             sapling_activation_height: sapling_activation_height.0 as u64,
             consensus_branch_id,
             block_height: blockchain_info.blocks().0 as u64,

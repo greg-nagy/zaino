@@ -6,7 +6,7 @@ default_to_workspace = false
 
 [env]
 IMAGE_NAME = "zingodevops/zaino-ci"
-TEST_BINARIES_DIR = "/home/container_user/zaino/test_binaries/bins"
+TEST_BINARIES_DIR = "/home/container_user/artifacts"
 
 [tasks.help]
 description = "List available commands and usage notes"
@@ -35,6 +35,8 @@ echo "  compute-image-tag          Compute the tag for the Docker image based on
 echo "  get-docker-hash            Get DOCKER_DIR_HASH value (hash for the image defining files)"
 echo "  ensure-image-exists        Check if the required image exists locally, build if not"
 echo "  check-matching-zebras      Verify Zebra versions match between Cargo.toml and .env"
+echo "  validate-test-targets      Check if nextest targets match CI workflow matrix"
+echo "  update-test-targets        Update CI workflow matrix to match nextest targets"
 echo "  validate-makefile-tasks    Run minimal validation of all maker tasks"
 echo "  hello-rust                 Test rust-script functionality"
 echo ""
@@ -408,4 +410,116 @@ fn get_image_tag() -> Result<String, Box<dyn std::error::Error>> {
     println!("DEBUG: Computed tag: {}", tag);
     Ok(tag)
 }
+'''
+
+# -------------------------------------------------------------------
+
+[tasks.validate-test-targets]
+description = "Validate that nextest targets match CI workflow matrix"
+script_runner = "bash"
+extend = "base-script"
+script.main = '''
+set -euo pipefail
+
+info "🔍 Validating test targets between nextest and CI workflow..."
+
+# Extract nextest targets with non-empty testcases
+info "Extracting targets from nextest..."
+NEXTEST_TARGETS=$(mktemp)
+cargo nextest list --profile ci -T json-pretty | jq -r '.["rust-suites"] | to_entries[] | select(.value.testcases | length > 0) | .key' | sort > "$NEXTEST_TARGETS"
+
+# Extract CI matrix partition values
+info "Extracting targets from CI workflow..."
+CI_TARGETS=$(mktemp)
+yq '.jobs.test.strategy.matrix.partition[]' .github/workflows/ci.yml | sed 's/"//g' | sort > "$CI_TARGETS"
+
+# Compare the lists
+info "Comparing target lists..."
+
+MISSING_IN_CI=$(mktemp)
+EXTRA_IN_CI=$(mktemp)
+
+# Find targets in nextest but not in CI
+comm -23 "$NEXTEST_TARGETS" "$CI_TARGETS" > "$MISSING_IN_CI"
+
+# Find targets in CI but not in nextest (or with empty testcases)
+comm -13 "$NEXTEST_TARGETS" "$CI_TARGETS" > "$EXTRA_IN_CI"
+
+# Display results
+if [[ ! -s "$MISSING_IN_CI" && ! -s "$EXTRA_IN_CI" ]]; then
+    info "✅ All test targets are synchronized!"
+    echo "Nextest targets ($(wc -l < "$NEXTEST_TARGETS")):"
+    cat "$NEXTEST_TARGETS" | sed 's/^/  - /'
+else
+    warn "❌ Test target synchronization issues found:"
+
+    if [[ -s "$MISSING_IN_CI" ]]; then
+        echo ""
+        warn "📋 Targets with tests missing from CI matrix ($(wc -l < "$MISSING_IN_CI")):"
+        cat "$MISSING_IN_CI" | sed 's/^/  - /'
+    fi
+
+    if [[ -s "$EXTRA_IN_CI" ]]; then
+        echo ""
+        warn "🗑️  Targets in CI matrix with no tests ($(wc -l < "$EXTRA_IN_CI")):"
+        cat "$EXTRA_IN_CI" | sed 's/^/  - /'
+    fi
+
+    echo ""
+    info "💡 To automatically update the CI workflow, run:"
+    info "   makers update-test-targets"
+fi
+
+# Cleanup temp files
+rm "$NEXTEST_TARGETS" "$CI_TARGETS" "$MISSING_IN_CI" "$EXTRA_IN_CI"
+'''
+
+# -------------------------------------------------------------------
+
+[tasks.update-test-targets]
+description = "Update CI workflow matrix to match nextest targets"
+script_runner = "bash"
+extend = "base-script"
+script.main = '''
+set -euo pipefail
+
+info "🔧 Updating CI workflow matrix to match nextest targets..."
+
+# Extract nextest targets with non-empty testcases
+info "Extracting current nextest targets..."
+NEXTEST_TARGETS=$(mktemp)
+cargo nextest list --profile ci -T json-pretty | jq -r '.["rust-suites"] | to_entries[] | select(.value.testcases | length > 0) | .key' | sort > "$NEXTEST_TARGETS"
+
+echo "Found $(wc -l < "$NEXTEST_TARGETS") targets with tests:"
+cat "$NEXTEST_TARGETS" | sed 's/^/  - /'
+
+# Update only the partition array using sed to preserve formatting
+# First, create the new partition list in the exact format we need
+NEW_PARTITION_LINES=$(mktemp)
+while IFS= read -r target; do
+    echo "          - \"${target}\""
+done < "$NEXTEST_TARGETS" > "$NEW_PARTITION_LINES"
+
+# Use sed to replace just the partition array section
+# Find the partition: line and replace everything until the next non-indented item
+sed -i '/^[[:space:]]*partition:/,/^[[:space:]]*[^[:space:]-]/{
+    /^[[:space:]]*partition:/!{
+        /^[[:space:]]*[^[:space:]-]/!d
+    }
+}' .github/workflows/ci.yml
+
+# Now insert the new partition lines after the "partition:" line
+sed -i "/^[[:space:]]*partition:$/r $NEW_PARTITION_LINES" .github/workflows/ci.yml
+
+rm "$NEW_PARTITION_LINES"
+
+info "✅ CI workflow updated successfully!"
+
+# Show what was changed using git diff
+echo ""
+info "Changes made:"
+git diff --no-index /dev/null .github/workflows/ci.yml 2>/dev/null | grep "^[+-].*partition\|^[+-].*integration-tests\|^[+-].*zaino\|^[+-].*zainod" || git diff .github/workflows/ci.yml || echo "No changes detected"
+
+# Cleanup temp files
+rm "$NEXTEST_TARGETS"
 '''

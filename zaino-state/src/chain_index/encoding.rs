@@ -35,7 +35,7 @@ pub mod version {
 ///
 /// ### Initial release (`VERSION = 1`)
 /// 1. `pub struct TxV1 { … }`   // layout frozen forever
-/// 2. `impl ZainoVersionedSerialise for TxV1`
+/// 2. `impl ZainoVersionedSerde for TxV1`
 ///    * `const VERSION = 1`
 ///    * `encode_body` – **v1** layout
 ///    * `decode_v1` – parses **v1** bytes
@@ -44,7 +44,7 @@ pub mod version {
 /// ### Bump to v2
 /// 1. `pub struct TxV2 { … }`   // new “current” layout
 /// 2. `impl From<TxV1> for TxV2` // loss-less upgrade path
-/// 3. `impl ZainoVersionedSerialise for TxV2`
+/// 3. `impl ZainoVersionedSerde for TxV2`
 ///    * `const VERSION = 2`
 ///    * `encode_body` – **v2** layout
 ///    * `decode_v1` – `TxV1::decode_latest(r).map(Self::from)`
@@ -67,7 +67,7 @@ pub mod version {
 ///
 /// Historical helpers (`decode_v1`, `decode_v2`, …) must be implemented
 /// for compatibility with historical versions
-pub trait ZainoVersionedSerialise: Sized {
+pub trait ZainoVersionedSerde: Sized {
     /// Tag this build writes.
     const VERSION: u8;
 
@@ -88,13 +88,13 @@ pub trait ZainoVersionedSerialise: Sized {
 
     #[inline(always)]
     #[allow(unused)]
-    /// Decode a v1 body
+    /// Decode an older v1 version
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
         Err(io::Error::new(io::ErrorKind::InvalidData, "v1 unsupported"))
     }
     #[inline(always)]
     #[allow(unused)]
-    /// Decode a v2 body
+    /// Decode an older v2 version
     fn decode_v2<R: Read>(r: &mut R) -> io::Result<Self> {
         Err(io::Error::new(io::ErrorKind::InvalidData, "v2 unsupported"))
     }
@@ -102,7 +102,7 @@ pub trait ZainoVersionedSerialise: Sized {
     /*──────────── router ────────────*/
 
     #[inline]
-    /// Given a version tag, decode a body
+    /// Decode the body, dispatcing to the appropriate decode_vx function
     fn decode_body<R: Read>(r: &mut R, version_tag: u8) -> io::Result<Self> {
         if version_tag == Self::VERSION {
             Self::decode_latest(r)
@@ -121,7 +121,7 @@ pub trait ZainoVersionedSerialise: Sized {
     /*──────────── User entry points ────────────*/
 
     #[inline]
-    /// Serialises struct.
+    /// The expected start point. Read the version tag, then decode the rest
     fn serialize<W: Write>(&self, mut w: W) -> io::Result<()> {
         w.write_all(&[Self::VERSION])?;
         self.encode_body(&mut w)
@@ -164,11 +164,10 @@ pub trait FixedEncodedLen {
 }
 
 /* ──────────────────────────── CompactSize helpers ────────────────────────────── */
-/// a compact representation of a u32 taking up 1-4 bytes based on size
-/// common in the zcash ecosystem
+/// A zcash/bitcoin CompactSize, a form of variable-length integer
 pub struct CompactSize;
 
-/// The larges value representable as a compact size
+/// The largest value representable as a CompactSize
 pub const MAX_COMPACT_SIZE: u32 = 0x0200_0000;
 
 impl CompactSize {
@@ -264,6 +263,20 @@ impl CompactSize {
 }
 
 /* ───────────────────────────── integer helpers ───────────────────────────── */
+
+/// Reads a u8.
+#[inline]
+pub fn read_u8<R: Read>(mut r: R) -> io::Result<u8> {
+    let mut buf = [0u8; 1];
+    r.read_exact(&mut buf)?;
+    Ok(buf[0])
+}
+
+/// Writes a u8.
+#[inline]
+pub fn write_u8<W: Write>(mut w: W, v: u8) -> io::Result<()> {
+    w.write_all(&[v])
+}
 
 /// Reads a u16 in LE format.
 #[inline]
