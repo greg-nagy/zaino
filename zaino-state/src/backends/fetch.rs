@@ -222,7 +222,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
         &self,
         params: GetAddressDeltasParams,
     ) -> Result<GetAddressDeltasResponse, Self::Error> {
-        todo!()
+        Ok(self.fetcher.get_address_deltas(params).await?)
     }
 
     /// Returns software information from the RPC server, as a [`GetInfo`] JSON struct.

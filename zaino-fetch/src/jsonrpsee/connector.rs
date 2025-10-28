@@ -25,13 +25,15 @@ use zebra_rpc::client::ValidateAddressResponse;
 use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
     response::{
-        address_deltas::GetAddressDeltasResponse, block_subsidy::GetBlockSubsidy,
-        mining_info::GetMiningInfoWire, peer_info::GetPeerInfo, GetBalanceError,
-        GetBalanceResponse, GetBlockCountResponse, GetBlockError, GetBlockHash, GetBlockResponse,
-        GetBlockchainInfoResponse, GetInfoResponse, GetMempoolInfoResponse, GetSubtreesError,
-        GetSubtreesResponse, GetTransactionResponse, GetTreestateError, GetTreestateResponse,
-        GetUtxosError, GetUtxosResponse, SendTransactionError, SendTransactionResponse, TxidsError,
-        TxidsResponse,
+        address_deltas::{GetAddressDeltasParams, GetAddressDeltasResponse},
+        block_subsidy::GetBlockSubsidy,
+        mining_info::GetMiningInfoWire,
+        peer_info::GetPeerInfo,
+        GetBalanceError, GetBalanceResponse, GetBlockCountResponse, GetBlockError, GetBlockHash,
+        GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse, GetMempoolInfoResponse,
+        GetSubtreesError, GetSubtreesResponse, GetTransactionResponse, GetTreestateError,
+        GetTreestateResponse, GetUtxosError, GetUtxosResponse, SendTransactionError,
+        SendTransactionResponse, TxidsError, TxidsResponse,
     },
 };
 
@@ -417,8 +419,10 @@ impl JsonRpSeeConnector {
     /// tags: address
     pub async fn get_address_deltas(
         &self,
+        params: GetAddressDeltasParams,
     ) -> Result<GetAddressDeltasResponse, RpcRequestError<Infallible>> {
-        todo!()
+        let params = vec![serde_json::to_value(params).map_err(RpcRequestError::JsonRpc)?];
+        self.send_request("getaddressdeltas", params).await
     }
 
     /// Returns software information from the RPC server, as a [`crate::jsonrpsee::connector::GetInfoResponse`] JSON struct.

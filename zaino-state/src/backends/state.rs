@@ -908,10 +908,10 @@ impl StateServiceSubscriber {
     }
 
     /// Creates a BlockInfo from a block height using direct state service calls.
-    async fn block_info_from_height(&self, height: u32) -> Result<BlockInfo, StateServiceError> {
+    async fn block_info_from_height(&self, height: Height) -> Result<BlockInfo, StateServiceError> {
         use zebra_state::{HashOrHeight, ReadRequest};
 
-        let hash_or_height = HashOrHeight::Height(zebra_chain::block::Height(height));
+        let hash_or_height = HashOrHeight::Height(height);
 
         let response = self
             .read_state_service
@@ -924,11 +924,11 @@ impl StateServiceSubscriber {
         match response {
             ReadResponse::BlockHeader { hash, .. } => Ok(BlockInfo::new(
                 hex::encode(hash.bytes_in_display_order()),
-                height,
+                height.0,
             )),
             _ => Err(StateServiceError::RpcError(RpcError::new_from_legacycode(
                 LegacyCode::InvalidParameter,
-                format!("Block not found at height {}", height),
+                format!("Block not found at height {}", height.0),
             ))),
         }
     }
@@ -972,35 +972,64 @@ impl ZcashIndexer for StateServiceSubscriber {
         &self,
         params: GetAddressDeltasParams,
     ) -> Result<GetAddressDeltasResponse, Self::Error> {
-        match params {
+        // 1) Extract fields (string form => full range & no chain info)
+        let (addresses, start_raw, end_raw, chain_info) = match &params {
             GetAddressDeltasParams::Filtered {
                 addresses,
                 start,
                 end,
                 chain_info,
-                blockindex,
-            } => {
-                // get all transactions for provided addresses and block range
-                let transactions = self
-                    .get_taddress_txs(addresses.clone(), start, end, true)
-                    .await?;
+            } => (addresses.clone(), *start, *end, *chain_info),
+            GetAddressDeltasParams::Address(a) => (vec![a.clone()], 0, 0, false),
+        };
 
-                // get deltas for all transactions in a single vector
-                let deltas = GetAddressDeltasResponse::process_transactions_to_deltas(
-                    &transactions,
-                    &addresses,
-                );
+        let tip = self.chain_height().await?;
+        let mut start = Height(start_raw);
+        let mut end = Height(end_raw);
+        if end == Height(0) {
+            end = tip;
+        }
+        if start > tip {
+            start = tip;
+        }
 
-                match chain_info {
-                    true => Ok(GetAddressDeltasResponse::WithChainInfo {
-                        start: self.block_info_from_height(start).await?,
-                        end: self.block_info_from_height(end).await?,
-                        deltas,
-                    }),
-                    false => Ok(GetAddressDeltasResponse::Simple(deltas)),
-                }
+        // 3) Fetch txs for the inclusive range [start..=end]
+        //    (If your provider already interprets end=0 as tip, you can pass start_raw/end_raw.)
+        let transactions = self
+            .get_taddress_txs(
+                addresses.clone(),
+                start.0,
+                end.0,
+                /*confirmed_only=*/ true,
+            )
+            .await?;
+
+        // 4) Build deltas (confirmed-only). If your provider might return mempool entries,
+        //    add `.filter(|tx| tx.height().unwrap_or(0) > 0)` before processing.
+        let mut deltas =
+            GetAddressDeltasResponse::process_transactions_to_deltas(&transactions, &addresses);
+
+        // 5) zcashd-like ordering: (height ASC, blockindex ASC, index ASC)
+        //    If you can fill block_index earlier, great; if not, None sorts last for stability.
+        deltas.sort_by_key(|d| (d.height, d.block_index.unwrap_or(u32::MAX), d.index));
+
+        if chain_info && start > Height(0) && end > Height(0) {
+            // zcashd validates range fits on chain when returning the object
+            if start > tip || end > tip {
+                return Err(StateServiceError::Custom("Wrong range".to_string()));
             }
-            _ => todo!(),
+
+            let start_info = self.block_info_from_height(start).await?;
+            let end_info = self.block_info_from_height(end).await?;
+
+            Ok(GetAddressDeltasResponse::WithChainInfo {
+                deltas,
+                start: start_info,
+                end: end_info,
+            })
+        } else {
+            // Otherwise return the array form
+            Ok(GetAddressDeltasResponse::Simple(deltas))
         }
     }
 
