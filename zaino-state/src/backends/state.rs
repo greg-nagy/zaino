@@ -860,9 +860,8 @@ impl StateServiceSubscriber {
     /// This method takes addresses and a block range and returns full transaction objects.
     /// Uses parallel async calls for efficient transaction fetching.
     ///
-    /// # Arguments
-    /// * `fail_fast` - If true, fails immediately when any transaction fetch fails.
-    ///                 If false, continues and returns partial results, filtering out failed fetches.
+    /// If `fial_fast` is true, fails immediately when any transaction fetch fails.
+    /// Otherwise, it continues and returns partial results, filtering out failed fetches.
     async fn get_taddress_txs(
         &self,
         addresses: Vec<String>,
@@ -889,7 +888,7 @@ impl StateServiceSubscriber {
             .filter_map(|result| {
                 match (fail_fast, result) {
                     // Fail-fast mode: propagate errors
-                    (true, Err(e)) => return Some(Err(e)),
+                    (true, Err(e)) => Some(Err(e)),
                     (true, Ok(tx)) => Some(Ok(tx)),
                     // Filter mode: skip errors
                     (false, Err(_)) => None,
