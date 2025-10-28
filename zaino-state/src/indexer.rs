@@ -5,9 +5,11 @@ use async_trait::async_trait;
 use tokio::{sync::mpsc, time::timeout};
 use tracing::warn;
 use zaino_fetch::jsonrpsee::response::{
-    block_subsidy::GetBlockSubsidy, mining_info::GetMiningInfoWire, peer_info::GetPeerInfo,
-    GetAddressDeltasRequest, GetAddressDeltasResponse, GetMempoolInfoResponse,
-    GetNetworkSolPsResponse,
+    address_deltas::{GetAddressDeltasRequest, GetAddressDeltasResponse},
+    block_subsidy::GetBlockSubsidy,
+    mining_info::GetMiningInfoWire,
+    peer_info::GetPeerInfo,
+    GetMempoolInfoResponse, GetNetworkSolPsResponse,
 };
 use zaino_proto::proto::{
     compact_formats::CompactBlock,

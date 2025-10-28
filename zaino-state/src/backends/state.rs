@@ -27,9 +27,11 @@ use zaino_fetch::{
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
         response::{
-            block_subsidy::GetBlockSubsidy, mining_info::GetMiningInfoWire, peer_info::GetPeerInfo,
-            BlockInfo, GetAddressDeltasRequest, GetAddressDeltasResponse, GetMempoolInfoResponse,
-            GetNetworkSolPsResponse, GetSubtreesResponse,
+            address_deltas::{BlockInfo, GetAddressDeltasRequest, GetAddressDeltasResponse},
+            block_subsidy::GetBlockSubsidy,
+            mining_info::GetMiningInfoWire,
+            peer_info::GetPeerInfo,
+            GetMempoolInfoResponse, GetNetworkSolPsResponse, GetSubtreesResponse,
         },
     },
 };

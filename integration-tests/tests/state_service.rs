@@ -1,6 +1,8 @@
 use zaino_common::network::ActivationHeights;
 use zaino_common::{DatabaseConfig, ServiceConfig, StorageConfig};
-use zaino_fetch::jsonrpsee::response::{GetAddressDeltasRequest, GetAddressDeltasResponse};
+use zaino_fetch::jsonrpsee::response::address_deltas::{
+    GetAddressDeltasRequest, GetAddressDeltasResponse,
+};
 use zaino_state::BackendType;
 use zaino_state::{
     FetchService, FetchServiceConfig, FetchServiceSubscriber, LightWalletIndexer, StateService,
