@@ -33,9 +33,9 @@ zcash_primitives = "0.26.1"
 zcash_transparent = "0.4"
 
 # Zebra
-zebra-chain = "3.0"
-zebra-state = "3.0"
-zebra-rpc = "3.0"
+zebra-chain = { rev = "eed8e0771f92db0b1938bab8af448e04d7d8ea51", git = "https://github.com/ZcashFoundation/zebra.git" }
+zebra-state = { rev = "eed8e0771f92db0b1938bab8af448e04d7d8ea51", git = "https://github.com/ZcashFoundation/zebra.git" }
+zebra-rpc = { rev = "eed8e0771f92db0b1938bab8af448e04d7d8ea51", git = "https://github.com/ZcashFoundation/zebra.git" }
 
 # Runtime
 tokio = { version = "1.38", features = ["full"] }

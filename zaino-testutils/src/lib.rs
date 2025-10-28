@@ -192,9 +192,22 @@ impl LocalNet {
     pub fn get_activation_heights(
         &self,
     ) -> zebra_chain::parameters::testnet::ConfiguredActivationHeights {
-        match self {
+        let heights = match self {
             LocalNet::Zcashd(net) => net.validator().get_activation_heights(),
             LocalNet::Zebrad(net) => net.validator().get_activation_heights(),
+        };
+        // Ugly hack for different versions
+        zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+            before_overwinter: heights.before_overwinter,
+            overwinter: heights.overwinter,
+            sapling: heights.sapling,
+            blossom: heights.blossom,
+            heartwood: heights.heartwood,
+            canopy: heights.canopy,
+            nu5: heights.nu5,
+            nu6: heights.nu6,
+            nu6_1: heights.nu6_1,
+            nu7: heights.nu7,
         }
     }
 
@@ -243,9 +256,16 @@ impl LocalNet {
 
     /// Get the network kind.
     pub fn network(&self) -> NetworkKind {
-        match self {
+        let kind = match self {
             LocalNet::Zcashd(net) => net.validator().network(),
             LocalNet::Zebrad(net) => *net.validator().network(),
+        };
+        // hack for version mismatch
+        match <&'static str>::from(kind) {
+            "MainnetKind" => NetworkKind::Mainnet,
+            "TestnetKind" => NetworkKind::Testnet,
+            "RegtestKind" => NetworkKind::Regtest,
+            _ => unreachable!(),
         }
     }
 }

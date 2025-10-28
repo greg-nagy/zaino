@@ -51,15 +51,15 @@ use zebra_chain::{
 };
 use zebra_rpc::{
     client::{
-        GetBlockchainInfoBalance, GetSubtreesByIndexResponse, GetTreestateResponse, HexData,
-        SubtreeRpcData, TransactionObject, ValidateAddressResponse,
+        GetAddressBalanceRequest, GetBlockchainInfoBalance, GetSubtreesByIndexResponse,
+        GetTreestateResponse, HexData, SubtreeRpcData, TransactionObject, ValidateAddressResponse,
     },
     methods::{
         chain_tip_difficulty, AddressBalance, AddressStrings, ConsensusBranchIdHex,
         GetAddressTxIdsRequest, GetAddressUtxos, GetBlock, GetBlockHash, GetBlockHeader,
         GetBlockHeaderObject, GetBlockTransaction, GetBlockTrees, GetBlockchainInfoResponse,
         GetInfo, GetRawTransaction, NetworkUpgradeInfo, NetworkUpgradeStatus, SentTransactionHash,
-        TipConsensusBranch,
+        TipConsensusBranch, ValidateAddresses as _,
     },
     server::error::LegacyCode,
     sync::init_read_state_with_syncer,
@@ -1051,7 +1051,7 @@ impl ZcashIndexer for StateServiceSubscriber {
 
     async fn z_get_address_balance(
         &self,
-        address_strings: AddressStrings,
+        address_strings: GetAddressBalanceRequest,
     ) -> Result<AddressBalance, Self::Error> {
         let mut state = self.read_state_service.clone();
 

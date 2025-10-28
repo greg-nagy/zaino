@@ -383,6 +383,7 @@ impl TryFrom<IndexerConfig> for BackendConfig {
                     delete_old_database: true,
                     debug_stop_at_height: None,
                     debug_validity_check_interval: None,
+                    should_backup_non_finalized_state: true,
                 },
                 validator_rpc_address: cfg.validator_listen_address,
                 validator_indexer_rpc_address: cfg.validator_grpc_listen_address,

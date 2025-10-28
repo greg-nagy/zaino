@@ -10,11 +10,14 @@ use zebra_state::HashOrHeight;
 
 use zebra_chain::{block::Height, subtree::NoteCommitmentSubtreeIndex};
 use zebra_rpc::{
-    client::{GetSubtreesByIndexResponse, GetTreestateResponse, ValidateAddressResponse},
+    client::{
+        GetAddressBalanceRequest, GetSubtreesByIndexResponse, GetTreestateResponse,
+        ValidateAddressResponse,
+    },
     methods::{
         AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
         GetBlockHashResponse, GetBlockchainInfoResponse, GetInfo, GetRawTransaction,
-        SentTransactionHash,
+        SentTransactionHash, ValidateAddresses as _,
     },
 };
 
@@ -296,17 +299,24 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// integer](https://github.com/zcash/lightwalletd/blob/bdaac63f3ee0dbef62bde04f6817a9f90d483b00/common/common.go#L128-L130).
     async fn z_get_address_balance(
         &self,
-        address_strings: AddressStrings,
+        address_strings: GetAddressBalanceRequest,
     ) -> Result<AddressBalance, Self::Error> {
         Ok(self
             .fetcher
-            .get_address_balance(address_strings.address_strings().map_err(|error| {
-                FetchServiceError::RpcError(RpcError {
-                    code: error.code() as i64,
-                    message: "Invalid address provided".to_string(),
-                    data: None,
-                })
-            })?)
+            .get_address_balance(
+                address_strings
+                    .valid_addresses()
+                    .map_err(|error| {
+                        FetchServiceError::RpcError(RpcError {
+                            code: error.code() as i64,
+                            message: "Invalid address provided".to_string(),
+                            data: None,
+                        })
+                    })?
+                    .into_iter()
+                    .map(|address| address.to_string())
+                    .collect(),
+            )
             .await?
             .into())
     }
@@ -577,17 +587,24 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// <https://github.com/zcash/lightwalletd/blob/master/frontend/service.go#L402>
     async fn z_get_address_utxos(
         &self,
-        address_strings: AddressStrings,
+        addresses: GetAddressBalanceRequest,
     ) -> Result<Vec<GetAddressUtxos>, Self::Error> {
         Ok(self
             .fetcher
-            .get_address_utxos(address_strings.valid_address_strings().map_err(|error| {
-                FetchServiceError::RpcError(RpcError {
-                    code: error.code() as i64,
-                    message: "Invalid address provided".to_string(),
-                    data: None,
-                })
-            })?)
+            .get_address_utxos(
+                addresses
+                    .valid_addresses()
+                    .map_err(|error| {
+                        FetchServiceError::RpcError(RpcError {
+                            code: error.code() as i64,
+                            message: "Invalid address provided".to_string(),
+                            data: None,
+                        })
+                    })?
+                    .into_iter()
+                    .map(|address| address.to_string())
+                    .collect(),
+            )
             .await?
             .into_iter()
             .map(|utxos| utxos.into())
