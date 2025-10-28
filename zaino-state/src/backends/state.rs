@@ -865,7 +865,7 @@ impl StateServiceSubscriber {
     /// Returns the median time of the last 11 blocks.
     async fn median_time_past(
         &self,
-        start: &Box<zebra_rpc::client::BlockObject>,
+        start: &zebra_rpc::client::BlockObject,
     ) -> Result<i64, MedianTimePast> {
         const MEDIAN_TIME_PAST_WINDOW: usize = 11;
 
