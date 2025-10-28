@@ -192,7 +192,8 @@ async fn v0_to_v1_interrupted() {
                     // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
                     nu6_1: None,
                     nu7: None,
-                },
+                }
+                .into(),
             ),
         );
 
@@ -319,7 +320,8 @@ async fn v0_to_v1_partial() {
                     // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
                     nu6_1: None,
                     nu7: None,
-                },
+                }
+                .into(),
             ),
         );
 

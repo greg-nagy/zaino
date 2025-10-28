@@ -300,7 +300,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
     ) -> Result<AddressBalance, Self::Error> {
         Ok(self
             .fetcher
-            .get_address_balance(address_strings.valid_address_strings().map_err(|error| {
+            .get_address_balance(address_strings.address_strings().map_err(|error| {
                 FetchServiceError::RpcError(RpcError {
                     code: error.code() as i64,
                     message: "Invalid address provided".to_string(),

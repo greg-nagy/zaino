@@ -100,7 +100,8 @@ pub(crate) async fn load_vectors_and_spawn_and_sync_v1_zaino_db() -> (
                     // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
                     nu6_1: None,
                     nu7: None,
-                },
+                }
+                .into(),
             ),
         );
 
@@ -260,7 +261,8 @@ async fn save_db_to_file_and_reload() {
                             // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
                             nu6_1: None,
                             nu7: None,
-                        },
+                        }
+                        .into(),
                     ),
                 );
 
@@ -475,7 +477,8 @@ async fn get_chain_blocks() {
                     // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
                     nu6_1: None,
                     nu7: None,
-                },
+                }
+                .into(),
             ),
         );
 
@@ -525,7 +528,8 @@ async fn get_compact_blocks() {
                     // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
                     nu6_1: None,
                     nu7: None,
-                },
+                }
+                .into(),
             ),
         );
 
@@ -586,7 +590,8 @@ async fn get_faucet_txids() {
                     // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
                     nu6_1: None,
                     nu7: None,
-                },
+                }
+                .into(),
             ),
         );
 
@@ -684,7 +689,8 @@ async fn get_recipient_txids() {
                     // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
                     nu6_1: None,
                     nu7: None,
-                },
+                }
+                .into(),
             ),
         );
 
@@ -910,7 +916,8 @@ async fn check_faucet_spent_map() {
                     // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
                     nu6_1: None,
                     nu7: None,
-                },
+                }
+                .into(),
             ),
         );
 
@@ -1069,7 +1076,8 @@ async fn check_recipient_spent_map() {
                     // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
                     nu6_1: None,
                     nu7: None,
-                },
+                }
+                .into(),
             ),
         );
 

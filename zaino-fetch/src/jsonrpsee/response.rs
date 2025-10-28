@@ -1177,6 +1177,7 @@ impl<'de> serde::Deserialize<'de> for GetTransactionResponse {
                     shielded_spends.unwrap_or_default(),
                     shielded_outputs.unwrap_or_default(),
                     // TODO: sprout joinsplits
+                    vec![],
                     None,
                     None,
                     None,
@@ -1234,6 +1235,7 @@ impl From<GetTransactionResponse> for zebra_rpc::methods::GetRawTransaction {
                     obj.shielded_spends().clone(),
                     obj.shielded_outputs().clone(),
                     //TODO: sprout joinspits
+                    vec![],
                     None,
                     None,
                     None,

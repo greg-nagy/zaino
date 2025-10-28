@@ -46,7 +46,7 @@ use zebra_chain::{
     block::{Header, Height, SerializedBlock},
     chain_tip::NetworkChainTipHeightEstimator,
     parameters::{ConsensusBranchId, Network, NetworkKind, NetworkUpgrade},
-    serialization::ZcashSerialize,
+    serialization::{BytesInDisplayOrder as _, ZcashSerialize},
     subtree::NoteCommitmentSubtreeIndex,
 };
 use zebra_rpc::{
@@ -1262,7 +1262,7 @@ impl ZcashIndexer for StateServiceSubscriber {
                     .values()
                     .map(|subtree| {
                         SubtreeRpcData {
-                            root: subtree.root.encode_hex(),
+                            root: subtree.root.to_bytes().encode_hex(),
                             end_height: subtree.end_height,
                         }
                         .into()

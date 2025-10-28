@@ -29,7 +29,7 @@ version = "0.1.2"
 zcash_address = "0.9"
 zcash_keys = "0.10"
 zcash_protocol = "0.6"
-zcash_primitives = "0.24"
+zcash_primitives = "0.26.1"
 zcash_transparent = "0.4"
 
 # Zebra
