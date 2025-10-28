@@ -193,13 +193,6 @@ pub struct TestManager {
     pub clients: Option<Clients>,
 }
 
-/// Adds a delay between blocks to allow zaino / zebra to catch up with test.
-pub(crate) async fn generate_blocks_with_delay<C: ControlChain>(controller: C, blocks: u32) {
-    for _ in 0..blocks {
-        controller.generate_blocks(1).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
-    }
-}
 impl TestManager {
     /// Launches zcash-local-net<Empty, Validator>.
     ///
@@ -373,7 +366,10 @@ impl TestManager {
         // Generate an extra block to turn on NU5 and NU6,
         // as they currently must be turned on at block height = 2.
         // Generates `blocks` regtest blocks.
-        generate_blocks_with_delay(local_net, 1).await;
+        local_net
+            .generate_blocks_with_delay(1)
+            .await
+            .expect("indexer to match validator");
         tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
 
         Ok(test_manager)
