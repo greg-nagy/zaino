@@ -380,7 +380,7 @@ impl ZcashIndexer for FetchServiceSubscriber {
     ///
     /// Note: This method has only been implemented in `zcashd`. Zebra has no intention of supporting it.
     async fn get_block_deltas(&self, hash: String) -> Result<BlockDeltas, Self::Error> {
-        Ok(self.fetcher.get_block_deltas(hash).await?.into())
+        Ok(self.fetcher.get_block_deltas(hash).await?)
     }
 
     async fn get_mining_info(&self) -> Result<GetMiningInfoWire, Self::Error> {

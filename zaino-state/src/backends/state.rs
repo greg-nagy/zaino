@@ -1165,61 +1165,60 @@ impl ZcashIndexer for StateServiceSubscriber {
                     .tx()
                     .iter()
                     .enumerate()
-                    .map(|(tx_index, tx)| {
-                        match tx {
-                            GetBlockTransaction::Object(txo) => {
-                                let txid = txo.txid().to_string();
+                    .map(|(tx_index, tx)| match tx {
+                        GetBlockTransaction::Object(txo) => {
+                            let txid = txo.txid().to_string();
 
-                                let inputs: Vec<InputDelta> = txo
-                                    .inputs()
-                                    .iter()
-                                    .enumerate()
-                                    .filter_map(|(i, vin)| match vin {
-                                        Input::Coinbase { .. } => None,
-                                        Input::NonCoinbase {
-                                            txid: prevtxid,
-                                            vout: prevout,
-                                            value,
-                                            value_zat,
-                                            address,
-                                            ..
-                                        } => {
-                                            let zats = if let Some(z) = value_zat {
-                                                *z
-                                            } else if let Some(v) = value {
-                                                (v * 100_000_000.0).round() as i64
-                                            } else {
-                                                return None;
-                                            };
+                            let inputs: Vec<InputDelta> = txo
+                                .inputs()
+                                .iter()
+                                .enumerate()
+                                .filter_map(|(i, vin)| match vin {
+                                    Input::Coinbase { .. } => None,
+                                    Input::NonCoinbase {
+                                        txid: prevtxid,
+                                        vout: prevout,
+                                        value,
+                                        value_zat,
+                                        address,
+                                        ..
+                                    } => {
+                                        let zats = if let Some(z) = value_zat {
+                                            *z
+                                        } else if let Some(v) = value {
+                                            (v * 100_000_000.0).round() as i64
+                                        } else {
+                                            return None;
+                                        };
 
-                                            let addr = match address {
-                                                Some(a) => a.clone(),
-                                                None => return None,
-                                            };
+                                        let addr = match address {
+                                            Some(a) => a.clone(),
+                                            None => return None,
+                                        };
 
-                                            let input_amt: Amount = match (-zats).try_into() {
-                                                Ok(a) => a,
-                                                Err(_) => return None,
-                                            };
+                                        let input_amt: Amount = match (-zats).try_into() {
+                                            Ok(a) => a,
+                                            Err(_) => return None,
+                                        };
 
-                                            Some(InputDelta {
-                                                address: addr,
-                                                satoshis: input_amt,
-                                                index: i as u32,
-                                                prevtxid: prevtxid.clone(),
-                                                prevout: *prevout,
-                                            })
-                                        }
-                                    })
-                                    .collect::<Vec<_>>();
+                                        Some(InputDelta {
+                                            address: addr,
+                                            satoshis: input_amt,
+                                            index: i as u32,
+                                            prevtxid: prevtxid.clone(),
+                                            prevout: *prevout,
+                                        })
+                                    }
+                                })
+                                .collect::<Vec<_>>();
 
-                                let outputs: Vec<OutputDelta> = txo
-                                    .outputs()
+                            let outputs: Vec<OutputDelta> =
+                                txo.outputs()
                                     .iter()
                                     .filter_map(|vout| {
                                         let addr_opt =
                                             vout.script_pub_key().addresses().as_ref().and_then(
-                                                |v| if v.len() == 1 { v.get(0) } else { None },
+                                                |v| if v.len() == 1 { v.first() } else { None },
                                             );
 
                                         let addr = addr_opt?.clone();
@@ -1238,17 +1237,16 @@ impl ZcashIndexer for StateServiceSubscriber {
                                     })
                                     .collect::<Vec<_>>();
 
-                                Ok::<_, Self::Error>(BlockDelta {
-                                    txid,
-                                    index: tx_index as u32,
-                                    inputs,
-                                    outputs,
-                                })
-                            }
-                            GetBlockTransaction::Hash(_) => {
-                                todo!() // Impossible
-                            }
+                            Ok::<_, Self::Error>(BlockDelta {
+                                txid,
+                                index: tx_index as u32,
+                                inputs,
+                                outputs,
+                            })
                         }
+                        GetBlockTransaction::Hash(_) => Err(StateServiceError::Custom(
+                            "Unexpected hash when expecting object".to_string(),
+                        )),
                     })
                     .collect::<Result<Vec<_>, _>>()?;
 
@@ -1262,11 +1260,11 @@ impl ZcashIndexer for StateServiceSubscriber {
                         .merkle_root()
                         .expect("merkle root should be present")
                         .encode_hex::<String>(),
-                    deltas: deltas,
+                    deltas,
                     time: boxed_block.time().expect("time should be present"),
 
-                    mediantime: self.median_time_past(&boxed_block).await.unwrap(),
-                    nonce: hex::encode(boxed_block.nonce().unwrap().to_vec()),
+                    median_time: self.median_time_past(&boxed_block).await.unwrap(),
+                    nonce: hex::encode(boxed_block.nonce().unwrap()),
                     bits: boxed_block
                         .bits()
                         .expect("bits should be present")
@@ -1274,13 +1272,15 @@ impl ZcashIndexer for StateServiceSubscriber {
                     difficulty: boxed_block
                         .difficulty()
                         .expect("difficulty should be present"),
-                    previousblockhash: boxed_block
+                    previous_block_hash: boxed_block
                         .previous_block_hash()
                         .map(|hash| hash.to_string()),
-                    nextblockhash: boxed_block.next_block_hash().map(|h| h.to_string()),
+                    next_block_hash: boxed_block.next_block_hash().map(|h| h.to_string()),
                 })
             }
-            GetBlock::Raw(serialized_block) => todo!(), // TODO: Error if the node ignores verbosity
+            GetBlock::Raw(_serialized_block) => Err(StateServiceError::Custom(
+                "Unexpected raw block".to_string(),
+            )),
         }
     }
 
@@ -2409,6 +2409,7 @@ fn header_to_block_commitments(
     Ok(hash)
 }
 
+/// An error type for median time past calculation errors
 #[derive(Debug, Clone)]
 pub enum MedianTimePast {
     /// The start block has no `time`.
@@ -2419,9 +2420,6 @@ pub enum MedianTimePast {
 
     /// No timestamps collected at all.
     EmptyWindow,
-
-    /// Failed to fetch an ancestor block.
-    AncestorFetchFailed { hash: String },
 }
 
 impl fmt::Display for MedianTimePast {
@@ -2435,9 +2433,6 @@ impl fmt::Display for MedianTimePast {
             }
             MedianTimePast::EmptyWindow => {
                 write!(f, "no timestamps collected (empty MTP window)")
-            }
-            MedianTimePast::AncestorFetchFailed { hash } => {
-                write!(f, "failed to fetch ancestor block {hash}")
             }
         }
     }

@@ -8,7 +8,6 @@ use crate::chain::{
 use sha2::{Digest, Sha256};
 use std::io::Cursor;
 use zaino_proto::proto::compact_formats::{ChainMetadata, CompactBlock};
-use zebra_rpc::methods::GetBlockTransaction;
 
 /// A block header, containing metadata about a block.
 ///
@@ -429,23 +428,5 @@ impl FullBlock {
         }
 
         Ok(height_num as i32)
-    }
-}
-
-impl serde::Serialize for FullTransaction {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        todo!()
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for FullTransaction {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        todo!()
     }
 }

@@ -25,12 +25,15 @@ use zebra_rpc::client::ValidateAddressResponse;
 use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
     response::{
-        block_deltas::BlockDeltas, block_subsidy::GetBlockSubsidy, mining_info::GetMiningInfoWire,
-        peer_info::GetPeerInfo, GetBalanceError, GetBalanceResponse, GetBlockCountResponse,
-        GetBlockError, GetBlockHash, GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse,
-        GetMempoolInfoResponse, GetSubtreesError, GetSubtreesResponse, GetTransactionResponse,
-        GetTreestateError, GetTreestateResponse, GetUtxosError, GetUtxosResponse,
-        SendTransactionError, SendTransactionResponse, TxidsError, TxidsResponse,
+        block_deltas::{BlockDeltas, BlockDeltasError},
+        block_subsidy::GetBlockSubsidy,
+        mining_info::GetMiningInfoWire,
+        peer_info::GetPeerInfo,
+        GetBalanceError, GetBalanceResponse, GetBlockCountResponse, GetBlockError, GetBlockHash,
+        GetBlockResponse, GetBlockchainInfoResponse, GetInfoResponse, GetMempoolInfoResponse,
+        GetSubtreesError, GetSubtreesResponse, GetTransactionResponse, GetTreestateError,
+        GetTreestateResponse, GetUtxosError, GetUtxosResponse, SendTransactionError,
+        SendTransactionResponse, TxidsError, TxidsResponse,
     },
 };
 
@@ -554,7 +557,7 @@ impl JsonRpSeeConnector {
     pub async fn get_block_deltas(
         &self,
         hash: String,
-    ) -> Result<BlockDeltas, RpcRequestError<Infallible>> {
+    ) -> Result<BlockDeltas, RpcRequestError<BlockDeltasError>> {
         let params = vec![serde_json::to_value(hash).map_err(RpcRequestError::JsonRpc)?];
         self.send_request("getblockdeltas", params).await
     }

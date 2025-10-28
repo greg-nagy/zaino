@@ -96,6 +96,11 @@ pub trait ZcashIndexerRpc {
     #[method(name = "getdifficulty")]
     async fn get_difficulty(&self) -> Result<f64, ErrorObjectOwned>;
 
+    /// Returns information about the given block and its transactions.
+    ///
+    /// zcashd reference: [`getblockdeltas`](https://zcash.github.io/rpc/getblockdeltas.html)
+    /// method: post
+    /// tags: blockchain
     #[method(name = "getblockdeltas")]
     async fn get_block_deltas(&self, hash: String) -> Result<BlockDeltas, ErrorObjectOwned>;
 
