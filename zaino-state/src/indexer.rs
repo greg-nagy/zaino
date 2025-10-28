@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use tokio::{sync::mpsc, time::timeout};
 use tracing::warn;
 use zaino_fetch::jsonrpsee::response::{
-    address_deltas::{GetAddressDeltasRequest, GetAddressDeltasResponse},
+    address_deltas::{GetAddressDeltasParams, GetAddressDeltasResponse},
     block_subsidy::GetBlockSubsidy,
     mining_info::GetMiningInfoWire,
     peer_info::GetPeerInfo,
@@ -176,7 +176,7 @@ pub trait ZcashIndexer: Send + Sync + 'static {
     /// tags: address
     async fn get_address_deltas(
         &self,
-        request: GetAddressDeltasRequest,
+        params: GetAddressDeltasParams,
     ) -> Result<GetAddressDeltasResponse, Self::Error>;
 
     /// Returns blockchain state information, as a [`GetBlockchainInfoResponse`] JSON struct.

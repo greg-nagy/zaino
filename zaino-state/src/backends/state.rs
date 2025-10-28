@@ -27,7 +27,7 @@ use zaino_fetch::{
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
         response::{
-            address_deltas::{BlockInfo, GetAddressDeltasRequest, GetAddressDeltasResponse},
+            address_deltas::{BlockInfo, GetAddressDeltasParams, GetAddressDeltasResponse},
             block_subsidy::GetBlockSubsidy,
             mining_info::GetMiningInfoWire,
             peer_info::GetPeerInfo,
@@ -970,26 +970,37 @@ impl ZcashIndexer for StateServiceSubscriber {
     /// tags: address
     async fn get_address_deltas(
         &self,
-        request: GetAddressDeltasRequest,
+        params: GetAddressDeltasParams,
     ) -> Result<GetAddressDeltasResponse, Self::Error> {
-        // get all transactions for provided addresses and block range
-        let transactions = self
-            .get_taddress_txs(request.addresses.clone(), request.start, request.end, true)
-            .await?;
+        match params {
+            GetAddressDeltasParams::Filtered {
+                addresses,
+                start,
+                end,
+                chain_info,
+                blockindex,
+            } => {
+                // get all transactions for provided addresses and block range
+                let transactions = self
+                    .get_taddress_txs(addresses.clone(), start, end, true)
+                    .await?;
 
-        // get deltas for all transactions in a single vector
-        let deltas = GetAddressDeltasResponse::process_transactions_to_deltas(
-            &transactions,
-            &request.addresses,
-        );
+                // get deltas for all transactions in a single vector
+                let deltas = GetAddressDeltasResponse::process_transactions_to_deltas(
+                    &transactions,
+                    &addresses,
+                );
 
-        match request.chaininfo {
-            true => Ok(GetAddressDeltasResponse::WithChainInfo {
-                start: self.block_info_from_height(request.start).await?,
-                end: self.block_info_from_height(request.end).await?,
-                deltas,
-            }),
-            false => Ok(GetAddressDeltasResponse::Simple(deltas)),
+                match chain_info {
+                    true => Ok(GetAddressDeltasResponse::WithChainInfo {
+                        start: self.block_info_from_height(start).await?,
+                        end: self.block_info_from_height(end).await?,
+                        deltas,
+                    }),
+                    false => Ok(GetAddressDeltasResponse::Simple(deltas)),
+                }
+            }
+            _ => todo!(),
         }
     }
 

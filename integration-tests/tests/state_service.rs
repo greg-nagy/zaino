@@ -1,7 +1,7 @@
 use zaino_common::network::ActivationHeights;
 use zaino_common::{DatabaseConfig, ServiceConfig, StorageConfig};
 use zaino_fetch::jsonrpsee::response::address_deltas::{
-    GetAddressDeltasRequest, GetAddressDeltasResponse,
+    GetAddressDeltasParams, GetAddressDeltasResponse,
 };
 use zaino_state::BackendType;
 use zaino_state::{
@@ -1080,7 +1080,7 @@ async fn state_service_get_address_deltas(validator: &ValidatorKind) {
         .0;
 
     // Test simple response (chaininfo = false)
-    let simple_request = GetAddressDeltasRequest::new(
+    let simple_request = GetAddressDeltasParams::new_filtered(
         vec![recipient_taddr.clone()],
         chain_height - 2,
         chain_height,
@@ -1100,7 +1100,7 @@ async fn state_service_get_address_deltas(validator: &ValidatorKind) {
     assert_eq!(fetch_service_simple_deltas, state_service_simple_deltas);
 
     // Test response with chain info (chaininfo = true)
-    let chain_info_request = GetAddressDeltasRequest::new(
+    let chain_info_request = GetAddressDeltasParams::new_filtered(
         vec![recipient_taddr.clone()],
         chain_height - 2,
         chain_height,
@@ -1170,7 +1170,7 @@ async fn state_service_get_address_deltas_testnet() {
 
     // Test simple response
     let simple_request =
-        GetAddressDeltasRequest::new(vec![address.to_string()], 2000000, 3000000, false);
+        GetAddressDeltasParams::new_filtered(vec![address.to_string()], 2000000, 3000000, false);
 
     let fetch_service_simple_deltas = dbg!(
         fetch_service_subscriber
@@ -1190,7 +1190,7 @@ async fn state_service_get_address_deltas_testnet() {
 
     // Test response with chain info
     let chain_info_request =
-        GetAddressDeltasRequest::new(vec![address.to_string()], 2000000, 3000000, true);
+        GetAddressDeltasParams::new_filtered(vec![address.to_string()], 2000000, 3000000, true);
 
     let fetch_service_chain_info_deltas = dbg!(
         fetch_service_subscriber

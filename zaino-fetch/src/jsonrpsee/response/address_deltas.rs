@@ -2,49 +2,57 @@
 
 use std::convert::Infallible;
 
+use serde::{Deserialize, Serialize};
 use zebra_rpc::client::{Input, Output, TransactionObject};
 
 use crate::jsonrpsee::connector::ResponseToError;
 
 /// Request parameters for the `getaddressdeltas` RPC method.
-/// Extends the basic address/height range with chaininfo support.
-#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct GetAddressDeltasRequest {
-    /// List of base58check encoded addresses
-    pub addresses: Vec<String>,
-    /// Start block height (inclusive)
-    pub start: u32,
-    /// End block height (inclusive)
-    pub end: u32,
-    /// Whether to include chain info in response (defaults to false)
-    #[serde(default)]
-    pub chaininfo: bool,
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum GetAddressDeltasParams {
+    /// Extends the basic address/height range with chaininfo and multiple address support.
+    #[serde(rename_all = "camelCase")]
+    Filtered {
+        /// List of base58check encoded addresses
+        addresses: Vec<String>,
+
+        /// Start block height (inclusive)
+        #[serde(default)]
+        start: u32,
+
+        /// End block height (inclusive)
+        #[serde(default)]
+        end: u32,
+
+        /// Whether to include chain info in response (defaults to false)
+        #[serde(default)]
+        chain_info: bool,
+
+        /// Zero-based position of the transaction within its containing block.
+        #[serde(rename = "blockindex", skip_serializing_if = "Option::is_none")]
+        blockindex: Option<u32>,
+    },
+
+    /// Get deltas for a single transparent address
+    Address(String),
 }
 
-impl GetAddressDeltasRequest {
-    /// Creates a new request with the given parameters.
-    pub fn new(addresses: Vec<String>, start: u32, end: u32, chaininfo: bool) -> Self {
-        Self {
+impl GetAddressDeltasParams {
+    /// Creates a new [`GetAddressDeltasParams::Filtered`] instance.
+    pub fn new_filtered(addresses: Vec<String>, start: u32, end: u32, chain_info: bool) -> Self {
+        GetAddressDeltasParams::Filtered {
             addresses,
             start,
             end,
-            chaininfo,
+            chain_info,
+            blockindex: None,
         }
     }
 
-    /// Creates a new request without chaininfo (defaults to false).
-    pub fn simple(addresses: Vec<String>, start: u32, end: u32) -> Self {
-        Self::new(addresses, start, end, false)
-    }
-
-    /// Creates a new request with chaininfo enabled.
-    pub fn with_chaininfo(addresses: Vec<String>, start: u32, end: u32) -> Self {
-        Self::new(addresses, start, end, true)
-    }
-
-    /// Decomposes the request into its constituent parts.
-    pub fn into_parts(self) -> (Vec<String>, u32, u32, bool) {
-        (self.addresses, self.start, self.end, self.chaininfo)
+    /// Creates a new [`GetAddressDeltasParams::Address`] instance.
+    pub fn new_address(addr: impl Into<String>) -> Self {
+        GetAddressDeltasParams::Address(addr.into())
     }
 }
 
@@ -80,31 +88,32 @@ impl GetAddressDeltasResponse {
         transactions
             .iter()
             .flat_map(|tx| {
-                let txid = hex::encode(tx.hex().as_ref());
+                let txid = tx.txid().to_string(); // own it
                 let height = tx.height().unwrap_or(0);
 
-                // Process inputs (spends - negative deltas)
-                let txid_clone = txid.clone();
-                let input_deltas =
-                    tx.inputs()
-                        .iter()
-                        .enumerate()
-                        .filter_map(move |(input_index, input)| {
-                            AddressDelta::from_input(
-                                input,
-                                input_index as u32,
-                                &txid_clone,
-                                height,
-                                target_addresses,
-                            )
-                        });
-
-                // Process outputs (receives - positive deltas)
-                let output_deltas = tx.outputs().iter().flat_map(move |output| {
-                    AddressDelta::from_output(output, &txid, height, target_addresses)
+                // Inputs (negative deltas)
+                let input_deltas = tx.inputs().iter().enumerate().filter_map({
+                    let input_txid = txid.clone(); // clone for inputs
+                    move |(input_index, input)| {
+                        AddressDelta::from_input(
+                            input,
+                            input_index as u32,
+                            &input_txid,
+                            height,           // Copy, so fine to move
+                            target_addresses, // &[], reference is Copy
+                        )
+                    }
                 });
 
-                // Chain input and output deltas together
+                // Outputs (positive deltas)
+                let output_deltas = tx.outputs().iter().flat_map({
+                    let output_txid = txid; // move the original into outputs
+                    move |output| {
+                        AddressDelta::from_output(output, &output_txid, height, target_addresses)
+                    }
+                });
+
+                // Return an iterator; flat_map will consume/flatten it.
                 input_deltas.chain(output_deltas)
             })
             .collect()
@@ -120,6 +129,7 @@ impl ResponseToError for GetAddressDeltasResponse {
 #[derive(Debug, thiserror::Error)]
 pub enum GetAddressDeltasError {}
 
+/// Represents a change in the balance of a transparent address.
 #[derive(Debug, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct AddressDelta {
     /// The difference in zatoshis (or satoshis equivalent in Zcash)
