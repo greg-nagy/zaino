@@ -9087,7 +9087,7 @@ dependencies = [
 [[package]]
 name = "zcash_local_net"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?branch=simplify_validator_trait#c02f130d7afdeaf97d0d59130d614ef91b70000a"
+source = "git+https://github.com/zingolabs/infrastructure.git?branch=simplify_validator_trait#5fdc6c6d270c18bc68adf9341c55fd0a2be1e44a"
 dependencies = [
  "getset",
  "hex",
@@ -10255,7 +10255,7 @@ dependencies = [
 [[package]]
 name = "zingo_test_vectors"
 version = "0.0.1"
-source = "git+https://github.com/zingolabs/infrastructure.git?branch=simplify_validator_trait#c02f130d7afdeaf97d0d59130d614ef91b70000a"
+source = "git+https://github.com/zingolabs/infrastructure.git?branch=simplify_validator_trait#5fdc6c6d270c18bc68adf9341c55fd0a2be1e44a"
 dependencies = [
  "bip0039",
 ]

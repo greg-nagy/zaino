@@ -193,6 +193,13 @@ pub struct TestManager {
     pub clients: Option<Clients>,
 }
 
+/// Adds a delay between blocks to allow zaino / zebra to catch up with test.
+pub(crate) async fn generate_blocks_with_delay<C: ControlChain>(controller: C, blocks: u32) {
+    for _ in 0..blocks {
+        controller.generate_blocks(1).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    }
+}
 impl TestManager {
     /// Launches zcash-local-net<Empty, Validator>.
     ///
@@ -366,12 +373,11 @@ impl TestManager {
         // Generate an extra block to turn on NU5 and NU6,
         // as they currently must be turned on at block height = 2.
         // Generates `blocks` regtest blocks.
-        local_net.generate_blocks(1).await.unwrap();
+        generate_blocks_with_delay(local_net, 1).await;
         tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
 
         Ok(test_manager)
     }
-
     /// Helper function to support default test case.
     #[allow(clippy::too_many_arguments)]
     pub async fn launch_with_default_activation_heights<C: ControlChain>(
@@ -1198,7 +1204,7 @@ mod launch_testmanager {
                 clients.faucet.account_balance(zip32::AccountId::ZERO).await.unwrap().confirmed_transparent_balance.unwrap().into_u64()
             );
 
-                let recipient_zaddr = clients.get_recipient_address("sapling").await;
+                let recipient_zaddr = clients.get_recipient_address("sapling").await.to_string();
                 zingolib::testutils::lightclient::from_inputs::quick_send(
                     &mut clients.faucet,
                     vec![(&recipient_zaddr, 250_000, None)],
