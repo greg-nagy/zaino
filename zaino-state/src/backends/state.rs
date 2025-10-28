@@ -860,7 +860,7 @@ impl StateServiceSubscriber {
     /// This method takes addresses and a block range and returns full transaction objects.
     /// Uses parallel async calls for efficient transaction fetching.
     ///
-    /// If `fial_fast` is true, fails immediately when any transaction fetch fails.
+    /// If `fail_fast` is true, fails immediately when any transaction fetch fails.
     /// Otherwise, it continues and returns partial results, filtering out failed fetches.
     async fn get_taddress_txs(
         &self,
