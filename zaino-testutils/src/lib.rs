@@ -20,7 +20,7 @@ use zaino_common::{
 use zaino_state::BackendType;
 use zainodlib::config::default_ephemeral_cookie_path;
 pub use zcash_local_net as services;
-use zcash_local_net::validator::{zcashd::ZcashdConfig, zebrad::ZebradConfig, ControlChain};
+use zcash_local_net::validator::{zcashd::ZcashdConfig, zebrad::ZebradConfig, Validator};
 use zebra_chain::parameters::NetworkKind;
 use zingo_test_vectors::seeds;
 pub use zingolib::get_base_address_macro;
@@ -204,7 +204,7 @@ impl TestManager {
     ///
     /// TODO: Add TestManagerConfig struct and constructor methods of common test setups.
     #[allow(clippy::too_many_arguments)]
-    pub async fn launch<C: ControlChain>(
+    pub async fn launch<C: Validator>(
         validator: &ValidatorKind,
         backend: &BackendType,
         network: Option<NetworkKind>,
@@ -376,7 +376,7 @@ impl TestManager {
     }
     /// Helper function to support default test case.
     #[allow(clippy::too_many_arguments)]
-    pub async fn launch_with_default_activation_heights<C: ControlChain>(
+    pub async fn launch_with_default_activation_heights<C: Validator>(
         validator: &ValidatorKind,
         backend: &BackendType,
         network: Option<NetworkKind>,
@@ -880,7 +880,7 @@ mod launch_testmanager {
                 clients.faucet.account_balance(zip32::AccountId::ZERO).await.unwrap().confirmed_transparent_balance.unwrap().into_u64()
             );
 
-                let recipient_zaddr = clients.get_recipient_address("sapling").await;
+                let recipient_zaddr = clients.get_recipient_address("sapling").await.to_string();
                 zingolib::testutils::lightclient::from_inputs::quick_send(
                     &mut clients.faucet,
                     vec![(&recipient_zaddr, 250_000, None)],
