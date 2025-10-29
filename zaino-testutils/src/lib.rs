@@ -142,12 +142,6 @@ pub enum ValidatorConfig {
     ZebradConfig(ZebradConfig),
 }
 
-/// Available zcash-local-net configurations.
-#[allow(
-    clippy::large_enum_variant,
-    reason = "Maybe this issue: https://github.com/rust-lang/rust-clippy/issues/9798"
-)]
-
 /// Holds zingo lightclients along with the lightclient builder for wallet-2-validator tests.
 pub struct Clients {
     /// Lightclient builder.
@@ -627,7 +621,7 @@ mod launch_testmanager {
 
         mod fetch_service {
 
-            use zcash_local_net::validator::Zebrad;
+            use zcash_local_net::validator::zebrad::Zebrad;
             use zip32::AccountId;
 
             use super::*;
