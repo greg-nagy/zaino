@@ -17,7 +17,7 @@ async fn create_test_manager_and_block_cache<V: Validator>(
     zaino_no_db: bool,
     enable_clients: bool,
 ) -> (
-    TestManager,
+    TestManager<V>,
     JsonRpSeeConnector,
     BlockCache,
     BlockCacheSubscriber,
@@ -27,7 +27,7 @@ async fn create_test_manager_and_block_cache<V: Validator>(
         ValidatorKind::Zcashd => ActivationHeights::default(),
     };
 
-    let test_manager = TestManager::launch::<V>(
+    let test_manager = TestManager::<V>::launch(
         validator,
         &BackendType::Fetch,
         None,
@@ -168,7 +168,7 @@ async fn launch_local_cache_process_n_block_batches<V: Validator>(
 
 mod zcashd {
     use zaino_testutils::ValidatorKind;
-    use zcash_local_net::validator::Zcashd;
+    use zcash_local_net::validator::zcashd::Zcashd;
 
     use crate::{launch_local_cache, launch_local_cache_process_n_block_batches};
 
@@ -195,7 +195,7 @@ mod zcashd {
 
 mod zebrad {
     use zaino_testutils::ValidatorKind;
-    use zcash_local_net::validator::Zebrad;
+    use zcash_local_net::validator::zebrad::Zebrad;
 
     use crate::{launch_local_cache, launch_local_cache_process_n_block_batches};
 
