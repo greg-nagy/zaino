@@ -997,7 +997,7 @@ mod launch_testmanager {
                     2,
                     u32::from(test_manager.local_net.get_chain_height().await)
                 );
-                test_manager.generate_blocks_with_delay(1).await;
+                test_manager.local_net.generate_blocks_with_delay(1).await;
                 assert_eq!(
                     3,
                     u32::from(test_manager.local_net.get_chain_height().await)
@@ -1117,7 +1117,7 @@ mod launch_testmanager {
                     .await
                     .unwrap());
 
-                test_manager.generate_blocks_with_delay(100).await;
+                test_manager.local_net.generate_blocks_with_delay(100).await;
                 clients.faucet.sync_and_await().await.unwrap();
                 dbg!(clients
                     .faucet
@@ -1159,7 +1159,7 @@ mod launch_testmanager {
                     .take()
                     .expect("Clients are not initialized");
 
-                test_manager.generate_blocks_with_delay(100).await;
+                test_manager.local_net.generate_blocks_with_delay(100).await;
                 clients.faucet.sync_and_await().await.unwrap();
                 dbg!(clients
                     .faucet
@@ -1190,7 +1190,7 @@ mod launch_testmanager {
 
                 // *Send all transparent funds to own orchard address.
                 clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
-                test_manager.generate_blocks_with_delay(1).await;
+                test_manager.local_net.generate_blocks_with_delay(1).await;
                 clients.faucet.sync_and_await().await.unwrap();
                 dbg!(clients
                     .faucet
@@ -1213,7 +1213,7 @@ mod launch_testmanager {
                 .await
                 .unwrap();
 
-                test_manager.generate_blocks_with_delay(1).await;
+                test_manager.local_net.generate_blocks_with_delay(1).await;
                 clients.recipient.sync_and_await().await.unwrap();
                 dbg!(clients
                     .recipient

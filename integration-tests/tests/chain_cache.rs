@@ -3,7 +3,7 @@ use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConne
 use zaino_state::BackendType;
 use zaino_testutils::{TestManager, ValidatorKind};
 
-async fn create_test_manager_and_connector<T: zcash_local_net::validator::ControlChain>(
+async fn create_test_manager_and_connector<T: zcash_local_net::validator::Validator>(
     validator: &ValidatorKind,
     activation_heights: Option<ActivationHeights>,
     chain_cache: Option<std::path::PathBuf>,
@@ -11,8 +11,8 @@ async fn create_test_manager_and_connector<T: zcash_local_net::validator::Contro
     zaino_no_sync: bool,
     zaino_no_db: bool,
     enable_clients: bool,
-) -> (TestManager, JsonRpSeeConnector) {
-    let test_manager = TestManager::launch::<T>(
+) -> (TestManager<T>, JsonRpSeeConnector) {
+    let test_manager = TestManager::<T>::launch(
         validator,
         &BackendType::Fetch,
         None,
@@ -66,7 +66,7 @@ mod chain_query_interface {
         },
         Height, StateService, StateServiceConfig, ZcashService as _,
     };
-    use zcash_local_net::validator::{zcashd::ZcashdManager, zebrad::ZebradManager, ControlChain};
+    use zcash_local_net::validator::{zcashd::Zcashd, zebrad::Zebrad, Validator};
     use zebra_chain::{
         parameters::NetworkKind,
         serialization::{ZcashDeserialize, ZcashDeserializeInto},
@@ -74,7 +74,7 @@ mod chain_query_interface {
 
     use super::*;
 
-    async fn create_test_manager_and_chain_index<C: ControlChain>(
+    async fn create_test_manager_and_chain_index<C: Validator>(
         validator: &ValidatorKind,
         chain_cache: Option<std::path::PathBuf>,
         enable_zaino: bool,
@@ -82,7 +82,7 @@ mod chain_query_interface {
         zaino_no_db: bool,
         enable_clients: bool,
     ) -> (
-        TestManager,
+        TestManager<C>,
         JsonRpSeeConnector,
         Option<StateService>,
         NodeBackedChainIndex,
@@ -159,12 +159,7 @@ mod chain_query_interface {
                     StorageConfig {
                         cache: CacheConfig::default(),
                         database: DatabaseConfig {
-                            path: test_manager
-                                .local_net
-                                .data_dir()
-                                .path()
-                                .to_path_buf()
-                                .join("zaino"),
+                            path: test_manager.data_dir.as_path().to_path_buf().join("zaino"),
                             ..Default::default()
                         },
                     },
@@ -242,15 +237,15 @@ mod chain_query_interface {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_block_range_zebrad() {
-        get_block_range::<ZebradManager>(&ValidatorKind::Zebrad).await
+        get_block_range::<Zebrad>(&ValidatorKind::Zebrad).await
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_block_range_zcashd() {
-        get_block_range::<ZcashdManager>(&ValidatorKind::Zcashd).await
+        get_block_range::<Zcashd>(&ValidatorKind::Zcashd).await
     }
 
-    async fn get_block_range<C: ControlChain>(validator: &ValidatorKind) {
+    async fn get_block_range<C: Validator>(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
             create_test_manager_and_chain_index::<C>(validator, None, false, false, false, false)
                 .await;
@@ -290,10 +285,10 @@ mod chain_query_interface {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn find_fork_point_zcashd() {
-        find_fork_point::<ZcashdManager>(&ValidatorKind::Zcashd).await
+        find_fork_point::<Zcashd>(&ValidatorKind::Zcashd).await
     }
 
-    async fn find_fork_point<C: ControlChain>(validator: &ValidatorKind) {
+    async fn find_fork_point<C: Validator>(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
             create_test_manager_and_chain_index::<V>(validator, None, false, false, false, false)
                 .await;
@@ -323,10 +318,10 @@ mod chain_query_interface {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_raw_transaction_zcashd() {
-        get_raw_transaction::<ZcashdManager>(&ValidatorKind::Zcashd).await
+        get_raw_transaction::<Zcashd>(&ValidatorKind::Zcashd).await
     }
 
-    async fn get_raw_transaction<C: ControlChain>(validator: &ValidatorKind) {
+    async fn get_raw_transaction<C: Validator>(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
             create_test_manager_and_chain_index::<V>(validator, None, false, false, false, false)
                 .await;
@@ -378,10 +373,10 @@ mod chain_query_interface {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_transaction_status_zcashd() {
-        get_transaction_status::<ZcashdManager>(&ValidatorKind::Zcashd).await
+        get_transaction_status::<Zcashd>(&ValidatorKind::Zcashd).await
     }
 
-    async fn get_transaction_status<C: ControlChain>(validator: &ValidatorKind) {
+    async fn get_transaction_status<C: Validator>(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
             create_test_manager_and_chain_index::<V>(validator, None, false, false, false, false)
                 .await;
@@ -419,10 +414,10 @@ mod chain_query_interface {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn sync_large_chain_zcashd() {
-        sync_large_chain::<ZcashdManager>(&ValidatorKind::Zcashd).await
+        sync_large_chain::<Zcashd>(&ValidatorKind::Zcashd).await
     }
 
-    async fn sync_large_chain<C: ControlChain>(validator: &ValidatorKind) {
+    async fn sync_large_chain<C: Validator>(validator: &ValidatorKind) {
         let (test_manager, json_service, _option_state_service, _chain_index, indexer) =
             create_test_manager_and_chain_index::<V>(validator, None, false, false, false, false)
                 .await;
