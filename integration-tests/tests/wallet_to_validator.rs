@@ -6,15 +6,15 @@ use zaino_fetch::jsonrpsee::connector::test_node_and_return_url;
 use zaino_state::BackendType;
 use zaino_testutils::from_inputs;
 use zaino_testutils::TestManager;
-use zaino_testutils::Validator;
 use zaino_testutils::ValidatorKind;
+use zcash_local_net::validator::Validator;
 use zip32::AccountId;
 
 async fn connect_to_node_get_info_for_validator<T: Validator>(
     validator: &ValidatorKind,
     backend: &BackendType,
 ) {
-    let mut test_manager = TestManager::launch_with_default_activation_heights::<T>(
+    let mut test_manager = TestManager::<V>::launch_with_default_activation_heights(
         validator, backend, None, None, true, false, false, true, true, true,
     )
     .await
@@ -31,7 +31,7 @@ async fn connect_to_node_get_info_for_validator<T: Validator>(
 }
 
 async fn send_to_orchard<T: Validator>(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::launch_with_default_activation_heights::<T>(
+    let mut test_manager = TestManager::<V>::launch_with_default_activation_heights(
         validator, backend, None, None, true, false, false, true, true, true,
     )
     .await
@@ -51,7 +51,7 @@ async fn send_to_orchard<T: Validator>(validator: &ValidatorKind, backend: &Back
         clients.faucet.sync_and_await().await.unwrap();
     };
 
-    let recipient_ua = clients.get_recipient_address("unified").await;
+    let recipient_ua = clients.get_recipient_address("unified").await.to_string();
     from_inputs::quick_send(&mut clients.faucet, vec![(&recipient_ua, 250_000, None)])
         .await
         .unwrap();
@@ -74,7 +74,7 @@ async fn send_to_orchard<T: Validator>(validator: &ValidatorKind, backend: &Back
 }
 
 async fn send_to_sapling<V: Validator>(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::launch_with_default_activation_heights::<V>(
+    let mut test_manager = TestManager::<V>::launch_with_default_activation_heights(
         validator, backend, None, None, true, false, false, true, true, true,
     )
     .await
@@ -117,7 +117,7 @@ async fn send_to_sapling<V: Validator>(validator: &ValidatorKind, backend: &Back
 }
 
 async fn send_to_transparent<V: Validator>(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::launch_with_default_activation_heights::<V>(
+    let mut test_manager = TestManager::<V>::launch_with_default_activation_heights(
         validator, backend, None, None, true, false, false, true, true, true,
     )
     .await
@@ -221,7 +221,7 @@ async fn send_to_transparent<V: Validator>(validator: &ValidatorKind, backend: &
 }
 
 async fn send_to_all<V: Validator>(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::launch_with_default_activation_heights::<V>(
+    let mut test_manager = TestManager::<V>::launch_with_default_activation_heights(
         validator, backend, None, None, true, false, false, true, true, true,
     )
     .await
@@ -312,7 +312,7 @@ async fn send_to_all<V: Validator>(validator: &ValidatorKind, backend: &BackendT
 }
 
 async fn shield_for_validator<V: Validator>(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::launch_with_default_activation_heights::<V>(
+    let mut test_manager = TestManager::<V>::launch_with_default_activation_heights(
         validator, backend, None, None, true, false, false, true, true, true,
     )
     .await
@@ -388,7 +388,7 @@ async fn monitor_unverified_mempool_for_validator<V: Validator>(
     validator: &ValidatorKind,
     backend: &BackendType,
 ) {
-    let mut test_manager = TestManager::launch_with_default_activation_heights::<V>(
+    let mut test_manager = TestManager::<V>::launch_with_default_activation_heights(
         validator, backend, None, None, true, false, false, true, true, true,
     )
     .await
