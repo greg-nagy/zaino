@@ -1086,7 +1086,7 @@ mod zebrad {
             .await;
             let mut chaintip_subscriber = state_service_subscriber.chaintip_update_subscriber();
             for _ in 0..5 {
-                test_manager.local_net.generate_blocks_with_delay(1).await;
+                let _ = test_manager.local_net.generate_blocks_with_delay(1).await;
                 assert_eq!(
                     chaintip_subscriber.next_tip_hash().await.unwrap().0,
                     <[u8; 32]>::try_from(
