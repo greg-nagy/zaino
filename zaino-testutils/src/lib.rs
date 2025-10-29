@@ -453,7 +453,7 @@ mod launch_testmanager {
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         pub(crate) async fn basic() {
-            let mut test_manager = TestManager::launch_with_default_activation_heights::<Zcashd>(
+            let mut test_manager = TestManager::<Zcashd>::launch_with_default_activation_heights(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
@@ -476,7 +476,7 @@ mod launch_testmanager {
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         pub(crate) async fn generate_blocks() {
-            let mut test_manager = TestManager::launch_with_default_activation_heights::<Zcashd>(
+            let mut test_manager = TestManager::<Zcashd>::launch_with_default_activation_heights(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
@@ -505,7 +505,7 @@ mod launch_testmanager {
         #[ignore = "chain cache needs development"]
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         pub(crate) async fn with_chain() {
-            let mut test_manager = TestManager::launch_with_default_activation_heights::<Zcashd>(
+            let mut test_manager = TestManager::<Zcashd>::launch_with_default_activation_heights(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
@@ -528,7 +528,7 @@ mod launch_testmanager {
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         pub(crate) async fn zaino() {
-            let mut test_manager = TestManager::launch_with_default_activation_heights::<Zcashd>(
+            let mut test_manager = TestManager::<Zcashd>::launch_with_default_activation_heights(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
@@ -555,7 +555,7 @@ mod launch_testmanager {
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         pub(crate) async fn zaino_clients() {
-            let mut test_manager = TestManager::launch_with_default_activation_heights::<Zcashd>(
+            let mut test_manager = TestManager::<Zcashd>::launch_with_default_activation_heights(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
@@ -583,7 +583,7 @@ mod launch_testmanager {
         /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         pub(crate) async fn zaino_clients_receive_mining_reward() {
-            let mut test_manager = TestManager::launch_with_default_activation_heights::<Zcashd>(
+            let mut test_manager = TestManager::<Zcashd>::launch_with_default_activation_heights(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
