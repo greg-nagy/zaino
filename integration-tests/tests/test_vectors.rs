@@ -28,8 +28,9 @@ use zaino_state::{
 use zaino_testutils::from_inputs;
 use zaino_testutils::test_vectors::transactions::get_test_vectors;
 use zaino_testutils::{TestManager, ValidatorKind};
+use zcash_local_net::logs::LogsToStdoutAndStderr;
+use zcash_local_net::validator::zebrad::Zebrad;
 use zcash_local_net::validator::Validator;
-use zcash_local_net::validator::Zebrad;
 use zebra_chain::parameters::NetworkKind;
 use zebra_chain::serialization::{ZcashDeserialize, ZcashSerialize};
 use zebra_rpc::methods::GetAddressUtxos;
@@ -48,14 +49,14 @@ macro_rules! expected_read_response {
     };
 }
 
-async fn create_test_manager_and_services<V: Validator>(
+async fn create_test_manager_and_services<V: Validator + LogsToStdoutAndStderr>(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
     enable_zaino: bool,
     enable_clients: bool,
     network: Option<NetworkKind>,
-) -> (TestManager, StateService, StateServiceSubscriber) {
-    let test_manager = TestManager::launch_with_default_activation_heights::<V>(
+) -> (TestManager<V>, StateService, StateServiceSubscriber) {
+    let test_manager = TestManager::<V>::launch_with_default_activation_heights(
         validator,
         &BackendType::Fetch,
         network,

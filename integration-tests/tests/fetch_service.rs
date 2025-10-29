@@ -26,8 +26,8 @@ async fn create_test_manager_and_fetch_service<V: Validator>(
     zaino_no_sync: bool,
     zaino_no_db: bool,
     enable_clients: bool,
-) -> (TestManager, FetchService, FetchServiceSubscriber) {
-    let test_manager = TestManager::launch_with_default_activation_heights::<V>(
+) -> (TestManager<V>, FetchService, FetchServiceSubscriber) {
+    let test_manager = TestManager::<V>::launch_with_default_activation_heights(
         validator,
         &BackendType::Fetch,
         None,
@@ -1473,7 +1473,7 @@ async fn assert_fetch_service_getnetworksols_matches_rpc<V: Validator>(validator
 mod zcashd {
 
     use super::*;
-    use zcash_local_net::validator::Zcashd;
+    use zcash_local_net::validator::zcashd::Zcashd;
 
     mod launch {
 
@@ -1689,7 +1689,7 @@ mod zcashd {
 mod zebrad {
 
     use super::*;
-    use zcash_local_net::validator::Zebrad;
+    use zcash_local_net::validator::zebrad::Zebrad;
 
     mod launch {
 

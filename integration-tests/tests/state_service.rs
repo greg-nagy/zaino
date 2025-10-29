@@ -749,7 +749,10 @@ async fn state_service_z_get_subtrees_by_index_testnet() {
     test_manager.close().await;
 }
 
-async fn state_service_get_raw_transaction<V: Validator>(validator: &ValidatorKind) {
+use zcash_local_net::logs::LogsToStdoutAndStderr;
+async fn state_service_get_raw_transaction<V: Validator + LogsToStdoutAndStderr>(
+    validator: &ValidatorKind,
+) {
     let (
         mut test_manager,
         _fetch_service,
@@ -1057,7 +1060,7 @@ mod zebrad {
 
         use super::*;
         use zaino_testutils::ZEBRAD_CHAIN_CACHE_DIR;
-        use zcash_local_net::validator::Zebrad;
+        use zcash_local_net::validator::zebrad::Zebrad;
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn regtest_no_cache() {
@@ -1083,7 +1086,7 @@ mod zebrad {
             .await;
             let mut chaintip_subscriber = state_service_subscriber.chaintip_update_subscriber();
             for _ in 0..5 {
-                test_manager.generate_blocks_with_delay(1).await;
+                test_manager.local_net.generate_blocks_with_delay(1).await;
                 assert_eq!(
                     chaintip_subscriber.next_tip_hash().await.unwrap().0,
                     <[u8; 32]>::try_from(
@@ -1123,7 +1126,7 @@ mod zebrad {
 
     pub(crate) mod get {
 
-        use zcash_local_net::validator::Zebrad;
+        use zcash_local_net::validator::zebrad::Zebrad;
 
         use super::*;
 
@@ -1395,7 +1398,7 @@ mod zebrad {
         }
 
         mod z {
-            use zcash_local_net::validator::Zebrad;
+            use zcash_local_net::validator::zebrad::Zebrad;
 
             use super::*;
 

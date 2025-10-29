@@ -14,7 +14,7 @@ async fn connect_to_node_get_info_for_validator<T: Validator>(
     validator: &ValidatorKind,
     backend: &BackendType,
 ) {
-    let mut test_manager = TestManager::<V>::launch_with_default_activation_heights(
+    let mut test_manager = TestManager::<T>::launch_with_default_activation_heights(
         validator, backend, None, None, true, false, false, true, true, true,
     )
     .await
@@ -31,7 +31,7 @@ async fn connect_to_node_get_info_for_validator<T: Validator>(
 }
 
 async fn send_to_orchard<T: Validator>(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::<V>::launch_with_default_activation_heights(
+    let mut test_manager = TestManager::<T>::launch_with_default_activation_heights(
         validator, backend, None, None, true, false, false, true, true, true,
     )
     .await
@@ -44,10 +44,18 @@ async fn send_to_orchard<T: Validator>(validator: &ValidatorKind, backend: &Back
     clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
-        test_manager.generate_blocks_with_delay(100).await;
+        test_manager
+            .local_net
+            .generate_blocks_with_delay(100)
+            .await
+            .unwrap();
         clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
-        test_manager.generate_blocks_with_delay(1).await;
+        test_manager
+            .local_net
+            .generate_blocks_with_delay(1)
+            .await
+            .unwrap();
         clients.faucet.sync_and_await().await.unwrap();
     };
 
@@ -55,7 +63,11 @@ async fn send_to_orchard<T: Validator>(validator: &ValidatorKind, backend: &Back
     from_inputs::quick_send(&mut clients.faucet, vec![(&recipient_ua, 250_000, None)])
         .await
         .unwrap();
-    test_manager.generate_blocks_with_delay(1).await;
+    test_manager
+        .local_net
+        .generate_blocks_with_delay(1)
+        .await
+        .unwrap();
     clients.recipient.sync_and_await().await.unwrap();
 
     assert_eq!(
@@ -87,10 +99,18 @@ async fn send_to_sapling<V: Validator>(validator: &ValidatorKind, backend: &Back
     clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
-        test_manager.generate_blocks_with_delay(100).await;
+        test_manager
+            .local_net
+            .generate_blocks_with_delay(100)
+            .await
+            .unwrap();
         clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
-        test_manager.generate_blocks_with_delay(1).await;
+        test_manager
+            .local_net
+            .generate_blocks_with_delay(1)
+            .await
+            .unwrap();
         clients.faucet.sync_and_await().await.unwrap();
     };
 
@@ -98,7 +118,11 @@ async fn send_to_sapling<V: Validator>(validator: &ValidatorKind, backend: &Back
     from_inputs::quick_send(&mut clients.faucet, vec![(&recipient_zaddr, 250_000, None)])
         .await
         .unwrap();
-    test_manager.generate_blocks_with_delay(1).await;
+    test_manager
+        .local_net
+        .generate_blocks_with_delay(1)
+        .await
+        .unwrap();
     clients.recipient.sync_and_await().await.unwrap();
 
     assert_eq!(
@@ -130,10 +154,10 @@ async fn send_to_transparent<V: Validator>(validator: &ValidatorKind, backend: &
     clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
-        test_manager.generate_blocks_with_delay(100).await;
+        test_manager.local_net.generate_blocks_with_delay(100).await;
         clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
-        test_manager.generate_blocks_with_delay(1).await;
+        test_manager.local_net.generate_blocks_with_delay(1).await;
         clients.faucet.sync_and_await().await.unwrap();
     };
 
@@ -142,7 +166,7 @@ async fn send_to_transparent<V: Validator>(validator: &ValidatorKind, backend: &
         .await
         .unwrap();
 
-    test_manager.generate_blocks_with_delay(1).await;
+    test_manager.local_net.generate_blocks_with_delay(1).await;
 
     let fetch_service = zaino_fetch::jsonrpsee::connector::JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
@@ -182,7 +206,7 @@ async fn send_to_transparent<V: Validator>(validator: &ValidatorKind, backend: &
     //       for this reason we generate blocks 1 at a time and sleep to let other tasks run.
     for height in 1..=99 {
         dbg!("Generating block at height: {}", height);
-        test_manager.generate_blocks_with_delay(1).await;
+        test_manager.local_net.generate_blocks_with_delay(1).await;
     }
 
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -231,21 +255,21 @@ async fn send_to_all<V: Validator>(validator: &ValidatorKind, backend: &BackendT
         .take()
         .expect("Clients are not initialized");
 
-    test_manager.generate_blocks_with_delay(2).await;
+    test_manager.local_net.generate_blocks_with_delay(2).await;
     clients.faucet.sync_and_await().await.unwrap();
 
     // "Create" 3 orchard notes in faucet.
     if matches!(validator, ValidatorKind::Zebrad) {
-        test_manager.generate_blocks_with_delay(100).await;
+        test_manager.local_net.generate_blocks_with_delay(100).await;
         clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
-        test_manager.generate_blocks_with_delay(100).await;
+        test_manager.local_net.generate_blocks_with_delay(100).await;
         clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
-        test_manager.generate_blocks_with_delay(100).await;
+        test_manager.local_net.generate_blocks_with_delay(100).await;
         clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
-        test_manager.generate_blocks_with_delay(1).await;
+        test_manager.local_net.generate_blocks_with_delay(1).await;
         clients.faucet.sync_and_await().await.unwrap();
     };
 
@@ -268,7 +292,7 @@ async fn send_to_all<V: Validator>(validator: &ValidatorKind, backend: &BackendT
     //       for this reason we generate blocks 1 at a time and sleep to let other tasks run.
     for height in 1..=100 {
         dbg!("Generating block at height: {}", height);
-        test_manager.generate_blocks_with_delay(1).await;
+        test_manager.local_net.generate_blocks_with_delay(1).await;
     }
 
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -325,10 +349,10 @@ async fn shield_for_validator<V: Validator>(validator: &ValidatorKind, backend: 
     clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
-        test_manager.generate_blocks_with_delay(100).await;
+        test_manager.local_net.generate_blocks_with_delay(100).await;
         clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
-        test_manager.generate_blocks_with_delay(1).await;
+        test_manager.local_net.generate_blocks_with_delay(1).await;
         clients.faucet.sync_and_await().await.unwrap();
     };
 
@@ -343,7 +367,7 @@ async fn shield_for_validator<V: Validator>(validator: &ValidatorKind, backend: 
     //       for this reason we generate blocks 1 at a time and sleep to let other tasks run.
     for height in 1..=100 {
         dbg!("Generating block at height: {}", height);
-        test_manager.generate_blocks_with_delay(1).await;
+        test_manager.local_net.generate_blocks_with_delay(1).await;
     }
 
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -366,7 +390,7 @@ async fn shield_for_validator<V: Validator>(validator: &ValidatorKind, backend: 
         .quick_shield(AccountId::ZERO)
         .await
         .unwrap();
-    test_manager.generate_blocks_with_delay(1).await;
+    test_manager.local_net.generate_blocks_with_delay(1).await;
     clients.recipient.sync_and_await().await.unwrap();
 
     assert_eq!(
@@ -398,17 +422,17 @@ async fn monitor_unverified_mempool_for_validator<V: Validator>(
         .take()
         .expect("Clients are not initialized");
 
-    test_manager.generate_blocks_with_delay(1).await;
+    test_manager.local_net.generate_blocks_with_delay(1).await;
     clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
-        test_manager.generate_blocks_with_delay(100).await;
+        test_manager.local_net.generate_blocks_with_delay(100).await;
         clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
-        test_manager.generate_blocks_with_delay(100).await;
+        test_manager.local_net.generate_blocks_with_delay(100).await;
         clients.faucet.sync_and_await().await.unwrap();
         clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
-        test_manager.generate_blocks_with_delay(1).await;
+        test_manager.local_net.generate_blocks_with_delay(1).await;
         clients.faucet.sync_and_await().await.unwrap();
     };
 
@@ -497,7 +521,7 @@ async fn monitor_unverified_mempool_for_validator<V: Validator>(
         250_000
     );
 
-    test_manager.generate_blocks_with_delay(1).await;
+    test_manager.local_net.generate_blocks_with_delay(1).await;
 
     println!("\n\nFetching Mined Tx 1!\n");
     let _transaction_1 = dbg!(
@@ -542,7 +566,7 @@ async fn monitor_unverified_mempool_for_validator<V: Validator>(
 }
 
 mod zcashd {
-    use zcash_local_net::validator::Zcashd;
+    use zcash_local_net::validator::zcashd::Zcashd;
 
     use super::*;
 
@@ -598,7 +622,7 @@ mod zebrad {
     use super::*;
 
     mod fetch_service {
-        use zcash_local_net::validator::Zebrad;
+        use zcash_local_net::validator::zebrad::Zebrad;
 
         use super::*;
 
@@ -650,7 +674,7 @@ mod zebrad {
     }
 
     mod state_service {
-        use zcash_local_net::validator::Zebrad;
+        use zcash_local_net::validator::zebrad::Zebrad;
 
         use super::*;
 
