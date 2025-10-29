@@ -58,7 +58,7 @@ async fn create_test_manager_and_services<V: Validator>(
         ),
     };
 
-    test_manager.local_net.print_stdout();
+    // TODO: implement trait test_manager.local_net.print_stdout();
 
     let fetch_service = FetchService::spawn(FetchServiceConfig::new(
         test_manager.zebrad_rpc_listen_address,
