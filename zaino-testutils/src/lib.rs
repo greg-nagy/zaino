@@ -20,7 +20,8 @@ use zaino_common::{
 use zaino_state::BackendType;
 use zainodlib::config::default_ephemeral_cookie_path;
 pub use zcash_local_net as services;
-use zcash_local_net::validator::{zcashd::ZcashdConfig, zebrad::ZebradConfig, Validator};
+use zcash_local_net::validator::Validator;
+use zcash_local_net::validator::{zcashd::ZcashdConfig, zebrad::ZebradConfig};
 use zebra_chain::parameters::NetworkKind;
 use zingo_test_vectors::seeds;
 pub use zingolib::get_base_address_macro;
@@ -172,7 +173,9 @@ impl Clients {
 }
 
 /// Configuration data for Zingo-Indexer Tests.
-pub struct TestManager {
+pub struct TestManager<C: Validator> {
+    /// Control plane for a validator
+    pub local_net: C,
     /// Data directory for the validator.
     pub data_dir: PathBuf,
     /// Network (chain) type:
@@ -193,7 +196,7 @@ pub struct TestManager {
     pub clients: Option<Clients>,
 }
 
-impl TestManager {
+impl<C: Validator> TestManager<C> {
     /// Launches zcash-local-net<Empty, Validator>.
     ///
     /// Possible validators: Zcashd, Zebrad.
@@ -204,7 +207,7 @@ impl TestManager {
     ///
     /// TODO: Add TestManagerConfig struct and constructor methods of common test setups.
     #[allow(clippy::too_many_arguments)]
-    pub async fn launch<C: Validator>(
+    pub async fn launch(
         validator: &ValidatorKind,
         backend: &BackendType,
         network: Option<NetworkKind>,
@@ -352,6 +355,7 @@ impl TestManager {
         };
 
         let test_manager = Self {
+            local_net,
             data_dir,
             network: network_kind,
             zebrad_rpc_listen_address,
@@ -366,7 +370,8 @@ impl TestManager {
         // Generate an extra block to turn on NU5 and NU6,
         // as they currently must be turned on at block height = 2.
         // Generates `blocks` regtest blocks.
-        local_net
+        test_manager
+            .local_net
             .generate_blocks_with_delay(1)
             .await
             .expect("indexer to match validator");
@@ -376,7 +381,7 @@ impl TestManager {
     }
     /// Helper function to support default test case.
     #[allow(clippy::too_many_arguments)]
-    pub async fn launch_with_default_activation_heights<C: Validator>(
+    pub async fn launch_with_default_activation_heights(
         validator: &ValidatorKind,
         backend: &BackendType,
         network: Option<NetworkKind>,
@@ -393,7 +398,7 @@ impl TestManager {
             ValidatorKind::Zcashd => ActivationHeights::default(),
         };
 
-        Self::launch::<C>(
+        Self::launch(
             validator,
             backend,
             network,
@@ -417,7 +422,7 @@ impl TestManager {
     }
 }
 
-impl Drop for TestManager {
+impl<C: Validator> Drop for TestManager<C> {
     fn drop(&mut self) {
         if let Some(handle) = &self.zaino_handle {
             handle.abort();
@@ -442,7 +447,7 @@ mod launch_testmanager {
 
     mod zcashd {
 
-        use zcash_local_net::validator::Zcashd;
+        use zcash_local_net::validator::zcashd::Zcashd;
 
         use super::*;
 
@@ -942,7 +947,7 @@ mod launch_testmanager {
 
         mod state_service {
 
-            use zcash_local_net::validator::Zebrad;
+            use zcash_local_net::validator::zebrad::Zebrad;
             use zip32::AccountId;
 
             use super::*;
