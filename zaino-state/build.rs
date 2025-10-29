@@ -35,15 +35,13 @@ fn main() -> io::Result<()> {
     // at https://reproducible-builds.org/docs/source-date-epoch/
     let build_date = match env::var("SOURCE_DATE_EPOCH") {
         Ok(s) => s.trim().to_string(),
-        Err(_) => {
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-                .to_string()
-        }
+        Err(_) => SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            .to_string(),
     };
-    
+
     println!("cargo:rustc-env=BUILD_DATE={}", build_date);
 
     // Set the build user
