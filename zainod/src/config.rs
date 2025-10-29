@@ -21,6 +21,8 @@ use tracing::{error, info};
 use zaino_common::{
     CacheConfig, DatabaseConfig, DatabaseSize, Network, ServiceConfig, StorageConfig,
 };
+
+#[allow(deprecated)]
 use zaino_state::{BackendConfig, FetchServiceConfig, StateServiceConfig};
 
 use crate::error::IndexerError;
@@ -374,6 +376,7 @@ pub fn load_config(file_path: &PathBuf) -> Result<IndexerConfig, IndexerError> {
 impl TryFrom<IndexerConfig> for BackendConfig {
     type Error = IndexerError;
 
+    #[allow(deprecated)]
     fn try_from(cfg: IndexerConfig) -> Result<Self, Self::Error> {
         match cfg.backend {
             zaino_state::BackendType::State => Ok(BackendConfig::State(StateServiceConfig {

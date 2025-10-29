@@ -9,6 +9,8 @@ use zaino_serve::server::{
     grpc::TonicServer,
     jsonrpc::JsonRpcServer,
 };
+
+#[allow(deprecated)]
 use zaino_state::{
     BackendConfig, FetchService, IndexerService, LightWalletService, StateService, StatusType,
     ZcashIndexer, ZcashService,
@@ -40,6 +42,7 @@ pub async fn start_indexer(
 }
 
 /// Spawns a new Indexer server.
+#[allow(deprecated)]
 pub async fn spawn_indexer(
     config: IndexerConfig,
 ) -> Result<tokio::task::JoinHandle<Result<(), IndexerError>>, IndexerError> {

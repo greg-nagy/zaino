@@ -2,6 +2,8 @@
 
 use zaino_common::network::ActivationHeights;
 use zaino_common::{DatabaseConfig, ServiceConfig, StorageConfig};
+
+#[allow(deprecated)]
 use zaino_state::{
     BackendType, FetchService, FetchServiceConfig, FetchServiceSubscriber, ZcashIndexer,
     ZcashService as _,
@@ -11,6 +13,7 @@ use zaino_testutils::{TestManager, ValidatorKind};
 use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetInfo};
 
+#[allow(deprecated)]
 async fn create_test_manager_and_fetch_services(
     enable_cookie_auth: bool,
     clients: bool,
