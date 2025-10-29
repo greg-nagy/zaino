@@ -461,10 +461,7 @@ mod launch_testmanager {
             )
             .await
             .unwrap();
-            assert_eq!(
-                2,
-                (test_manager.local_net.get_chain_height().await)
-            );
+            assert_eq!(2, (test_manager.local_net.get_chain_height().await));
             test_manager.close().await;
         }
 
@@ -484,15 +481,9 @@ mod launch_testmanager {
             )
             .await
             .unwrap();
-            assert_eq!(
-                2,
-                (test_manager.local_net.get_chain_height().await)
-            );
+            assert_eq!(2, (test_manager.local_net.get_chain_height().await));
             test_manager.local_net.generate_blocks(1).await.unwrap();
-            assert_eq!(
-                3,
-                (test_manager.local_net.get_chain_height().await)
-            );
+            assert_eq!(3, (test_manager.local_net.get_chain_height().await));
             test_manager.close().await;
         }
 
@@ -513,10 +504,7 @@ mod launch_testmanager {
             )
             .await
             .unwrap();
-            assert_eq!(
-                10,
-                (test_manager.local_net.get_chain_height().await)
-            );
+            assert_eq!(10, (test_manager.local_net.get_chain_height().await));
             test_manager.close().await;
         }
 
@@ -643,10 +631,7 @@ mod launch_testmanager {
                     )
                     .await
                     .unwrap();
-                assert_eq!(
-                    2,
-                    (test_manager.local_net.get_chain_height().await)
-                );
+                assert_eq!(2, (test_manager.local_net.get_chain_height().await));
                 test_manager.close().await;
             }
 
@@ -667,15 +652,9 @@ mod launch_testmanager {
                     )
                     .await
                     .unwrap();
-                assert_eq!(
-                    2,
-                    (test_manager.local_net.get_chain_height().await)
-                );
+                assert_eq!(2, (test_manager.local_net.get_chain_height().await));
                 test_manager.local_net.generate_blocks(1).await.unwrap();
-                assert_eq!(
-                    3,
-                    (test_manager.local_net.get_chain_height().await)
-                );
+                assert_eq!(3, (test_manager.local_net.get_chain_height().await));
                 test_manager.close().await;
             }
 
@@ -697,10 +676,7 @@ mod launch_testmanager {
                     )
                     .await
                     .unwrap();
-                assert_eq!(
-                    52,
-                    (test_manager.local_net.get_chain_height().await)
-                );
+                assert_eq!(52, (test_manager.local_net.get_chain_height().await));
                 test_manager.close().await;
             }
 
@@ -963,10 +939,7 @@ mod launch_testmanager {
                     )
                     .await
                     .unwrap();
-                assert_eq!(
-                    2,
-                    (test_manager.local_net.get_chain_height().await)
-                );
+                assert_eq!(2, (test_manager.local_net.get_chain_height().await));
                 test_manager.close().await;
             }
 
@@ -987,15 +960,9 @@ mod launch_testmanager {
                     )
                     .await
                     .unwrap();
-                assert_eq!(
-                    2,
-                    (test_manager.local_net.get_chain_height().await)
-                );
-                test_manager.local_net.generate_blocks_with_delay(1).await;
-                assert_eq!(
-                    3,
-                    (test_manager.local_net.get_chain_height().await)
-                );
+                assert_eq!(2, (test_manager.local_net.get_chain_height().await));
+                let _ = test_manager.local_net.generate_blocks_with_delay(1).await;
+                assert_eq!(3, (test_manager.local_net.get_chain_height().await));
                 test_manager.close().await;
             }
 
@@ -1017,10 +984,7 @@ mod launch_testmanager {
                     )
                     .await
                     .unwrap();
-                assert_eq!(
-                    52,
-                    (test_manager.local_net.get_chain_height().await)
-                );
+                assert_eq!(52, (test_manager.local_net.get_chain_height().await));
                 test_manager.close().await;
             }
 
@@ -1111,7 +1075,7 @@ mod launch_testmanager {
                     .await
                     .unwrap());
 
-                test_manager.local_net.generate_blocks_with_delay(100).await;
+                let _ = test_manager.local_net.generate_blocks_with_delay(100).await;
                 clients.faucet.sync_and_await().await.unwrap();
                 dbg!(clients
                     .faucet
@@ -1153,7 +1117,7 @@ mod launch_testmanager {
                     .take()
                     .expect("Clients are not initialized");
 
-                test_manager.local_net.generate_blocks_with_delay(100).await;
+                let _ = test_manager.local_net.generate_blocks_with_delay(100).await;
                 clients.faucet.sync_and_await().await.unwrap();
                 dbg!(clients
                     .faucet
@@ -1184,7 +1148,7 @@ mod launch_testmanager {
 
                 // *Send all transparent funds to own orchard address.
                 clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
-                test_manager.local_net.generate_blocks_with_delay(1).await;
+                let _ = test_manager.local_net.generate_blocks_with_delay(1).await;
                 clients.faucet.sync_and_await().await.unwrap();
                 dbg!(clients
                     .faucet
@@ -1207,7 +1171,7 @@ mod launch_testmanager {
                 .await
                 .unwrap();
 
-                test_manager.local_net.generate_blocks_with_delay(1).await;
+                let _ = test_manager.local_net.generate_blocks_with_delay(1).await;
                 clients.recipient.sync_and_await().await.unwrap();
                 dbg!(clients
                     .recipient
