@@ -1,6 +1,8 @@
 use zaino_common::network::{ActivationHeights, ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS};
 use zaino_common::{DatabaseConfig, ServiceConfig, StorageConfig};
 use zaino_state::BackendType;
+
+#[allow(deprecated)]
 use zaino_state::{
     FetchService, FetchServiceConfig, FetchServiceSubscriber, LightWalletIndexer, StateService,
     StateServiceConfig, StateServiceSubscriber, ZcashIndexer, ZcashService as _,
@@ -13,6 +15,7 @@ use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetInfo};
 use zip32::AccountId;
 
+#[allow(deprecated)]
 async fn create_test_manager_and_services(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
@@ -1398,6 +1401,7 @@ mod zebrad {
 
         /// `getmempoolinfo` computed from local Broadcast state
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        #[allow(deprecated)]
         async fn get_mempool_info() {
             let (
                 mut test_manager,
