@@ -11,6 +11,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tower::{Service, ServiceExt as _};
 use zaino_common::network::ActivationHeights;
+use zaino_common::network::ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS;
 use zaino_common::DatabaseConfig;
 use zaino_common::ServiceConfig;
 use zaino_common::StorageConfig;
@@ -57,36 +58,31 @@ async fn create_test_manager_and_services(
     enable_clients: bool,
     network: Option<NetworkKind>,
 ) -> (TestManager, StateService, StateServiceSubscriber) {
-    let test_manager = TestManager::launch_with_default_activation_heights(
+    let test_manager = TestManager::launch(
         validator,
         &BackendType::Fetch,
         network,
+        Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
         chain_cache.clone(),
         enable_zaino,
         false,
-        false,
-        true,
-        true,
         enable_clients,
     )
     .await
     .unwrap();
 
-    let (network_type, zaino_sync_bool) = match network {
+    let network_type = match network {
         Some(NetworkKind::Mainnet) => {
             println!("Waiting for validator to spawn..");
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-            (zaino_common::Network::Mainnet, false)
+            zaino_common::Network::Mainnet
         }
         Some(NetworkKind::Testnet) => {
             println!("Waiting for validator to spawn..");
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-            (zaino_common::Network::Testnet, false)
+            zaino_common::Network::Testnet
         }
-        _ => (
-            zaino_common::Network::Regtest(ActivationHeights::default()),
-            true,
-        ),
+        _ => zaino_common::Network::Regtest(ActivationHeights::default()),
     };
 
     test_manager.local_net.print_stdout();
@@ -104,8 +100,8 @@ async fn create_test_manager_and_services(
             debug_stop_at_height: None,
             debug_validity_check_interval: None,
         },
-        test_manager.zebrad_rpc_listen_address,
-        test_manager.zebrad_grpc_listen_address,
+        test_manager.full_node_rpc_listen_address,
+        test_manager.full_node_grpc_listen_address,
         false,
         None,
         None,
@@ -124,8 +120,6 @@ async fn create_test_manager_and_services(
             ..Default::default()
         },
         network_type,
-        zaino_sync_bool,
-        true,
     ))
     .await
     .unwrap();
