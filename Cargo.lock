@@ -2709,7 +2709,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.0",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -4656,7 +4656,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.1",
  "rustls 0.23.32",
- "socket2 0.5.10",
+ "socket2 0.6.0",
  "thiserror 2.0.16",
  "tokio",
  "tracing",
@@ -4693,7 +4693,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.0",
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -6271,21 +6271,6 @@ name = "tinyvec_macros"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
-
-[[package]]
-name = "tklog"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0f9f3abb3fcc49882b5d32abfc11cf804768b54e6b73d210c6bb5ec6f123a9f"
-dependencies = [
- "chrono",
- "crossbeam-channel",
- "flate2",
- "log",
- "once_cell",
- "regex",
- "tokio",
-]
 
 [[package]]
 name = "tokio"
@@ -8731,7 +8716,7 @@ dependencies = [
  "zebra-chain 2.0.0",
  "zingo_common_components 0.1.0 (git+https://github.com/zingolabs/zingo-common.git?tag=zingo_common_components_v0.1.0)",
  "zingo_netutils 0.1.0 (git+https://github.com/zingolabs/zingo-common.git?tag=zingo_common_components_v0.1.0)",
- "zingo_test_vectors 0.0.1 (git+https://github.com/zingolabs/infrastructure.git?branch=simplify_validator_trait)",
+ "zingo_test_vectors 0.0.1 (git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.3.0)",
  "zingolib",
  "zip32",
 ]
@@ -9087,7 +9072,7 @@ dependencies = [
 [[package]]
 name = "zcash_local_net"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?branch=simplify_validator_trait#5fdc6c6d270c18bc68adf9341c55fd0a2be1e44a"
+source = "git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.3.0#7d833158da3b7f6656b5459fbda618e8ebbca49e"
 dependencies = [
  "getset",
  "hex",
@@ -9097,7 +9082,6 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 1.0.69",
- "tklog",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -9106,7 +9090,7 @@ dependencies = [
  "zebra-node-services 2.0.0",
  "zebra-rpc 3.0.0",
  "zingo_common_components 0.1.0 (git+https://github.com/zingolabs/zingo-common.git?branch=dev)",
- "zingo_test_vectors 0.0.1 (git+https://github.com/zingolabs/infrastructure.git?branch=simplify_validator_trait)",
+ "zingo_test_vectors 0.0.1 (git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.3.0)",
 ]
 
 [[package]]
@@ -10255,7 +10239,7 @@ dependencies = [
 [[package]]
 name = "zingo_test_vectors"
 version = "0.0.1"
-source = "git+https://github.com/zingolabs/infrastructure.git?branch=simplify_validator_trait#5fdc6c6d270c18bc68adf9341c55fd0a2be1e44a"
+source = "git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.3.0#7d833158da3b7f6656b5459fbda618e8ebbca49e"
 dependencies = [
  "bip0039",
 ]
