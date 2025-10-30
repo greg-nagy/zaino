@@ -1,12 +1,14 @@
 //! Holds error types for Zaino-state.
 
+// Needs to be module level due to the thiserror::Error macro
+#![allow(deprecated)]
+
 use crate::BlockHash;
 
 use std::{any::type_name, fmt::Display};
 
 use zaino_fetch::jsonrpsee::connector::RpcRequestError;
 
-#[allow(deprecated)]
 impl<T: ToString> From<RpcRequestError<T>> for StateServiceError {
     fn from(value: RpcRequestError<T>) -> Self {
         match value {
@@ -132,7 +134,6 @@ impl From<StateServiceError> for tonic::Status {
     }
 }
 
-#[allow(deprecated)]
 impl<T: ToString> From<RpcRequestError<T>> for FetchServiceError {
     fn from(value: RpcRequestError<T>) -> Self {
         match value {
