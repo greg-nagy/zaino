@@ -8,8 +8,6 @@ async fn create_test_manager_and_connector(
     activation_heights: Option<ActivationHeights>,
     chain_cache: Option<std::path::PathBuf>,
     enable_zaino: bool,
-    zaino_no_sync: bool,
-    zaino_no_db: bool,
     enable_clients: bool,
 ) -> (TestManager, JsonRpSeeConnector) {
     let test_manager = TestManager::launch(
@@ -20,9 +18,6 @@ async fn create_test_manager_and_connector(
         chain_cache,
         enable_zaino,
         false,
-        false,
-        zaino_no_sync,
-        zaino_no_db,
         enable_clients,
     )
     .await
@@ -30,8 +25,7 @@ async fn create_test_manager_and_connector(
 
     let json_service = JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
-            test_manager.zebrad_rpc_listen_address,
-            false,
+            test_manager.full_node_rpc_listen_address,
             None,
             Some("xxxxxx".to_string()),
             Some("xxxxxx".to_string()),
@@ -77,8 +71,6 @@ mod chain_query_interface {
         validator: &ValidatorKind,
         chain_cache: Option<std::path::PathBuf>,
         enable_zaino: bool,
-        zaino_no_sync: bool,
-        zaino_no_db: bool,
         enable_clients: bool,
     ) -> (
         TestManager,
@@ -121,8 +113,6 @@ mod chain_query_interface {
             Some(activation_heights),
             chain_cache.clone(),
             enable_zaino,
-            zaino_no_sync,
-            zaino_no_db,
             enable_clients,
         )
         .await;
@@ -148,8 +138,8 @@ mod chain_query_interface {
                         debug_stop_at_height: None,
                         debug_validity_check_interval: None,
                     },
-                    test_manager.zebrad_rpc_listen_address,
-                    test_manager.zebrad_grpc_listen_address,
+                    test_manager.full_node_rpc_listen_address,
+                    test_manager.full_node_grpc_listen_address,
                     false,
                     None,
                     None,
@@ -168,8 +158,6 @@ mod chain_query_interface {
                         },
                     },
                     network.into(),
-                    true,
-                    true,
                 ))
                 .await
                 .unwrap();
@@ -185,8 +173,6 @@ mod chain_query_interface {
                     },
                     db_version: 1,
                     network: zaino_common::Network::Regtest(activation_heights),
-                    no_sync: false,
-                    no_db: false,
                 };
                 let chain_index = NodeBackedChainIndex::new(
                     ValidatorConnector::State(chain_index::source::State {
@@ -222,8 +208,6 @@ mod chain_query_interface {
                     },
                     db_version: 1,
                     network: zaino_common::Network::Regtest(activation_heights),
-                    no_sync: false,
-                    no_db: false,
                 };
                 let chain_index = NodeBackedChainIndex::new(
                     ValidatorConnector::Fetch(json_service.clone()),
@@ -251,7 +235,7 @@ mod chain_query_interface {
 
     async fn get_block_range(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(validator, None, false, false, false, false).await;
+            create_test_manager_and_chain_index(validator, None, false, false).await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
         test_manager.generate_blocks_with_delay(5).await;
@@ -293,7 +277,7 @@ mod chain_query_interface {
 
     async fn find_fork_point(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(validator, None, false, false, false, false).await;
+            create_test_manager_and_chain_index(validator, None, false, false).await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
         test_manager.generate_blocks_with_delay(5).await;
@@ -325,7 +309,7 @@ mod chain_query_interface {
 
     async fn get_raw_transaction(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(validator, None, false, false, false, false).await;
+            create_test_manager_and_chain_index(validator, None, false, false).await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
         test_manager.generate_blocks_with_delay(5).await;
@@ -379,7 +363,7 @@ mod chain_query_interface {
 
     async fn get_transaction_status(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(validator, None, false, false, false, false).await;
+            create_test_manager_and_chain_index(validator, None, false, false).await;
         let snapshot = indexer.snapshot_nonfinalized_state();
         // I don't know where this second block is generated. Somewhere in the
         // guts of create_test_manager_and_chain_index
@@ -419,7 +403,7 @@ mod chain_query_interface {
 
     async fn sync_large_chain(validator: &ValidatorKind) {
         let (test_manager, json_service, _option_state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(validator, None, false, false, false, false).await;
+            create_test_manager_and_chain_index(validator, None, false, false).await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
         test_manager.generate_blocks_with_delay(5).await;
