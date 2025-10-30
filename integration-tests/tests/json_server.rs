@@ -796,7 +796,7 @@ mod zcashd {
                 zcashd_subscriber,
                 _zaino_service,
                 zaino_subscriber,
-            ) = create_test_manager_and_fetch_services(false, false).await;
+            ) = create_test_manager_and_fetch_services(false).await;
 
             const BLOCK_LIMIT: u32 = 10;
 

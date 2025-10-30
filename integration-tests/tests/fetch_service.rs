@@ -715,7 +715,7 @@ async fn fetch_service_get_block(validator: &ValidatorKind) {
 
 async fn fetch_service_get_block_header(validator: &ValidatorKind) {
     let (test_manager, _fetch_service, fetch_service_subscriber) =
-        create_test_manager_and_fetch_service(validator, None, true, true, true, true).await;
+        create_test_manager_and_fetch_service(validator, None, true, true, true).await;
 
     const BLOCK_LIMIT: u32 = 10;
 
@@ -740,8 +740,7 @@ async fn fetch_service_get_block_header(validator: &ValidatorKind) {
 
         let jsonrpc_client = JsonRpSeeConnector::new_with_basic_auth(
             test_node_and_return_url(
-                test_manager.zebrad_rpc_listen_address,
-                false,
+                test_manager.full_node_rpc_listen_address,
                 None,
                 Some("xxxxxx".to_string()),
                 Some("xxxxxx".to_string()),
