@@ -86,12 +86,11 @@ pub struct FetchService {
 impl ZcashService for FetchService {
     type Subscriber = FetchServiceSubscriber;
     type Config = FetchServiceConfig;
-    /// Initializes a new StateService instance and starts sync process.
+    /// Initializes a new FetchService instance and starts sync process.
     async fn spawn(config: FetchServiceConfig) -> Result<Self, FetchServiceError> {
         info!("Launching Chain Fetch Service..");
 
         let fetcher = JsonRpSeeConnector::new_from_config_parts(
-            config.validator_cookie_auth,
             config.validator_rpc_address,
             config.validator_rpc_user.clone(),
             config.validator_rpc_password.clone(),

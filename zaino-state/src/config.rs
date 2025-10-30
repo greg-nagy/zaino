@@ -1,5 +1,6 @@
 //! Holds config data for Zaino-State services.
 
+use std::path::PathBuf;
 use zaino_common::{Network, ServiceConfig, StorageConfig};
 
 #[derive(Debug, Clone, serde::Deserialize, PartialEq, Copy)]
@@ -25,15 +26,15 @@ pub enum BackendConfig {
 #[derive(Debug, Clone)]
 pub struct StateServiceConfig {
     /// Zebra [`zebra_state::ReadStateService`] config data
-    pub validator_config: zebra_state::Config,
+    pub validator_state_config: zebra_state::Config,
     /// Validator JsonRPC address.
     pub validator_rpc_address: std::net::SocketAddr,
     /// Validator gRPC address.
-    pub validator_indexer_rpc_address: std::net::SocketAddr,
-    /// Enable validator rpc cookie authentification.
+    pub validator_grpc_address: std::net::SocketAddr,
+    /// Validator cookie auth.
     pub validator_cookie_auth: bool,
-    /// Path to the validator cookie file.
-    pub validator_cookie_path: Option<String>,
+    /// Enable validator rpc cookie authentification with Some: Path to the validator cookie file.
+    pub validator_cookie_path: Option<PathBuf>,
     /// Validator JsonRPC user.
     pub validator_rpc_user: String,
     /// Validator JsonRPC password.
@@ -44,12 +45,6 @@ pub struct StateServiceConfig {
     pub storage: StorageConfig,
     /// Network type.
     pub network: Network,
-    /// Disables internal sync and stops zaino waiting on server sync.
-    /// Used for testing.
-    pub no_sync: bool,
-    /// Disables FinalisedState.
-    /// Used for testing.
-    pub no_db: bool,
 }
 
 impl StateServiceConfig {
@@ -57,23 +52,21 @@ impl StateServiceConfig {
     #[allow(clippy::too_many_arguments)]
     // TODO: replace with struct-literal init only?
     pub fn new(
-        validator_config: zebra_state::Config,
+        validator_state_config: zebra_state::Config,
         validator_rpc_address: std::net::SocketAddr,
-        validator_indexer_rpc_address: std::net::SocketAddr,
+        validator_grpc_address: std::net::SocketAddr,
         validator_cookie_auth: bool,
-        validator_cookie_path: Option<String>,
+        validator_cookie_path: Option<PathBuf>,
         validator_rpc_user: Option<String>,
         validator_rpc_password: Option<String>,
         service: ServiceConfig,
         storage: StorageConfig,
         network: Network,
-        no_sync: bool,
-        no_db: bool,
     ) -> Self {
         StateServiceConfig {
-            validator_config,
+            validator_state_config,
             validator_rpc_address,
-            validator_indexer_rpc_address,
+            validator_grpc_address,
             validator_cookie_auth,
             validator_cookie_path,
             validator_rpc_user: validator_rpc_user.unwrap_or("xxxxxx".to_string()),
@@ -81,8 +74,6 @@ impl StateServiceConfig {
             service,
             storage,
             network,
-            no_sync,
-            no_db,
         }
     }
 }
@@ -92,10 +83,8 @@ impl StateServiceConfig {
 pub struct FetchServiceConfig {
     /// Validator JsonRPC address.
     pub validator_rpc_address: std::net::SocketAddr,
-    /// Enable validator rpc cookie authentification.
-    pub validator_cookie_auth: bool,
-    /// Path to the validator cookie file.
-    pub validator_cookie_path: Option<String>,
+    /// Enable validator rpc cookie authentification with Some: path to the validator cookie file.
+    pub validator_cookie_path: Option<PathBuf>,
     /// Validator JsonRPC user.
     pub validator_rpc_user: String,
     /// Validator JsonRPC password.
@@ -106,41 +95,28 @@ pub struct FetchServiceConfig {
     pub storage: StorageConfig,
     /// Network type.
     pub network: Network,
-    /// Disables internal sync and stops zaino waiting on server sync.
-    /// Used for testing.
-    pub no_sync: bool,
-    /// Disables FinalisedState.
-    /// Used for testing.
-    pub no_db: bool,
 }
 
 impl FetchServiceConfig {
     /// Returns a new instance of [`FetchServiceConfig`].
     #[allow(clippy::too_many_arguments)]
-    // TODO: replace with struct-literal init only?
     pub fn new(
         validator_rpc_address: std::net::SocketAddr,
-        validator_cookie_auth: bool,
-        validator_cookie_path: Option<String>,
+        validator_cookie_path: Option<PathBuf>,
         validator_rpc_user: Option<String>,
         validator_rpc_password: Option<String>,
         service: ServiceConfig,
         storage: StorageConfig,
         network: Network,
-        no_sync: bool,
-        no_db: bool,
     ) -> Self {
         FetchServiceConfig {
             validator_rpc_address,
-            validator_cookie_auth,
             validator_cookie_path,
             validator_rpc_user: validator_rpc_user.unwrap_or("xxxxxx".to_string()),
             validator_rpc_password: validator_rpc_password.unwrap_or("xxxxxx".to_string()),
             service,
             storage,
             network,
-            no_sync,
-            no_db,
         }
     }
 }
@@ -155,30 +131,16 @@ pub struct BlockCacheConfig {
     pub db_version: u32,
     /// Network type.
     pub network: Network,
-    /// Stops zaino waiting on server sync.
-    /// Used for testing.
-    pub no_sync: bool,
-    /// Disables FinalisedState.
-    /// Used for testing.
-    pub no_db: bool,
 }
 
 impl BlockCacheConfig {
     /// Returns a new instance of [`BlockCacheConfig`].
     #[allow(dead_code)]
-    pub fn new(
-        storage: StorageConfig,
-        db_version: u32,
-        network: Network,
-        no_sync: bool,
-        no_db: bool,
-    ) -> Self {
+    pub fn new(storage: StorageConfig, db_version: u32, network: Network, _no_sync: bool) -> Self {
         BlockCacheConfig {
             storage,
             db_version,
             network,
-            no_sync,
-            no_db,
         }
     }
 }
@@ -190,8 +152,6 @@ impl From<StateServiceConfig> for BlockCacheConfig {
             // TODO: update zaino configs to include db version.
             db_version: 1,
             network: value.network,
-            no_sync: value.no_sync,
-            no_db: value.no_db,
         }
     }
 }
@@ -203,8 +163,6 @@ impl From<FetchServiceConfig> for BlockCacheConfig {
             // TODO: update zaino configs to include db version.
             db_version: 1,
             network: value.network,
-            no_sync: value.no_sync,
-            no_db: value.no_db,
         }
     }
 }
