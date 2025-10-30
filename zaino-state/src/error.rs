@@ -1,5 +1,4 @@
 //! Holds error types for Zaino-state.
-#![allow(deprecated)]
 
 use crate::BlockHash;
 
