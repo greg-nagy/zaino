@@ -1,5 +1,6 @@
 //! Zcash chain fetch and tx submission service backed by Zebras [`ReadStateService`].
 
+#[allow(deprecated)]
 use crate::{
     chain_index::{
         mempool::{Mempool, MempoolSubscriber},
@@ -105,27 +106,38 @@ macro_rules! expected_read_response {
 ///       If we want the ability to clone Service all JoinHandle's should be
 /// converted to Arc\<JoinHandle\>.
 #[derive(Debug)]
+#[deprecated = "Will be eventually replaced by `BlockchainSource"]
 pub struct StateService {
     /// `ReadeStateService` from Zebra-State.
     read_state_service: ReadStateService,
+
     /// Sync task handle.
     sync_task_handle: Option<Arc<tokio::task::JoinHandle<()>>>,
+
     /// JsonRPC Client.
     rpc_client: JsonRpSeeConnector,
+
     /// Local compact block cache.
     block_cache: BlockCache,
+
     /// Internal mempool.
     mempool: Mempool<ValidatorConnector>,
+
     /// Service metadata.
     data: ServiceMetadata,
+
     /// StateService config data.
+    #[allow(deprecated)]
     config: StateServiceConfig,
+
     /// Thread-safe status indicator.
     status: AtomicStatus,
+
     /// Listener for when the chain tip changes
     chain_tip_change: zebra_state::ChainTipChange,
 }
 
+#[allow(deprecated)]
 impl StateService {
     /// Uses poll_ready to update the status of the `ReadStateService`.
     async fn fetch_status_from_validator(&self) -> StatusType {
@@ -156,6 +168,7 @@ impl StateService {
 }
 
 #[async_trait]
+#[allow(deprecated)]
 impl ZcashService for StateService {
     type Subscriber = StateServiceSubscriber;
     type Config = StateServiceConfig;
@@ -313,6 +326,7 @@ impl ZcashService for StateService {
     }
 }
 
+#[allow(deprecated)]
 impl Drop for StateService {
     fn drop(&mut self) {
         self.close()
@@ -323,19 +337,27 @@ impl Drop for StateService {
 ///
 /// Subscribers should be
 #[derive(Debug, Clone)]
+#[deprecated]
 pub struct StateServiceSubscriber {
     /// Remote wrappper functionality for zebra's [`ReadStateService`].
     pub read_state_service: ReadStateService,
+
     /// JsonRPC Client.
     pub rpc_client: JsonRpSeeConnector,
+
     /// Local compact block cache.
     pub block_cache: BlockCacheSubscriber,
+
     /// Internal mempool.
     pub mempool: MempoolSubscriber,
+
     /// Service metadata.
     pub data: ServiceMetadata,
+
     /// StateService config data.
+    #[allow(deprecated)]
     config: StateServiceConfig,
+
     /// Listener for when the chain tip changes
     chain_tip_change: zebra_state::ChainTipChange,
 }
@@ -363,6 +385,7 @@ impl ChainTipSubscriber {
 ///
 /// These would be simple to add to the public interface if
 /// needed, there are currently no plans to do so.
+#[allow(deprecated)]
 impl StateServiceSubscriber {
     /// Gets a Subscriber to any updates to the latest chain tip
     pub fn chaintip_update_subscriber(&self) -> ChainTipSubscriber {
@@ -514,7 +537,7 @@ impl StateServiceSubscriber {
     }
 
     /// Return a list of consecutive compact blocks.
-    #[allow(dead_code)]
+    #[allow(dead_code, deprecated)]
     async fn get_block_range_inner(
         &self,
         request: BlockRange,
@@ -932,12 +955,14 @@ impl StateServiceSubscriber {
     }
 
     /// Returns the network type running.
+    #[allow(deprecated)]
     pub fn network(&self) -> zaino_common::Network {
         self.config.network
     }
 }
 
 #[async_trait]
+#[allow(deprecated)]
 impl ZcashIndexer for StateServiceSubscriber {
     type Error = StateServiceError;
 
@@ -1708,6 +1733,7 @@ impl ZcashIndexer for StateServiceSubscriber {
 }
 
 #[async_trait]
+#[allow(deprecated)]
 impl LightWalletIndexer for StateServiceSubscriber {
     /// Return the height of the tip of the best chain
     async fn get_latest_block(&self) -> Result<BlockId, Self::Error> {
@@ -2342,7 +2368,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
     }
 }
 
-#[allow(clippy::result_large_err)]
+#[allow(clippy::result_large_err, deprecated)]
 fn header_to_block_commitments(
     header: &Header,
     network: &Network,

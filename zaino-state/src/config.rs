@@ -13,8 +13,9 @@ pub enum BackendType {
     Fetch,
 }
 
-#[derive(Debug, Clone)]
 /// Unified backend configuration enum.
+#[derive(Debug, Clone)]
+#[allow(deprecated)]
 pub enum BackendConfig {
     /// StateService config.
     State(StateServiceConfig),
@@ -24,6 +25,7 @@ pub enum BackendConfig {
 
 /// Holds config data for [crate::StateService].
 #[derive(Debug, Clone)]
+#[deprecated]
 pub struct StateServiceConfig {
     /// Zebra [`zebra_state::ReadStateService`] config data
     pub validator_state_config: zebra_state::Config,
@@ -47,6 +49,7 @@ pub struct StateServiceConfig {
     pub network: Network,
 }
 
+#[allow(deprecated)]
 impl StateServiceConfig {
     /// Returns a new instance of [`StateServiceConfig`].
     #[allow(clippy::too_many_arguments)]
@@ -80,6 +83,7 @@ impl StateServiceConfig {
 
 /// Holds config data for [crate::FetchService].
 #[derive(Debug, Clone)]
+#[deprecated]
 pub struct FetchServiceConfig {
     /// Validator JsonRPC address.
     pub validator_rpc_address: std::net::SocketAddr,
@@ -97,6 +101,7 @@ pub struct FetchServiceConfig {
     pub network: Network,
 }
 
+#[allow(deprecated)]
 impl FetchServiceConfig {
     /// Returns a new instance of [`FetchServiceConfig`].
     #[allow(clippy::too_many_arguments)]
@@ -145,6 +150,7 @@ impl BlockCacheConfig {
     }
 }
 
+#[allow(deprecated)]
 impl From<StateServiceConfig> for BlockCacheConfig {
     fn from(value: StateServiceConfig) -> Self {
         Self {
@@ -156,6 +162,7 @@ impl From<StateServiceConfig> for BlockCacheConfig {
     }
 }
 
+#[allow(deprecated)]
 impl From<FetchServiceConfig> for BlockCacheConfig {
     fn from(value: FetchServiceConfig) -> Self {
         Self {

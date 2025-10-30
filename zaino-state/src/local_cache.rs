@@ -2,6 +2,7 @@
 
 use std::any::type_name;
 
+#[allow(deprecated)]
 use crate::{
     config::BlockCacheConfig, error::BlockCacheError, status::StatusType, StateServiceSubscriber,
 };
@@ -228,6 +229,7 @@ pub(crate) async fn fetch_block_from_node(
     try_fetcher_path(fetcher, hash_or_height).await
 }
 
+#[allow(deprecated)]
 async fn try_state_path(
     state: &ReadStateService,
     network: &Network,
