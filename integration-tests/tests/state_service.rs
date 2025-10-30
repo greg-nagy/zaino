@@ -1074,19 +1074,19 @@ async fn state_service_get_address_deltas_testnet() {
     assert_eq!(fetch_service_simple_deltas, state_service_simple_deltas);
 
     // Test response with chain info
-    let chain_info_request =
+    let chain_info_params =
         GetAddressDeltasParams::new_filtered(vec![address.to_string()], 2000000, 3000000, true);
 
     let fetch_service_chain_info_deltas = dbg!(
         fetch_service_subscriber
-            .get_address_deltas(chain_info_request.clone())
+            .get_address_deltas(chain_info_params.clone())
             .await
     )
     .unwrap();
 
     let state_service_chain_info_deltas = dbg!(
         state_service_subscriber
-            .get_address_deltas(chain_info_request)
+            .get_address_deltas(chain_info_params)
             .await
     )
     .unwrap();

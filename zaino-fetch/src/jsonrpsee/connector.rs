@@ -404,7 +404,7 @@ impl JsonRpSeeConnector {
 
     /// Returns all changes for an address.
     ///
-    /// Returns information about all changes to the given transparent addresses within the given (inclusive)
+    /// Returns information about all changes to the given transparent addresses within the given block range (inclusive)
     ///
     /// block height range, default is the full blockchain.
     /// If start or end are not specified, they default to zero.
