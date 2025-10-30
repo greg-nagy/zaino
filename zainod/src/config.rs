@@ -21,6 +21,8 @@ use zaino_common::{
     ValidatorConfig,
 };
 use zaino_serve::server::config::{GrpcServerConfig, JsonRpcServerConfig};
+
+#[allow(deprecated)]
 use zaino_state::{BackendConfig, FetchServiceConfig, StateServiceConfig};
 
 /// Custom deserialization function for `BackendType` from a String.
@@ -344,6 +346,7 @@ pub fn load_config(file_path: &PathBuf) -> Result<ZainodConfig, IndexerError> {
 impl TryFrom<ZainodConfig> for BackendConfig {
     type Error = IndexerError;
 
+    #[allow(deprecated)]
     fn try_from(cfg: ZainodConfig) -> Result<Self, Self::Error> {
         match cfg.backend {
             zaino_state::BackendType::State => Ok(BackendConfig::State(StateServiceConfig {

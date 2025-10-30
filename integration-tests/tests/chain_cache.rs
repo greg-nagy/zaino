@@ -39,6 +39,7 @@ async fn create_test_manager_and_connector(
     (test_manager, json_service)
 }
 
+#[allow(deprecated)]
 mod chain_query_interface {
 
     use std::{path::PathBuf, time::Duration};
@@ -67,6 +68,7 @@ mod chain_query_interface {
 
     use super::*;
 
+    #[allow(deprecated)]
     async fn create_test_manager_and_chain_index(
         validator: &ValidatorKind,
         chain_cache: Option<std::path::PathBuf>,
