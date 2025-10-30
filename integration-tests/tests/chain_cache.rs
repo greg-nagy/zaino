@@ -134,9 +134,12 @@ mod chain_query_interface {
                     None => test_manager.data_dir.clone(),
                 };
                 let network = match test_manager.network {
-                    NetworkKind::Regtest => {
-                        zebra_chain::parameters::Network::new_regtest(activation_heights.into())
-                    }
+                    NetworkKind::Regtest => zebra_chain::parameters::Network::new_regtest(
+                        zebra_chain::parameters::testnet::ConfiguredActivationHeights::from(
+                            activation_heights,
+                        )
+                        .into(),
+                    ),
                     NetworkKind::Testnet => zebra_chain::parameters::Network::new_default_testnet(),
                     NetworkKind::Mainnet => zebra_chain::parameters::Network::Mainnet,
                 };
@@ -147,6 +150,8 @@ mod chain_query_interface {
                         delete_old_database: true,
                         debug_stop_at_height: None,
                         debug_validity_check_interval: None,
+                        // todo: does this matter?
+                        should_backup_non_finalized_state: true,
                     },
                     test_manager.zebrad_rpc_listen_address,
                     test_manager.zebrad_grpc_listen_address,
