@@ -69,7 +69,7 @@ use crate::{
 ///       ServiceSubscribers are used to create separate chain fetch processes while allowing central state processes to be managed in a single place.
 ///       If we want the ability to clone Service all JoinHandle's should be converted to Arc\<JoinHandle\>.
 #[derive(Debug)]
-#[deprecated = "Will be eventually replaced by `BlockchainSource"]
+#[deprecated = "Will be eventually replaced by `BlockchainSource`"]
 pub struct FetchService {
     /// JsonRPC Client.
     fetcher: JsonRpSeeConnector,
