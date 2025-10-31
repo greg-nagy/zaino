@@ -2,6 +2,7 @@
 
 #![forbid(unsafe_code)]
 
+use zaino_common::network::ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS;
 use zaino_fetch::jsonrpsee::connector::test_node_and_return_url;
 use zaino_state::BackendType;
 use zaino_testutils::from_inputs;
@@ -170,8 +171,7 @@ async fn send_to_transparent<V: Validator>(validator: &ValidatorKind, backend: &
 
     let fetch_service = zaino_fetch::jsonrpsee::connector::JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
-            test_manager.zebrad_rpc_listen_address,
-            false,
+            test_manager.full_node_rpc_listen_address,
             None,
             Some("xxxxxx".to_string()),
             Some("xxxxxx".to_string()),
@@ -465,8 +465,7 @@ async fn monitor_unverified_mempool_for_validator<V: Validator>(
 
     let fetch_service = zaino_fetch::jsonrpsee::connector::JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
-            test_manager.zebrad_rpc_listen_address,
-            false,
+            test_manager.full_node_rpc_listen_address,
             None,
             Some("xxxxxx".to_string()),
             Some("xxxxxx".to_string()),

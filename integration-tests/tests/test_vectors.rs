@@ -11,6 +11,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tower::{Service, ServiceExt as _};
 use zaino_common::network::ActivationHeights;
+use zaino_common::network::ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS;
 use zaino_common::DatabaseConfig;
 use zaino_common::ServiceConfig;
 use zaino_common::StorageConfig;
@@ -22,6 +23,8 @@ use zaino_state::write_u32_le;
 use zaino_state::write_u64_le;
 use zaino_state::CompactSize;
 use zaino_state::{BackendType, ChainWork, IndexedBlock};
+
+#[allow(deprecated)]
 use zaino_state::{
     StateService, StateServiceConfig, StateServiceSubscriber, ZcashIndexer, ZcashService as _,
 };
@@ -49,6 +52,7 @@ macro_rules! expected_read_response {
     };
 }
 
+#[allow(deprecated)]
 async fn create_test_manager_and_services<V: Validator + LogsToStdoutAndStderr>(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
@@ -60,32 +64,27 @@ async fn create_test_manager_and_services<V: Validator + LogsToStdoutAndStderr>(
         validator,
         &BackendType::Fetch,
         network,
+        Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
         chain_cache.clone(),
         enable_zaino,
         false,
-        false,
-        true,
-        true,
         enable_clients,
     )
     .await
     .unwrap();
 
-    let (network_type, zaino_sync_bool) = match network {
+    let network_type = match network {
         Some(NetworkKind::Mainnet) => {
             println!("Waiting for validator to spawn..");
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-            (zaino_common::Network::Mainnet, false)
+            zaino_common::Network::Mainnet
         }
         Some(NetworkKind::Testnet) => {
             println!("Waiting for validator to spawn..");
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-            (zaino_common::Network::Testnet, false)
+            zaino_common::Network::Testnet
         }
-        _ => (
-            zaino_common::Network::Regtest(ActivationHeights::default()),
-            true,
-        ),
+        _ => zaino_common::Network::Regtest(ActivationHeights::default()),
     };
 
     test_manager.local_net.print_stdout();
@@ -103,8 +102,8 @@ async fn create_test_manager_and_services<V: Validator + LogsToStdoutAndStderr>(
             debug_stop_at_height: None,
             debug_validity_check_interval: None,
         },
-        test_manager.zebrad_rpc_listen_address,
-        test_manager.zebrad_grpc_listen_address,
+        test_manager.full_node_rpc_listen_address,
+        test_manager.full_node_grpc_listen_address,
         false,
         None,
         None,
@@ -123,8 +122,6 @@ async fn create_test_manager_and_services<V: Validator + LogsToStdoutAndStderr>(
             ..Default::default()
         },
         network_type,
-        zaino_sync_bool,
-        true,
     ))
     .await
     .unwrap();
@@ -136,6 +133,7 @@ async fn create_test_manager_and_services<V: Validator + LogsToStdoutAndStderr>(
     (test_manager, state_service, state_subscriber)
 }
 
+#[allow(deprecated)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "Not a test! Used to build test vector data for zaino_state::chain_index unit tests."]
 async fn create_200_block_regtest_chain_vectors() {

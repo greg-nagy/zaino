@@ -8630,6 +8630,7 @@ version = "0.1.2"
 dependencies = [
  "futures",
  "jsonrpsee",
+ "serde",
  "thiserror 1.0.69",
  "tokio",
  "tonic 0.12.3",
@@ -8707,6 +8708,7 @@ dependencies = [
  "tonic 0.12.3",
  "tracing-subscriber",
  "zaino-common",
+ "zaino-serve",
  "zaino-state",
  "zaino-testvectors",
  "zainod",
