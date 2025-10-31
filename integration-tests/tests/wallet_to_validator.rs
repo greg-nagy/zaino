@@ -229,7 +229,7 @@ async fn send_to_transparent<Service: LightWalletService + Send + Sync + 'static
         .unwrap();
 
     dbg!(unfinalised_transactions.clone());
-    test_manager.generate_blocks_and_poll(100).await;
+    test_manager.generate_blocks_and_poll(99).await;
 
     println!("\n\nFetching Tx From Finalized Chain!\n");
 

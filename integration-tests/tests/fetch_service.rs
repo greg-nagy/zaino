@@ -388,6 +388,7 @@ async fn fetch_service_z_get_treestate(validator: &ValidatorKind) {
     clients.faucet.sync_and_await().await.unwrap();
 
     if matches!(validator, ValidatorKind::Zebrad) {
+        // TODO: investigate why 101 blocks are needed instead of the previous 100 blocks (chain index integration related?)
         test_manager
             .generate_blocks_and_poll_indexer(101, &fetch_service_subscriber)
             .await;

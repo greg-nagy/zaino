@@ -260,9 +260,6 @@ mod chain_query_interface {
             .generate_blocks_and_poll_chain_index(5, &indexer)
             .await;
         let snapshot = indexer.snapshot_nonfinalized_state();
-        for block in snapshot.blocks.values() {
-            dbg!(block.height());
-        }
         assert_eq!(snapshot.as_ref().blocks.len(), 8);
         for block_hash in snapshot.heights_to_hashes.values() {
             // As all blocks are currently on the main chain,

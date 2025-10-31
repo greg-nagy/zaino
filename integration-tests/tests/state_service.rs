@@ -1566,7 +1566,7 @@ mod zebrad {
             let (
                 mut test_manager,
                 _fetch_service,
-                fetch_service_subscriber, // no longer used
+                fetch_service_subscriber,
                 _state_service,
                 state_service_subscriber,
             ) = create_test_manager_and_services(&ValidatorKind::Zebrad, None, true, true, None)
