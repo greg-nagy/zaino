@@ -9,6 +9,7 @@ pub mod test_vectors {
 }
 
 use once_cell::sync::Lazy;
+use zainodlib::{config::ZainodConfig, error::IndexerError, indexer::Indexer};
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
@@ -358,7 +359,7 @@ pub struct TestManager<Service: LightWalletService + Send + Sync + 'static> {
     /// Zebrad/Zcashd gRpc listen address.
     pub full_node_grpc_listen_address: SocketAddr,
     /// Zaino Indexer JoinHandle.
-    pub zaino_handle: Option<tokio::task::JoinHandle<Result<(), zainodlib::error::IndexerError>>>,
+    pub zaino_handle: Option<tokio::task::JoinHandle<Result<(), IndexerError>>>,
     /// Zaino JsonRPC listen address.
     pub zaino_json_rpc_listen_address: Option<SocketAddr>,
     /// Zaino gRPC listen address.
@@ -373,7 +374,7 @@ pub struct TestManager<Service: LightWalletService + Send + Sync + 'static> {
 
 impl<Service: LightWalletService + Send + Sync + 'static> TestManager<Service>
 where
-    Service::Config: From<IndexerConfig>,
+    Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
     /// Launches zcash-local-net<Empty, Validator>.
@@ -470,14 +471,13 @@ where
             let zaino_json_listen_port = portpicker::pick_unused_port().expect("No ports free");
             let zaino_json_listen_address =
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), zaino_json_listen_port);
-            let zaino_json_server_cookie_dir: Option<PathBuf> = None;
             let indexer_config = zainodlib::config::ZainodConfig {
                 // TODO: Make configurable.
                 backend: Service::BACKEND_TYPE,
                 json_server_settings: if enable_zaino_jsonrpc_server {
                     Some(JsonRpcServerConfig {
                         json_rpc_listen_address: zaino_json_listen_address,
-                        cookie_dir: zaino_json_server_cookie_dir.clone(),
+                        cookie_dir: None,
                     })
                 } else {
                     None
@@ -505,37 +505,22 @@ where
                 network: zaino_network_kind,
             };
 
-            let (handle, service_subscriber) = Indexer::<Service>::spawn_inner(
+            let (handle, service_subscriber) = Indexer::<Service>::launch_inner(
                 Service::Config::from(indexer_config.clone()),
                 indexer_config,
             )
             .await
             .unwrap();
 
-            // let (handle, service_subscriber) =
-            //     match BackendConfig::try_from(indexer_config.clone()).unwrap() {
-            //         BackendConfig::State(state_service_config) => {
-            //             Indexer::<StateService>::spawn_inner(state_service_config, indexer_config).await.unwrap()
-            //         }
-            //         BackendConfig::Fetch(fetch_service_config) => {
-            //             Indexer::<FetchService>::spawn_inner(fetch_service_config, indexer_config).await.unwrap()
-            //         }
-            //     };
-
-            // let handle = zainodlib::indexer::spawn_indexer(indexer_config)
-            // .await
-            // .unwrap();
-
             // NOTE: This is required to give the server time to launch, this is not used in production code but could be rewritten to improve testing efficiency.
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
-            // (Some(handle), None, Some(zaino_grpc_listen_address), Some(zaino_json_listen_address), Some(zaino_json_server_cookie_dir))
             (
                 Some(handle),
                 Some(service_subscriber),
                 Some(zaino_grpc_listen_address),
                 Some(zaino_json_listen_address),
-                Some(zaino_json_server_cookie_dir),
+                None,
             )
         } else {
             (None, None, None, None, None)
@@ -682,6 +667,7 @@ async fn build_client(
 #[cfg(test)]
 mod launch_testmanager {
     use super::*;
+            #[allow(deprecated)]
     use zaino_state::FetchService;
 
     mod zcashd {
@@ -689,6 +675,7 @@ mod launch_testmanager {
         use super::*;
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
         pub(crate) async fn basic() {
             let mut test_manager = TestManager::<FetchService>::launch(
                 &ValidatorKind::Zcashd,
@@ -710,6 +697,7 @@ mod launch_testmanager {
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
         pub(crate) async fn generate_blocks() {
             let mut test_manager = TestManager::<FetchService>::launch(
                 &ValidatorKind::Zcashd,
@@ -737,6 +725,7 @@ mod launch_testmanager {
 
         #[ignore = "chain cache needs development"]
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
         pub(crate) async fn with_chain() {
             let mut test_manager = TestManager::<FetchService>::launch(
                 &ValidatorKind::Zcashd,
@@ -758,6 +747,7 @@ mod launch_testmanager {
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
         pub(crate) async fn zaino() {
             let mut test_manager = TestManager::<FetchService>::launch(
                 &ValidatorKind::Zcashd,
@@ -783,6 +773,7 @@ mod launch_testmanager {
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
         pub(crate) async fn zaino_clients() {
             let mut test_manager = TestManager::<FetchService>::launch(
                 &ValidatorKind::Zcashd,
@@ -809,6 +800,7 @@ mod launch_testmanager {
         /// This is not the case with Zcashd and should not be the case here.
         /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
         pub(crate) async fn zaino_clients_receive_mining_reward() {
             let mut test_manager = TestManager::<FetchService>::launch(
                 &ValidatorKind::Zcashd,
@@ -856,8 +848,9 @@ mod launch_testmanager {
             use super::*;
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
             pub(crate) async fn basic() {
-                let mut test_manager = TestMan::<FetchService>::launch(
+                let mut test_manager = TestManager::<FetchService>::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
@@ -877,6 +870,7 @@ mod launch_testmanager {
             }
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
             pub(crate) async fn generate_blocks() {
                 let mut test_manager = TestManager::<FetchService>::launch(
                     &ValidatorKind::Zebrad,
@@ -904,6 +898,7 @@ mod launch_testmanager {
 
             #[ignore = "chain cache needs development"]
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
             pub(crate) async fn with_chain() {
                 let mut test_manager = TestManager::<FetchService>::launch(
                     &ValidatorKind::Zebrad,
@@ -925,6 +920,7 @@ mod launch_testmanager {
             }
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
             pub(crate) async fn zaino() {
                 let mut test_manager = TestManager::<FetchService>::launch(
                     &ValidatorKind::Zebrad,
@@ -950,6 +946,7 @@ mod launch_testmanager {
             }
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
             pub(crate) async fn zaino_clients() {
                 let mut test_manager = TestManager::<FetchService>::launch(
                     &ValidatorKind::Zebrad,
@@ -976,6 +973,7 @@ mod launch_testmanager {
             /// This is not the case with Zcashd and should not be the case here.
             /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
             pub(crate) async fn zaino_clients_receive_mining_reward() {
                 let mut test_manager = TestManager::<FetchService>::launch(
                     &ValidatorKind::Zebrad,
@@ -1021,6 +1019,7 @@ mod launch_testmanager {
             }
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
             pub(crate) async fn zaino_clients_receive_mining_reward_and_send() {
                 let mut test_manager = TestManager::<FetchService>::launch(
                     &ValidatorKind::Zebrad,
@@ -1119,6 +1118,7 @@ mod launch_testmanager {
 
             #[ignore = "requires fully synced testnet."]
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
             pub(crate) async fn zaino_testnet() {
                 let mut test_manager = TestManager::<FetchService>::launch(
                     &ValidatorKind::Zebrad,
@@ -1144,10 +1144,12 @@ mod launch_testmanager {
 
         mod state_service {
             use super::*;
+            #[allow(deprecated)]
             use zaino_state::StateService;
             use zip32::AccountId;
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
             pub(crate) async fn basic() {
                 let mut test_manager = TestManager::<StateService>::launch(
                     &ValidatorKind::Zebrad,
@@ -1169,6 +1171,7 @@ mod launch_testmanager {
             }
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
             pub(crate) async fn generate_blocks() {
                 let mut test_manager = TestManager::<StateService>::launch(
                     &ValidatorKind::Zebrad,
@@ -1196,6 +1199,7 @@ mod launch_testmanager {
 
             #[ignore = "chain cache needs development"]
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
             pub(crate) async fn with_chain() {
                 let mut test_manager = TestManager::<StateService>::launch(
                     &ValidatorKind::Zebrad,
@@ -1217,6 +1221,7 @@ mod launch_testmanager {
             }
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
             pub(crate) async fn zaino() {
                 let mut test_manager = TestManager::<StateService>::launch(
                     &ValidatorKind::Zebrad,
@@ -1242,6 +1247,7 @@ mod launch_testmanager {
             }
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
             pub(crate) async fn zaino_clients() {
                 let mut test_manager = TestManager::<StateService>::launch(
                     &ValidatorKind::Zebrad,
@@ -1268,6 +1274,7 @@ mod launch_testmanager {
             /// This is not the case with Zcashd and should not be the case here.
             /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
             pub(crate) async fn zaino_clients_receive_mining_reward() {
                 let mut test_manager = TestManager::<StateService>::launch(
                     &ValidatorKind::Zebrad,
@@ -1314,6 +1321,7 @@ mod launch_testmanager {
             }
 
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
             pub(crate) async fn zaino_clients_receive_mining_reward_and_send() {
                 let mut test_manager = TestManager::<StateService>::launch(
                     &ValidatorKind::Zebrad,
@@ -1412,6 +1420,7 @@ mod launch_testmanager {
 
             #[ignore = "requires fully synced testnet."]
             #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[allow(deprecated)]
             pub(crate) async fn zaino_testnet() {
                 let mut test_manager = TestManager::<StateService>::launch(
                     &ValidatorKind::Zebrad,

@@ -136,6 +136,7 @@ async fn create_test_manager_and_services(
     )
 }
 
+#[allow(deprecated)]
 async fn generate_blocks_and_poll_all_chain_indexes(
     n: u32,
     test_manager: &TestManager<FetchService>,

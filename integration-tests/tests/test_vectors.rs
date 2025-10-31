@@ -43,16 +43,15 @@ macro_rules! expected_read_response {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "Not a test! Used to build test vector data for zaino_state::chain_index unit tests."]
+#[allow(deprecated)]
 async fn create_200_block_regtest_chain_vectors() {
-    let mut test_manager = TestManager::<StateService>::launch_with_default_activation_heights(
+    let mut test_manager = TestManager::<StateService>::launch(
         &ValidatorKind::Zebrad,
         &BackendType::State,
         None,
         None,
+        None,
         true,
-        false,
-        false,
-        false,
         false,
         true,
     )

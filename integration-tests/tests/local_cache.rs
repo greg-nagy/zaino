@@ -7,11 +7,13 @@ use zaino_state::{
     test_dependencies::{BlockCache, BlockCacheConfig, BlockCacheSubscriber},
     BackendType,
 };
-use zaino_testutils::Validator;
+#[allow(deprecated)]
+use zaino_state::FetchService;
 use zaino_testutils::{TestManager, ValidatorKind};
 use zebra_chain::{block::Height, parameters::NetworkKind};
 use zebra_state::HashOrHeight;
 
+#[allow(deprecated)]
 async fn create_test_manager_and_block_cache(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,

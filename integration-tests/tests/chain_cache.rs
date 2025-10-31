@@ -1,8 +1,11 @@
 use zaino_common::network::ActivationHeights;
 use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
-use zaino_state::{BackendType, FetchService};
+use zaino_state::BackendType;
+#[allow(deprecated)]
+use zaino_state::FetchService;
 use zaino_testutils::{TestManager, Validator as _, ValidatorKind};
 
+#[allow(deprecated)]
 async fn create_test_manager_and_connector(
     validator: &ValidatorKind,
     activation_heights: Option<ActivationHeights>,

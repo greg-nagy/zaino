@@ -1,6 +1,6 @@
 //! Tests that compare the output of both `zcashd` and `zainod` through `FetchService`.
 
-use zaino_common::network::{ActivationHeights, ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS};
+use zaino_common::network::ActivationHeights;
 use zaino_common::{DatabaseConfig, ServiceConfig, StorageConfig};
 
 #[allow(deprecated)]
@@ -24,11 +24,11 @@ async fn create_test_manager_and_fetch_services(
     FetchServiceSubscriber,
 ) {
     println!("Launching test manager..");
-    let test_manager = TestManager::<FetchService>::launch_with_default_activation_heights(
+    let test_manager = TestManager::<FetchService>::launch(
         &ValidatorKind::Zcashd,
         &BackendType::Fetch,
         None,
-        Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
+        None,
         None,
         true,
         true,
@@ -101,6 +101,22 @@ async fn create_test_manager_and_fetch_services(
         zaino_fetch_service,
         zaino_subscriber,
     )
+}
+
+#[allow(deprecated)]
+async fn generate_blocks_and_poll_all_chain_indexes(
+    n: u32,
+    test_manager: &TestManager<FetchService>,
+    zaino_subscriber: FetchServiceSubscriber,
+    zcashd_subscriber: FetchServiceSubscriber,
+) {
+    test_manager.generate_blocks_and_poll(n).await;
+    test_manager
+        .generate_blocks_and_poll_indexer(0, &zaino_subscriber)
+        .await;
+    test_manager
+        .generate_blocks_and_poll_indexer(0, &zcashd_subscriber)
+        .await;
 }
 
 async fn launch_json_server_check_info() {
@@ -289,9 +305,7 @@ async fn z_get_address_balance_inner() {
     )
     .await
     .unwrap();
-    test_manager
-        .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
-        .await;
+    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
 
     clients.recipient.sync_and_await().await.unwrap();
     let recipient_balance = clients
@@ -383,9 +397,7 @@ async fn get_raw_mempool_inner() {
         .take()
         .expect("Clients are not initialized");
 
-    test_manager
-        .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
-        .await;
+    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
 
     clients.faucet.sync_and_await().await.unwrap();
 
@@ -423,9 +435,7 @@ async fn get_mempool_info_inner() {
         .take()
         .expect("Clients are not initialized");
 
-    test_manager
-        .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
-        .await;
+    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
 
     clients.faucet.sync_and_await().await.unwrap();
 
@@ -467,9 +477,7 @@ async fn z_get_treestate_inner() {
         .await
         .unwrap();
 
-    test_manager
-        .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
-        .await;
+    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
 
     let zcashd_treestate = dbg!(zcashd_subscriber
         .z_get_treestate("2".to_string())
@@ -502,9 +510,7 @@ async fn z_get_subtrees_by_index_inner() {
         .await
         .unwrap();
 
-    test_manager
-        .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
-        .await;
+    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
 
     let zcashd_subtrees = dbg!(zcashd_subscriber
         .z_get_subtrees_by_index("orchard".to_string(), NoteCommitmentSubtreeIndex(0), None)
@@ -537,9 +543,7 @@ async fn get_raw_transaction_inner() {
         .await
         .unwrap();
 
-    test_manager
-        .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
-        .await;
+    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
 
     test_manager.local_net.print_stdout();
 
@@ -576,9 +580,7 @@ async fn get_address_tx_ids_inner() {
     )
     .await
     .unwrap();
-    test_manager
-        .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
-        .await;
+    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
 
     let chain_height = zcashd_subscriber
         .block_cache
@@ -634,9 +636,7 @@ async fn z_get_address_utxos_inner() {
     )
     .await
     .unwrap();
-    test_manager
-        .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
-        .await;
+    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
 
     clients.faucet.sync_and_await().await.unwrap();
 
@@ -717,9 +717,7 @@ mod zcashd {
 
                 assert_eq!(zcashd_difficulty, zaino_difficulty);
 
-                test_manager
-                    .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
-                    .await;
+    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
             }
 
             test_manager.close().await;
@@ -764,9 +762,7 @@ mod zcashd {
 
             assert_eq!(zcashd_peer_info, zaino_peer_info);
 
-            test_manager
-                .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
-                .await;
+    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
 
             test_manager.close().await;
         }
@@ -781,9 +777,7 @@ mod zcashd {
                 zaino_subscriber,
             ) = create_test_manager_and_fetch_services(false).await;
 
-            test_manager
-                .generate_blocks_and_poll_indexer(1, &zaino_subscriber)
-                .await;
+    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
 
             let zcashd_block_subsidy = zcashd_subscriber.get_block_subsidy(1).await.unwrap();
             let zaino_block_subsidy = zaino_subscriber.get_block_subsidy(1).await.unwrap();
