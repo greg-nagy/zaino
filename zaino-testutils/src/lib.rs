@@ -17,7 +17,7 @@ use std::{
 use tempfile::TempDir;
 use tracing_subscriber::EnvFilter;
 use zaino_common::{
-    network::ActivationHeights, validator::ValidatorConfig, CacheConfig, DatabaseConfig, Network,
+    network::{ActivationHeights, ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS}, validator::ValidatorConfig, CacheConfig, DatabaseConfig, Network,
     ServiceConfig, StorageConfig,
 };
 use zaino_serve::server::config::{GrpcServerConfig, JsonRpcServerConfig};
@@ -389,7 +389,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub async fn launch(
         validator: &ValidatorKind,
-        _backend: &BackendType,
+        _backend: &BackendType, // NOTE: this may be useful in the future depending on how we migrate to using BlockchainSource traits to replace fetch/state service types
         network: Option<NetworkKind>,
         activation_heights: Option<ActivationHeights>,
         chain_cache: Option<PathBuf>,
@@ -410,8 +410,10 @@ where
             .with_target(true)
             .try_init();
 
-            // TODO: add match for validator kind and ensure all tests use correct activation height
-        let activation_heights = activation_heights.unwrap_or_default();
+        let activation_heights = activation_heights.unwrap_or_else(|| match validator {
+            ValidatorKind::Zcashd => ActivationHeights::default(),
+            ValidatorKind::Zebrad => ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
+        });
         let network_kind = network.unwrap_or(NetworkKind::Regtest);
         let zaino_network_kind =
             Network::from_network_kind_and_activation_heights(&network_kind, &activation_heights);

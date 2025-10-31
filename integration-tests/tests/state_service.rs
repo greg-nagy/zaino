@@ -36,7 +36,7 @@ async fn create_test_manager_and_services(
         validator,
         &BackendType::Fetch,
         network,
-        Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
+        None,
         chain_cache.clone(),
         enable_zaino,
         false,

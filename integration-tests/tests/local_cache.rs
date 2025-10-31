@@ -25,16 +25,11 @@ async fn create_test_manager_and_block_cache(
     BlockCache,
     BlockCacheSubscriber,
 ) {
-    let activation_heights = match validator {
-        ValidatorKind::Zebrad => ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
-        ValidatorKind::Zcashd => ActivationHeights::default(),
-    };
-
     let test_manager = TestManager::<FetchService>::launch(
         validator,
         &BackendType::Fetch,
         None,
-        Some(activation_heights),
+        None,
         chain_cache,
         enable_zaino,
         false,

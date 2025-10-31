@@ -50,7 +50,7 @@ mod chain_query_interface {
     use futures::TryStreamExt as _;
     use tempfile::TempDir;
     use zaino_common::{
-        network::ActivationHeights, CacheConfig, DatabaseConfig, ServiceConfig, StorageConfig,
+        CacheConfig, DatabaseConfig, ServiceConfig, StorageConfig,
     };
     use zaino_state::{
         chain_index::{
@@ -84,38 +84,9 @@ mod chain_query_interface {
         NodeBackedChainIndex,
         NodeBackedChainIndexSubscriber,
     ) {
-        // until zaino is switched over to using chain index we will keep these activation heights separate.
-        // FIXME: unify acitvation heights after switchover to chain index
-        let activation_heights = match validator {
-            ValidatorKind::Zebrad => ActivationHeights {
-                overwinter: Some(1),
-                before_overwinter: Some(1),
-                sapling: Some(1),
-                blossom: Some(1),
-                heartwood: Some(1),
-                canopy: Some(1),
-                nu5: Some(2),
-                nu6: Some(2),
-                nu6_1: Some(1000),
-                nu7: None,
-            },
-            ValidatorKind::Zcashd => ActivationHeights {
-                overwinter: Some(1),
-                before_overwinter: Some(1),
-                sapling: Some(1),
-                blossom: Some(1),
-                heartwood: Some(1),
-                canopy: Some(1),
-                nu5: Some(2),
-                nu6: Some(2),
-                nu6_1: Some(2),
-                nu7: None,
-            },
-        };
-
         let (test_manager, json_service) = create_test_manager_and_connector(
             validator,
-            Some(activation_heights),
+            None,
             chain_cache.clone(),
             enable_zaino,
             enable_clients,
@@ -130,7 +101,7 @@ mod chain_query_interface {
                 };
                 let network = match test_manager.network {
                     NetworkKind::Regtest => {
-                        zebra_chain::parameters::Network::new_regtest(activation_heights.into())
+                        zebra_chain::parameters::Network::new_regtest(test_manager.local_net.get_activation_heights())
                     }
                     NetworkKind::Testnet => zebra_chain::parameters::Network::new_default_testnet(),
                     NetworkKind::Mainnet => zebra_chain::parameters::Network::Mainnet,
@@ -177,7 +148,7 @@ mod chain_query_interface {
                         ..Default::default()
                     },
                     db_version: 1,
-                    network: zaino_common::Network::Regtest(activation_heights),
+                    network: zaino_common::Network::Regtest(test_manager.local_net.get_activation_heights().into()),
                 };
                 let chain_index = NodeBackedChainIndex::new(
                     ValidatorConnector::State(chain_index::source::State {
@@ -212,7 +183,7 @@ mod chain_query_interface {
                         ..Default::default()
                     },
                     db_version: 1,
-                    network: zaino_common::Network::Regtest(activation_heights),
+                    network: zaino_common::Network::Regtest(test_manager.local_net.get_activation_heights().into()),
                 };
                 let chain_index = NodeBackedChainIndex::new(
                     ValidatorConnector::Fetch(json_service.clone()),
