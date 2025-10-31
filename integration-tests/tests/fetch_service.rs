@@ -28,7 +28,7 @@ async fn create_test_manager_and_fetch_service<V: Validator>(
     _zaino_no_sync: bool,
     enable_clients: bool,
 ) -> (TestManager<V>, FetchService, FetchServiceSubscriber) {
-    let test_manager = TestManager::<V>::launch_with_default_activation_heights(
+    let test_manager = TestManager::<V>::launch(
         validator,
         &BackendType::Fetch,
         None,
@@ -67,7 +67,8 @@ async fn launch_fetch_service<V: Validator>(
     chain_cache: Option<std::path::PathBuf>,
 ) {
     let (mut test_manager, _fetch_service, fetch_service_subscriber) =
-        create_test_manager_and_fetch_service::<V>(validator, chain_cache, false, true, false).await;
+        create_test_manager_and_fetch_service::<V>(validator, chain_cache, false, true, false)
+            .await;
     assert_eq!(fetch_service_subscriber.status(), StatusType::Ready);
     dbg!(fetch_service_subscriber.data.clone());
     dbg!(fetch_service_subscriber.get_info().await.unwrap());
