@@ -1048,7 +1048,7 @@ async fn state_service_get_address_deltas_testnet() {
 
     // Test simple response
     let simple_request =
-        GetAddressDeltasParams::new_filtered(vec![address.to_string()], 2000000, 3000000, false);
+        GetAddressDeltasParams::new_filtered(vec![address.to_string()], 1000, 2000, false);
 
     let fetch_service_simple_deltas = dbg!(
         fetch_service_subscriber
@@ -1068,7 +1068,7 @@ async fn state_service_get_address_deltas_testnet() {
 
     // Test response with chain info
     let chain_info_params =
-        GetAddressDeltasParams::new_filtered(vec![address.to_string()], 2000000, 3000000, true);
+        GetAddressDeltasParams::new_filtered(vec![address.to_string()], 1000, 2000, true);
 
     let fetch_service_chain_info_deltas = dbg!(
         fetch_service_subscriber
