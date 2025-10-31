@@ -42,3 +42,4 @@ zingolib = { git = "https://github.com/Oscar-Pepper/zingolib.git", branch = "deb
 
 # Zingo-infra
 zingo_test_vectors = { git = "https://github.com/zingolabs/infrastructure.git", tag = "zcash_local_net_v0.1.0" }
+zcash_local_net = { git = "https://github.com/zingolabs/infrastructure.git", tag = "zcash_local_net_v0.1.0" }

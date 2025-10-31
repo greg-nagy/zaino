@@ -1,4 +1,4 @@
-use zaino_common::network::{ActivationHeights, ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS};
+use zaino_common::network::ActivationHeights;
 use zaino_common::{DatabaseConfig, ServiceConfig, StorageConfig};
 use zaino_state::BackendType;
 
