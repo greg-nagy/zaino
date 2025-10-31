@@ -5,6 +5,8 @@ use tracing::info;
 
 use zaino_fetch::jsonrpsee::connector::test_node_and_return_url;
 use zaino_serve::server::{config::GrpcServerConfig, grpc::TonicServer, jsonrpc::JsonRpcServer};
+
+#[allow(deprecated)]
 use zaino_state::{
     BackendConfig, FetchService, IndexerService, LightWalletService, StateService, StatusType,
     ZcashIndexer, ZcashService,
@@ -36,6 +38,7 @@ pub async fn start_indexer(
 }
 
 /// Spawns a new Indexer server.
+#[allow(deprecated)]
 pub async fn spawn_indexer(
     config: ZainodConfig,
 ) -> Result<tokio::task::JoinHandle<Result<(), IndexerError>>, IndexerError> {
@@ -198,8 +201,8 @@ where
             None => StatusType::Offline,
         };
 
-        let json_server_status = match &self.server {
-            Some(server) => server.status(),
+        let json_server_status = match &self.json_server {
+            Some(json_server) => json_server.status(),
             None => StatusType::Offline,
         };
 
