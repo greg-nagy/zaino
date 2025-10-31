@@ -228,6 +228,8 @@ pub trait ZcashIndexerRpc {
     /// - verbose: (boolean, optional, default=true) true for a json object, false for the hex encoded data
     ///
     /// zcashd reference: [`getblockheader`](https://zcash.github.io/rpc/getblockheader.html)
+    /// zcashd implementation [here](https://github.com/zcash/zcash/blob/16ac743764a513e41dafb2cd79c2417c5bb41e81/src/rpc/blockchain.cpp#L668)
+    ///
     /// method: post
     /// tags: blockchain
     #[method(name = "getblockheader")]

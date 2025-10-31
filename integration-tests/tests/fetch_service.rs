@@ -758,7 +758,22 @@ async fn fetch_service_get_block_header(validator: &ValidatorKind) {
             .get_block_header(block_hash.to_string(), false)
             .await
             .unwrap();
+
+        let fetch_service_get_block_header_verbose = fetch_service_subscriber
+            .get_block_header(block_hash.to_string(), false)
+            .await
+            .unwrap();
+
+        let rpc_block_header_response_verbose = jsonrpc_client
+            .get_block_header(block_hash.to_string(), false)
+            .await
+            .unwrap();
+
         assert_eq!(fetch_service_get_block_header, rpc_block_header_response);
+        assert_eq!(
+            fetch_service_get_block_header_verbose,
+            rpc_block_header_response_verbose
+        );
     }
 }
 
