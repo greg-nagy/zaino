@@ -22,6 +22,7 @@ use std::{
 use tracing::error;
 use zebra_rpc::client::ValidateAddressResponse;
 
+use crate::jsonrpsee::response::address_deltas::GetAddressDeltasError;
 use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
     response::{
@@ -415,7 +416,7 @@ impl JsonRpSeeConnector {
     pub async fn get_address_deltas(
         &self,
         params: GetAddressDeltasParams,
-    ) -> Result<GetAddressDeltasResponse, RpcRequestError<Infallible>> {
+    ) -> Result<GetAddressDeltasResponse, RpcRequestError<GetAddressDeltasError>> {
         let params = vec![serde_json::to_value(params).map_err(RpcRequestError::JsonRpc)?];
         self.send_request("getaddressdeltas", params).await
     }

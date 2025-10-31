@@ -1,11 +1,9 @@
 //! Types associated with the `getaddressdeltas` RPC request.
 
-use std::convert::Infallible;
-
 use serde::{Deserialize, Serialize};
 use zebra_rpc::client::{Input, Output, TransactionObject};
 
-use crate::jsonrpsee::connector::ResponseToError;
+use crate::jsonrpsee::connector::{ResponseToError, RpcError};
 
 /// Request parameters for the `getaddressdeltas` RPC method.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
@@ -126,14 +124,29 @@ impl GetAddressDeltasResponse {
     }
 }
 
-impl ResponseToError for GetAddressDeltasResponse {
-    // type RpcError = GetAddressDeltasError;
-    type RpcError = Infallible;
-}
-
 /// Error type used for the `getaddressdeltas` RPC request.
 #[derive(Debug, thiserror::Error)]
-pub enum GetAddressDeltasError {}
+pub enum GetAddressDeltasError {
+    /// Invalid encoding
+    #[error("Invalid encoding: {0}")]
+    InvalidEncoding(String),
+
+    /// Wrong block range
+    #[error("Invalid block range. Start = {0}, End = {1}")]
+    InvalidBlockRange(u32, u32),
+}
+
+impl ResponseToError for GetAddressDeltasResponse {
+    type RpcError = GetAddressDeltasError;
+}
+
+impl TryFrom<RpcError> for GetAddressDeltasError {
+    type Error = RpcError;
+
+    fn try_from(value: RpcError) -> Result<Self, Self::Error> {
+        Err(value)
+    }
+}
 
 /// Represents a change in the balance of a transparent address.
 #[derive(Debug, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
