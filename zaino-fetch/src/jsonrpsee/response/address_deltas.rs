@@ -222,14 +222,14 @@ impl AddressDelta {
 /// Block information for `getaddressdeltas` responses with `chaininfo = true`.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct BlockInfo {
-    /// The block hash, hex-encoded
+    /// The block hash in hex-encoded display order
     pub hash: String,
     /// The block height
     pub height: u32,
 }
 
 impl BlockInfo {
-    /// Creates a new BlockInfo from hash and height.
+    /// Creates a new BlockInfo from a hash in hex-encoded display order and height.
     pub fn new(hash: String, height: u32) -> Self {
         Self { hash, height }
     }
