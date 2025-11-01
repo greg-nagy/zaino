@@ -21,8 +21,8 @@ use zaino_common::{
 use zaino_serve::server::config::{GrpcServerConfig, JsonRpcServerConfig};
 use zaino_state::BackendType;
 pub use zcash_local_net as services;
+use zcash_local_net::validator::zcashd::ZcashdConfig;
 use zcash_local_net::validator::Validator;
-use zcash_local_net::validator::{zcashd::ZcashdConfig, zebrad::ZebradConfig};
 use zebra_chain::parameters::NetworkKind;
 use zingo_test_vectors::seeds;
 pub use zingolib::get_base_address_macro;
@@ -186,7 +186,6 @@ impl<C: Validator> TestManager<C> {
     /// If clients is set to active zingolib lightclients will be created for test use.
     ///
     /// TODO: Add TestManagerConfig struct and constructor methods of common test setups.
-    #[allow(clippy::too_many_arguments)]
     pub async fn launch(
         validator: &ValidatorKind,
         backend: &BackendType,
