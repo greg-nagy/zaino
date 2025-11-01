@@ -1024,11 +1024,6 @@ impl ZcashIndexer for StateServiceSubscriber {
             GetAddressDeltasResponse::process_transactions_to_deltas(&transactions, &addresses);
 
         if chain_info && start > Height(0) && end > Height(0) {
-            // zcashd validates range fits on chain when returning the object
-            if start > tip || end > tip {
-                return Err(StateServiceError::Custom("Wrong range".to_string()));
-            }
-
             let start_info = self.block_info_from_height(start).await?;
             let end_info = self.block_info_from_height(end).await?;
 
