@@ -81,7 +81,7 @@ impl GetAddressDeltasResponse {
     ) -> Vec<AddressDelta> {
         let mut deltas: Vec<AddressDelta> = transactions
             .iter()
-            .filter(|tx| tx.height().unwrap_or(0) > 0) // Filtering out coinbase
+            .filter(|tx| tx.height().unwrap_or(0) > 0)
             .flat_map(|tx| {
                 let txid = tx.txid().to_string();
                 let height = tx.height().unwrap(); // height > 0 due to previous filter
