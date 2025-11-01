@@ -221,15 +221,16 @@ impl<C: Validator> TestManager<C> {
         }
 
         // Launch LocalNet:
-        let rpc_listen_port = portpicker::pick_unused_port().expect("No ports free");
         let grpc_listen_port = portpicker::pick_unused_port().expect("No ports free");
-        let full_node_rpc_listen_address =
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rpc_listen_port);
         let full_node_grpc_listen_address =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), grpc_listen_port);
         let local_net = C::launch_default()
             .await
             .expect("to launch a default validator");
+        let rpc_listen_port = local_net.get_port();
+        let full_node_rpc_listen_address =
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rpc_listen_port);
+
         let data_dir = local_net.data_dir().path().to_path_buf();
         let zaino_db_path = data_dir.join("zaino");
 
@@ -506,7 +507,7 @@ mod launch_testmanager {
             test_manager.close().await;
         }
 
-        /// This test shows currently we do not receive mining rewards from Zebra unless we mine 100 blocks at a time.
+        /// This test shows nothing about zebrad.
         /// This is not the case with Zcashd and should not be the case here.
         /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
