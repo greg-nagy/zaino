@@ -1019,11 +1019,9 @@ impl ZcashIndexer for StateServiceSubscriber {
             .get_taddress_txs(addresses.clone(), start.0, end.0, true)
             .await?;
 
-        let mut deltas =
+        // Ordered deltas
+        let deltas =
             GetAddressDeltasResponse::process_transactions_to_deltas(&transactions, &addresses);
-
-        // zcashd-like ordering
-        deltas.sort_by_key(|d| (d.height, d.block_index.unwrap_or(u32::MAX), d.index));
 
         if chain_info && start > Height(0) && end > Height(0) {
             // zcashd validates range fits on chain when returning the object
