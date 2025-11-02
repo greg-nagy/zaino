@@ -1,7 +1,5 @@
 //! Types associated with the `getblockheader` RPC request.
 
-use std::collections::BTreeMap;
-
 use serde::{Deserialize, Serialize};
 
 use zebra_rpc::methods::opthex;
@@ -39,6 +37,7 @@ pub enum GetBlockHeaderError {
 ///
 /// See the notes for the `get_block_header` method.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct VerboseBlockHeader {
     /// The hash of the requested block.
     #[serde(with = "hex")]
@@ -119,10 +118,6 @@ pub struct VerboseBlockHeader {
         skip_serializing_if = "Option::is_none"
     )]
     pub next_block_hash: Option<String>,
-
-    /// Catch-all for any extra/undocumented fields.
-    #[serde(flatten)]
-    pub extra: BTreeMap<String, serde_json::Value>,
 }
 
 impl ResponseToError for GetBlockHeader {
@@ -168,9 +163,7 @@ mod tests {
           "difficulty": 123456.789,
           "chainwork": "0000000000000000000000000000000000000000000000000000000000001234",
           "previousblockhash": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
-          "nextblockhash": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
-          "mediantime": 1700000500,
-          "nTx": 12
+          "nextblockhash": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f"
         }"#
     }
 
@@ -195,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn deserialize_verbose_zcashd_includes_chainwork_and_extra() {
+    fn deserialize_verbose_zcashd_includes_chainwork() {
         match serde_json::from_str::<VerboseBlockHeader>(zcashd_verbose_json()) {
             Ok(block_header) => {
                 assert_eq!(
@@ -241,13 +234,6 @@ mod tests {
                     block_header.next_block_hash.as_deref(),
                     Some("000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f")
                 );
-
-                // Extras
-                assert_eq!(
-                    block_header.extra.get("mediantime"),
-                    Some(&json!(1_700_000_500))
-                );
-                assert_eq!(block_header.extra.get("nTx"), Some(&json!(12)));
             }
             Err(e) => {
                 panic!(
@@ -319,9 +305,6 @@ mod tests {
                     Some("000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f")
                 );
                 assert!(block_header.next_block_hash.is_none());
-
-                // No extras
-                assert!(block_header.extra.is_empty());
             }
             Err(e) => {
                 panic!(
@@ -380,7 +363,7 @@ mod tests {
     }
 
     #[test]
-    fn zcashd_roundtrip_preserves_chainwork_and_extras() {
+    fn zcashd_roundtrip_preserves_chainwork() {
         let block_header: GetBlockHeader = serde_json::from_str(zcashd_verbose_json()).unwrap();
         let header_value: Value = serde_json::to_value(&block_header).unwrap();
         let header_object = header_value.as_object().unwrap();
@@ -391,9 +374,6 @@ mod tests {
                 "0000000000000000000000000000000000000000000000000000000000001234"
             ))
         );
-
-        assert_eq!(header_object.get("mediantime"), Some(&json!(1_700_000_500)));
-        assert_eq!(header_object.get("nTx"), Some(&json!(12)));
     }
 
     #[test]
