@@ -59,6 +59,8 @@ pub struct VerboseBlockHeader {
 
     /// The blockcommitments field of the requested block. Its interpretation changes
     /// depending on the network and height.
+    ///
+    /// This field is only present in Zebra. It was added [here](https://github.com/ZcashFoundation/zebra/pull/9217).
     #[serde(
         with = "opthex",
         rename = "blockcommitments",
@@ -71,15 +73,6 @@ pub struct VerboseBlockHeader {
     #[serde(with = "opthex", rename = "finalsaplingroot")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub final_sapling_root: Option<[u8; 32]>,
-
-    /// The root of the Orchard commitment tree after applying this block.
-    #[serde(
-        with = "opthex",
-        rename = "finalorchardroot",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
-    final_orchard_root: Option<[u8; 32]>,
 
     /// The block time of the requested block header in non-leap seconds since Jan 1 1970 GMT.
     pub time: i64,
@@ -177,7 +170,6 @@ mod tests {
           "merkleroot": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
           "blockcommitments": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
           "finalsaplingroot": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
-          "finalorchardroot": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
           "time": 1699999999,
           "nonce": "33nonce",
           "solution": "44solution",
@@ -284,13 +276,6 @@ mod tests {
                     .unwrap()
                 );
 
-                assert_eq!(
-                    block_header.final_orchard_root.unwrap(),
-                    <[u8; 32]>::from_hex(
-                        "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f"
-                    )
-                    .unwrap()
-                );
                 assert_eq!(block_header.time, 1_699_999_999);
                 assert_eq!(block_header.nonce, "33nonce");
                 assert_eq!(block_header.solution, "44solution");
@@ -386,7 +371,6 @@ mod tests {
           "version": 4,
           "merkleroot": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
           "finalsaplingroot": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
-          "finalorchardroot": "000000000053d2771290ff1b57181bd067ae0e55a367ba8ddee2d961ea27a14f",
           "time": 1477641369,
           "nonce": "nonce",
           "solution": "solution",
