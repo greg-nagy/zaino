@@ -1,18 +1,16 @@
 use zaino_common::network::ActivationHeights;
 use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
 use zaino_state::BackendType;
-use zaino_testutils::{TestManager, Validator as _, ValidatorKind};
+use zaino_testutils::{TestManager, ValidatorKind};
 
-async fn create_test_manager_and_connector(
+async fn create_test_manager_and_connector<T: zcash_local_net::validator::Validator>(
     validator: &ValidatorKind,
     activation_heights: Option<ActivationHeights>,
     chain_cache: Option<std::path::PathBuf>,
     enable_zaino: bool,
-    zaino_no_sync: bool,
-    zaino_no_db: bool,
     enable_clients: bool,
-) -> (TestManager, JsonRpSeeConnector) {
-    let test_manager = TestManager::launch(
+) -> (TestManager<T>, JsonRpSeeConnector) {
+    let test_manager = TestManager::<T>::launch(
         validator,
         &BackendType::Fetch,
         None,
@@ -20,9 +18,6 @@ async fn create_test_manager_and_connector(
         chain_cache,
         enable_zaino,
         false,
-        false,
-        zaino_no_sync,
-        zaino_no_db,
         enable_clients,
     )
     .await
@@ -30,8 +25,7 @@ async fn create_test_manager_and_connector(
 
     let json_service = JsonRpSeeConnector::new_with_basic_auth(
         test_node_and_return_url(
-            test_manager.zebrad_rpc_listen_address,
-            false,
+            test_manager.full_node_rpc_listen_address,
             None,
             Some("xxxxxx".to_string()),
             Some("xxxxxx".to_string()),
@@ -45,6 +39,7 @@ async fn create_test_manager_and_connector(
     (test_manager, json_service)
 }
 
+#[allow(deprecated)]
 mod chain_query_interface {
 
     use std::{path::PathBuf, time::Duration};
@@ -66,6 +61,7 @@ mod chain_query_interface {
         },
         Height, StateService, StateServiceConfig, ZcashService as _,
     };
+    use zcash_local_net::validator::{zcashd::Zcashd, zebrad::Zebrad, Validator};
     use zebra_chain::{
         parameters::NetworkKind,
         serialization::{ZcashDeserialize, ZcashDeserializeInto},
@@ -73,15 +69,14 @@ mod chain_query_interface {
 
     use super::*;
 
-    async fn create_test_manager_and_chain_index(
+    #[allow(deprecated)]
+    async fn create_test_manager_and_chain_index<C: Validator>(
         validator: &ValidatorKind,
         chain_cache: Option<std::path::PathBuf>,
         enable_zaino: bool,
-        zaino_no_sync: bool,
-        zaino_no_db: bool,
         enable_clients: bool,
     ) -> (
-        TestManager,
+        TestManager<C>,
         JsonRpSeeConnector,
         Option<StateService>,
         NodeBackedChainIndex,
@@ -116,13 +111,11 @@ mod chain_query_interface {
             },
         };
 
-        let (test_manager, json_service) = create_test_manager_and_connector(
+        let (test_manager, json_service) = create_test_manager_and_connector::<C>(
             validator,
             Some(activation_heights),
             chain_cache.clone(),
             enable_zaino,
-            zaino_no_sync,
-            zaino_no_db,
             enable_clients,
         )
         .await;
@@ -153,8 +146,8 @@ mod chain_query_interface {
                         // todo: does this matter?
                         should_backup_non_finalized_state: true,
                     },
-                    test_manager.zebrad_rpc_listen_address,
-                    test_manager.zebrad_grpc_listen_address,
+                    test_manager.full_node_rpc_listen_address,
+                    test_manager.full_node_grpc_listen_address,
                     false,
                     None,
                     None,
@@ -163,18 +156,11 @@ mod chain_query_interface {
                     StorageConfig {
                         cache: CacheConfig::default(),
                         database: DatabaseConfig {
-                            path: test_manager
-                                .local_net
-                                .data_dir()
-                                .path()
-                                .to_path_buf()
-                                .join("zaino"),
+                            path: test_manager.data_dir.as_path().to_path_buf().join("zaino"),
                             ..Default::default()
                         },
                     },
                     network.into(),
-                    true,
-                    true,
                 ))
                 .await
                 .unwrap();
@@ -190,8 +176,6 @@ mod chain_query_interface {
                     },
                     db_version: 1,
                     network: zaino_common::Network::Regtest(activation_heights),
-                    no_sync: false,
-                    no_db: false,
                 };
                 let chain_index = NodeBackedChainIndex::new(
                     ValidatorConnector::State(chain_index::source::State {
@@ -227,8 +211,6 @@ mod chain_query_interface {
                     },
                     db_version: 1,
                     network: zaino_common::Network::Regtest(activation_heights),
-                    no_sync: false,
-                    no_db: false,
                 };
                 let chain_index = NodeBackedChainIndex::new(
                     ValidatorConnector::Fetch(json_service.clone()),
@@ -246,20 +228,20 @@ mod chain_query_interface {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_block_range_zebrad() {
-        get_block_range(&ValidatorKind::Zebrad).await
+        get_block_range::<Zebrad>(&ValidatorKind::Zebrad).await
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_block_range_zcashd() {
-        get_block_range(&ValidatorKind::Zcashd).await
+        get_block_range::<Zcashd>(&ValidatorKind::Zcashd).await
     }
 
-    async fn get_block_range(validator: &ValidatorKind) {
+    async fn get_block_range<C: Validator>(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(validator, None, false, false, false, false).await;
+            create_test_manager_and_chain_index::<C>(validator, None, false, false).await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
-        test_manager.generate_blocks_with_delay(5).await;
+        let _ = test_manager.local_net.generate_blocks_with_delay(5).await;
         let snapshot = indexer.snapshot_nonfinalized_state();
         assert_eq!(snapshot.as_ref().blocks.len(), 8);
         let range = indexer
@@ -288,20 +270,20 @@ mod chain_query_interface {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn find_fork_point_zebrad() {
-        find_fork_point(&ValidatorKind::Zebrad).await
+        find_fork_point::<Zebrad>(&ValidatorKind::Zebrad).await
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn find_fork_point_zcashd() {
-        find_fork_point(&ValidatorKind::Zcashd).await
+        find_fork_point::<Zcashd>(&ValidatorKind::Zcashd).await
     }
 
-    async fn find_fork_point(validator: &ValidatorKind) {
+    async fn find_fork_point<C: Validator>(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(validator, None, false, false, false, false).await;
+            create_test_manager_and_chain_index::<C>(validator, None, false, false).await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
-        test_manager.generate_blocks_with_delay(5).await;
+        let _ = test_manager.local_net.generate_blocks_with_delay(5).await;
         let snapshot = indexer.snapshot_nonfinalized_state();
         assert_eq!(snapshot.as_ref().blocks.len(), 8);
         for block_hash in snapshot.heights_to_hashes.values() {
@@ -320,20 +302,20 @@ mod chain_query_interface {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_raw_transaction_zebrad() {
-        get_raw_transaction(&ValidatorKind::Zebrad).await
+        get_raw_transaction::<Zebrad>(&ValidatorKind::Zebrad).await
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_raw_transaction_zcashd() {
-        get_raw_transaction(&ValidatorKind::Zcashd).await
+        get_raw_transaction::<Zcashd>(&ValidatorKind::Zcashd).await
     }
 
-    async fn get_raw_transaction(validator: &ValidatorKind) {
+    async fn get_raw_transaction<C: Validator>(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(validator, None, false, false, false, false).await;
+            create_test_manager_and_chain_index::<C>(validator, None, false, false).await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
-        test_manager.generate_blocks_with_delay(5).await;
+        let _ = test_manager.local_net.generate_blocks_with_delay(5).await;
         let snapshot = indexer.snapshot_nonfinalized_state();
         assert_eq!(snapshot.as_ref().blocks.len(), 8);
         for (txid, height) in snapshot.blocks.values().flat_map(|block| {
@@ -374,24 +356,24 @@ mod chain_query_interface {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_transaction_status_zebrad() {
-        get_transaction_status(&ValidatorKind::Zebrad).await
+        get_transaction_status::<Zebrad>(&ValidatorKind::Zebrad).await
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn get_transaction_status_zcashd() {
-        get_transaction_status(&ValidatorKind::Zcashd).await
+        get_transaction_status::<Zcashd>(&ValidatorKind::Zcashd).await
     }
 
-    async fn get_transaction_status(validator: &ValidatorKind) {
+    async fn get_transaction_status<C: Validator>(validator: &ValidatorKind) {
         let (test_manager, _json_service, _option_state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(validator, None, false, false, false, false).await;
+            create_test_manager_and_chain_index::<C>(validator, None, false, false).await;
         let snapshot = indexer.snapshot_nonfinalized_state();
         // I don't know where this second block is generated. Somewhere in the
         // guts of create_test_manager_and_chain_index
         assert_eq!(snapshot.as_ref().blocks.len(), 3);
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
-        test_manager.generate_blocks_with_delay(5).await;
+        let _ = test_manager.local_net.generate_blocks_with_delay(5).await;
         let snapshot = indexer.snapshot_nonfinalized_state();
         assert_eq!(snapshot.as_ref().blocks.len(), 8);
         for (txid, height, block_hash) in snapshot.blocks.values().flat_map(|block| {
@@ -414,20 +396,20 @@ mod chain_query_interface {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn sync_large_chain_zebrad() {
-        sync_large_chain(&ValidatorKind::Zebrad).await
+        sync_large_chain::<Zebrad>(&ValidatorKind::Zebrad).await
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn sync_large_chain_zcashd() {
-        sync_large_chain(&ValidatorKind::Zcashd).await
+        sync_large_chain::<Zcashd>(&ValidatorKind::Zcashd).await
     }
 
-    async fn sync_large_chain(validator: &ValidatorKind) {
+    async fn sync_large_chain<C: Validator>(validator: &ValidatorKind) {
         let (test_manager, json_service, _option_state_service, _chain_index, indexer) =
-            create_test_manager_and_chain_index(validator, None, false, false, false, false).await;
+            create_test_manager_and_chain_index::<C>(validator, None, false, false).await;
 
         // this delay had to increase. Maybe we tweak sync loop rerun time?
-        test_manager.generate_blocks_with_delay(5).await;
+        let _ = test_manager.local_net.generate_blocks_with_delay(5).await;
         {
             let chain_height =
                 Height::try_from(json_service.get_blockchain_info().await.unwrap().blocks.0)
@@ -436,7 +418,7 @@ mod chain_query_interface {
             assert_eq!(chain_height, indexer_height);
         }
 
-        test_manager.generate_blocks_with_delay(150).await;
+        let _ = test_manager.local_net.generate_blocks_with_delay(150).await;
 
         tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
 

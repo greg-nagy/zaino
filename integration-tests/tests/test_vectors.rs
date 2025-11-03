@@ -11,6 +11,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tower::{Service, ServiceExt as _};
 use zaino_common::network::ActivationHeights;
+use zaino_common::network::ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS;
 use zaino_common::DatabaseConfig;
 use zaino_common::ServiceConfig;
 use zaino_common::StorageConfig;
@@ -22,13 +23,17 @@ use zaino_state::write_u32_le;
 use zaino_state::write_u64_le;
 use zaino_state::CompactSize;
 use zaino_state::{BackendType, ChainWork, IndexedBlock};
+
+#[allow(deprecated)]
 use zaino_state::{
     StateService, StateServiceConfig, StateServiceSubscriber, ZcashIndexer, ZcashService as _,
 };
 use zaino_testutils::from_inputs;
 use zaino_testutils::test_vectors::transactions::get_test_vectors;
-use zaino_testutils::Validator as _;
 use zaino_testutils::{TestManager, ValidatorKind};
+use zcash_local_net::logs::LogsToStdoutAndStderr;
+use zcash_local_net::validator::zebrad::Zebrad;
+use zcash_local_net::validator::Validator;
 use zebra_chain::parameters::NetworkKind;
 use zebra_chain::serialization::{ZcashDeserialize, ZcashSerialize};
 use zebra_rpc::methods::GetAddressUtxos;
@@ -47,43 +52,39 @@ macro_rules! expected_read_response {
     };
 }
 
-async fn create_test_manager_and_services(
+#[allow(deprecated)]
+async fn create_test_manager_and_services<V: Validator + LogsToStdoutAndStderr>(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
     enable_zaino: bool,
     enable_clients: bool,
     network: Option<NetworkKind>,
-) -> (TestManager, StateService, StateServiceSubscriber) {
-    let test_manager = TestManager::launch_with_default_activation_heights(
+) -> (TestManager<V>, StateService, StateServiceSubscriber) {
+    let test_manager = TestManager::<V>::launch_with_default_activation_heights(
         validator,
         &BackendType::Fetch,
         network,
+        Some(ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS),
         chain_cache.clone(),
         enable_zaino,
         false,
-        false,
-        true,
-        true,
         enable_clients,
     )
     .await
     .unwrap();
 
-    let (network_type, zaino_sync_bool) = match network {
+    let network_type = match network {
         Some(NetworkKind::Mainnet) => {
             println!("Waiting for validator to spawn..");
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-            (zaino_common::Network::Mainnet, false)
+            zaino_common::Network::Mainnet
         }
         Some(NetworkKind::Testnet) => {
             println!("Waiting for validator to spawn..");
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
-            (zaino_common::Network::Testnet, false)
+            zaino_common::Network::Testnet
         }
-        _ => (
-            zaino_common::Network::Regtest(ActivationHeights::default()),
-            true,
-        ),
+        _ => zaino_common::Network::Regtest(ActivationHeights::default()),
     };
 
     test_manager.local_net.print_stdout();
@@ -101,8 +102,8 @@ async fn create_test_manager_and_services(
             debug_stop_at_height: None,
             debug_validity_check_interval: None,
         },
-        test_manager.zebrad_rpc_listen_address,
-        test_manager.zebrad_grpc_listen_address,
+        test_manager.full_node_rpc_listen_address,
+        test_manager.full_node_grpc_listen_address,
         false,
         None,
         None,
@@ -121,8 +122,6 @@ async fn create_test_manager_and_services(
             ..Default::default()
         },
         network_type,
-        zaino_sync_bool,
-        true,
     ))
     .await
     .unwrap();
@@ -134,11 +133,13 @@ async fn create_test_manager_and_services(
     (test_manager, state_service, state_subscriber)
 }
 
+#[allow(deprecated)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "Not a test! Used to build test vector data for zaino_state::chain_index unit tests."]
 async fn create_200_block_regtest_chain_vectors() {
     let (mut test_manager, _state_service, state_service_subscriber) =
-        create_test_manager_and_services(&ValidatorKind::Zebrad, None, true, true, None).await;
+        create_test_manager_and_services::<Zebrad>(&ValidatorKind::Zebrad, None, true, true, None)
+            .await;
 
     let mut clients = test_manager
         .clients
