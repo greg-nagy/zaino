@@ -609,15 +609,28 @@ where
         indexer: &impl LightWalletIndexer,
     ) {
         let chain_height = self.local_net.get_chain_height().await;
-        if n != 0 {
-            self.local_net.generate_blocks(n).await.unwrap();
-        }
+        let mut next_block_height = u64::from(chain_height) + 1;
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         interval.tick().await;
+        // NOTE: readstate service seems to not be functioning correctly when generate multiple blocks at once and polling the latest block.
+        // commented out a fall back to `get_block` to query the cache directly if needed in the future.
+        // while indexer.get_block(zaino_proto::proto::service::BlockId {
+        //     height: u64::from(chain_height) + n as u64,
+        //     hash: vec![],
+        // }).await.is_err()
         while indexer.get_latest_block().await.unwrap().height < u64::from(chain_height) + n as u64
         {
-            interval.tick().await;
+            if n == 0 {
+                interval.tick().await;
+            } else {
+                self.local_net.generate_blocks(1).await.unwrap();
+                while indexer.get_latest_block().await.unwrap().height != next_block_height
+                {            
+                    interval.tick().await;
+                }
+                next_block_height += 1;
+            }
         }
     }
 
@@ -628,7 +641,7 @@ where
         chain_index: &NodeBackedChainIndexSubscriber,
     ) {
         let chain_height = self.local_net.get_chain_height().await;
-        self.local_net.generate_blocks(n).await.unwrap();
+        let mut next_block_height = u32::from(chain_height) + 1;
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         interval.tick().await;
@@ -639,7 +652,22 @@ where
                 .height,
         ) < u32::from(chain_height) + n
         {
-            interval.tick().await;
+            if n == 0 {
+                interval.tick().await;
+            } else {
+                self.local_net.generate_blocks(1).await.unwrap();
+                while
+                    u32::from(
+                    chain_index
+                        .snapshot_nonfinalized_state()
+                        .best_chaintip()
+                        .height,
+                    ) != next_block_height
+                {            
+                    interval.tick().await;
+                }
+                next_block_height += 1;
+            }
         }
     }
 

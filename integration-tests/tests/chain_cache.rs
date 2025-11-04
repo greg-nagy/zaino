@@ -62,7 +62,7 @@ mod chain_query_interface {
             chain_index::{self, ChainIndex},
             BlockCacheConfig,
         },
-        Height, StateService, StateServiceConfig, ZcashService as _,
+        Height, StateService, StateServiceConfig, ZcashService,
     };
     use zebra_chain::{
         parameters::NetworkKind,
@@ -380,12 +380,17 @@ mod chain_query_interface {
     }
 
     async fn sync_large_chain(validator: &ValidatorKind) {
-        let (test_manager, json_service, _option_state_service, _chain_index, indexer) =
+        let (test_manager, json_service, option_state_service, _chain_index, indexer) =
             create_test_manager_and_chain_index(validator, None, false, false).await;
 
         test_manager
             .generate_blocks_and_poll_chain_index(5, &indexer)
             .await;
+        if let Some(state_service) = option_state_service.as_ref() {
+            test_manager
+                .generate_blocks_and_poll_indexer(0, state_service.get_subscriber().inner_ref())
+                .await;
+        }
         {
             let chain_height =
                 Height::try_from(json_service.get_blockchain_info().await.unwrap().blocks.0)
@@ -397,6 +402,11 @@ mod chain_query_interface {
         test_manager
             .generate_blocks_and_poll_chain_index(150, &indexer)
             .await;
+        if let Some(state_service) = option_state_service.as_ref() {
+            test_manager
+                .generate_blocks_and_poll_indexer(0, state_service.get_subscriber().inner_ref())
+                .await;
+        }
 
         tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
 

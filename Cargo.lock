@@ -8549,6 +8549,7 @@ dependencies = [
  "tonic 0.13.1",
  "tracing-subscriber",
  "zaino-common",
+ "zaino-proto",
  "zaino-serve",
  "zaino-state",
  "zaino-testvectors",
