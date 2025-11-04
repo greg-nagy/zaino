@@ -1671,13 +1671,14 @@ mod zebra {
                 .await
                 .unwrap();
 
-            assert!(
-                matches!(
-                    fs_address_deltas_filtered,
-                    GetAddressDeltasResponse::Simple(_)
-                ),
-                "Expected simple format (when start = 0, even if chain_info = true)"
-            );
+            // Extract and assert: when start = 0, should return Simple variant even if chain_info = true
+            if let GetAddressDeltasResponse::Simple(address_deltas) = fs_address_deltas_filtered {
+                assert!(!address_deltas.is_empty(), "Expected deltas for both addresses");
+                // Should contain deltas for both recipient and faucet addresses
+                assert!(address_deltas.len() >= 2, "Expected deltas from multiple addresses");
+            } else {
+                panic!("Expected Simple variant");
+            }
 
             let fs_address_deltas_filtered_with_chaininfo = state_service_subscriber
                 .get_address_deltas(GetAddressDeltasParams::Filtered {
@@ -1689,13 +1690,15 @@ mod zebra {
                 .await
                 .unwrap();
 
-            assert!(
-                matches!(
-                    fs_address_deltas_filtered_with_chaininfo,
-                    GetAddressDeltasResponse::WithChainInfo { .. }
-                ),
-                "Expected filtered format (when start > 0 & chain_info = true)"
-            );
+            // Extract and assert: when start > 0 and chain_info = true, should return WithChainInfo variant
+            if let GetAddressDeltasResponse::WithChainInfo { deltas, start, end } = fs_address_deltas_filtered_with_chaininfo {
+                assert!(!deltas.is_empty(), "Expected deltas with chain info");
+                assert_eq!(start.height, 1, "Start block should be height 1");
+                assert_eq!(end.height, 104, "End block should be height 104");
+                assert!(start.height < end.height, "Start height should be less than end height");
+            } else {
+                panic!("Expected WithChainInfo variant");
+            }
 
             let start_end_clamped = state_service_subscriber
                 .get_address_deltas(GetAddressDeltasParams::Filtered {
