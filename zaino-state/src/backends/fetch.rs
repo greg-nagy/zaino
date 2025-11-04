@@ -24,6 +24,7 @@ use zaino_fetch::{
         connector::{JsonRpSeeConnector, RpcError},
         response::{
             address_deltas::{GetAddressDeltasParams, GetAddressDeltasResponse},
+            block_header::GetBlockHeader,
             block_subsidy::GetBlockSubsidy,
             mining_info::GetMiningInfoWire,
             peer_info::GetPeerInfo,
@@ -414,6 +415,14 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_block(hash_or_height, verbosity)
             .await?
             .try_into()?)
+    }
+
+    async fn get_block_header(
+        &self,
+        hash: String,
+        verbose: bool,
+    ) -> Result<GetBlockHeader, Self::Error> {
+        Ok(self.fetcher.get_block_header(hash, verbose).await?)
     }
 
     async fn get_mining_info(&self) -> Result<GetMiningInfoWire, Self::Error> {

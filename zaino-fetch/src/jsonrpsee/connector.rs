@@ -27,6 +27,7 @@ use crate::jsonrpsee::{
     error::{JsonRpcError, TransportError},
     response::{
         address_deltas::{GetAddressDeltasParams, GetAddressDeltasResponse},
+        block_header::{GetBlockHeader, GetBlockHeaderError},
         block_subsidy::GetBlockSubsidy,
         mining_info::GetMiningInfoWire,
         peer_info::GetPeerInfo,
@@ -566,6 +567,29 @@ impl JsonRpSeeConnector {
                 .await
                 .map(GetBlockResponse::Object)
         }
+    }
+
+    /// If verbose is false, returns a string that is serialized, hex-encoded data for blockheader `hash`.
+    /// If verbose is true, returns an Object with information about blockheader `hash`.
+    ///
+    /// # Parameters
+    ///
+    /// - hash: (string, required) The block hash
+    /// - verbose: (boolean, optional, default=true) true for a json object, false for the hex encoded data
+    ///
+    /// zcashd reference: [`getblockheader`](https://zcash.github.io/rpc/getblockheader.html)
+    /// method: post
+    /// tags: blockchain
+    pub async fn get_block_header(
+        &self,
+        hash: String,
+        verbose: bool,
+    ) -> Result<GetBlockHeader, RpcRequestError<GetBlockHeaderError>> {
+        let params = [
+            serde_json::to_value(hash).map_err(RpcRequestError::JsonRpc)?,
+            serde_json::to_value(verbose).map_err(RpcRequestError::JsonRpc)?,
+        ];
+        self.send_request("getblockheader", params).await
     }
 
     /// Returns the hash of the best block (tip) of the longest chain.
