@@ -1640,21 +1640,17 @@ mod zebra {
 
             // Test constants
             const EXPECTED_TX_HEIGHT: u32 = 102;
-            const EXPECTED_CHAIN_TIP: u32 = 102;
-            const FILTER_START_ZERO: u32 = 0;
-            const FILTER_START_ONE: u32 = 1;
-            const FILTER_END_NORMAL: u32 = 104;
-            const FILTER_END_BEYOND_TIP: u32 = 200;
 
             // ============================================================
             // Test 1: Simple address query (single address, no filters)
             // ============================================================
-            let fs_address_deltas = state_service_subscriber
-                .get_address_deltas(GetAddressDeltasParams::Address(recipient_taddr.clone()))
+            let params_simple = GetAddressDeltasParams::Address(recipient_taddr.clone());
+            let response_simple = state_service_subscriber
+                .get_address_deltas(params_simple)
                 .await
                 .unwrap();
 
-            if let GetAddressDeltasResponse::Simple(address_deltas) = fs_address_deltas {
+            if let GetAddressDeltasResponse::Simple(address_deltas) = response_simple {
                 assert!(!address_deltas.is_empty(), "Expected at least one delta");
                 let recipient_delta = address_deltas
                     .iter()
@@ -1669,17 +1665,18 @@ mod zebra {
             // ============================================================
             // Test 2: Filtered query with start=0 (should return Simple variant)
             // ============================================================
-            let fs_address_deltas_filtered = state_service_subscriber
-                .get_address_deltas(GetAddressDeltasParams::Filtered {
-                    addresses: vec![recipient_taddr.clone(), faucet_taddr.clone()],
-                    start: FILTER_START_ZERO,
-                    end: FILTER_END_NORMAL,
-                    chain_info: true,
-                })
+            let params_filtered_start_zero = GetAddressDeltasParams::Filtered {
+                addresses: vec![recipient_taddr.clone(), faucet_taddr.clone()],
+                start: 0,
+                end: 104,
+                chain_info: true,
+            };
+            let response_filtered = state_service_subscriber
+                .get_address_deltas(params_filtered_start_zero)
                 .await
                 .unwrap();
 
-            if let GetAddressDeltasResponse::Simple(address_deltas) = fs_address_deltas_filtered {
+            if let GetAddressDeltasResponse::Simple(address_deltas) = response_filtered {
                 assert!(!address_deltas.is_empty(), "Expected deltas for both addresses");
                 assert!(address_deltas.len() >= 2, "Expected deltas from multiple addresses");
             } else {
@@ -1689,67 +1686,75 @@ mod zebra {
             // ============================================================
             // Test 3: Filtered query with start>0 and chain_info=true
             // ============================================================
-            let fs_address_deltas_filtered_with_chaininfo = state_service_subscriber
-                .get_address_deltas(GetAddressDeltasParams::Filtered {
-                    addresses: vec![recipient_taddr.clone(), faucet_taddr.clone()],
-                    start: FILTER_START_ONE,
-                    end: FILTER_END_NORMAL,
-                    chain_info: true,
-                })
+            let params_with_chaininfo = GetAddressDeltasParams::Filtered {
+                addresses: vec![recipient_taddr.clone(), faucet_taddr.clone()],
+                start: 1,
+                end: 104,
+                chain_info: true,
+            };
+            let response_with_chaininfo = state_service_subscriber
+                .get_address_deltas(params_with_chaininfo.clone())
                 .await
                 .unwrap();
 
-            if let GetAddressDeltasResponse::WithChainInfo { deltas, start, end } = fs_address_deltas_filtered_with_chaininfo {
-                assert!(!deltas.is_empty(), "Expected deltas with chain info");
-                assert_eq!(start.height, FILTER_START_ONE, "Start block should match request");
-                assert_eq!(end.height, FILTER_END_NORMAL, "End block should match request");
-                assert!(start.height < end.height, "Start height should be less than end height");
-            } else {
-                panic!("Expected WithChainInfo variant");
+            if let GetAddressDeltasParams::Filtered { start: req_start, end: req_end, .. } = &params_with_chaininfo {
+                if let GetAddressDeltasResponse::WithChainInfo { deltas, start, end } = response_with_chaininfo {
+                    assert!(!deltas.is_empty(), "Expected deltas with chain info");
+                    assert_eq!(start.height, *req_start, "Start block should match request");
+                    assert_eq!(end.height, *req_end, "End block should match request");
+                    assert!(start.height < end.height, "Start height should be less than end height");
+                } else {
+                    panic!("Expected WithChainInfo variant");
+                }
             }
 
             // ============================================================
             // Test 4: Height clamping (end beyond chain tip)
             // ============================================================
-            let start_end_clamped = state_service_subscriber
-                .get_address_deltas(GetAddressDeltasParams::Filtered {
-                    addresses: vec![recipient_taddr.clone(), faucet_taddr.clone()],
-                    start: FILTER_START_ONE,
-                    end: FILTER_END_BEYOND_TIP,
-                    chain_info: true,
-                })
+            let params_clamped = GetAddressDeltasParams::Filtered {
+                addresses: vec![recipient_taddr.clone(), faucet_taddr.clone()],
+                start: 1,
+                end: 200,
+                chain_info: true,
+            };
+            let response_clamped = state_service_subscriber
+                .get_address_deltas(params_clamped.clone())
                 .await
                 .unwrap();
 
-            if let GetAddressDeltasResponse::WithChainInfo { deltas, start, end } = start_end_clamped {
-                assert!(!deltas.is_empty(), "Expected deltas with clamped range");
-                assert_eq!(start.height, FILTER_START_ONE, "Start should match request");
-                assert!(end.height < FILTER_END_BEYOND_TIP, "End height should be clamped");
-                assert!(end.height <= FILTER_END_NORMAL, "End height should not exceed chain tip region");
-            } else {
-                panic!("Expected WithChainInfo variant");
+            if let GetAddressDeltasParams::Filtered { start: req_start, end: req_end, .. } = &params_clamped {
+                if let GetAddressDeltasResponse::WithChainInfo { deltas, start, end } = response_clamped {
+                    assert!(!deltas.is_empty(), "Expected deltas with clamped range");
+                    assert_eq!(start.height, *req_start, "Start should match request");
+                    assert!(end.height < *req_end, "End height should be clamped below requested value");
+                    assert!(end.height <= 104, "End height should not exceed chain tip region");
+                } else {
+                    panic!("Expected WithChainInfo variant");
+                }
             }
 
             // ============================================================
             // Test 5: Non-existent address (should return empty deltas)
             // ============================================================
-            let non_existent_addr = "tmVqEASZxBNKFTbmASZikGa5fPLkd68iJyx".to_string();
-            let non_existent_address = state_service_subscriber
-                .get_address_deltas(GetAddressDeltasParams::Filtered {
-                    addresses: vec![non_existent_addr],
-                    start: FILTER_START_ONE,
-                    end: FILTER_END_BEYOND_TIP,
-                    chain_info: true,
-                })
+            let params_non_existent = GetAddressDeltasParams::Filtered {
+                addresses: vec!["tmVqEASZxBNKFTbmASZikGa5fPLkd68iJyx".to_string()],
+                start: 1,
+                end: 200,
+                chain_info: true,
+            };
+            let response_non_existent = state_service_subscriber
+                .get_address_deltas(params_non_existent.clone())
                 .await
                 .unwrap();
 
-            if let GetAddressDeltasResponse::WithChainInfo { deltas, start, end } = non_existent_address {
-                assert!(deltas.is_empty(), "Non-existent address should have no deltas");
-                assert_eq!(start.height, FILTER_START_ONE, "Start height should match request");
-                assert!(end.height > 0, "End height should be set");
-            } else {
-                panic!("Expected WithChainInfo variant");
+            if let GetAddressDeltasParams::Filtered { start: req_start, .. } = &params_non_existent {
+                if let GetAddressDeltasResponse::WithChainInfo { deltas, start, end } = response_non_existent {
+                    assert!(deltas.is_empty(), "Non-existent address should have no deltas");
+                    assert_eq!(start.height, *req_start, "Start height should match request");
+                    assert!(end.height > 0, "End height should be set");
+                } else {
+                    panic!("Expected WithChainInfo variant");
+                }
             }
 
             test_manager.close().await;
