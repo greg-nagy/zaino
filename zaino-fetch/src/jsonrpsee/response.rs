@@ -4,8 +4,9 @@
 //! to prevent locking consumers into a zebra_rpc version
 
 pub mod block_deltas;
+pub mod block_header;
 pub mod block_subsidy;
-mod common;
+pub mod common;
 pub mod mining_info;
 pub mod peer_info;
 

@@ -23,9 +23,9 @@ use zaino_fetch::{
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
         response::{
-            block_deltas::BlockDeltas, block_subsidy::GetBlockSubsidy,
-            mining_info::GetMiningInfoWire, peer_info::GetPeerInfo, GetMempoolInfoResponse,
-            GetNetworkSolPsResponse,
+            block_deltas::BlockDeltas, block_header::GetBlockHeader,
+            block_subsidy::GetBlockSubsidy, mining_info::GetMiningInfoWire, peer_info::GetPeerInfo,
+            GetMempoolInfoResponse, GetNetworkSolPsResponse,
         },
     },
 };
@@ -397,6 +397,14 @@ impl ZcashIndexer for FetchServiceSubscriber {
     /// Note: This method has only been implemented in `zcashd`. Zebra has no intention of supporting it.
     async fn get_block_deltas(&self, hash: String) -> Result<BlockDeltas, Self::Error> {
         Ok(self.fetcher.get_block_deltas(hash).await?)
+    }
+
+    async fn get_block_header(
+        &self,
+        hash: String,
+        verbose: bool,
+    ) -> Result<GetBlockHeader, Self::Error> {
+        Ok(self.fetcher.get_block_header(hash, verbose).await?)
     }
 
     async fn get_mining_info(&self) -> Result<GetMiningInfoWire, Self::Error> {
