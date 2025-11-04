@@ -1700,6 +1700,7 @@ mod zebra {
                 panic!("Expected WithChainInfo variant");
             }
 
+            // Test that end height is clamped to actual chain height (requested 200, should clamp to ~102)
             let start_end_clamped = state_service_subscriber
                 .get_address_deltas(GetAddressDeltasParams::Filtered {
                     addresses: vec![recipient_taddr.clone(), faucet_taddr.clone()],
@@ -1707,9 +1708,17 @@ mod zebra {
                     end: 200,
                     chain_info: true,
                 })
-                .await;
+                .await
+                .unwrap();
 
-            assert!(start_end_clamped.is_ok());
+            if let GetAddressDeltasResponse::WithChainInfo { deltas, start, end } = start_end_clamped {
+                assert!(!deltas.is_empty(), "Expected deltas with clamped range");
+                assert_eq!(start.height, 1, "Start should remain at 1");
+                assert!(end.height < 200, "End height should be clamped to actual chain height");
+                assert!(end.height <= 104, "End height should be at most the chain tip");
+            } else {
+                panic!("Expected WithChainInfo variant");
+            }
 
             let non_existent_address = state_service_subscriber
                 .get_address_deltas(GetAddressDeltasParams::Filtered {
