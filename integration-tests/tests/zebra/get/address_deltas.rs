@@ -1,6 +1,12 @@
 use super::*;
 
-async fn setup_chain(test_manager: &mut TestManager) -> (String, String, u32) {
+// Test constants
+const EXPECTED_TX_HEIGHT: u32 = 102;
+const EXPECTED_CHAIN_TIP: u32 = 104;
+const HEIGHT_BEYOND_TIP: u32 = 200;
+const NON_EXISTENT_ADDRESS: &str = "tmVqEASZxBNKFTbmASZikGa5fPLkd68iJyx";
+
+async fn setup_chain(test_manager: &mut TestManager) -> (String, String) {
     let mut clients = test_manager
         .clients
         .take()
@@ -30,14 +36,12 @@ async fn setup_chain(test_manager: &mut TestManager) -> (String, String, u32) {
 
     clients.recipient.sync_and_await().await.unwrap();
 
-    const EXPECTED_TX_HEIGHT: u32 = 102;
-    (recipient_taddr, faucet_taddr, EXPECTED_TX_HEIGHT)
+    (recipient_taddr, faucet_taddr)
 }
 
 async fn test_simple_query(
     subscriber: &StateServiceSubscriber,
     recipient_taddr: &str,
-    expected_tx_height: u32,
 ) {
     let params = GetAddressDeltasParams::Address(recipient_taddr.to_string());
     let response = subscriber.get_address_deltas(params).await.unwrap();
@@ -46,10 +50,10 @@ async fn test_simple_query(
         assert!(!address_deltas.is_empty(), "Expected at least one delta");
         let recipient_delta = address_deltas
             .iter()
-            .find(|d| d.height >= expected_tx_height)
+            .find(|d| d.height >= EXPECTED_TX_HEIGHT)
             .expect("Should find recipient transaction delta");
         assert!(
-            recipient_delta.height >= expected_tx_height,
+            recipient_delta.height >= EXPECTED_TX_HEIGHT,
             "Transaction should be at expected height"
         );
         assert_eq!(recipient_delta.index, 0, "Expected output index 0");
@@ -66,7 +70,7 @@ async fn test_filtered_start_zero(
     let params = GetAddressDeltasParams::Filtered {
         addresses: vec![recipient_taddr.to_string(), faucet_taddr.to_string()],
         start: 0,
-        end: 104,
+        end: EXPECTED_CHAIN_TIP,
         chain_info: true,
     };
     let response = subscriber.get_address_deltas(params).await.unwrap();
@@ -90,7 +94,7 @@ async fn test_with_chaininfo(
     let params = GetAddressDeltasParams::Filtered {
         addresses: vec![recipient_taddr.to_string(), faucet_taddr.to_string()],
         start: 1,
-        end: 104,
+        end: EXPECTED_CHAIN_TIP,
         chain_info: true,
     };
     let response = subscriber
@@ -127,7 +131,7 @@ async fn test_height_clamping(
     let params = GetAddressDeltasParams::Filtered {
         addresses: vec![recipient_taddr.to_string(), faucet_taddr.to_string()],
         start: 1,
-        end: 200,
+        end: HEIGHT_BEYOND_TIP,
         chain_info: true,
     };
     let response = subscriber
@@ -150,7 +154,7 @@ async fn test_height_clamping(
                 "End height should be clamped below requested value"
             );
             assert!(
-                end.height <= 104,
+                end.height <= EXPECTED_CHAIN_TIP,
                 "End height should not exceed chain tip region"
             );
         } else {
@@ -161,9 +165,9 @@ async fn test_height_clamping(
 
 async fn test_non_existent_address(subscriber: &StateServiceSubscriber) {
     let params = GetAddressDeltasParams::Filtered {
-        addresses: vec!["tmVqEASZxBNKFTbmASZikGa5fPLkd68iJyx".to_string()],
+        addresses: vec![NON_EXISTENT_ADDRESS.to_string()],
         start: 1,
-        end: 200,
+        end: HEIGHT_BEYOND_TIP,
         chain_info: true,
     };
     let response = subscriber
@@ -202,14 +206,12 @@ pub(super) async fn main() {
     )
     .await;
 
-    let (recipient_taddr, faucet_taddr, expected_tx_height) =
-        setup_chain(&mut test_manager).await;
+    let (recipient_taddr, faucet_taddr) = setup_chain(&mut test_manager).await;
 
     // ============================================================
     // Test 1: Simple address query (single address, no filters)
     // ============================================================
-    test_simple_query(&state_service_subscriber, &recipient_taddr, expected_tx_height)
-        .await;
+    test_simple_query(&state_service_subscriber, &recipient_taddr).await;
 
     // ============================================================
     // Test 2: Filtered query with start=0 (should return Simple variant)
