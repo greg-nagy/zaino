@@ -1598,6 +1598,11 @@ mod zebra {
             state_service_get_address_deltas_testnet().await;
         }
 
+        #[tokio::test]
+        async fn address_deltas() {
+            address_deltas::main().await;
+        }
+
         mod address_deltas {
             use super::*;
 
@@ -1787,8 +1792,7 @@ mod zebra {
                 }
             }
 
-            #[tokio::test]
-            async fn scenario() {
+            pub(super) async fn main() {
                 let (
                     mut test_manager,
                     _fetch_service,
