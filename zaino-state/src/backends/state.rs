@@ -28,8 +28,9 @@ use zaino_fetch::{
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
         response::{
-            block_subsidy::GetBlockSubsidy, mining_info::GetMiningInfoWire, peer_info::GetPeerInfo,
-            GetMempoolInfoResponse, GetNetworkSolPsResponse, GetSubtreesResponse,
+            block_header::GetBlockHeader, block_subsidy::GetBlockSubsidy,
+            mining_info::GetMiningInfoWire, peer_info::GetPeerInfo, GetMempoolInfoResponse,
+            GetNetworkSolPsResponse, GetSubtreesResponse,
         },
     },
 };
@@ -57,10 +58,10 @@ use zebra_rpc::{
     },
     methods::{
         chain_tip_difficulty, AddressBalance, AddressStrings, ConsensusBranchIdHex,
-        GetAddressTxIdsRequest, GetAddressUtxos, GetBlock, GetBlockHash, GetBlockHeader,
-        GetBlockHeaderObject, GetBlockTransaction, GetBlockTrees, GetBlockchainInfoResponse,
-        GetInfo, GetRawTransaction, NetworkUpgradeInfo, NetworkUpgradeStatus, SentTransactionHash,
-        TipConsensusBranch,
+        GetAddressTxIdsRequest, GetAddressUtxos, GetBlock, GetBlockHash,
+        GetBlockHeader as GetBlockHeaderZebra, GetBlockHeaderObject, GetBlockTransaction,
+        GetBlockTrees, GetBlockchainInfoResponse, GetInfo, GetRawTransaction, NetworkUpgradeInfo,
+        NetworkUpgradeStatus, SentTransactionHash, TipConsensusBranch,
     },
     server::error::LegacyCode,
     sync::init_read_state_with_syncer,
@@ -412,12 +413,12 @@ impl StateServiceSubscriber {
     ///
     /// This rpc is used by get_block(verbose), there is currently no
     /// plan to offer this RPC publicly.
-    async fn get_block_header(
+    async fn get_block_header_inner(
         state: &ReadStateService,
         network: &Network,
         hash_or_height: HashOrHeight,
         verbose: Option<bool>,
-    ) -> Result<GetBlockHeader, StateServiceError> {
+    ) -> Result<GetBlockHeaderZebra, StateServiceError> {
         let mut state = state.clone();
         let verbose = verbose.unwrap_or(true);
         let network = network.clone();
@@ -448,7 +449,7 @@ impl StateServiceSubscriber {
         };
 
         let response = if !verbose {
-            GetBlockHeader::Raw(HexData(header.zcash_serialize_to_vec()?))
+            GetBlockHeaderZebra::Raw(HexData(header.zcash_serialize_to_vec()?))
         } else {
             let zebra_state::ReadResponse::SaplingTree(sapling_tree) = state
                 .ready()
@@ -527,7 +528,7 @@ impl StateServiceSubscriber {
                 next_block_hash,
             );
 
-            GetBlockHeader::Object(Box::new(block_header))
+            GetBlockHeaderZebra::Object(Box::new(block_header))
         };
 
         Ok(response)
@@ -755,7 +756,7 @@ impl StateServiceSubscriber {
                 let (fullblock, orchard_tree_response, header, block_info) = futures::join!(
                     blockandsize_future,
                     orchard_future,
-                    StateServiceSubscriber::get_block_header(
+                    StateServiceSubscriber::get_block_header_inner(
                         &state_3,
                         network,
                         hash_or_height,
@@ -765,10 +766,10 @@ impl StateServiceSubscriber {
                 );
 
                 let header_obj = match header? {
-                    GetBlockHeader::Raw(_hex_data) => unreachable!(
+                    GetBlockHeaderZebra::Raw(_hex_data) => unreachable!(
                         "`true` was passed to get_block_header, an object should be returned"
                     ),
-                    GetBlockHeader::Object(get_block_header_object) => get_block_header_object,
+                    GetBlockHeaderZebra::Object(get_block_header_object) => get_block_header_object,
                 };
 
                 let (transactions_response, size, block_info): (Vec<GetBlockTransaction>, _, _) =
@@ -1107,6 +1108,17 @@ impl ZcashIndexer for StateServiceSubscriber {
             .await
             .map(SentTransactionHash::from)
             .map_err(Into::into)
+    }
+
+    async fn get_block_header(
+        &self,
+        hash: String,
+        verbose: bool,
+    ) -> Result<GetBlockHeader, Self::Error> {
+        self.rpc_client
+            .get_block_header(hash, verbose)
+            .await
+            .map_err(|e| StateServiceError::Custom(e.to_string()))
     }
 
     async fn z_get_block(
