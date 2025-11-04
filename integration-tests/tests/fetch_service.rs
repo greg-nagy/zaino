@@ -1571,7 +1571,6 @@ mod zcashd {
                     true,
                     true,
                     true,
-                    true,
                 )
                 .await;
 
@@ -1590,8 +1589,7 @@ mod zcashd {
 
             let jsonrpc_client = JsonRpSeeConnector::new_with_basic_auth(
                 test_node_and_return_url(
-                    test_manager.zebrad_rpc_listen_address,
-                    false,
+                    test_manager.full_node_rpc_listen_address,
                     None,
                     Some("xxxxxx".to_string()),
                     Some("xxxxxx".to_string()),
