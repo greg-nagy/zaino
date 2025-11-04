@@ -1720,6 +1720,7 @@ mod zebra {
                 panic!("Expected WithChainInfo variant");
             }
 
+            // Test that querying a non-existent address returns empty deltas without error
             let non_existent_address = state_service_subscriber
                 .get_address_deltas(GetAddressDeltasParams::Filtered {
                     addresses: vec!["tmVqEASZxBNKFTbmASZikGa5fPLkd68iJyx".to_string()],
@@ -1727,9 +1728,16 @@ mod zebra {
                     end: 200,
                     chain_info: true,
                 })
-                .await;
+                .await
+                .unwrap();
 
-            assert!(non_existent_address.is_ok());
+            if let GetAddressDeltasResponse::WithChainInfo { deltas, start, end } = non_existent_address {
+                assert!(deltas.is_empty(), "Non-existent address should have no deltas");
+                assert_eq!(start.height, 1, "Start height should match request");
+                assert!(end.height > 0, "End height should be set");
+            } else {
+                panic!("Expected WithChainInfo variant");
+            }
 
             test_manager.close().await;
         }
