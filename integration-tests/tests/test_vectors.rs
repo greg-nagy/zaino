@@ -17,10 +17,10 @@ use zaino_state::read_u64_le;
 use zaino_state::write_u32_le;
 use zaino_state::write_u64_le;
 use zaino_state::CompactSize;
-use zaino_state::{BackendType, ChainWork, IndexedBlock};
-use zaino_state::ZcashIndexer;
 #[allow(deprecated)]
 use zaino_state::StateService;
+use zaino_state::ZcashIndexer;
+use zaino_state::{BackendType, ChainWork, IndexedBlock};
 use zaino_testutils::from_inputs;
 use zaino_testutils::test_vectors::transactions::get_test_vectors;
 use zaino_testutils::{TestManager, ValidatorKind};

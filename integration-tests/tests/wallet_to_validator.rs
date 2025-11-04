@@ -23,18 +23,10 @@ async fn connect_to_node_get_info_for_validator<
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
-    let mut test_manager = TestManager::<Service>::launch(
-        validator,
-        backend,
-        None,
-        None,
-        None,
-        true,
-        false,
-        true,
-    )
-    .await
-    .unwrap();
+    let mut test_manager =
+        TestManager::<Service>::launch(validator, backend, None, None, None, true, false, true)
+            .await
+            .unwrap();
     let clients = test_manager
         .clients
         .take()
@@ -53,18 +45,10 @@ async fn send_to_orchard<Service: LightWalletService + Send + Sync + 'static>(
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
-    let mut test_manager = TestManager::<Service>::launch(
-        validator,
-        backend,
-        None,
-        None,
-        None,
-        true,
-        false,
-        true,
-    )
-    .await
-    .unwrap();
+    let mut test_manager =
+        TestManager::<Service>::launch(validator, backend, None, None, None, true, false, true)
+            .await
+            .unwrap();
     let mut clients = test_manager
         .clients
         .take()
@@ -109,18 +93,10 @@ async fn send_to_sapling<Service: LightWalletService + Send + Sync + 'static>(
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
-    let mut test_manager = TestManager::<Service>::launch(
-        validator,
-        backend,
-        None,
-        None,
-        None,
-        true,
-        false,
-        true,
-    )
-    .await
-    .unwrap();
+    let mut test_manager =
+        TestManager::<Service>::launch(validator, backend, None, None, None, true, false, true)
+            .await
+            .unwrap();
     let mut clients = test_manager
         .clients
         .take()
@@ -165,18 +141,10 @@ async fn send_to_transparent<Service: LightWalletService + Send + Sync + 'static
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
-    let mut test_manager = TestManager::<Service>::launch(
-        validator,
-        backend,
-        None,
-        None,
-        None,
-        true,
-        false,
-        true,
-    )
-    .await
-    .unwrap();
+    let mut test_manager =
+        TestManager::<Service>::launch(validator, backend, None, None, None, true, false, true)
+            .await
+            .unwrap();
     let mut clients = test_manager
         .clients
         .take()
@@ -271,18 +239,10 @@ async fn send_to_all<Service: LightWalletService + Send + Sync + 'static>(
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
-    let mut test_manager = TestManager::<Service>::launch(
-        validator,
-        backend,
-        None,
-        None,
-        None,
-        true,
-        false,
-        true,
-    )
-    .await
-    .unwrap();
+    let mut test_manager =
+        TestManager::<Service>::launch(validator, backend, None, None, None, true, false, true)
+            .await
+            .unwrap();
     let mut clients = test_manager
         .clients
         .take()
@@ -365,18 +325,10 @@ async fn shield_for_validator<Service: LightWalletService + Send + Sync + 'stati
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
-    let mut test_manager = TestManager::<Service>::launch(
-        validator,
-        backend,
-        None,
-        None,
-        None,
-        true,
-        false,
-        true,
-    )
-    .await
-    .unwrap();
+    let mut test_manager =
+        TestManager::<Service>::launch(validator, backend, None, None, None, true, false, true)
+            .await
+            .unwrap();
     let mut clients = test_manager
         .clients
         .take()
@@ -443,18 +395,10 @@ async fn monitor_unverified_mempool_for_validator<
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
-    let mut test_manager = TestManager::<Service>::launch(
-        validator,
-        backend,
-        None,
-        None,
-        None,
-        true,
-        false,
-        true,
-    )
-    .await
-    .unwrap();
+    let mut test_manager =
+        TestManager::<Service>::launch(validator, backend, None, None, None, true, false, true)
+            .await
+            .unwrap();
     let mut clients = test_manager
         .clients
         .take()
@@ -603,13 +547,13 @@ async fn monitor_unverified_mempool_for_validator<
 }
 
 mod zcashd {
-            #[allow(deprecated)]
+    #[allow(deprecated)]
     use zaino_state::FetchService;
 
     use super::*;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+    #[allow(deprecated)]
     async fn connect_to_node_get_info() {
         connect_to_node_get_info_for_validator::<FetchService>(
             &ValidatorKind::Zcashd,
@@ -622,38 +566,38 @@ mod zcashd {
         use super::*;
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+        #[allow(deprecated)]
         pub(crate) async fn orchard() {
             send_to_orchard::<FetchService>(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+        #[allow(deprecated)]
         pub(crate) async fn sapling() {
             send_to_sapling::<FetchService>(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+        #[allow(deprecated)]
         pub(crate) async fn transparent() {
             send_to_transparent::<FetchService>(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+        #[allow(deprecated)]
         pub(crate) async fn all() {
             send_to_all::<FetchService>(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
         }
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+    #[allow(deprecated)]
     async fn shield() {
         shield_for_validator::<FetchService>(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+    #[allow(deprecated)]
     async fn monitor_unverified_mempool() {
         monitor_unverified_mempool_for_validator::<FetchService>(
             &ValidatorKind::Zcashd,
@@ -667,12 +611,12 @@ mod zebrad {
     use super::*;
 
     mod fetch_service {
-            #[allow(deprecated)]
-        use zaino_state::FetchService;
         use super::*;
+        #[allow(deprecated)]
+        use zaino_state::FetchService;
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+        #[allow(deprecated)]
         async fn connect_to_node_get_info() {
             connect_to_node_get_info_for_validator::<FetchService>(
                 &ValidatorKind::Zebrad,
@@ -710,13 +654,13 @@ mod zebrad {
             }
         }
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+        #[allow(deprecated)]
         async fn shield() {
             shield_for_validator::<FetchService>(&ValidatorKind::Zebrad, &BackendType::Fetch).await;
         }
         /// Bug documented in https://github.com/zingolabs/zaino/issues/144.
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+        #[allow(deprecated)]
         async fn monitor_unverified_mempool() {
             monitor_unverified_mempool_for_validator::<FetchService>(
                 &ValidatorKind::Zebrad,
@@ -727,12 +671,12 @@ mod zebrad {
     }
 
     mod state_service {
-            #[allow(deprecated)]
-        use zaino_state::StateService;
         use super::*;
+        #[allow(deprecated)]
+        use zaino_state::StateService;
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+        #[allow(deprecated)]
         async fn connect_to_node_get_info() {
             connect_to_node_get_info_for_validator::<StateService>(
                 &ValidatorKind::Zebrad,
@@ -770,13 +714,13 @@ mod zebrad {
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+        #[allow(deprecated)]
         async fn shield() {
             shield_for_validator::<StateService>(&ValidatorKind::Zebrad, &BackendType::State).await;
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+        #[allow(deprecated)]
         async fn monitor_unverified_mempool() {
             monitor_unverified_mempool_for_validator::<StateService>(
                 &ValidatorKind::Zebrad,

@@ -305,7 +305,13 @@ async fn z_get_address_balance_inner() {
     )
     .await
     .unwrap();
-    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
+    generate_blocks_and_poll_all_chain_indexes(
+        1,
+        &test_manager,
+        zaino_subscriber.clone(),
+        zcashd_subscriber.clone(),
+    )
+    .await;
 
     clients.recipient.sync_and_await().await.unwrap();
     let recipient_balance = clients
@@ -397,7 +403,13 @@ async fn get_raw_mempool_inner() {
         .take()
         .expect("Clients are not initialized");
 
-    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
+    generate_blocks_and_poll_all_chain_indexes(
+        1,
+        &test_manager,
+        zaino_subscriber.clone(),
+        zcashd_subscriber.clone(),
+    )
+    .await;
 
     clients.faucet.sync_and_await().await.unwrap();
 
@@ -435,7 +447,13 @@ async fn get_mempool_info_inner() {
         .take()
         .expect("Clients are not initialized");
 
-    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
+    generate_blocks_and_poll_all_chain_indexes(
+        1,
+        &test_manager,
+        zaino_subscriber.clone(),
+        zcashd_subscriber.clone(),
+    )
+    .await;
 
     clients.faucet.sync_and_await().await.unwrap();
 
@@ -477,7 +495,13 @@ async fn z_get_treestate_inner() {
         .await
         .unwrap();
 
-    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
+    generate_blocks_and_poll_all_chain_indexes(
+        1,
+        &test_manager,
+        zaino_subscriber.clone(),
+        zcashd_subscriber.clone(),
+    )
+    .await;
 
     let zcashd_treestate = dbg!(zcashd_subscriber
         .z_get_treestate("2".to_string())
@@ -510,7 +534,13 @@ async fn z_get_subtrees_by_index_inner() {
         .await
         .unwrap();
 
-    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
+    generate_blocks_and_poll_all_chain_indexes(
+        1,
+        &test_manager,
+        zaino_subscriber.clone(),
+        zcashd_subscriber.clone(),
+    )
+    .await;
 
     let zcashd_subtrees = dbg!(zcashd_subscriber
         .z_get_subtrees_by_index("orchard".to_string(), NoteCommitmentSubtreeIndex(0), None)
@@ -543,7 +573,13 @@ async fn get_raw_transaction_inner() {
         .await
         .unwrap();
 
-    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
+    generate_blocks_and_poll_all_chain_indexes(
+        1,
+        &test_manager,
+        zaino_subscriber.clone(),
+        zcashd_subscriber.clone(),
+    )
+    .await;
 
     test_manager.local_net.print_stdout();
 
@@ -580,7 +616,13 @@ async fn get_address_tx_ids_inner() {
     )
     .await
     .unwrap();
-    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
+    generate_blocks_and_poll_all_chain_indexes(
+        1,
+        &test_manager,
+        zaino_subscriber.clone(),
+        zcashd_subscriber.clone(),
+    )
+    .await;
 
     let chain_height = zcashd_subscriber
         .block_cache
@@ -636,7 +678,13 @@ async fn z_get_address_utxos_inner() {
     )
     .await
     .unwrap();
-    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
+    generate_blocks_and_poll_all_chain_indexes(
+        1,
+        &test_manager,
+        zaino_subscriber.clone(),
+        zcashd_subscriber.clone(),
+    )
+    .await;
 
     clients.faucet.sync_and_await().await.unwrap();
 
@@ -717,7 +765,13 @@ mod zcashd {
 
                 assert_eq!(zcashd_difficulty, zaino_difficulty);
 
-    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
+                generate_blocks_and_poll_all_chain_indexes(
+                    1,
+                    &test_manager,
+                    zaino_subscriber.clone(),
+                    zcashd_subscriber.clone(),
+                )
+                .await;
             }
 
             test_manager.close().await;
@@ -762,7 +816,13 @@ mod zcashd {
 
             assert_eq!(zcashd_peer_info, zaino_peer_info);
 
-    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
+            generate_blocks_and_poll_all_chain_indexes(
+                1,
+                &test_manager,
+                zaino_subscriber.clone(),
+                zcashd_subscriber.clone(),
+            )
+            .await;
 
             test_manager.close().await;
         }
@@ -777,7 +837,13 @@ mod zcashd {
                 zaino_subscriber,
             ) = create_test_manager_and_fetch_services(false).await;
 
-    generate_blocks_and_poll_all_chain_indexes(1, &test_manager, zaino_subscriber.clone(), zcashd_subscriber.clone()).await;
+            generate_blocks_and_poll_all_chain_indexes(
+                1,
+                &test_manager,
+                zaino_subscriber.clone(),
+                zcashd_subscriber.clone(),
+            )
+            .await;
 
             let zcashd_block_subsidy = zcashd_subscriber.get_block_subsidy(1).await.unwrap();
             let zaino_block_subsidy = zaino_subscriber.get_block_subsidy(1).await.unwrap();

@@ -49,9 +49,7 @@ mod chain_query_interface {
 
     use futures::TryStreamExt as _;
     use tempfile::TempDir;
-    use zaino_common::{
-        CacheConfig, DatabaseConfig, ServiceConfig, StorageConfig,
-    };
+    use zaino_common::{CacheConfig, DatabaseConfig, ServiceConfig, StorageConfig};
     use zaino_state::{
         chain_index::{
             source::ValidatorConnector,
@@ -100,9 +98,9 @@ mod chain_query_interface {
                     None => test_manager.data_dir.clone(),
                 };
                 let network = match test_manager.network {
-                    NetworkKind::Regtest => {
-                        zebra_chain::parameters::Network::new_regtest(test_manager.local_net.get_activation_heights())
-                    }
+                    NetworkKind::Regtest => zebra_chain::parameters::Network::new_regtest(
+                        test_manager.local_net.get_activation_heights(),
+                    ),
                     NetworkKind::Testnet => zebra_chain::parameters::Network::new_default_testnet(),
                     NetworkKind::Mainnet => zebra_chain::parameters::Network::Mainnet,
                 };
@@ -148,7 +146,9 @@ mod chain_query_interface {
                         ..Default::default()
                     },
                     db_version: 1,
-                    network: zaino_common::Network::Regtest(test_manager.local_net.get_activation_heights().into()),
+                    network: zaino_common::Network::Regtest(
+                        test_manager.local_net.get_activation_heights().into(),
+                    ),
                 };
                 let chain_index = NodeBackedChainIndex::new(
                     ValidatorConnector::State(chain_index::source::State {
@@ -183,7 +183,9 @@ mod chain_query_interface {
                         ..Default::default()
                     },
                     db_version: 1,
-                    network: zaino_common::Network::Regtest(test_manager.local_net.get_activation_heights().into()),
+                    network: zaino_common::Network::Regtest(
+                        test_manager.local_net.get_activation_heights().into(),
+                    ),
                 };
                 let chain_index = NodeBackedChainIndex::new(
                     ValidatorConnector::Fetch(json_service.clone()),

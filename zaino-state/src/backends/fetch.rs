@@ -57,9 +57,7 @@ use crate::{
         AddressStream, CompactBlockStream, CompactTransactionStream, RawTransactionStream,
         UtxoReplyStream,
     },
-    utils::{
-        blockid_to_hashorheight, get_build_info, ServiceMetadata,
-    },
+    utils::{blockid_to_hashorheight, get_build_info, ServiceMetadata},
     BackendType,
 };
 
@@ -98,7 +96,7 @@ impl ZcashService for FetchService {
 
     type Subscriber = FetchServiceSubscriber;
     type Config = FetchServiceConfig;
-    
+
     /// Initializes a new FetchService instance and starts sync process.
     async fn spawn(config: FetchServiceConfig) -> Result<Self, FetchServiceError> {
         info!("Launching Chain Fetch Service..");

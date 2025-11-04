@@ -1,18 +1,15 @@
-use zaino_common::{
-    DatabaseConfig,
-    StorageConfig,
-};
+use zaino_common::{DatabaseConfig, StorageConfig};
 use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
+#[allow(deprecated)]
+use zaino_state::FetchService;
 use zaino_state::{
     test_dependencies::{BlockCache, BlockCacheConfig, BlockCacheSubscriber},
     BackendType,
 };
-#[allow(deprecated)]
-use zaino_state::FetchService;
 use zaino_testutils::{TestManager, ValidatorKind};
+use zcash_local_net::validator::Validator as _;
 use zebra_chain::{block::Height, parameters::NetworkKind};
 use zebra_state::HashOrHeight;
-use zcash_local_net::validator::Validator as _;
 
 #[allow(deprecated)]
 async fn create_test_manager_and_block_cache(
@@ -54,9 +51,9 @@ async fn create_test_manager_and_block_cache(
     .unwrap();
 
     let network = match test_manager.network {
-        NetworkKind::Regtest => {
-            zebra_chain::parameters::Network::new_regtest(test_manager.local_net.get_activation_heights())
-        }
+        NetworkKind::Regtest => zebra_chain::parameters::Network::new_regtest(
+            test_manager.local_net.get_activation_heights(),
+        ),
         NetworkKind::Testnet => zebra_chain::parameters::Network::new_default_testnet(),
         NetworkKind::Mainnet => zebra_chain::parameters::Network::Mainnet,
     };

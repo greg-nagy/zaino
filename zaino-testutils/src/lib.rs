@@ -9,7 +9,6 @@ pub mod test_vectors {
 }
 
 use once_cell::sync::Lazy;
-use zainodlib::{config::ZainodConfig, error::IndexerError, indexer::Indexer};
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
@@ -17,14 +16,16 @@ use std::{
 use tempfile::TempDir;
 use tracing_subscriber::EnvFilter;
 use zaino_common::{
-    network::{ActivationHeights, ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS}, validator::ValidatorConfig, CacheConfig, DatabaseConfig, Network,
-    ServiceConfig, StorageConfig,
+    network::{ActivationHeights, ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS},
+    validator::ValidatorConfig,
+    CacheConfig, DatabaseConfig, Network, ServiceConfig, StorageConfig,
 };
 use zaino_serve::server::config::{GrpcServerConfig, JsonRpcServerConfig};
 use zaino_state::{
     chain_index::NonFinalizedSnapshot, BackendType, ChainIndex, LightWalletIndexer,
     LightWalletService, NodeBackedChainIndexSubscriber, ZcashIndexer, ZcashService,
 };
+use zainodlib::{config::ZainodConfig, error::IndexerError, indexer::Indexer};
 pub use zcash_local_net as services;
 pub use zcash_local_net::validator::Validator;
 use zcash_local_net::validator::{ZcashdConfig, ZebradConfig};
@@ -625,8 +626,7 @@ where
                 interval.tick().await;
             } else {
                 self.local_net.generate_blocks(1).await.unwrap();
-                while indexer.get_latest_block().await.unwrap().height != next_block_height
-                {            
+                while indexer.get_latest_block().await.unwrap().height != next_block_height {
                     interval.tick().await;
                 }
                 next_block_height += 1;
@@ -656,14 +656,13 @@ where
                 interval.tick().await;
             } else {
                 self.local_net.generate_blocks(1).await.unwrap();
-                while
-                    u32::from(
+                while u32::from(
                     chain_index
                         .snapshot_nonfinalized_state()
                         .best_chaintip()
                         .height,
-                    ) != next_block_height
-                {            
+                ) != next_block_height
+                {
                     interval.tick().await;
                 }
                 next_block_height += 1;
@@ -697,7 +696,7 @@ async fn build_client(
 #[cfg(test)]
 mod launch_testmanager {
     use super::*;
-            #[allow(deprecated)]
+    #[allow(deprecated)]
     use zaino_state::FetchService;
 
     mod zcashd {
@@ -705,7 +704,7 @@ mod launch_testmanager {
         use super::*;
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+        #[allow(deprecated)]
         pub(crate) async fn basic() {
             let mut test_manager = TestManager::<FetchService>::launch(
                 &ValidatorKind::Zcashd,
@@ -727,7 +726,7 @@ mod launch_testmanager {
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+        #[allow(deprecated)]
         pub(crate) async fn generate_blocks() {
             let mut test_manager = TestManager::<FetchService>::launch(
                 &ValidatorKind::Zcashd,
@@ -755,7 +754,7 @@ mod launch_testmanager {
 
         #[ignore = "chain cache needs development"]
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+        #[allow(deprecated)]
         pub(crate) async fn with_chain() {
             let mut test_manager = TestManager::<FetchService>::launch(
                 &ValidatorKind::Zcashd,
@@ -777,7 +776,7 @@ mod launch_testmanager {
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+        #[allow(deprecated)]
         pub(crate) async fn zaino() {
             let mut test_manager = TestManager::<FetchService>::launch(
                 &ValidatorKind::Zcashd,
@@ -803,7 +802,7 @@ mod launch_testmanager {
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+        #[allow(deprecated)]
         pub(crate) async fn zaino_clients() {
             let mut test_manager = TestManager::<FetchService>::launch(
                 &ValidatorKind::Zcashd,
@@ -830,7 +829,7 @@ mod launch_testmanager {
         /// This is not the case with Zcashd and should not be the case here.
         /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-            #[allow(deprecated)]
+        #[allow(deprecated)]
         pub(crate) async fn zaino_clients_receive_mining_reward() {
             let mut test_manager = TestManager::<FetchService>::launch(
                 &ValidatorKind::Zcashd,

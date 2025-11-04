@@ -58,11 +58,13 @@ pub async fn spawn_indexer(
     );
     match BackendConfig::try_from(config.clone()) {
         Ok(BackendConfig::State(state_service_config)) => {
-            Indexer::<StateService>::launch_inner(state_service_config, config).await
+            Indexer::<StateService>::launch_inner(state_service_config, config)
+                .await
                 .map(|res| res.0)
         }
         Ok(BackendConfig::Fetch(fetch_service_config)) => {
-            Indexer::<FetchService>::launch_inner(fetch_service_config, config).await
+            Indexer::<FetchService>::launch_inner(fetch_service_config, config)
+                .await
                 .map(|res| res.0)
         }
         Err(e) => Err(e),
@@ -87,13 +89,12 @@ where
     > {
         let service = IndexerService::<Service>::spawn(service_config).await?;
         let service_subscriber = service.inner_ref().get_subscriber();
-        
+
         let json_server = match indexer_config.json_server_settings {
             Some(json_server_config) => Some(
                 JsonRpcServer::spawn(service.inner_ref().get_subscriber(), json_server_config)
                     .await
                     .unwrap(),
-
             ),
             None => None,
         };

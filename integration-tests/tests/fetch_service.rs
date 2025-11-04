@@ -7,9 +7,7 @@ use zaino_proto::proto::service::{
     TransparentAddressBlockFilter, TxFilter,
 };
 #[allow(deprecated)]
-use zaino_state::{
-    BackendType, FetchService, LightWalletIndexer, StatusType, ZcashIndexer,
-};
+use zaino_state::{BackendType, FetchService, LightWalletIndexer, StatusType, ZcashIndexer};
 use zaino_testutils::{TestManager, ValidatorKind};
 use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
 use zebra_rpc::client::ValidateAddressResponse;
