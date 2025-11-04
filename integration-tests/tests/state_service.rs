@@ -1164,6 +1164,8 @@ mod zebra {
 
     pub(crate) mod get {
 
+        use zaino_fetch::jsonrpsee::response::address_deltas::GetAddressDeltasResponse;
+
         use super::*;
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1594,6 +1596,116 @@ mod zebra {
         #[tokio::test]
         async fn address_deltas_testnet() {
             state_service_get_address_deltas_testnet().await;
+        }
+
+        #[tokio::test]
+        async fn address_deltas_scenario() {
+            let (
+                mut test_manager,
+                _fetch_service,
+                _fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(&ValidatorKind::Zebrad, None, true, true, None)
+                .await;
+
+            let mut clients = test_manager
+                .clients
+                .take()
+                .expect("Clients are not initialized");
+            let recipient_taddr = clients.get_recipient_address("transparent").await;
+            let faucet_taddr = clients.get_faucet_address("transparent").await;
+
+            clients.faucet.sync_and_await().await.unwrap();
+
+            test_manager.local_net.generate_blocks(100).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            clients.faucet.sync_and_await().await.unwrap();
+            clients.faucet.quick_shield(AccountId::ZERO).await.unwrap();
+            test_manager.local_net.generate_blocks(1).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            clients.faucet.sync_and_await().await.unwrap();
+
+            from_inputs::quick_send(
+                &mut clients.faucet,
+                vec![(recipient_taddr.as_str(), 250_000, None)],
+            )
+            .await
+            .unwrap();
+            test_manager.local_net.generate_blocks(1).await.unwrap();
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+            clients.recipient.sync_and_await().await.unwrap();
+
+            let fs_address_deltas = state_service_subscriber
+                .get_address_deltas(GetAddressDeltasParams::Address(recipient_taddr.clone()))
+                .await
+                .unwrap();
+
+            assert!(
+                matches!(fs_address_deltas, GetAddressDeltasResponse::Simple(_)),
+                "Expected simple array format"
+            );
+
+            let fs_address_deltas_filtered = state_service_subscriber
+                .get_address_deltas(GetAddressDeltasParams::Filtered {
+                    addresses: vec![recipient_taddr.clone(), faucet_taddr.clone()],
+                    start: 0,
+                    end: 104,
+                    chain_info: true,
+                })
+                .await
+                .unwrap();
+
+            assert!(
+                matches!(
+                    fs_address_deltas_filtered,
+                    GetAddressDeltasResponse::Simple(_)
+                ),
+                "Expected simple format (when start = 0, even if chain_info = true)"
+            );
+
+            let fs_address_deltas_filtered_with_chaininfo = state_service_subscriber
+                .get_address_deltas(GetAddressDeltasParams::Filtered {
+                    addresses: vec![recipient_taddr.clone(), faucet_taddr.clone()],
+                    start: 1,
+                    end: 104,
+                    chain_info: true,
+                })
+                .await
+                .unwrap();
+
+            assert!(
+                matches!(
+                    fs_address_deltas_filtered_with_chaininfo,
+                    GetAddressDeltasResponse::WithChainInfo { .. }
+                ),
+                "Expected filtered format (when start > 0 & chain_info = true)"
+            );
+
+            let start_end_clamped = state_service_subscriber
+                .get_address_deltas(GetAddressDeltasParams::Filtered {
+                    addresses: vec![recipient_taddr.clone(), faucet_taddr.clone()],
+                    start: 1,
+                    end: 200,
+                    chain_info: true,
+                })
+                .await;
+
+            assert!(start_end_clamped.is_ok());
+
+            let non_existent_address = state_service_subscriber
+                .get_address_deltas(GetAddressDeltasParams::Filtered {
+                    addresses: vec!["tmVqEASZxBNKFTbmASZikGa5fPLkd68iJyx".to_string()],
+                    start: 1,
+                    end: 200,
+                    chain_info: true,
+                })
+                .await;
+
+            assert!(non_existent_address.is_ok());
+
+            test_manager.close().await;
         }
     }
 

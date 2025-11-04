@@ -1008,7 +1008,7 @@ impl ZcashIndexer for StateServiceSubscriber {
         let tip = self.chain_height().await?;
         let mut start = Height(start_raw);
         let mut end = Height(end_raw);
-        if end == Height(0) {
+        if end == Height(0) || end > tip {
             end = tip;
         }
         if start > tip {
