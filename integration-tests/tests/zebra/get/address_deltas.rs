@@ -1,6 +1,50 @@
+//! Integration tests for the `getaddressdeltas` RPC method.
+//!
+//! # Test Chain Scenario
+//!
+//! The test chain is constructed as follows:
+//!
+//! 1. **Blocks 1-100**: Initial block generation (via `generate_blocks(100)`)
+//! 2. **Block 101**: Faucet shields its transparent funds
+//! 3. **Block 102**: Faucet sends 250,000 zatoshis to recipient's transparent address
+//! 4. **Final state**: Chain height = 102 (approximately, may vary slightly)
+//!
+//! # Test Constants
+//!
+//! ## EXPECTED_TX_HEIGHT = 102
+//! The block height where the test transaction (250k zatoshis to recipient) is expected to land.
+//!
+//! **Invariant**: Must be >= 102 based on setup (100 initial blocks + 1 shield + 1 transaction).
+//!
+//! ## EXPECTED_CHAIN_TIP = 104
+//! The expected final chain height after all setup operations complete.
+//!
+//! **Invariants**:
+//! - Must be >= EXPECTED_TX_HEIGHT
+//! - Small buffer above EXPECTED_TX_HEIGHT to account for any additional blocks
+//! - Used as `end` parameter in range queries to ensure we capture the test transaction
+//!
+//! ## HEIGHT_BEYOND_TIP = 200
+//! A height value intentionally beyond the actual chain tip, used to test height clamping behavior.
+//!
+//! **Invariant**: Must be > EXPECTED_CHAIN_TIP to properly test that the implementation
+//! clamps the requested end height to the actual chain tip.
+//!
+//! ## NON_EXISTENT_ADDRESS
+//! A valid testnet transparent address that is guaranteed to have no deltas in this test chain.
+//! Used to verify that queries for non-existent addresses return empty results gracefully.
+//!
+//! # Modifying Parameters
+//!
+//! If you need to modify the chain setup:
+//! - Changing block generation count requires updating EXPECTED_TX_HEIGHT accordingly
+//! - EXPECTED_CHAIN_TIP should always be slightly above the actual final height
+//! - HEIGHT_BEYOND_TIP must remain larger than EXPECTED_CHAIN_TIP
+//! - Test assertions reference these constants, so they'll automatically adjust
+
 use super::*;
 
-// Test constants
+// Test constants (see module documentation above for details)
 const EXPECTED_TX_HEIGHT: u32 = 102;
 const EXPECTED_CHAIN_TIP: u32 = 104;
 const HEIGHT_BEYOND_TIP: u32 = 200;
