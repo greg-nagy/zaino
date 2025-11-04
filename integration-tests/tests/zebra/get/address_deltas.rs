@@ -67,10 +67,13 @@ async fn test_filtered_start_zero(
     recipient_taddr: &str,
     faucet_taddr: &str,
 ) {
+    let start_height = 0;
+    let end_height = EXPECTED_CHAIN_TIP;
+
     let params = GetAddressDeltasParams::Filtered {
         addresses: vec![recipient_taddr.to_string(), faucet_taddr.to_string()],
-        start: 0,
-        end: EXPECTED_CHAIN_TIP,
+        start: start_height,
+        end: end_height,
         chain_info: true,
     };
     let response = subscriber.get_address_deltas(params).await.unwrap();
@@ -91,35 +94,27 @@ async fn test_with_chaininfo(
     recipient_taddr: &str,
     faucet_taddr: &str,
 ) {
+    let start_height = 1;
+    let end_height = EXPECTED_CHAIN_TIP;
+
     let params = GetAddressDeltasParams::Filtered {
         addresses: vec![recipient_taddr.to_string(), faucet_taddr.to_string()],
-        start: 1,
-        end: EXPECTED_CHAIN_TIP,
+        start: start_height,
+        end: end_height,
         chain_info: true,
     };
-    let response = subscriber
-        .get_address_deltas(params.clone())
-        .await
-        .unwrap();
+    let response = subscriber.get_address_deltas(params).await.unwrap();
 
-    if let GetAddressDeltasParams::Filtered {
-        start: req_start,
-        end: req_end,
-        ..
-    } = &params
-    {
-        if let GetAddressDeltasResponse::WithChainInfo { deltas, start, end } = response
-        {
-            assert!(!deltas.is_empty(), "Expected deltas with chain info");
-            assert_eq!(start.height, *req_start, "Start block should match request");
-            assert_eq!(end.height, *req_end, "End block should match request");
-            assert!(
-                start.height < end.height,
-                "Start height should be less than end height"
-            );
-        } else {
-            panic!("Expected WithChainInfo variant");
-        }
+    if let GetAddressDeltasResponse::WithChainInfo { deltas, start, end } = response {
+        assert!(!deltas.is_empty(), "Expected deltas with chain info");
+        assert_eq!(start.height, start_height, "Start block should match request");
+        assert_eq!(end.height, end_height, "End block should match request");
+        assert!(
+            start.height < end.height,
+            "Start height should be less than end height"
+        );
+    } else {
+        panic!("Expected WithChainInfo variant");
     }
 }
 
@@ -128,65 +123,51 @@ async fn test_height_clamping(
     recipient_taddr: &str,
     faucet_taddr: &str,
 ) {
+    let start_height = 1;
+    let end_height = HEIGHT_BEYOND_TIP;
+
     let params = GetAddressDeltasParams::Filtered {
         addresses: vec![recipient_taddr.to_string(), faucet_taddr.to_string()],
-        start: 1,
-        end: HEIGHT_BEYOND_TIP,
+        start: start_height,
+        end: end_height,
         chain_info: true,
     };
-    let response = subscriber
-        .get_address_deltas(params.clone())
-        .await
-        .unwrap();
+    let response = subscriber.get_address_deltas(params).await.unwrap();
 
-    if let GetAddressDeltasParams::Filtered {
-        start: req_start,
-        end: req_end,
-        ..
-    } = &params
-    {
-        if let GetAddressDeltasResponse::WithChainInfo { deltas, start, end } = response
-        {
-            assert!(!deltas.is_empty(), "Expected deltas with clamped range");
-            assert_eq!(start.height, *req_start, "Start should match request");
-            assert!(
-                end.height < *req_end,
-                "End height should be clamped below requested value"
-            );
-            assert!(
-                end.height <= EXPECTED_CHAIN_TIP,
-                "End height should not exceed chain tip region"
-            );
-        } else {
-            panic!("Expected WithChainInfo variant");
-        }
+    if let GetAddressDeltasResponse::WithChainInfo { deltas, start, end } = response {
+        assert!(!deltas.is_empty(), "Expected deltas with clamped range");
+        assert_eq!(start.height, start_height, "Start should match request");
+        assert!(
+            end.height < end_height,
+            "End height should be clamped below requested value"
+        );
+        assert!(
+            end.height <= EXPECTED_CHAIN_TIP,
+            "End height should not exceed chain tip region"
+        );
+    } else {
+        panic!("Expected WithChainInfo variant");
     }
 }
 
 async fn test_non_existent_address(subscriber: &StateServiceSubscriber) {
+    let start_height = 1;
+    let end_height = HEIGHT_BEYOND_TIP;
+
     let params = GetAddressDeltasParams::Filtered {
         addresses: vec![NON_EXISTENT_ADDRESS.to_string()],
-        start: 1,
-        end: HEIGHT_BEYOND_TIP,
+        start: start_height,
+        end: end_height,
         chain_info: true,
     };
-    let response = subscriber
-        .get_address_deltas(params.clone())
-        .await
-        .unwrap();
+    let response = subscriber.get_address_deltas(params).await.unwrap();
 
-    if let GetAddressDeltasParams::Filtered {
-        start: req_start, ..
-    } = &params
-    {
-        if let GetAddressDeltasResponse::WithChainInfo { deltas, start, end } = response
-        {
-            assert!(deltas.is_empty(), "Non-existent address should have no deltas");
-            assert_eq!(start.height, *req_start, "Start height should match request");
-            assert!(end.height > 0, "End height should be set");
-        } else {
-            panic!("Expected WithChainInfo variant");
-        }
+    if let GetAddressDeltasResponse::WithChainInfo { deltas, start, end } = response {
+        assert!(deltas.is_empty(), "Non-existent address should have no deltas");
+        assert_eq!(start.height, start_height, "Start height should match request");
+        assert!(end.height > 0, "End height should be set");
+    } else {
+        panic!("Expected WithChainInfo variant");
     }
 }
 
