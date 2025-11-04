@@ -1642,10 +1642,24 @@ mod zebra {
                 .await
                 .unwrap();
 
-            assert!(
-                matches!(fs_address_deltas, GetAddressDeltasResponse::Simple(_)),
-                "Expected simple array format"
-            );
+            // Extract the Simple variant and assert on the data
+            if let GetAddressDeltasResponse::Simple(address_deltas) = fs_address_deltas {
+                // Assert we have deltas (recipient received funds)
+                assert!(!address_deltas.is_empty(), "Expected at least one delta");
+
+                // Check that we have the expected transaction
+                // The recipient should have received 250,000 zatoshis
+                let recipient_delta = address_deltas
+                    .iter()
+                    .find(|d| d.height > 101)
+                    .expect("Should find recipient transaction delta");
+
+                // Assert on accessible fields
+                assert!(recipient_delta.height > 101, "Transaction should be in a later block");
+                assert_eq!(recipient_delta.index, 0, "Expected output index 0");
+            } else {
+                panic!("Expected Simple variant");
+            }
 
             let fs_address_deltas_filtered = state_service_subscriber
                 .get_address_deltas(GetAddressDeltasParams::Filtered {
