@@ -83,10 +83,8 @@ async fn setup_chain(test_manager: &mut TestManager) -> (String, String) {
     (recipient_taddr, faucet_taddr)
 }
 
-async fn test_simple_query(
-    subscriber: &StateServiceSubscriber,
-    recipient_taddr: &str,
-) {
+#[allow(deprecated)]
+async fn test_simple_query(subscriber: &StateServiceSubscriber, recipient_taddr: &str) {
     let params = GetAddressDeltasParams::Address(recipient_taddr.to_string());
     let response = subscriber.get_address_deltas(params).await.unwrap();
 
@@ -106,6 +104,7 @@ async fn test_simple_query(
     }
 }
 
+#[allow(deprecated)]
 async fn test_filtered_start_zero(
     subscriber: &StateServiceSubscriber,
     recipient_taddr: &str,
@@ -123,7 +122,10 @@ async fn test_filtered_start_zero(
     let response = subscriber.get_address_deltas(params).await.unwrap();
 
     if let GetAddressDeltasResponse::Simple(address_deltas) = response {
-        assert!(!address_deltas.is_empty(), "Expected deltas for both addresses");
+        assert!(
+            !address_deltas.is_empty(),
+            "Expected deltas for both addresses"
+        );
         assert!(
             address_deltas.len() >= 2,
             "Expected deltas from multiple addresses"
@@ -133,6 +135,7 @@ async fn test_filtered_start_zero(
     }
 }
 
+#[allow(deprecated)]
 async fn test_with_chaininfo(
     subscriber: &StateServiceSubscriber,
     recipient_taddr: &str,
@@ -151,7 +154,10 @@ async fn test_with_chaininfo(
 
     if let GetAddressDeltasResponse::WithChainInfo { deltas, start, end } = response {
         assert!(!deltas.is_empty(), "Expected deltas with chain info");
-        assert_eq!(start.height, start_height, "Start block should match request");
+        assert_eq!(
+            start.height, start_height,
+            "Start block should match request"
+        );
         assert_eq!(end.height, end_height, "End block should match request");
         assert!(
             start.height < end.height,
@@ -162,6 +168,7 @@ async fn test_with_chaininfo(
     }
 }
 
+#[allow(deprecated)]
 async fn test_height_clamping(
     subscriber: &StateServiceSubscriber,
     recipient_taddr: &str,
@@ -194,6 +201,7 @@ async fn test_height_clamping(
     }
 }
 
+#[allow(deprecated)]
 async fn test_non_existent_address(subscriber: &StateServiceSubscriber) {
     let start_height = 1;
     let end_height = HEIGHT_BEYOND_TIP;
@@ -207,8 +215,14 @@ async fn test_non_existent_address(subscriber: &StateServiceSubscriber) {
     let response = subscriber.get_address_deltas(params).await.unwrap();
 
     if let GetAddressDeltasResponse::WithChainInfo { deltas, start, end } = response {
-        assert!(deltas.is_empty(), "Non-existent address should have no deltas");
-        assert_eq!(start.height, start_height, "Start height should match request");
+        assert!(
+            deltas.is_empty(),
+            "Non-existent address should have no deltas"
+        );
+        assert_eq!(
+            start.height, start_height,
+            "Start height should match request"
+        );
         assert!(end.height > 0, "End height should be set");
     } else {
         panic!("Expected WithChainInfo variant");
@@ -222,14 +236,8 @@ pub(super) async fn main() {
         _fetch_service_subscriber,
         _state_service,
         state_service_subscriber,
-    ) = super::create_test_manager_and_services(
-        &ValidatorKind::Zebrad,
-        None,
-        true,
-        true,
-        None,
-    )
-    .await;
+    ) = super::create_test_manager_and_services(&ValidatorKind::Zebrad, None, true, true, None)
+        .await;
 
     let (recipient_taddr, faucet_taddr) = setup_chain(&mut test_manager).await;
 
@@ -241,24 +249,17 @@ pub(super) async fn main() {
     // ============================================================
     // Test 2: Filtered query with start=0 (should return Simple variant)
     // ============================================================
-    test_filtered_start_zero(
-        &state_service_subscriber,
-        &recipient_taddr,
-        &faucet_taddr,
-    )
-    .await;
+    test_filtered_start_zero(&state_service_subscriber, &recipient_taddr, &faucet_taddr).await;
 
     // ============================================================
     // Test 3: Filtered query with start>0 and chain_info=true
     // ============================================================
-    test_with_chaininfo(&state_service_subscriber, &recipient_taddr, &faucet_taddr)
-        .await;
+    test_with_chaininfo(&state_service_subscriber, &recipient_taddr, &faucet_taddr).await;
 
     // ============================================================
     // Test 4: Height clamping (end beyond chain tip)
     // ============================================================
-    test_height_clamping(&state_service_subscriber, &recipient_taddr, &faucet_taddr)
-        .await;
+    test_height_clamping(&state_service_subscriber, &recipient_taddr, &faucet_taddr).await;
 
     // ============================================================
     // Test 5: Non-existent address (should return empty deltas)
