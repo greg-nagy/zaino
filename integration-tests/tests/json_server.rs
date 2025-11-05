@@ -664,6 +664,9 @@ mod zcashd {
     use super::*;
 
     pub(crate) mod zcash_indexer {
+        use zaino_state::LightWalletIndexer;
+        use zebra_rpc::methods::GetBlock;
+
         use super::*;
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -712,6 +715,42 @@ mod zcashd {
                 let zaino_difficulty = zaino_subscriber.get_difficulty().await.unwrap();
 
                 assert_eq!(zcashd_difficulty, zaino_difficulty);
+
+                test_manager.local_net.generate_blocks(1).await.unwrap();
+            }
+
+            test_manager.close().await;
+        }
+
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        async fn get_block_deltas() {
+            let (
+                mut test_manager,
+                _zcashd_service,
+                zcashd_subscriber,
+                _zaino_service,
+                zaino_subscriber,
+            ) = create_test_manager_and_fetch_services(false).await;
+
+            const BLOCK_LIMIT: i32 = 10;
+
+            for _ in 0..BLOCK_LIMIT {
+                let current_block = zcashd_subscriber.get_latest_block().await.unwrap();
+
+                let block_hash_bytes: [u8; 32] = current_block.hash.as_slice().try_into().unwrap();
+
+                let block_hash = zebra_chain::block::Hash::from(block_hash_bytes);
+
+                let zcashd_deltas = zcashd_subscriber
+                    .get_block_deltas(block_hash.to_string())
+                    .await
+                    .unwrap();
+                let zaino_deltas = zaino_subscriber
+                    .get_block_deltas(block_hash.to_string())
+                    .await
+                    .unwrap();
+
+                assert_eq!(zcashd_deltas, zaino_deltas);
 
                 test_manager.local_net.generate_blocks(1).await.unwrap();
             }
@@ -791,6 +830,45 @@ mod zcashd {
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn z_get_block() {
             z_get_block_inner().await;
+        }
+
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        async fn get_block_header() {
+            let (
+                test_manager,
+                _zcashd_service,
+                zcashd_subscriber,
+                _zaino_service,
+                zaino_subscriber,
+            ) = create_test_manager_and_fetch_services(false).await;
+
+            const BLOCK_LIMIT: u32 = 10;
+
+            for i in 0..BLOCK_LIMIT {
+                test_manager.local_net.generate_blocks(1).await.unwrap();
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+                let block = zcashd_subscriber
+                    .z_get_block(i.to_string(), Some(1))
+                    .await
+                    .unwrap();
+
+                let block_hash = match block {
+                    GetBlock::Object(block) => block.hash(),
+                    GetBlock::Raw(_) => panic!("Expected block object"),
+                };
+
+                let zcashd_get_block_header = zcashd_subscriber
+                    .get_block_header(block_hash.to_string(), false)
+                    .await
+                    .unwrap();
+
+                let zainod_block_header_response = zaino_subscriber
+                    .get_block_header(block_hash.to_string(), false)
+                    .await
+                    .unwrap();
+                assert_eq!(zcashd_get_block_header, zainod_block_header_response);
+            }
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
