@@ -587,7 +587,7 @@ where
         .await
         .unwrap();
         let chain_height = self.local_net.get_chain_height().await;
-        self.local_net.generate_blocks(n).await.unwrap();
+        let mut next_block_height = u64::from(chain_height) + 1;
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         interval.tick().await;
@@ -599,7 +599,22 @@ where
             .height
             < u64::from(chain_height) + n as u64
         {
-            interval.tick().await;
+            if n == 0 {
+                interval.tick().await;
+            } else {
+                self.local_net.generate_blocks(1).await.unwrap();
+                while grpc_client
+                    .get_latest_block(tonic::Request::new(ChainSpec {}))
+                    .await
+                    .unwrap()
+                    .into_inner()
+                    .height
+                    != next_block_height
+                {
+                    interval.tick().await;
+                }
+                next_block_height += 1;
+            }
         }
     }
 
