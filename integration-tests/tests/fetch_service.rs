@@ -31,6 +31,10 @@ async fn launch_fetch_service(validator: &ValidatorKind, chain_cache: Option<std
 
     let fetch_service_subscriber = test_manager.service_subscriber.take().unwrap();
 
+    // FIXME: status is sometimes syncing instead of ready here
+    while fetch_service_subscriber.status() == StatusType::Syncing {
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
     assert_eq!(fetch_service_subscriber.status(), StatusType::Ready);
     dbg!(fetch_service_subscriber.data.clone());
     dbg!(fetch_service_subscriber.get_info().await.unwrap());
