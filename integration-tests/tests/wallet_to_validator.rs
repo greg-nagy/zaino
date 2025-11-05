@@ -14,12 +14,11 @@ use zainodlib::config::ZainodConfig;
 use zainodlib::error::IndexerError;
 use zip32::AccountId;
 
-async fn connect_to_node_get_info_for_validator<
-    Service: LightWalletService + Send + Sync + 'static,
->(
+async fn connect_to_node_get_info_for_validator<Service>(
     validator: &ValidatorKind,
     backend: &BackendType,
 ) where
+    Service: LightWalletService + Send + Sync + 'static,
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
@@ -38,10 +37,9 @@ async fn connect_to_node_get_info_for_validator<
     test_manager.close().await;
 }
 
-async fn send_to_orchard<Service: LightWalletService + Send + Sync + 'static>(
-    validator: &ValidatorKind,
-    backend: &BackendType,
-) where
+async fn send_to_orchard<Service>(validator: &ValidatorKind, backend: &BackendType)
+where
+    Service: LightWalletService + Send + Sync + 'static,
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
@@ -86,10 +84,9 @@ async fn send_to_orchard<Service: LightWalletService + Send + Sync + 'static>(
     test_manager.close().await;
 }
 
-async fn send_to_sapling<Service: LightWalletService + Send + Sync + 'static>(
-    validator: &ValidatorKind,
-    backend: &BackendType,
-) where
+async fn send_to_sapling<Service>(validator: &ValidatorKind, backend: &BackendType)
+where
+    Service: LightWalletService + Send + Sync + 'static,
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
@@ -134,10 +131,9 @@ async fn send_to_sapling<Service: LightWalletService + Send + Sync + 'static>(
     test_manager.close().await;
 }
 
-async fn send_to_transparent<Service: LightWalletService + Send + Sync + 'static>(
-    validator: &ValidatorKind,
-    backend: &BackendType,
-) where
+async fn send_to_transparent<Service>(validator: &ValidatorKind, backend: &BackendType)
+where
+    Service: LightWalletService + Send + Sync + 'static,
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
@@ -232,10 +228,9 @@ async fn send_to_transparent<Service: LightWalletService + Send + Sync + 'static
     test_manager.close().await;
 }
 
-async fn send_to_all<Service: LightWalletService + Send + Sync + 'static>(
-    validator: &ValidatorKind,
-    backend: &BackendType,
-) where
+async fn send_to_all<Service>(validator: &ValidatorKind, backend: &BackendType)
+where
+    Service: LightWalletService + Send + Sync + 'static,
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
@@ -318,10 +313,9 @@ async fn send_to_all<Service: LightWalletService + Send + Sync + 'static>(
     test_manager.close().await;
 }
 
-async fn shield_for_validator<Service: LightWalletService + Send + Sync + 'static>(
-    validator: &ValidatorKind,
-    backend: &BackendType,
-) where
+async fn shield_for_validator<Service>(validator: &ValidatorKind, backend: &BackendType)
+where
+    Service: LightWalletService + Send + Sync + 'static,
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
@@ -386,12 +380,11 @@ async fn shield_for_validator<Service: LightWalletService + Send + Sync + 'stati
     test_manager.close().await;
 }
 
-async fn monitor_unverified_mempool_for_validator<
-    Service: LightWalletService + Send + Sync + 'static,
->(
+async fn monitor_unverified_mempool_for_validator<Service>(
     validator: &ValidatorKind,
     backend: &BackendType,
 ) where
+    Service: LightWalletService + Send + Sync + 'static,
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {

@@ -373,8 +373,9 @@ pub struct TestManager<Service: LightWalletService + Send + Sync + 'static> {
     pub clients: Option<Clients>,
 }
 
-impl<Service: LightWalletService + Send + Sync + 'static> TestManager<Service>
+impl<Service> TestManager<Service>
 where
+    Service: LightWalletService + Send + Sync + 'static,
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
@@ -533,7 +534,7 @@ where
             let mut client_builder = ClientBuilder::new(
                 make_uri(
                     zaino_grpc_listen_address
-                        .expect("lightclients should not be enabled if zaino is not enabled")
+                        .expect("Error launching zingo lightclients. `enable_zaino` is None.")
                         .port(),
                 ),
                 tempfile::tempdir().unwrap(),
