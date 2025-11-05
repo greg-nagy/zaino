@@ -14,7 +14,8 @@ use zcash_local_net::logs::LogsToStdoutAndStderr as _;
 use zcash_local_net::validator::zcashd::Zcashd;
 use zcash_local_net::validator::Validator as _;
 use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
-use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetInfo};
+use zebra_rpc::client::GetAddressBalanceRequest;
+use zebra_rpc::methods::{GetAddressTxIdsRequest, GetInfo};
 
 #[allow(deprecated)]
 async fn create_zcashd_test_manager_and_fetch_services(
@@ -27,7 +28,7 @@ async fn create_zcashd_test_manager_and_fetch_services(
     FetchServiceSubscriber,
 ) {
     println!("Launching test manager..");
-    let test_manager = TestManager::<Zcashd>::launch_with_default_activation_heights(
+    let test_manager = TestManager::<Zcashd>::launch(
         &ValidatorKind::Zcashd,
         &BackendType::Fetch,
         None,
@@ -303,12 +304,12 @@ async fn z_get_address_balance_inner() {
         .unwrap();
 
     let zcashd_service_balance = zcashd_subscriber
-        .z_get_address_balance(AddressStrings::new(vec![recipient_taddr.clone()]))
+        .z_get_address_balance(GetAddressBalanceRequest::new(vec![recipient_taddr.clone()]))
         .await
         .unwrap();
 
     let zaino_service_balance = zaino_subscriber
-        .z_get_address_balance(AddressStrings::new(vec![recipient_taddr]))
+        .z_get_address_balance(GetAddressBalanceRequest::new(vec![recipient_taddr]))
         .await
         .unwrap();
 
@@ -636,13 +637,13 @@ async fn z_get_address_utxos_inner() {
     clients.faucet.sync_and_await().await.unwrap();
 
     let zcashd_utxos = zcashd_subscriber
-        .z_get_address_utxos(AddressStrings::new(vec![recipient_taddr.clone()]))
+        .z_get_address_utxos(GetAddressBalanceRequest::new(vec![recipient_taddr.clone()]))
         .await
         .unwrap();
     let (_, zcashd_txid, ..) = zcashd_utxos[0].into_parts();
 
     let zaino_utxos = zaino_subscriber
-        .z_get_address_utxos(AddressStrings::new(vec![recipient_taddr]))
+        .z_get_address_utxos(GetAddressBalanceRequest::new(vec![recipient_taddr]))
         .await
         .unwrap();
     let (_, zaino_txid, ..) = zaino_utxos[0].into_parts();

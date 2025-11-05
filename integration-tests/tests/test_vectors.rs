@@ -37,7 +37,7 @@ use zcash_local_net::validator::Validator;
 use zebra_chain::parameters::NetworkKind;
 use zebra_chain::serialization::{ZcashDeserialize, ZcashSerialize};
 use zebra_rpc::methods::GetAddressUtxos;
-use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetBlockTransaction};
+use zebra_rpc::methods::{GetAddressBalanceRequest, GetAddressTxIdsRequest, GetBlockTransaction};
 use zebra_state::HashOrHeight;
 use zebra_state::{ReadRequest, ReadResponse};
 
@@ -60,7 +60,7 @@ async fn create_test_manager_and_services<V: Validator + LogsToStdoutAndStderr>(
     enable_clients: bool,
     network: Option<NetworkKind>,
 ) -> (TestManager<V>, StateService, StateServiceSubscriber) {
-    let test_manager = TestManager::<V>::launch_with_default_activation_heights(
+    let test_manager = TestManager::<V>::launch(
         validator,
         &BackendType::Fetch,
         network,
@@ -101,6 +101,7 @@ async fn create_test_manager_and_services<V: Validator + LogsToStdoutAndStderr>(
             delete_old_database: true,
             debug_stop_at_height: None,
             debug_validity_check_interval: None,
+            should_backup_non_finalized_state: false,
         },
         test_manager.full_node_rpc_listen_address,
         test_manager.full_node_grpc_listen_address,
@@ -577,12 +578,12 @@ async fn create_200_block_regtest_chain_vectors() {
             .unwrap();
 
         let faucet_utxos = state_service_subscriber
-            .z_get_address_utxos(AddressStrings::new(vec![faucet_taddr.clone()]))
+            .z_get_address_utxos(GetAddressBalanceRequest::new(vec![faucet_taddr.clone()]))
             .await
             .unwrap();
 
         let faucet_balance = state_service_subscriber
-            .z_get_address_balance(AddressStrings::new(vec![faucet_taddr.clone()]))
+            .z_get_address_balance(GetAddressBalanceRequest::new(vec![faucet_taddr.clone()]))
             .await
             .unwrap()
             .balance();
@@ -602,12 +603,12 @@ async fn create_200_block_regtest_chain_vectors() {
             .unwrap();
 
         let recipient_utxos = state_service_subscriber
-            .z_get_address_utxos(AddressStrings::new(vec![recipient_taddr.clone()]))
+            .z_get_address_utxos(GetAddressBalanceRequest::new(vec![recipient_taddr.clone()]))
             .await
             .unwrap();
 
         let recipient_balance = state_service_subscriber
-            .z_get_address_balance(AddressStrings::new(vec![recipient_taddr.clone()]))
+            .z_get_address_balance(GetAddressBalanceRequest::new(vec![recipient_taddr.clone()]))
             .await
             .unwrap()
             .balance();

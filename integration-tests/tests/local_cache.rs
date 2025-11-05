@@ -7,9 +7,8 @@ use zaino_state::{
     test_dependencies::{BlockCache, BlockCacheConfig, BlockCacheSubscriber},
     BackendType,
 };
-use zcash_local_net::validator::Validator;
-use zaino_testutils::{ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS};
 use zaino_testutils::{TestManager, ValidatorKind};
+use zcash_local_net::validator::Validator;
 use zebra_chain::{block::Height, parameters::NetworkKind};
 use zebra_state::HashOrHeight;
 
@@ -57,9 +56,10 @@ async fn create_test_manager_and_block_cache<V: Validator>(
     .unwrap();
 
     let network = match test_manager.network {
-        NetworkKind::Regtest => {
-            zebra_chain::parameters::Network::new_regtest(activation_heights.into())
-        }
+        NetworkKind::Regtest => zebra_chain::parameters::Network::new_regtest(
+            zebra_chain::parameters::testnet::ConfiguredActivationHeights::from(activation_heights)
+                .into(),
+        ),
         NetworkKind::Testnet => zebra_chain::parameters::Network::new_default_testnet(),
         NetworkKind::Mainnet => zebra_chain::parameters::Network::Mainnet,
     };

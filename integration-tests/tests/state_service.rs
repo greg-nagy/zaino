@@ -12,7 +12,7 @@ use zaino_testutils::{TestManager, ValidatorKind, ZEBRAD_TESTNET_CACHE_DIR};
 use zcash_local_net::validator::{zebrad::Zebrad, Validator};
 use zebra_chain::parameters::NetworkKind;
 use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
-use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetInfo};
+use zebra_rpc::methods::{GetAddressBalanceRequest, GetAddressTxIdsRequest, GetInfo};
 use zip32::AccountId;
 
 #[allow(deprecated)]
@@ -29,7 +29,7 @@ async fn create_test_manager_and_services<V: Validator>(
     StateService,
     StateServiceSubscriber,
 ) {
-    let test_manager = TestManager::<V>::launch_with_default_activation_heights(
+    let test_manager = TestManager::<V>::launch(
         validator,
         &BackendType::Fetch,
         network,
@@ -95,6 +95,7 @@ async fn create_test_manager_and_services<V: Validator>(
             delete_old_database: true,
             debug_stop_at_height: None,
             debug_validity_check_interval: None,
+            should_backup_non_finalized_state: false,
         },
         test_manager.full_node_rpc_listen_address,
         test_manager.full_node_grpc_listen_address,
@@ -306,12 +307,12 @@ async fn state_service_get_address_balance<V: Validator>(validator: &ValidatorKi
         .unwrap();
 
     let fetch_service_balance = fetch_service_subscriber
-        .z_get_address_balance(AddressStrings::new(vec![recipient_taddr.clone()]))
+        .z_get_address_balance(GetAddressBalanceRequest::new(vec![recipient_taddr.clone()]))
         .await
         .unwrap();
 
     let state_service_balance = state_service_subscriber
-        .z_get_address_balance(AddressStrings::new(vec![recipient_taddr]))
+        .z_get_address_balance(GetAddressBalanceRequest::new(vec![recipient_taddr]))
         .await
         .unwrap();
 
@@ -356,7 +357,7 @@ async fn state_service_get_address_balance_testnet() {
 
     let address = "tmAkxrvJCN75Ty9YkiHccqc1hJmGZpggo6i";
 
-    let address_request = AddressStrings::new(vec![address.to_string()]);
+    let address_request = GetAddressBalanceRequest::new(vec![address.to_string()]);
 
     let fetch_service_balance = dbg!(
         fetch_service_subscriber
@@ -981,13 +982,13 @@ async fn state_service_get_address_utxos<V: Validator>(validator: &ValidatorKind
     clients.faucet.sync_and_await().await.unwrap();
 
     let fetch_service_utxos = fetch_service_subscriber
-        .z_get_address_utxos(AddressStrings::new(vec![recipient_taddr.clone()]))
+        .z_get_address_utxos(GetAddressBalanceRequest::new(vec![recipient_taddr.clone()]))
         .await
         .unwrap();
     let (_, fetch_service_txid, ..) = fetch_service_utxos[0].into_parts();
 
     let state_service_utxos = state_service_subscriber
-        .z_get_address_utxos(AddressStrings::new(vec![recipient_taddr]))
+        .z_get_address_utxos(GetAddressBalanceRequest::new(vec![recipient_taddr]))
         .await
         .unwrap();
     let (_, state_service_txid, ..) = state_service_utxos[0].into_parts();
@@ -1024,7 +1025,7 @@ async fn state_service_get_address_utxos_testnet() {
 
     let address = "tmAkxrvJCN75Ty9YkiHccqc1hJmGZpggo6i";
 
-    let address_request = AddressStrings::new(vec![address.to_string()]);
+    let address_request = GetAddressBalanceRequest::new(vec![address.to_string()]);
 
     let fetch_service_utxos = dbg!(
         fetch_service_subscriber

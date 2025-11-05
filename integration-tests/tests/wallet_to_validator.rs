@@ -15,11 +15,10 @@ async fn connect_to_node_get_info_for_validator<T: Validator>(
     validator: &ValidatorKind,
     backend: &BackendType,
 ) {
-    let mut test_manager = TestManager::<T>::launch_with_default_activation_heights(
-        validator, backend, None, None, true, false, false, true, true, true,
-    )
-    .await
-    .unwrap();
+    let mut test_manager =
+        TestManager::<T>::launch(validator, backend, None, None, None, true, false, true)
+            .await
+            .unwrap();
     let clients = test_manager
         .clients
         .take()
@@ -32,11 +31,10 @@ async fn connect_to_node_get_info_for_validator<T: Validator>(
 }
 
 async fn send_to_orchard<T: Validator>(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::<T>::launch_with_default_activation_heights(
-        validator, backend, None, None, true, false, false, true, true, true,
-    )
-    .await
-    .unwrap();
+    let mut test_manager =
+        TestManager::<T>::launch(validator, backend, None, None, None, true, false, true)
+            .await
+            .unwrap();
     let mut clients = test_manager
         .clients
         .take()
@@ -87,11 +85,10 @@ async fn send_to_orchard<T: Validator>(validator: &ValidatorKind, backend: &Back
 }
 
 async fn send_to_sapling<V: Validator>(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::<V>::launch_with_default_activation_heights(
-        validator, backend, None, None, true, false, false, true, true, true,
-    )
-    .await
-    .unwrap();
+    let mut test_manager =
+        TestManager::<V>::launch(validator, backend, None, None, None, true, false, true)
+            .await
+            .unwrap();
     let mut clients = test_manager
         .clients
         .take()
@@ -142,11 +139,10 @@ async fn send_to_sapling<V: Validator>(validator: &ValidatorKind, backend: &Back
 }
 
 async fn send_to_transparent<V: Validator>(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::<V>::launch_with_default_activation_heights(
-        validator, backend, None, None, true, false, false, true, true, true,
-    )
-    .await
-    .unwrap();
+    let mut test_manager =
+        TestManager::<V>::launch(validator, backend, None, None, None, true, false, true)
+            .await
+            .unwrap();
     let mut clients = test_manager
         .clients
         .take()
@@ -245,11 +241,10 @@ async fn send_to_transparent<V: Validator>(validator: &ValidatorKind, backend: &
 }
 
 async fn send_to_all<V: Validator>(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::<V>::launch_with_default_activation_heights(
-        validator, backend, None, None, true, false, false, true, true, true,
-    )
-    .await
-    .unwrap();
+    let mut test_manager =
+        TestManager::<V>::launch(validator, backend, None, None, None, true, false, true)
+            .await
+            .unwrap();
     let mut clients = test_manager
         .clients
         .take()
@@ -336,11 +331,10 @@ async fn send_to_all<V: Validator>(validator: &ValidatorKind, backend: &BackendT
 }
 
 async fn shield_for_validator<V: Validator>(validator: &ValidatorKind, backend: &BackendType) {
-    let mut test_manager = TestManager::<V>::launch_with_default_activation_heights(
-        validator, backend, None, None, true, false, false, true, true, true,
-    )
-    .await
-    .unwrap();
+    let mut test_manager =
+        TestManager::<V>::launch(validator, backend, None, None, None, true, false, true)
+            .await
+            .unwrap();
     let mut clients = test_manager
         .clients
         .take()
@@ -412,11 +406,10 @@ async fn monitor_unverified_mempool_for_validator<V: Validator>(
     validator: &ValidatorKind,
     backend: &BackendType,
 ) {
-    let mut test_manager = TestManager::<V>::launch_with_default_activation_heights(
-        validator, backend, None, None, true, false, false, true, true, true,
-    )
-    .await
-    .unwrap();
+    let mut test_manager =
+        TestManager::<V>::launch(validator, backend, None, None, None, true, false, true)
+            .await
+            .unwrap();
     let mut clients = test_manager
         .clients
         .take()
