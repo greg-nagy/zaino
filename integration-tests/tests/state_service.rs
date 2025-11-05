@@ -1,5 +1,6 @@
 use zaino_common::network::{ActivationHeights, ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS};
 use zaino_common::{DatabaseConfig, ServiceConfig, StorageConfig};
+use zaino_fetch::jsonrpsee::response::address_deltas::GetAddressDeltasParams;
 use zaino_state::BackendType;
 
 #[allow(deprecated)]
@@ -1027,7 +1028,71 @@ async fn state_service_get_address_utxos_testnet() {
     test_manager.close().await;
 }
 
-mod zebrad {
+async fn state_service_get_address_deltas_testnet() {
+    let (
+        mut test_manager,
+        _fetch_service,
+        fetch_service_subscriber,
+        _state_service,
+        state_service_subscriber,
+    ) = create_test_manager_and_services(
+        &ValidatorKind::Zebrad,
+        ZEBRAD_TESTNET_CACHE_DIR.clone(),
+        false,
+        false,
+        Some(NetworkKind::Testnet),
+    )
+    .await;
+
+    let address = "tmAkxrvJCN75Ty9YkiHccqc1hJmGZpggo6i";
+
+    // Test simple response
+    let simple_request =
+        GetAddressDeltasParams::new_filtered(vec![address.to_string()], 2000000, 3000000, false);
+
+    let fetch_service_simple_deltas = dbg!(
+        fetch_service_subscriber
+            .get_address_deltas(simple_request.clone())
+            .await
+    )
+    .unwrap();
+
+    let state_service_simple_deltas = dbg!(
+        state_service_subscriber
+            .get_address_deltas(simple_request)
+            .await
+    )
+    .unwrap();
+
+    assert_eq!(fetch_service_simple_deltas, state_service_simple_deltas);
+
+    // Test response with chain info
+    let chain_info_params =
+        GetAddressDeltasParams::new_filtered(vec![address.to_string()], 2000000, 3000000, true);
+
+    let fetch_service_chain_info_deltas = dbg!(
+        fetch_service_subscriber
+            .get_address_deltas(chain_info_params.clone())
+            .await
+    )
+    .unwrap();
+
+    let state_service_chain_info_deltas = dbg!(
+        state_service_subscriber
+            .get_address_deltas(chain_info_params)
+            .await
+    )
+    .unwrap();
+
+    assert_eq!(
+        fetch_service_chain_info_deltas,
+        state_service_chain_info_deltas
+    );
+
+    test_manager.close().await;
+}
+
+mod zebra {
 
     use super::*;
 
@@ -1098,6 +1163,8 @@ mod zebrad {
     }
 
     pub(crate) mod get {
+
+        use zaino_fetch::jsonrpsee::response::address_deltas::GetAddressDeltasResponse;
 
         use super::*;
 
@@ -1524,6 +1591,19 @@ mod zebrad {
         async fn address_balance_testnet() {
             state_service_get_address_balance_testnet().await;
         }
+
+        #[ignore = "requires fully synced testnet."]
+        #[tokio::test]
+        async fn address_deltas_testnet() {
+            state_service_get_address_deltas_testnet().await;
+        }
+
+        #[tokio::test]
+        async fn address_deltas() {
+            address_deltas::main().await;
+        }
+
+        mod address_deltas;
     }
 
     pub(crate) mod lightwallet_indexer {
@@ -1531,7 +1611,7 @@ mod zebrad {
         use zaino_proto::proto::service::{
             AddressList, BlockId, BlockRange, GetAddressUtxosArg, GetSubtreeRootsArg, TxFilter,
         };
-        use zebra_rpc::methods::GetAddressTxIdsRequest;
+        use zebra_rpc::methods::{GetAddressTxIdsRequest, GetBlock};
 
         use super::*;
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1605,6 +1685,55 @@ mod zebrad {
                 .unwrap());
             assert_eq!(fetch_service_block_by_hash, state_service_block_by_hash);
             assert_eq!(state_service_block_by_hash, state_service_block_by_height)
+        }
+
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        async fn get_block_header() {
+            let (
+                test_manager,
+                _fetch_service,
+                fetch_service_subscriber,
+                _state_service,
+                state_service_subscriber,
+            ) = create_test_manager_and_services(
+                &ValidatorKind::Zebrad,
+                None,
+                false,
+                false,
+                Some(NetworkKind::Regtest),
+            )
+            .await;
+
+            const BLOCK_LIMIT: u32 = 10;
+
+            for i in 0..BLOCK_LIMIT {
+                test_manager.local_net.generate_blocks(1).await.unwrap();
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+                let block = fetch_service_subscriber
+                    .z_get_block(i.to_string(), Some(1))
+                    .await
+                    .unwrap();
+
+                let block_hash = match block {
+                    GetBlock::Object(block) => block.hash(),
+                    GetBlock::Raw(_) => panic!("Expected block object"),
+                };
+
+                let fetch_service_get_block_header = fetch_service_subscriber
+                    .get_block_header(block_hash.to_string(), false)
+                    .await
+                    .unwrap();
+
+                let state_service_block_header_response = state_service_subscriber
+                    .get_block_header(block_hash.to_string(), false)
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    fetch_service_get_block_header,
+                    state_service_block_header_response
+                );
+            }
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
