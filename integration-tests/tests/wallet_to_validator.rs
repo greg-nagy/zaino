@@ -545,7 +545,7 @@ mod zcashd {
 
     use super::*;
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[tokio::test(flavor = "multi_thread")]
     #[allow(deprecated)]
     async fn connect_to_node_get_info() {
         connect_to_node_get_info_for_validator::<FetchService>(
@@ -558,38 +558,38 @@ mod zcashd {
     mod sent_to {
         use super::*;
 
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         pub(crate) async fn orchard() {
             send_to_orchard::<FetchService>(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
         }
 
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         pub(crate) async fn sapling() {
             send_to_sapling::<FetchService>(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
         }
 
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         pub(crate) async fn transparent() {
             send_to_transparent::<FetchService>(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
         }
 
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         pub(crate) async fn all() {
             send_to_all::<FetchService>(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
         }
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[tokio::test(flavor = "multi_thread")]
     #[allow(deprecated)]
     async fn shield() {
         shield_for_validator::<FetchService>(&ValidatorKind::Zcashd, &BackendType::Fetch).await;
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[tokio::test(flavor = "multi_thread")]
     #[allow(deprecated)]
     async fn monitor_unverified_mempool() {
         monitor_unverified_mempool_for_validator::<FetchService>(
@@ -608,7 +608,7 @@ mod zebrad {
         #[allow(deprecated)]
         use zaino_state::FetchService;
 
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         async fn connect_to_node_get_info() {
             connect_to_node_get_info_for_validator::<FetchService>(
@@ -620,39 +620,39 @@ mod zebrad {
         mod send_to {
             use super::*;
 
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn sapling() {
                 send_to_sapling::<FetchService>(&ValidatorKind::Zebrad, &BackendType::Fetch).await;
             }
 
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn orchard() {
                 send_to_orchard::<FetchService>(&ValidatorKind::Zebrad, &BackendType::Fetch).await;
             }
 
             /// Bug documented in https://github.com/zingolabs/zaino/issues/145.
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn transparent() {
                 send_to_transparent::<FetchService>(&ValidatorKind::Zebrad, &BackendType::Fetch)
                     .await;
             }
 
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn all() {
                 send_to_all::<FetchService>(&ValidatorKind::Zebrad, &BackendType::Fetch).await;
             }
         }
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         async fn shield() {
             shield_for_validator::<FetchService>(&ValidatorKind::Zebrad, &BackendType::Fetch).await;
         }
         /// Bug documented in https://github.com/zingolabs/zaino/issues/144.
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         async fn monitor_unverified_mempool() {
             monitor_unverified_mempool_for_validator::<FetchService>(
@@ -668,7 +668,7 @@ mod zebrad {
         #[allow(deprecated)]
         use zaino_state::StateService;
 
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         async fn connect_to_node_get_info() {
             connect_to_node_get_info_for_validator::<StateService>(
@@ -680,39 +680,39 @@ mod zebrad {
         mod send_to {
             use super::*;
 
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn sapling() {
                 send_to_sapling::<StateService>(&ValidatorKind::Zebrad, &BackendType::State).await;
             }
 
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn orchard() {
                 send_to_orchard::<StateService>(&ValidatorKind::Zebrad, &BackendType::State).await;
             }
 
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn transparent() {
                 send_to_transparent::<StateService>(&ValidatorKind::Zebrad, &BackendType::State)
                     .await;
             }
 
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn all() {
                 send_to_all::<StateService>(&ValidatorKind::Zebrad, &BackendType::State).await;
             }
         }
 
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         async fn shield() {
             shield_for_validator::<StateService>(&ValidatorKind::Zebrad, &BackendType::State).await;
         }
 
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         async fn monitor_unverified_mempool() {
             monitor_unverified_mempool_for_validator::<StateService>(

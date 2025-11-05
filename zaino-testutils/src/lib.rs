@@ -722,7 +722,7 @@ mod launch_testmanager {
 
         use super::*;
 
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         pub(crate) async fn basic() {
             let mut test_manager = TestManager::<FetchService>::launch(
@@ -744,7 +744,7 @@ mod launch_testmanager {
             test_manager.close().await;
         }
 
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         pub(crate) async fn generate_blocks() {
             let mut test_manager = TestManager::<FetchService>::launch(
@@ -772,7 +772,7 @@ mod launch_testmanager {
         }
 
         #[ignore = "chain cache needs development"]
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         pub(crate) async fn with_chain() {
             let mut test_manager = TestManager::<FetchService>::launch(
@@ -794,7 +794,7 @@ mod launch_testmanager {
             test_manager.close().await;
         }
 
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         pub(crate) async fn zaino() {
             let mut test_manager = TestManager::<FetchService>::launch(
@@ -820,7 +820,7 @@ mod launch_testmanager {
             test_manager.close().await;
         }
 
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         pub(crate) async fn zaino_clients() {
             let mut test_manager = TestManager::<FetchService>::launch(
@@ -847,7 +847,7 @@ mod launch_testmanager {
         /// This test shows currently we do not receive mining rewards from Zebra unless we mine 100 blocks at a time.
         /// This is not the case with Zcashd and should not be the case here.
         /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         pub(crate) async fn zaino_clients_receive_mining_reward() {
             let mut test_manager = TestManager::<FetchService>::launch(
@@ -895,7 +895,7 @@ mod launch_testmanager {
 
             use super::*;
 
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn basic() {
                 let mut test_manager = TestManager::<FetchService>::launch(
@@ -917,7 +917,7 @@ mod launch_testmanager {
                 test_manager.close().await;
             }
 
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn generate_blocks() {
                 let mut test_manager = TestManager::<FetchService>::launch(
@@ -945,7 +945,7 @@ mod launch_testmanager {
             }
 
             #[ignore = "chain cache needs development"]
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn with_chain() {
                 let mut test_manager = TestManager::<FetchService>::launch(
@@ -967,7 +967,7 @@ mod launch_testmanager {
                 test_manager.close().await;
             }
 
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino() {
                 let mut test_manager = TestManager::<FetchService>::launch(
@@ -993,7 +993,7 @@ mod launch_testmanager {
                 test_manager.close().await;
             }
 
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino_clients() {
                 let mut test_manager = TestManager::<FetchService>::launch(
@@ -1020,7 +1020,7 @@ mod launch_testmanager {
             /// This test shows currently we do not receive mining rewards from Zebra unless we mine 100 blocks at a time.
             /// This is not the case with Zcashd and should not be the case here.
             /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino_clients_receive_mining_reward() {
                 let mut test_manager = TestManager::<FetchService>::launch(
@@ -1066,7 +1066,7 @@ mod launch_testmanager {
                 test_manager.close().await;
             }
 
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino_clients_receive_mining_reward_and_send() {
                 let mut test_manager = TestManager::<FetchService>::launch(
@@ -1165,7 +1165,7 @@ mod launch_testmanager {
             }
 
             #[ignore = "requires fully synced testnet."]
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino_testnet() {
                 let mut test_manager = TestManager::<FetchService>::launch(
@@ -1196,7 +1196,7 @@ mod launch_testmanager {
             use zaino_state::StateService;
             use zip32::AccountId;
 
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn basic() {
                 let mut test_manager = TestManager::<StateService>::launch(
@@ -1218,7 +1218,7 @@ mod launch_testmanager {
                 test_manager.close().await;
             }
 
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn generate_blocks() {
                 let mut test_manager = TestManager::<StateService>::launch(
@@ -1246,7 +1246,7 @@ mod launch_testmanager {
             }
 
             #[ignore = "chain cache needs development"]
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn with_chain() {
                 let mut test_manager = TestManager::<StateService>::launch(
@@ -1268,7 +1268,7 @@ mod launch_testmanager {
                 test_manager.close().await;
             }
 
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino() {
                 let mut test_manager = TestManager::<StateService>::launch(
@@ -1294,7 +1294,7 @@ mod launch_testmanager {
                 test_manager.close().await;
             }
 
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino_clients() {
                 let mut test_manager = TestManager::<StateService>::launch(
@@ -1321,7 +1321,7 @@ mod launch_testmanager {
             /// This test shows currently we do not receive mining rewards from Zebra unless we mine 100 blocks at a time.
             /// This is not the case with Zcashd and should not be the case here.
             /// Even if rewards need 100 confirmations these blocks should not have to be mined at the same time.
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino_clients_receive_mining_reward() {
                 let mut test_manager = TestManager::<StateService>::launch(
@@ -1368,7 +1368,7 @@ mod launch_testmanager {
                 test_manager.close().await;
             }
 
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino_clients_receive_mining_reward_and_send() {
                 let mut test_manager = TestManager::<StateService>::launch(
@@ -1467,7 +1467,7 @@ mod launch_testmanager {
             }
 
             #[ignore = "requires fully synced testnet."]
-            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino_testnet() {
                 let mut test_manager = TestManager::<StateService>::launch(
