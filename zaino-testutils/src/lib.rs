@@ -516,9 +516,6 @@ where
             .await
             .unwrap();
 
-            // NOTE: This is required to give the server time to launch, this is not used in production code but could be rewritten to improve testing efficiency.
-            tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-
             (
                 Some(handle),
                 Some(service_subscriber),
@@ -573,7 +570,13 @@ where
 
         // Generate an extra block to turn on NU5 and NU6,
         // as they currently must be turned on at block height = 2.
-        test_manager.local_net.generate_blocks(1).await.unwrap();
+        // NOTE: if this is removed when zebra fixes this issue we must replace with a generate_block_and_poll(0) when
+        // zaino is enabled to ensure its ready and not still syncing
+        if enable_zaino {
+            test_manager.generate_blocks_and_poll(1).await;
+        } else {
+            test_manager.local_net.generate_blocks(1).await.unwrap();
+        }
 
         Ok(test_manager)
     }
@@ -589,7 +592,7 @@ where
         .unwrap();
         let chain_height = self.local_net.get_chain_height().await;
         let mut next_block_height = u64::from(chain_height) + 1;
-        let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(200));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         interval.tick().await;
         while grpc_client
@@ -627,7 +630,7 @@ where
     ) {
         let chain_height = self.local_net.get_chain_height().await;
         let mut next_block_height = u64::from(chain_height) + 1;
-        let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(200));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         interval.tick().await;
         // NOTE: readstate service seems to not be functioning correctly when generate multiple blocks at once and polling the latest block.
@@ -658,7 +661,7 @@ where
     ) {
         let chain_height = self.local_net.get_chain_height().await;
         let mut next_block_height = u32::from(chain_height) + 1;
-        let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(200));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         interval.tick().await;
         while u32::from(

@@ -1754,7 +1754,7 @@ async fn fetch_service_get_taddress_utxos(validator: &ValidatorKind) {
         None,
         true,
         false,
-        false,
+        true,
     )
     .await
     .unwrap();

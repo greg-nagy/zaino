@@ -163,7 +163,7 @@ async fn state_service_check_info(
         fetch_service_subscriber,
         _state_service,
         state_service_subscriber,
-    ) = create_test_manager_and_services(validator, chain_cache, false, false, Some(network)).await;
+    ) = create_test_manager_and_services(validator, chain_cache, true, false, Some(network)).await;
 
     if dbg!(network.to_string()) == *"Regtest" {
         generate_blocks_and_poll_all_chain_indexes(
@@ -1186,7 +1186,7 @@ mod zebrad {
             ) = create_test_manager_and_services(
                 &ValidatorKind::Zebrad,
                 None,
-                false,
+                true,
                 false,
                 Some(NetworkKind::Regtest),
             )
@@ -1285,7 +1285,7 @@ mod zebrad {
             ) = create_test_manager_and_services(
                 &ValidatorKind::Zebrad,
                 None,
-                false,
+                true,
                 false,
                 Some(NetworkKind::Regtest),
             )
@@ -1316,7 +1316,7 @@ mod zebrad {
             ) = create_test_manager_and_services(
                 &ValidatorKind::Zebrad,
                 None,
-                false,
+                true,
                 false,
                 Some(NetworkKind::Regtest),
             )
@@ -1391,7 +1391,7 @@ mod zebrad {
             ) = create_test_manager_and_services(
                 &ValidatorKind::Zebrad,
                 None,
-                false,
+                true,
                 false,
                 Some(NetworkKind::Regtest),
             )
@@ -1502,7 +1502,7 @@ mod zebrad {
             ) = create_test_manager_and_services(
                 &ValidatorKind::Zebrad,
                 None,
-                false,
+                true,
                 false,
                 Some(NetworkKind::Regtest),
             )
@@ -1715,7 +1715,7 @@ mod zebrad {
             ) = create_test_manager_and_services(
                 &ValidatorKind::Zebrad,
                 None,
-                false,
+                true,
                 false,
                 Some(NetworkKind::Regtest),
             )
@@ -1746,7 +1746,7 @@ mod zebrad {
             ) = create_test_manager_and_services(
                 &ValidatorKind::Zebrad,
                 None,
-                false,
+                true,
                 false,
                 Some(NetworkKind::Regtest),
             )
@@ -1798,7 +1798,7 @@ mod zebrad {
             ) = create_test_manager_and_services(
                 &ValidatorKind::Zebrad,
                 None,
-                false,
+                true,
                 false,
                 Some(NetworkKind::Regtest),
             )
@@ -1840,7 +1840,7 @@ mod zebrad {
             ) = create_test_manager_and_services(
                 &ValidatorKind::Zebrad,
                 None,
-                false,
+                true,
                 false,
                 Some(NetworkKind::Regtest),
             )
@@ -1889,7 +1889,7 @@ mod zebrad {
             ) = create_test_manager_and_services(
                 &ValidatorKind::Zebrad,
                 None,
-                false,
+                true,
                 false,
                 Some(NetworkKind::Regtest),
             )
@@ -1923,7 +1923,7 @@ mod zebrad {
             ) = create_test_manager_and_services(
                 &ValidatorKind::Zebrad,
                 None,
-                false,
+                true,
                 false,
                 Some(NetworkKind::Regtest),
             )

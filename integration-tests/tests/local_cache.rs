@@ -91,7 +91,7 @@ async fn launch_local_cache(validator: &ValidatorKind) {
 /// Launches a testmanager and block cache and generates `n*100` blocks, checking blocks are stored and fetched correctly.
 async fn launch_local_cache_process_n_block_batches(validator: &ValidatorKind, batches: u32) {
     let (test_manager, json_service, mut block_cache, mut block_cache_subscriber) =
-        create_test_manager_and_block_cache(validator, None, false, false).await;
+        create_test_manager_and_block_cache(validator, None, true, false).await;
 
     let finalised_state = block_cache.finalised_state.take().unwrap();
     let finalised_state_subscriber = block_cache_subscriber.finalised_state.take().unwrap();
