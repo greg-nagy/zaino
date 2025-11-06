@@ -23,10 +23,13 @@ use zaino_fetch::{
     jsonrpsee::{
         connector::{JsonRpSeeConnector, RpcError},
         response::{
+            address_deltas::{GetAddressDeltasParams, GetAddressDeltasResponse},
+            block_deltas::BlockDeltas,
+            block_header::GetBlockHeader,
             block_subsidy::GetBlockSubsidy,
             mining_info::GetMiningInfoWire,
             peer_info::GetPeerInfo,
-            {GetMempoolInfoResponse, GetNetworkSolPsResponse},
+            GetMempoolInfoResponse, GetNetworkSolPsResponse,
         },
     },
 };
@@ -222,6 +225,32 @@ impl FetchServiceSubscriber {
 impl ZcashIndexer for FetchServiceSubscriber {
     type Error = FetchServiceError;
 
+    /// Returns information about all changes to the given transparent addresses within the given inclusive block-height range.
+    ///
+    /// Defaults: if start or end are not specified, they default to 0.
+    ///
+    /// ### Normalization
+    ///
+    /// - If start is greater than the latest block height (tip), start is set to the tip.
+    /// - If end is 0 or greater than the tip, end is set to the tip.
+    ///
+    /// ### Validation
+    ///
+    /// If the resulting start is greater than end, the call fails with an error.
+    /// (Thus, [tip, tip] is valid and returns only the tip block.)
+    ///
+    /// [Original zcashd implementation](https://github.com/zcash/zcash/blob/18238d90cd0b810f5b07d5aaa1338126aa128c06/src/rpc/misc.cpp#L881)
+    ///
+    /// zcashd reference: [`getaddressdeltas`](https://zcash.github.io/rpc/getaddressdeltas.html)
+    /// method: post
+    /// tags: address
+    async fn get_address_deltas(
+        &self,
+        params: GetAddressDeltasParams,
+    ) -> Result<GetAddressDeltasResponse, Self::Error> {
+        Ok(self.fetcher.get_address_deltas(params).await?)
+    }
+
     /// Returns software information from the RPC server, as a [`GetInfo`] JSON struct.
     ///
     /// zcashd reference: [`getinfo`](https://zcash.github.io/rpc/getinfo.html)
@@ -391,6 +420,25 @@ impl ZcashIndexer for FetchServiceSubscriber {
             .get_block(hash_or_height, verbosity)
             .await?
             .try_into()?)
+    }
+
+    /// Returns information about the given block and its transactions.
+    ///
+    /// zcashd reference: [`getblockdeltas`](https://zcash.github.io/rpc/getblockdeltas.html)
+    /// method: post
+    /// tags: blockchain
+    ///
+    /// Note: This method has only been implemented in `zcashd`. Zebra has no intention of supporting it.
+    async fn get_block_deltas(&self, hash: String) -> Result<BlockDeltas, Self::Error> {
+        Ok(self.fetcher.get_block_deltas(hash).await?)
+    }
+
+    async fn get_block_header(
+        &self,
+        hash: String,
+        verbose: bool,
+    ) -> Result<GetBlockHeader, Self::Error> {
+        Ok(self.fetcher.get_block_header(hash, verbose).await?)
     }
 
     async fn get_mining_info(&self) -> Result<GetMiningInfoWire, Self::Error> {

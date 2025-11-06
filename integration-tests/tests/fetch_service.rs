@@ -920,6 +920,82 @@ async fn fetch_service_get_block(validator: &ValidatorKind) {
 }
 
 #[allow(deprecated)]
+async fn fetch_service_get_block_header(validator: &ValidatorKind) {
+    let mut test_manager = TestManager::<FetchService>::launch(
+        validator,
+        &BackendType::Fetch,
+        None,
+        None,
+        None,
+        true,
+        false,
+        false,
+    )
+    .await
+    .unwrap();
+
+    let fetch_service_subscriber = test_manager.service_subscriber.take().unwrap();
+
+    const BLOCK_LIMIT: u32 = 10;
+
+    for i in 0..BLOCK_LIMIT {
+        test_manager
+            .generate_blocks_and_poll_indexer(1, &fetch_service_subscriber)
+            .await;
+
+        let block = fetch_service_subscriber
+            .z_get_block(i.to_string(), Some(1))
+            .await
+            .unwrap();
+
+        let block_hash = match block {
+            GetBlock::Object(block) => block.hash(),
+            GetBlock::Raw(_) => panic!("Expected block object"),
+        };
+
+        let fetch_service_get_block_header = fetch_service_subscriber
+            .get_block_header(block_hash.to_string(), false)
+            .await
+            .unwrap();
+
+        let jsonrpc_client = JsonRpSeeConnector::new_with_basic_auth(
+            test_node_and_return_url(
+                test_manager.full_node_rpc_listen_address,
+                None,
+                Some("xxxxxx".to_string()),
+                Some("xxxxxx".to_string()),
+            )
+            .await
+            .unwrap(),
+            "xxxxxx".to_string(),
+            "xxxxxx".to_string(),
+        )
+        .unwrap();
+
+        let rpc_block_header_response = jsonrpc_client
+            .get_block_header(block_hash.to_string(), false)
+            .await
+            .unwrap();
+
+        let fetch_service_get_block_header_verbose = fetch_service_subscriber
+            .get_block_header(block_hash.to_string(), true)
+            .await
+            .unwrap();
+
+        let rpc_block_header_response_verbose = jsonrpc_client
+            .get_block_header(block_hash.to_string(), true)
+            .await
+            .unwrap();
+
+        assert_eq!(fetch_service_get_block_header, rpc_block_header_response);
+        assert_eq!(
+            fetch_service_get_block_header_verbose,
+            rpc_block_header_response_verbose
+        );
+    }
+}
+
+#[allow(deprecated)]
 async fn fetch_service_get_best_blockhash(validator: &ValidatorKind) {
     let mut test_manager = TestManager::<FetchService>::launch(
         validator,
@@ -2059,97 +2135,139 @@ mod zcashd {
         }
 
         #[tokio::test(flavor = "multi_thread")]
+        pub(crate) async fn block_header() {
+            fetch_service_get_block_header(&ValidatorKind::Zcashd).await;
+        }
 
+        #[tokio::test(flavor = "multi_thread")]
         pub(crate) async fn difficulty() {
             assert_fetch_service_difficulty_matches_rpc(&ValidatorKind::Zcashd).await;
         }
 
+        #[allow(deprecated)]
         #[tokio::test(flavor = "multi_thread")]
+        pub(crate) async fn block_deltas() {
+            let mut test_manager = TestManager::<FetchService>::launch(
+                &ValidatorKind::Zcashd,
+                &BackendType::Fetch,
+                None,
+                None,
+                None,
+                true,
+                false,
+                false,
+            )
+            .await
+            .unwrap();
 
+            let fetch_service_subscriber = test_manager.service_subscriber.take().unwrap();
+
+            let current_block = fetch_service_subscriber.get_latest_block().await.unwrap();
+
+            let block_hash_bytes: [u8; 32] = current_block.hash.as_slice().try_into().unwrap();
+
+            let block_hash = zebra_chain::block::Hash::from(block_hash_bytes);
+
+            // Note: we need an 'expected' block hash in order to query its deltas.
+            // Having a predictable or test vector chain is the way to go here.
+            let fetch_service_block_deltas = fetch_service_subscriber
+                .get_block_deltas(block_hash.to_string())
+                .await
+                .unwrap();
+
+            let jsonrpc_client = JsonRpSeeConnector::new_with_basic_auth(
+                test_node_and_return_url(
+                    test_manager.full_node_rpc_listen_address,
+                    None,
+                    Some("xxxxxx".to_string()),
+                    Some("xxxxxx".to_string()),
+                )
+                .await
+                .unwrap(),
+                "xxxxxx".to_string(),
+                "xxxxxx".to_string(),
+            )
+            .unwrap();
+
+            let rpc_block_deltas = jsonrpc_client
+                .get_block_deltas(block_hash.to_string())
+                .await
+                .unwrap();
+
+            assert_eq!(fetch_service_block_deltas, rpc_block_deltas);
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
         pub(crate) async fn mining_info() {
             assert_fetch_service_mininginfo_matches_rpc(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn peer_info() {
             assert_fetch_service_peerinfo_matches_rpc(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn block_subsidy() {
             fetch_service_get_block_subsidy(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn best_blockhash() {
             fetch_service_get_best_blockhash(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn block_count() {
             fetch_service_get_block_count(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn block_nullifiers() {
             fetch_service_get_block_nullifiers(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn block_range() {
             fetch_service_get_block_range(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn block_range_nullifiers() {
             fetch_service_get_block_range_nullifiers(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn transaction_mined() {
             fetch_service_get_transaction_mined(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn transaction_mempool() {
             fetch_service_get_transaction_mempool(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn taddress_txids() {
             fetch_service_get_taddress_txids(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn taddress_balance() {
             fetch_service_get_taddress_balance(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn mempool_tx() {
             fetch_service_get_mempool_tx(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn mempool_stream() {
             fetch_service_get_mempool_stream(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn tree_state() {
             fetch_service_get_tree_state(&ValidatorKind::Zcashd).await;
         }
@@ -2309,7 +2427,11 @@ mod zebrad {
         }
 
         #[tokio::test(flavor = "multi_thread")]
+        pub(crate) async fn block_header() {
+            fetch_service_get_block_header(&ValidatorKind::Zebrad).await;
+        }
 
+        #[tokio::test(flavor = "multi_thread")]
         pub(crate) async fn difficulty() {
             assert_fetch_service_difficulty_matches_rpc(&ValidatorKind::Zebrad).await;
         }
