@@ -578,6 +578,9 @@ where
             test_manager.local_net.generate_blocks(1).await.unwrap();
         }
 
+        // FIXME: zaino's status can still be syncing instead of ready at this point
+        tokio::time::sleep(Duration::from_secs(1)),await;
+            
         Ok(test_manager)
     }
 
