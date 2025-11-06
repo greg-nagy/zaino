@@ -579,8 +579,8 @@ where
         }
 
         // FIXME: zaino's status can still be syncing instead of ready at this point
-        tokio::time::sleep(Duration::from_secs(1)),await;
-            
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
         Ok(test_manager)
     }
 
