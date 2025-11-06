@@ -138,7 +138,6 @@ pub(crate) async fn load_vectors_v0db_and_reader() -> (
 // *** ZainoDB Tests ***
 
 #[tokio::test(flavor = "multi_thread")]
-
 async fn sync_to_height() {
     init_tracing();
 
@@ -158,7 +157,6 @@ async fn sync_to_height() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-
 async fn add_blocks_to_db_and_verify() {
     init_tracing();
 
@@ -170,7 +168,6 @@ async fn add_blocks_to_db_and_verify() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-
 async fn delete_blocks_from_db() {
     init_tracing();
 
@@ -191,7 +188,6 @@ async fn delete_blocks_from_db() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-
 async fn save_db_to_file_and_reload() {
     init_tracing();
 
@@ -299,7 +295,6 @@ async fn save_db_to_file_and_reload() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-
 async fn create_db_reader() {
     init_tracing();
 
@@ -315,7 +310,6 @@ async fn create_db_reader() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-
 async fn get_compact_blocks() {
     init_tracing();
 

@@ -13,7 +13,6 @@ use crate::chain_index::tests::vectors::{build_mockchain_source, load_test_vecto
 use crate::{BlockCacheConfig, BlockMetadata, BlockWithMetadata, ChainWork, IndexedBlock};
 
 #[tokio::test(flavor = "multi_thread")]
-
 async fn v0_to_v1_full() {
     init_tracing();
 
@@ -84,7 +83,6 @@ async fn v0_to_v1_full() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-
 async fn v0_to_v1_interrupted() {
     init_tracing();
 
@@ -207,7 +205,6 @@ async fn v0_to_v1_interrupted() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-
 async fn v0_to_v1_partial() {
     init_tracing();
 

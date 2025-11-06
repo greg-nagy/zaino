@@ -768,7 +768,6 @@ pub fn read_vectors_from_file<P: AsRef<Path>>(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-
 async fn pre_v4_txs_parsing() -> anyhow::Result<()> {
     let test_vectors = get_test_vectors();
 

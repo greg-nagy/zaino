@@ -2026,7 +2026,6 @@ mod zcashd {
         use super::*;
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn regtest_no_cache() {
             launch_fetch_service(&ValidatorKind::Zcashd, None).await;
         }
@@ -2047,7 +2046,6 @@ mod zcashd {
         use super::*;
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn validate_address() {
             fetch_service_validate_address(&ValidatorKind::Zcashd).await;
         }
@@ -2058,31 +2056,26 @@ mod zcashd {
         use super::*;
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn address_balance() {
             fetch_service_get_address_balance(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn block_raw() {
             fetch_service_get_block_raw(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn block_object() {
             fetch_service_get_block_object(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn raw_mempool() {
             fetch_service_get_raw_mempool(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn mempool_info() {
             test_get_mempool_info(&ValidatorKind::Zcashd).await;
         }
@@ -2092,44 +2085,37 @@ mod zcashd {
             use super::*;
 
             #[tokio::test(flavor = "multi_thread")]
-
             pub(crate) async fn get_treestate() {
                 fetch_service_z_get_treestate(&ValidatorKind::Zcashd).await;
             }
 
             #[tokio::test(flavor = "multi_thread")]
-
             pub(crate) async fn subtrees_by_index() {
                 fetch_service_z_get_subtrees_by_index(&ValidatorKind::Zcashd).await;
             }
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn raw_transaction() {
             fetch_service_get_raw_transaction(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn address_tx_ids() {
             fetch_service_get_address_tx_ids(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn address_utxos() {
             fetch_service_get_address_utxos(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn latest_block() {
             fetch_service_get_latest_block(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn block() {
             fetch_service_get_block(&ValidatorKind::Zcashd).await;
         }
@@ -2273,31 +2259,26 @@ mod zcashd {
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn latest_tree_state() {
             fetch_service_get_latest_tree_state(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn subtree_roots() {
             fetch_service_get_subtree_roots(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn taddress_utxos() {
             fetch_service_get_taddress_utxos(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn taddress_utxos_stream() {
             fetch_service_get_taddress_utxos_stream(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn lightd_info() {
             fetch_service_get_lightd_info(&ValidatorKind::Zcashd).await;
         }
@@ -2318,7 +2299,6 @@ mod zebrad {
         use super::*;
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn regtest_no_cache() {
             launch_fetch_service(&ValidatorKind::Zebrad, None).await;
         }
@@ -2339,7 +2319,6 @@ mod zebrad {
         use super::*;
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn validate_address() {
             fetch_service_validate_address(&ValidatorKind::Zebrad).await;
         }
@@ -2350,31 +2329,26 @@ mod zebrad {
         use super::*;
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn address_balance() {
             fetch_service_get_address_balance(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn block_raw() {
             fetch_service_get_block_raw(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn block_object() {
             fetch_service_get_block_object(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn raw_mempool() {
             fetch_service_get_raw_mempool(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn mempool_info() {
             test_get_mempool_info(&ValidatorKind::Zebrad).await;
         }
@@ -2384,44 +2358,37 @@ mod zebrad {
             use super::*;
 
             #[tokio::test(flavor = "multi_thread")]
-
             pub(crate) async fn treestate() {
                 fetch_service_z_get_treestate(&ValidatorKind::Zebrad).await;
             }
 
             #[tokio::test(flavor = "multi_thread")]
-
             pub(crate) async fn subtrees_by_index() {
                 fetch_service_z_get_subtrees_by_index(&ValidatorKind::Zebrad).await;
             }
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn raw_transaction() {
             fetch_service_get_raw_transaction(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn address_tx_ids() {
             fetch_service_get_address_tx_ids(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn address_utxos() {
             fetch_service_get_address_utxos(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn latest_block() {
             fetch_service_get_latest_block(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn block() {
             fetch_service_get_block(&ValidatorKind::Zebrad).await;
         }
@@ -2437,121 +2404,101 @@ mod zebrad {
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn mining_info() {
             assert_fetch_service_mininginfo_matches_rpc(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn peer_info() {
             assert_fetch_service_peerinfo_matches_rpc(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn block_subsidy() {
             fetch_service_get_block_subsidy(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn best_blockhash() {
             fetch_service_get_best_blockhash(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn block_count() {
             fetch_service_get_block_count(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn block_nullifiers() {
             fetch_service_get_block_nullifiers(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn block_range() {
             fetch_service_get_block_range(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn block_range_nullifiers() {
             fetch_service_get_block_range_nullifiers(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn transaction_mined() {
             fetch_service_get_transaction_mined(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn transaction_mempool() {
             fetch_service_get_transaction_mempool(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn taddress_txids() {
             fetch_service_get_taddress_txids(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn taddress_balance() {
             fetch_service_get_taddress_balance(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn mempool_tx() {
             fetch_service_get_mempool_tx(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn mempool_stream() {
             fetch_service_get_mempool_stream(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn tree_state() {
             fetch_service_get_tree_state(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn latest_tree_state() {
             fetch_service_get_latest_tree_state(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn subtree_roots() {
             fetch_service_get_subtree_roots(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn taddress_utxos() {
             fetch_service_get_taddress_utxos(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn taddress_utxos_stream() {
             fetch_service_get_taddress_utxos_stream(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread")]
-
         pub(crate) async fn lightd_info() {
             fetch_service_get_lightd_info(&ValidatorKind::Zebrad).await;
         }
