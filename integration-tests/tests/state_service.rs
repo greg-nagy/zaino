@@ -1054,7 +1054,7 @@ async fn state_service_get_address_deltas_testnet() {
         fetch_service_subscriber,
         _state_service,
         state_service_subscriber,
-    ) = create_test_manager_and_services(
+    ) = create_test_manager_and_services::<Zebrad>(
         &ValidatorKind::Zebrad,
         ZEBRAD_TESTNET_CACHE_DIR.clone(),
         false,
@@ -1724,7 +1724,7 @@ mod zebra {
                 fetch_service_subscriber,
                 _state_service,
                 state_service_subscriber,
-            ) = create_test_manager_and_services(
+            ) = create_test_manager_and_services::<Zebrad>(
                 &ValidatorKind::Zebrad,
                 None,
                 false,

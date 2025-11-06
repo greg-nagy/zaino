@@ -1620,7 +1620,7 @@ mod zcashd {
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         pub(crate) async fn block_header() {
-            fetch_service_get_block_header(&ValidatorKind::Zcashd).await;
+            fetch_service_get_block_header::<Zcashd>(&ValidatorKind::Zcashd).await;
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1631,7 +1631,7 @@ mod zcashd {
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         pub(crate) async fn block_deltas() {
             let (test_manager, _fetch_service, fetch_service_subscriber) =
-                create_test_manager_and_fetch_service(
+                create_test_manager_and_fetch_service::<Zcashd>(
                     &ValidatorKind::Zcashd,
                     None,
                     true,
@@ -1888,7 +1888,7 @@ mod zebrad {
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         pub(crate) async fn block_header() {
-            fetch_service_get_block_header(&ValidatorKind::Zebrad).await;
+            fetch_service_get_block_header::<Zebrad>(&ValidatorKind::Zebrad).await;
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
