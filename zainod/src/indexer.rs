@@ -267,9 +267,6 @@ fn startup_message() {
              Thank you for using ZingoLabs Zaino!
 
        - Donate to us at https://free2z.cash/zingolabs.
-       - For security conserns contact us online on Matrix:
-         Admins can be contacted for private messageing at
-         #zingolabs:matrix.org which is a public, unencrypted channel.
 
 ****** Please note Zaino is currently in development and should not be used to run mainnet nodes. ******
     "#;
