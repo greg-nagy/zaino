@@ -18,7 +18,7 @@ zaino-common.workspace = true
 zainod = { workspace = true }
 
 # Librustzcash
-zcash_protocol = { git = "https://github.com/zcash/librustzcash", rev = "d387aed7e04e881dbe30c6ff8b26a96c834c094b", features = [
+zcash_protocol = { version = "0.7.0", features = [
   "local-consensus",
 ] }
 zcash_client_backend = { version = "0.20", features = ["lightwalletd-tonic"] }
@@ -37,6 +37,7 @@ zingo_common_components = { git = "https://github.com/zingolabs/zingo-common.git
 zingolib = { git = "https://github.com/zingolabs/zingolib.git", rev = "b65eae7f7c99e63490f10a685fee1484bb4a8ca1", features = [
     "testutils",
 ] }
+zingolib_testutils = { git = "https://github.com/zingolabs/zingolib.git", rev = "b65eae7f7c99e63490f10a685fee1484bb4a8ca1" }
 
 # Miscellaneous
 http = { workspace = true }

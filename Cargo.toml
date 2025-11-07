@@ -29,7 +29,7 @@ version = "0.1.2"
 zcash_address = "0.9"
 zcash_keys = "0.10"
 zcash_protocol = "0.6"
-zcash_primitives = "0.26.1"
+zcash_primitives = "0.26.0"
 zcash_transparent = "0.4"
 
 # Zebra
@@ -127,6 +127,15 @@ arc-swap = "1.7.1"
 cargo-lock = "10.1.0"
 derive_more = "2.0.1"
 lazy_static = "1.5.0"
+
+[patch.crates-io]
+zcash_client_backend = { git = "https://github.com/zcash/librustzcash", rev = "3ba772c9b8"}
+zcash_address = { git = "https://github.com/zcash/librustzcash", rev = "3ba772c9b8"}
+zcash_keys = { git = "https://github.com/zcash/librustzcash", rev = "3ba772c9b8"}
+zcash_primitives = { git = "https://github.com/zcash/librustzcash", rev = "3ba772c9b8"}
+zcash_protocol = { git = "https://github.com/zcash/librustzcash", rev = "3ba772c9b8"}
+zcash_transparent = { git = "https://github.com/zcash/librustzcash", rev = "3ba772c9b8"}
+
 
 [profile.test]
 opt-level = 3

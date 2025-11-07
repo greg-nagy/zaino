@@ -27,12 +27,12 @@ use zcash_local_net::validator::zcashd::{Zcashd, ZcashdConfig};
 use zcash_local_net::validator::zebrad::{Zebrad, ZebradConfig};
 pub use zcash_local_net::validator::Validator;
 use zcash_local_net::LocalNetConfig;
-use zebra_chain::parameters::NetworkKind;
+use zebra_chain::parameters::{testnet::ConfiguredActivationHeights, NetworkKind};
 use zingo_test_vectors::seeds;
 pub use zingolib::get_base_address_macro;
 pub use zingolib::lightclient::LightClient;
 pub use zingolib::testutils::lightclient::from_inputs;
-use zingolib::testutils::scenarios::ClientBuilder;
+use zingolib_testutils::scenarios::ClientBuilder;
 
 /// Helper to get the test binary path from the TEST_BINARIES_DIR env var.
 fn binary_path(binary_name: &str) -> Option<PathBuf> {
@@ -315,10 +315,8 @@ impl<C: Validator> TestManager<C> {
                 ),
                 tempfile::tempdir().unwrap(),
             );
-            let faucet = client_builder.build_faucet(
-                true,
-                local_network_from_activation_heights(activation_heights),
-            );
+            let faucet = client_builder
+                .build_faucet(true, ConfiguredActivationHeights::from(activation_heights));
             let recipient = client_builder.build_client(
                 seeds::HOSPITAL_MUSEUM_SEED.to_string(),
                 1,
