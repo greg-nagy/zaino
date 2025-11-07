@@ -27,7 +27,8 @@ use zcash_local_net::validator::zcashd::{Zcashd, ZcashdConfig};
 use zcash_local_net::validator::zebrad::{Zebrad, ZebradConfig};
 pub use zcash_local_net::validator::Validator;
 use zcash_local_net::LocalNetConfig;
-use zebra_chain::parameters::{testnet::ConfiguredActivationHeights, NetworkKind};
+use zebra_chain::parameters::NetworkKind;
+use zebra_chain_zingolib_testutils_compat::parameters::testnet::ConfiguredActivationHeights;
 use zingo_test_vectors::seeds;
 pub use zingolib::get_base_address_macro;
 pub use zingolib::lightclient::LightClient;
@@ -315,13 +316,24 @@ impl<C: Validator> TestManager<C> {
                 ),
                 tempfile::tempdir().unwrap(),
             );
-            let faucet = client_builder
-                .build_faucet(true, ConfiguredActivationHeights::from(activation_heights));
+            let configured_activation_heights = ConfiguredActivationHeights {
+                before_overwinter: activation_heights.before_overwinter,
+                overwinter: activation_heights.overwinter,
+                sapling: activation_heights.sapling,
+                blossom: activation_heights.blossom,
+                heartwood: activation_heights.heartwood,
+                canopy: activation_heights.canopy,
+                nu5: activation_heights.nu5,
+                nu6: activation_heights.nu6,
+                nu6_1: activation_heights.nu6_1,
+                nu7: activation_heights.nu7,
+            };
+            let faucet = client_builder.build_faucet(true, configured_activation_heights);
             let recipient = client_builder.build_client(
                 seeds::HOSPITAL_MUSEUM_SEED.to_string(),
                 1,
                 true,
-                local_network_from_activation_heights(activation_heights),
+                configured_activation_heights,
             );
             Some(Clients {
                 client_builder,

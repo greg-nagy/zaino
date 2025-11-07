@@ -38,6 +38,7 @@ zingolib = { git = "https://github.com/zingolabs/zingolib.git", rev = "b65eae7f7
     "testutils",
 ] }
 zingolib_testutils = { git = "https://github.com/zingolabs/zingolib.git", rev = "b65eae7f7c99e63490f10a685fee1484bb4a8ca1" }
+zebra_chain_zingolib_testutils_compat = { version = "3.0.0", package = "zebra-chain" }
 
 # Miscellaneous
 http = { workspace = true }

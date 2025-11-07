@@ -8444,6 +8444,7 @@ dependencies = [
  "zcash_client_backend",
  "zcash_local_net 0.1.0 (git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.3.0)",
  "zcash_protocol 0.7.0",
+ "zebra-chain 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "zebra-chain 3.0.0 (git+https://github.com/ZcashFoundation/zebra.git?rev=eed8e0771f92db0b1938bab8af448e04d7d8ea51)",
  "zingo_common_components 0.1.0 (git+https://github.com/zingolabs/zingo-common.git?tag=zingo_common_components_v0.1.0)",
  "zingo_netutils",
