@@ -34,10 +34,10 @@ zingo_test_vectors = { git = "https://github.com/zingolabs/infrastructure.git", 
 zingo_common_components = { git = "https://github.com/zingolabs/zingo-common.git", tag = "zingo_common_components_v0.1.0", features = [ "for_test" ]}
 
 # ZingoLib
-zingolib = { git = "https://github.com/zingolabs/zingolib.git", rev = "b65eae7f7c99e63490f10a685fee1484bb4a8ca1", features = [
+zingolib = { git = "https://github.com/zingolabs/zingolib.git", rev = "e0eb2b85f4f8754d5597bc2bcd1ce67238728de0", features = [
     "testutils",
 ] }
-zingolib_testutils = { git = "https://github.com/zingolabs/zingolib.git", rev = "b65eae7f7c99e63490f10a685fee1484bb4a8ca1" }
+zingolib_testutils = { git = "https://github.com/zingolabs/zingolib.git", rev = "e0eb2b85f4f8754d5597bc2bcd1ce67238728de0" }
 zebra_chain_zingolib_testutils_compat = { version = "3.0.0", package = "zebra-chain" }
 
 # Miscellaneous

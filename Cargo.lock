@@ -2884,7 +2884,7 @@ dependencies = [
  "zaino-proto",
  "zaino-state",
  "zaino-testutils",
- "zcash_local_net 0.1.0 (git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.3.0)",
+ "zcash_local_net",
  "zebra-chain 3.0.0 (git+https://github.com/ZcashFoundation/zebra.git?rev=eed8e0771f92db0b1938bab8af448e04d7d8ea51)",
  "zebra-rpc 3.0.0 (git+https://github.com/ZcashFoundation/zebra.git?rev=eed8e0771f92db0b1938bab8af448e04d7d8ea51)",
  "zebra-state 3.0.0 (git+https://github.com/ZcashFoundation/zebra.git?rev=eed8e0771f92db0b1938bab8af448e04d7d8ea51)",
@@ -3944,7 +3944,7 @@ dependencies = [
 [[package]]
 name = "pepper-sync"
 version = "0.0.1"
-source = "git+https://github.com/zingolabs/zingolib.git?rev=b65eae7f7c99e63490f10a685fee1484bb4a8ca1#b65eae7f7c99e63490f10a685fee1484bb4a8ca1"
+source = "git+https://github.com/zingolabs/zingolib.git?rev=e0eb2b85f4f8754d5597bc2bcd1ce67238728de0#e0eb2b85f4f8754d5597bc2bcd1ce67238728de0"
 dependencies = [
  "bip32",
  "byteorder",
@@ -8414,7 +8414,7 @@ dependencies = [
  "zaino-proto",
  "zcash_address 0.9.0",
  "zcash_keys 0.10.1",
- "zcash_local_net 0.1.0 (git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.3.0)",
+ "zcash_local_net",
  "zcash_primitives 0.26.0",
  "zcash_protocol 0.6.2",
  "zcash_transparent 0.4.0",
@@ -8442,7 +8442,7 @@ dependencies = [
  "zaino-testvectors",
  "zainod",
  "zcash_client_backend",
- "zcash_local_net 0.1.0 (git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.3.0)",
+ "zcash_local_net",
  "zcash_protocol 0.7.0",
  "zebra-chain 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "zebra-chain 3.0.0 (git+https://github.com/ZcashFoundation/zebra.git?rev=eed8e0771f92db0b1938bab8af448e04d7d8ea51)",
@@ -8681,30 +8681,6 @@ dependencies = [
  "zebra-rpc 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "zingo_common_components 0.1.0 (git+https://github.com/zingolabs/zingo-common.git?branch=dev)",
  "zingo_test_vectors 0.0.1 (git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.3.0)",
-]
-
-[[package]]
-name = "zcash_local_net"
-version = "0.1.0"
-source = "git+https://github.com/zingolabs/infrastructure.git?branch=dev#985c8332f0a6e82d102ea0b7962c65a0e86c3a34"
-dependencies = [
- "getset",
- "hex",
- "http",
- "json",
- "portpicker",
- "serde_json",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "zcash_protocol 0.7.0",
- "zebra-chain 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "zebra-node-services 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "zebra-rpc 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "zingo_common_components 0.1.0 (git+https://github.com/zingolabs/zingo-common.git?branch=dev)",
- "zingo_test_vectors 0.0.1 (git+https://github.com/zingolabs/infrastructure.git?branch=dev)",
 ]
 
 [[package]]
@@ -9594,7 +9570,7 @@ dependencies = [
 [[package]]
 name = "zingo-memo"
 version = "0.0.1"
-source = "git+https://github.com/zingolabs/zingolib.git?rev=b65eae7f7c99e63490f10a685fee1484bb4a8ca1#b65eae7f7c99e63490f10a685fee1484bb4a8ca1"
+source = "git+https://github.com/zingolabs/zingolib.git?rev=e0eb2b85f4f8754d5597bc2bcd1ce67238728de0#e0eb2b85f4f8754d5597bc2bcd1ce67238728de0"
 dependencies = [
  "zcash_address 0.10.0",
  "zcash_client_backend",
@@ -9606,7 +9582,7 @@ dependencies = [
 [[package]]
 name = "zingo-price"
 version = "0.0.1"
-source = "git+https://github.com/zingolabs/zingolib.git?rev=b65eae7f7c99e63490f10a685fee1484bb4a8ca1#b65eae7f7c99e63490f10a685fee1484bb4a8ca1"
+source = "git+https://github.com/zingolabs/zingolib.git?rev=e0eb2b85f4f8754d5597bc2bcd1ce67238728de0#e0eb2b85f4f8754d5597bc2bcd1ce67238728de0"
 dependencies = [
  "byteorder",
  "reqwest",
@@ -9622,7 +9598,7 @@ dependencies = [
 [[package]]
 name = "zingo-status"
 version = "0.0.1"
-source = "git+https://github.com/zingolabs/zingolib.git?rev=b65eae7f7c99e63490f10a685fee1484bb4a8ca1#b65eae7f7c99e63490f10a685fee1484bb4a8ca1"
+source = "git+https://github.com/zingolabs/zingolib.git?rev=e0eb2b85f4f8754d5597bc2bcd1ce67238728de0#e0eb2b85f4f8754d5597bc2bcd1ce67238728de0"
 dependencies = [
  "byteorder",
  "zcash_primitives 0.26.0",
@@ -9681,7 +9657,7 @@ dependencies = [
 [[package]]
 name = "zingolib"
 version = "0.0.1"
-source = "git+https://github.com/zingolabs/zingolib.git?rev=b65eae7f7c99e63490f10a685fee1484bb4a8ca1#b65eae7f7c99e63490f10a685fee1484bb4a8ca1"
+source = "git+https://github.com/zingolabs/zingolib.git?rev=e0eb2b85f4f8754d5597bc2bcd1ce67238728de0#e0eb2b85f4f8754d5597bc2bcd1ce67238728de0"
 dependencies = [
  "append-only-vec",
  "bech32",
@@ -9747,14 +9723,14 @@ dependencies = [
 [[package]]
 name = "zingolib_testutils"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/zingolib.git?rev=b65eae7f7c99e63490f10a685fee1484bb4a8ca1#b65eae7f7c99e63490f10a685fee1484bb4a8ca1"
+source = "git+https://github.com/zingolabs/zingolib.git?rev=e0eb2b85f4f8754d5597bc2bcd1ce67238728de0#e0eb2b85f4f8754d5597bc2bcd1ce67238728de0"
 dependencies = [
  "bip0039",
  "http",
  "pepper-sync",
  "portpicker",
  "tempfile",
- "zcash_local_net 0.1.0 (git+https://github.com/zingolabs/infrastructure.git?branch=dev)",
+ "zcash_local_net",
  "zcash_protocol 0.7.0",
  "zebra-chain 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "zingo_common_components 0.1.0 (git+https://github.com/zingolabs/zingo-common.git?branch=dev)",
