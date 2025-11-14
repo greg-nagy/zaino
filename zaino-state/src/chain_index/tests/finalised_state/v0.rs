@@ -14,7 +14,7 @@ use crate::chain_index::tests::vectors::{
     build_mockchain_source, load_test_vectors, TestVectorBlockData, TestVectorData,
 };
 use crate::error::FinalisedStateError;
-use crate::{BlockCacheConfig, ChainWork, Height, IndexedBlock};
+use crate::{BlockCacheConfig, BlockMetadata, BlockWithMetadata, ChainWork, Height, IndexedBlock};
 
 pub(crate) async fn spawn_v0_zaino_db(
     source: MockchainSource,
@@ -32,9 +32,6 @@ pub(crate) async fn spawn_v0_zaino_db(
         },
         db_version: 0,
         network: Network::Regtest(ActivationHeights::default()),
-
-        no_sync: false,
-        no_db: false,
     };
 
     let zaino_db = ZainoDB::spawn(config, source).await.unwrap();
@@ -78,7 +75,7 @@ pub(crate) async fn load_vectors_v0db_and_reader(
 
 // *** ZainoDB Tests ***
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn sync_to_height() {
     init_tracing();
 
@@ -97,7 +94,7 @@ async fn sync_to_height() {
     assert_eq!(built_db_height, Height(200));
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn add_blocks_to_db_and_verify() {
     init_tracing();
 
@@ -107,7 +104,7 @@ async fn add_blocks_to_db_and_verify() {
     dbg!(zaino_db.db_height().await.unwrap());
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn delete_blocks_from_db() {
     init_tracing();
 
@@ -126,7 +123,7 @@ async fn delete_blocks_from_db() {
     dbg!(zaino_db.db_height().await.unwrap());
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn save_db_to_file_and_reload() {
     init_tracing();
 
@@ -144,9 +141,6 @@ async fn save_db_to_file_and_reload() {
         },
         db_version: 0,
         network: Network::Regtest(ActivationHeights::default()),
-
-        no_sync: false,
-        no_db: false,
     };
 
     let source = build_mockchain_source(blocks.clone());
@@ -203,7 +197,7 @@ async fn save_db_to_file_and_reload() {
     .unwrap();
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn create_db_reader() {
     init_tracing();
 
@@ -218,7 +212,7 @@ async fn create_db_reader() {
     assert_eq!(db_height, db_reader_height);
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn get_compact_blocks() {
     init_tracing();
 
@@ -237,8 +231,7 @@ async fn get_compact_blocks() {
         ..
     } in blocks.iter()
     {
-        let chain_block = IndexedBlock::try_from((
-            zebra_block,
+        let metadata = BlockMetadata::new(
             *sapling_root,
             *sapling_tree_size as u32,
             *orchard_root,
@@ -259,8 +252,11 @@ async fn get_compact_blocks() {
                     nu7: None,
                 },
             ),
-        ))
-        .unwrap();
+        );
+
+        let chain_block =
+            IndexedBlock::try_from(BlockWithMetadata::new(zebra_block, metadata)).unwrap();
+
         let compact_block = chain_block.to_compact_block();
 
         parent_chain_work = *chain_block.index().chainwork();

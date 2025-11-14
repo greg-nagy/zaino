@@ -293,7 +293,7 @@ pub(crate) fn build_active_mockchain_source(
 
 // ***** Tests *****
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn vectors_can_be_loaded_and_deserialised() {
     let TestVectorData {
         blocks,
