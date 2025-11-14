@@ -111,12 +111,6 @@ impl ZainodConfig {
                         format!("Validator cookie authentication is enabled, but cookie path '{:?}' does not exist.", cookie_path),
                     ));
             }
-        } else {
-            // do nothing. This just means there is no cookie path set.
-            // return Err(IndexerError::ConfigError(
-            //"Validator cookie authentication is None, and therefore no cookie path is provided."
-            //  .to_string(),
-            //));
         }
 
         #[cfg(not(feature = "no_tls_use_unencrypted_traffic"))]
