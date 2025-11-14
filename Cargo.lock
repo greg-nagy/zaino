@@ -8736,7 +8736,7 @@ dependencies = [
  "zebra-chain 3.0.0 (git+https://github.com/ZcashFoundation/zebra.git?rev=eed8e0771f92db0b1938bab8af448e04d7d8ea51)",
  "zebra-state 3.0.0 (git+https://github.com/ZcashFoundation/zebra.git?rev=eed8e0771f92db0b1938bab8af448e04d7d8ea51)",
  "zingo_common_components 0.1.0 (git+https://github.com/zingolabs/zingo-common.git?tag=zingo_common_components_v0.1.0)",
- "zingo_netutils 0.1.0 (git+https://github.com/zingolabs/zingo-common.git?tag=zingo_common_components_v0.1.0)",
+ "zingo_netutils 0.1.0 (git+https://github.com/zingolabs/zingo-common.git?rev=b64dfd6d6a2a597a5456d1cc7b2bc9b649328187)",
  "zingo_test_vectors 0.0.1 (git+https://github.com/zingolabs/infrastructure.git?tag=zcash_local_net_v0.3.0)",
  "zingolib 0.0.1 (git+https://github.com/zingolabs/zingolib.git?rev=e0eb2b85f4f8754d5597bc2bcd1ce67238728de0)",
  "zingolib_testutils",
@@ -10594,7 +10594,7 @@ dependencies = [
 [[package]]
 name = "zingo_netutils"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/zingo-common.git?tag=zingo_common_components_v0.1.0#7407028a9c561561d174740e70170c4c20529bcd"
+source = "git+https://github.com/zingolabs/zingo-common.git?branch=dev#b64dfd6d6a2a597a5456d1cc7b2bc9b649328187"
 dependencies = [
  "http",
  "http-body",
@@ -10606,13 +10606,13 @@ dependencies = [
  "tonic 0.13.1",
  "tower 0.5.2",
  "webpki-roots 0.25.4",
- "zcash_client_backend 0.19.1 (git+https://github.com/zcash/librustzcash?rev=d387aed7e04e881dbe30c6ff8b26a96c834c094b)",
+ "zcash_client_backend 0.20.0",
 ]
 
 [[package]]
 name = "zingo_netutils"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/zingo-common.git?branch=dev#b64dfd6d6a2a597a5456d1cc7b2bc9b649328187"
+source = "git+https://github.com/zingolabs/zingo-common.git?rev=b64dfd6d6a2a597a5456d1cc7b2bc9b649328187#b64dfd6d6a2a597a5456d1cc7b2bc9b649328187"
 dependencies = [
  "http",
  "http-body",
