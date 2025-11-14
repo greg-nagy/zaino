@@ -10,7 +10,10 @@ use zebra_chain::serialization::ZcashDeserialize as _;
 use zebra_rpc::methods::GetAddressUtxos;
 
 use crate::chain_index::source::test::MockchainSource;
-use crate::{read_u32_le, read_u64_le, BlockHash, ChainWork, CompactSize, IndexedBlock};
+use crate::{
+    read_u32_le, read_u64_le, BlockHash, BlockMetadata, BlockWithMetadata, ChainWork, CompactSize,
+    IndexedBlock,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestVectorData {
@@ -59,17 +62,31 @@ pub async fn sync_db_with_blockdata(
                 break;
             }
         }
-        let chain_block = IndexedBlock::try_from((
-            &zebra_block,
+        let metadata = BlockMetadata::new(
             sapling_root,
             sapling_tree_size as u32,
             orchard_root,
             orchard_tree_size as u32,
-            &parent_chain_work,
-            &zaino_common::Network::Regtest(zaino_common::network::ActivationHeights::default())
-                .to_zebra_network(),
-        ))
-        .unwrap();
+            parent_chain_work,
+            zebra_chain::parameters::Network::new_regtest(
+                zebra_chain::parameters::testnet::ConfiguredActivationHeights {
+                    before_overwinter: Some(1),
+                    overwinter: Some(1),
+                    sapling: Some(1),
+                    blossom: Some(1),
+                    heartwood: Some(1),
+                    canopy: Some(1),
+                    nu5: Some(1),
+                    nu6: Some(1),
+                    // see https://zips.z.cash/#nu6-1-candidate-zips for info on NU6.1
+                    nu6_1: None,
+                    nu7: None,
+                },
+            ),
+        );
+
+        let block_with_metadata = BlockWithMetadata::new(&zebra_block, metadata);
+        let chain_block = IndexedBlock::try_from(block_with_metadata).unwrap();
         parent_chain_work = *chain_block.chainwork();
 
         db.write_block(chain_block).await.unwrap();

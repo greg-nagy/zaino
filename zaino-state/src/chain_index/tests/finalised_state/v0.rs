@@ -236,8 +236,8 @@ async fn get_compact_blocks() {
             *sapling_tree_size as u32,
             *orchard_root,
             *orchard_tree_size as u32,
-            &parent_chain_work,
-            &zebra_chain::parameters::Network::new_regtest(
+            parent_chain_work,
+            zebra_chain::parameters::Network::new_regtest(
                 zebra_chain::parameters::testnet::ConfiguredActivationHeights {
                     before_overwinter: Some(1),
                     overwinter: Some(1),
