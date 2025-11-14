@@ -75,7 +75,7 @@ impl<T: BlockchainSource> MigrationManager<T> {
     }
 
     /// Return the next migration for the current version.
-    fn get_migration(&self) -> Result<impl Migration<T> + use<T>, FinalisedStateError> {
+    fn get_migration(&self) -> Result<impl Migration<T>, FinalisedStateError> {
         match (
             self.current_version.major,
             self.current_version.minor,
