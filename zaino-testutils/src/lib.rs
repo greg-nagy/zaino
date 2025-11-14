@@ -195,8 +195,9 @@ pub struct TestManager<C: Validator, Service: LightWalletService + Send + Sync +
     pub clients: Option<Clients>,
 }
 
-impl<Service> TestManager<Service>
+impl<C, Service> TestManager<C, Service>
 where
+    C: Validator,
     Service: LightWalletService + Send + Sync + 'static,
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
@@ -514,7 +515,9 @@ where
     }
 }
 
-impl<Service: LightWalletService + Send + Sync + 'static> Drop for TestManager<Service> {
+impl<C: Validator, Service: LightWalletService + Send + Sync + 'static> Drop
+    for TestManager<C, Service>
+{
     fn drop(&mut self) {
         if let Some(handle) = &self.zaino_handle {
             handle.abort();
@@ -563,7 +566,7 @@ mod launch_testmanager {
         #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         pub(crate) async fn generate_blocks() {
-            let mut test_manager = TestManager::<Zcashd,FetchService>::launch(
+            let mut test_manager = TestManager::<Zcashd, FetchService>::launch(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
@@ -585,7 +588,7 @@ mod launch_testmanager {
         #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         pub(crate) async fn with_chain() {
-            let mut test_manager = TestManager::<Zcashd,FetchService>::launch(
+            let mut test_manager = TestManager::<Zcashd, FetchService>::launch(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
@@ -604,7 +607,7 @@ mod launch_testmanager {
         #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         pub(crate) async fn zaino() {
-            let mut test_manager = TestManager::<Zcashd,FetchService>::launch(
+            let mut test_manager = TestManager::<Zcashd, FetchService>::launch(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
@@ -630,7 +633,7 @@ mod launch_testmanager {
         #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         pub(crate) async fn zaino_clients() {
-            let mut test_manager = TestManager::<Zcashd,FetchService>::launch(
+            let mut test_manager = TestManager::<Zcashd, FetchService>::launch(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
@@ -657,7 +660,7 @@ mod launch_testmanager {
         #[tokio::test(flavor = "multi_thread")]
         #[allow(deprecated)]
         pub(crate) async fn zaino_clients_receive_mining_reward() {
-            let mut test_manager = TestManager::<Zcashd,FetchService>::launch(
+            let mut test_manager = TestManager::<Zcashd, FetchService>::launch(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
@@ -706,7 +709,7 @@ mod launch_testmanager {
             #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn basic() {
-                let mut test_manager = TestManager::<Zebrad,FetchService>::launch(
+                let mut test_manager = TestManager::<Zebrad, FetchService>::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
@@ -728,7 +731,7 @@ mod launch_testmanager {
             #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn generate_blocks() {
-                let mut test_manager = TestManager::<Zebrad,FetchService>::launch(
+                let mut test_manager = TestManager::<Zebrad, FetchService>::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
@@ -753,7 +756,7 @@ mod launch_testmanager {
             #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn with_chain() {
-                let mut test_manager = TestManager::<Zebrad,FetchService>::launch(
+                let mut test_manager = TestManager::<Zebrad, FetchService>::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
@@ -775,7 +778,7 @@ mod launch_testmanager {
             #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino() {
-                let mut test_manager = TestManager::<Zebrad,FetchService>::launch(
+                let mut test_manager = TestManager::<Zebrad, FetchService>::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
@@ -801,7 +804,7 @@ mod launch_testmanager {
             #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino_clients() {
-                let mut test_manager = TestManager::<Zebrad,FetchService>::launch(
+                let mut test_manager = TestManager::<Zebrad, FetchService>::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
@@ -828,7 +831,7 @@ mod launch_testmanager {
             #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino_clients_receive_mining_reward() {
-                let mut test_manager = TestManager::<Zebrad,FetchService>::launch(
+                let mut test_manager = TestManager::<Zebrad, FetchService>::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
@@ -874,7 +877,7 @@ mod launch_testmanager {
             #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino_clients_receive_mining_reward_and_send() {
-                let mut test_manager = TestManager::<Zebrad,FetchService>::launch(
+                let mut test_manager = TestManager::<Zebrad, FetchService>::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     None,
@@ -973,7 +976,7 @@ mod launch_testmanager {
             #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino_testnet() {
-                let mut test_manager = TestManager::<Zebrad,FetchService>::launch(
+                let mut test_manager = TestManager::<Zebrad, FetchService>::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::Fetch,
                     Some(NetworkKind::Testnet),
@@ -1004,7 +1007,7 @@ mod launch_testmanager {
             #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn basic() {
-                let mut test_manager = TestManager::<Zebrad,StateService>::launch(
+                let mut test_manager = TestManager::<Zebrad, StateService>::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
@@ -1026,7 +1029,7 @@ mod launch_testmanager {
             #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn generate_blocks() {
-                let mut test_manager = TestManager::<Zebrad,StateService>::launch(
+                let mut test_manager = TestManager::<Zebrad, StateService>::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
@@ -1054,7 +1057,7 @@ mod launch_testmanager {
             #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn with_chain() {
-                let mut test_manager = TestManager::<Zebrad,StateService>::launch(
+                let mut test_manager = TestManager::<Zebrad, StateService>::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
@@ -1076,7 +1079,7 @@ mod launch_testmanager {
             #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino() {
-                let mut test_manager = TestManager::<Zebrad,StateService>::launch(
+                let mut test_manager = TestManager::<Zebrad, StateService>::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
@@ -1102,7 +1105,7 @@ mod launch_testmanager {
             #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino_clients() {
-                let mut test_manager = TestManager::<Zebrad,StateService>::launch(
+                let mut test_manager = TestManager::<Zebrad, StateService>::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
@@ -1129,7 +1132,7 @@ mod launch_testmanager {
             #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino_clients_receive_mining_reward() {
-                let mut test_manager = TestManager::<Zebrad,StateService>::launch(
+                let mut test_manager = TestManager::<Zebrad, StateService>::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
@@ -1176,7 +1179,7 @@ mod launch_testmanager {
             #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino_clients_receive_mining_reward_and_send() {
-                let mut test_manager = TestManager::<Zebrad,StateService>::launch(
+                let mut test_manager = TestManager::<Zebrad, StateService>::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     None,
@@ -1275,7 +1278,7 @@ mod launch_testmanager {
             #[tokio::test(flavor = "multi_thread")]
             #[allow(deprecated)]
             pub(crate) async fn zaino_testnet() {
-                let mut test_manager = TestManager::<Zebrad,StateService>::launch(
+                let mut test_manager = TestManager::<Zebrad, StateService>::launch(
                     &ValidatorKind::Zebrad,
                     &BackendType::State,
                     Some(NetworkKind::Testnet),

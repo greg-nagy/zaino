@@ -6,6 +6,7 @@ use zaino_proto::proto::service::{
     AddressList, BlockId, BlockRange, Exclude, GetAddressUtxosArg, GetSubtreeRootsArg,
     TransparentAddressBlockFilter, TxFilter,
 };
+use zaino_state::FetchServiceSubscriber;
 #[allow(deprecated)]
 use zaino_state::{BackendType, FetchService, LightWalletIndexer, StatusType, ZcashIndexer};
 use zaino_testutils::{TestManager, ValidatorKind};
@@ -22,8 +23,8 @@ async fn create_test_manager_and_fetch_service<V: Validator>(
     enable_zaino: bool,
     _zaino_no_sync: bool,
     enable_clients: bool,
-) -> (TestManager<V>, FetchService, FetchServiceSubscriber) {
-    let test_manager = TestManager::<V>::launch(
+) -> (TestManager<V, FetchService>, FetchServiceSubscriber) {
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
         &BackendType::Fetch,
         None,
@@ -37,12 +38,14 @@ async fn create_test_manager_and_fetch_service<V: Validator>(
     .unwrap();
 
     let fetch_service_subscriber = test_manager.service_subscriber.take().unwrap();
+    (test_manager, fetch_service_subscriber)
+}
 
 async fn launch_fetch_service<V: Validator>(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
 ) {
-    let (mut test_manager, _fetch_service, fetch_service_subscriber) =
+    let (mut test_manager, fetch_service_subscriber) =
         create_test_manager_and_fetch_service::<V>(validator, chain_cache, false, true, false)
             .await;
     assert_eq!(fetch_service_subscriber.status(), StatusType::Ready);
@@ -59,8 +62,9 @@ async fn launch_fetch_service<V: Validator>(
 
 #[allow(deprecated)]
 async fn fetch_service_get_address_balance<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -138,8 +142,9 @@ async fn fetch_service_get_address_balance<V: Validator>(validator: &ValidatorKi
 
 #[allow(deprecated)]
 async fn fetch_service_get_block_raw<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -162,8 +167,9 @@ async fn fetch_service_get_block_raw<V: Validator>(validator: &ValidatorKind) {
 
 #[allow(deprecated)]
 async fn fetch_service_get_block_object<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -186,8 +192,9 @@ async fn fetch_service_get_block_object<V: Validator>(validator: &ValidatorKind)
 
 #[allow(deprecated)]
 async fn fetch_service_get_raw_mempool<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -242,8 +249,8 @@ async fn fetch_service_get_raw_mempool<V: Validator>(validator: &ValidatorKind) 
         clients.faucet.sync_and_await().await.unwrap();
     };
 
-    let recipient_ua = clients.get_recipient_address("unified").await;
-    let recipient_taddr = clients.get_recipient_address("transparent").await;
+    let recipient_ua: String = clients.get_recipient_address("unified").await;
+    let recipient_taddr: String = clients.get_recipient_address("transparent").await;
     zaino_testutils::from_inputs::quick_send(
         &mut clients.faucet,
         vec![(&recipient_taddr, 250_000, None)],
@@ -274,8 +281,9 @@ async fn fetch_service_get_raw_mempool<V: Validator>(validator: &ValidatorKind) 
 // `getmempoolinfo` computed from local Broadcast state for all validators
 #[allow(deprecated)]
 pub async fn test_get_mempool_info<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -373,8 +381,9 @@ pub async fn test_get_mempool_info<V: Validator>(validator: &ValidatorKind) {
 
 #[allow(deprecated)]
 async fn fetch_service_z_get_treestate<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -428,8 +437,9 @@ async fn fetch_service_z_get_treestate<V: Validator>(validator: &ValidatorKind) 
 
 #[allow(deprecated)]
 async fn fetch_service_z_get_subtrees_by_index<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -483,8 +493,9 @@ async fn fetch_service_z_get_subtrees_by_index<V: Validator>(validator: &Validat
 
 #[allow(deprecated)]
 async fn fetch_service_get_raw_transaction<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -537,8 +548,9 @@ async fn fetch_service_get_raw_transaction<V: Validator>(validator: &ValidatorKi
 
 #[allow(deprecated)]
 async fn fetch_service_get_address_tx_ids<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -607,8 +619,9 @@ async fn fetch_service_get_address_tx_ids<V: Validator>(validator: &ValidatorKin
 
 #[allow(deprecated)]
 async fn fetch_service_get_address_utxos<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -667,8 +680,9 @@ async fn fetch_service_get_address_utxos<V: Validator>(validator: &ValidatorKind
 
 #[allow(deprecated)]
 async fn fetch_service_get_latest_block<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -720,8 +734,9 @@ async fn fetch_service_get_latest_block<V: Validator>(validator: &ValidatorKind)
 
 #[allow(deprecated)]
 async fn assert_fetch_service_difficulty_matches_rpc<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -756,8 +771,9 @@ async fn assert_fetch_service_difficulty_matches_rpc<V: Validator>(validator: &V
 
 #[allow(deprecated)]
 async fn assert_fetch_service_mininginfo_matches_rpc<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -792,8 +808,9 @@ async fn assert_fetch_service_mininginfo_matches_rpc<V: Validator>(validator: &V
 
 #[allow(deprecated)]
 async fn assert_fetch_service_peerinfo_matches_rpc<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -831,8 +848,9 @@ async fn assert_fetch_service_peerinfo_matches_rpc<V: Validator>(validator: &Val
 
 #[allow(deprecated)]
 async fn fetch_service_get_block_subsidy<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -875,8 +893,9 @@ async fn fetch_service_get_block_subsidy<V: Validator>(validator: &ValidatorKind
 
 #[allow(deprecated)]
 async fn fetch_service_get_block<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -915,8 +934,9 @@ async fn fetch_service_get_block<V: Validator>(validator: &ValidatorKind) {
 
 #[allow(deprecated)]
 async fn fetch_service_get_block_header<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -990,8 +1010,9 @@ async fn fetch_service_get_block_header<V: Validator>(validator: &ValidatorKind)
 
 #[allow(deprecated)]
 async fn fetch_service_get_best_blockhash<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -1001,7 +1022,7 @@ async fn fetch_service_get_best_blockhash<V: Validator>(validator: &ValidatorKin
     )
     .await
     .unwrap();
-
+    let fetch_service_subscriber = test_manager.service_subscriber.take().unwrap();
 
     test_manager
         .generate_blocks_and_poll_indexer(5, &fetch_service_subscriber)
@@ -1031,8 +1052,9 @@ async fn fetch_service_get_best_blockhash<V: Validator>(validator: &ValidatorKin
 
 #[allow(deprecated)]
 async fn fetch_service_get_block_count<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -1064,8 +1086,9 @@ async fn fetch_service_get_block_count<V: Validator>(validator: &ValidatorKind) 
 
 #[allow(deprecated)]
 async fn fetch_service_validate_address<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -1113,8 +1136,9 @@ async fn fetch_service_validate_address<V: Validator>(validator: &ValidatorKind)
 
 #[allow(deprecated)]
 async fn fetch_service_get_block_nullifiers<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -1144,7 +1168,7 @@ async fn fetch_service_get_block_nullifiers<V: Validator>(validator: &ValidatorK
 
 #[allow(deprecated)]
 async fn fetch_service_get_block_range<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
         &BackendType::Fetch,
         None,
@@ -1192,7 +1216,7 @@ async fn fetch_service_get_block_range<V: Validator>(validator: &ValidatorKind) 
 
 #[allow(deprecated)]
 async fn fetch_service_get_block_range_nullifiers<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<FetchService>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
         &BackendType::Fetch,
         None,
@@ -1240,8 +1264,9 @@ async fn fetch_service_get_block_range_nullifiers<V: Validator>(validator: &Vali
 
 #[allow(deprecated)]
 async fn fetch_service_get_transaction_mined<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -1301,8 +1326,9 @@ async fn fetch_service_get_transaction_mined<V: Validator>(validator: &Validator
 
 #[allow(deprecated)]
 async fn fetch_service_get_transaction_mempool<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -1361,8 +1387,9 @@ async fn fetch_service_get_transaction_mempool<V: Validator>(validator: &Validat
 
 #[allow(deprecated)]
 async fn fetch_service_get_taddress_txids<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -1446,8 +1473,9 @@ async fn fetch_service_get_taddress_txids<V: Validator>(validator: &ValidatorKin
 
 #[allow(deprecated)]
 async fn fetch_service_get_taddress_balance<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -1516,8 +1544,9 @@ async fn fetch_service_get_taddress_balance<V: Validator>(validator: &ValidatorK
 
 #[allow(deprecated)]
 async fn fetch_service_get_mempool_tx<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -1625,8 +1654,9 @@ async fn fetch_service_get_mempool_tx<V: Validator>(validator: &ValidatorKind) {
 
 #[allow(deprecated)]
 async fn fetch_service_get_mempool_stream<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -1712,8 +1742,9 @@ async fn fetch_service_get_mempool_stream<V: Validator>(validator: &ValidatorKin
 
 #[allow(deprecated)]
 async fn fetch_service_get_tree_state<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -1743,8 +1774,9 @@ async fn fetch_service_get_tree_state<V: Validator>(validator: &ValidatorKind) {
 
 #[allow(deprecated)]
 async fn fetch_service_get_latest_tree_state<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -1767,8 +1799,9 @@ async fn fetch_service_get_latest_tree_state<V: Validator>(validator: &Validator
 
 #[allow(deprecated)]
 async fn fetch_service_get_subtree_roots<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -1805,8 +1838,9 @@ async fn fetch_service_get_subtree_roots<V: Validator>(validator: &ValidatorKind
 
 #[allow(deprecated)]
 async fn fetch_service_get_taddress_utxos<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -1867,8 +1901,9 @@ async fn fetch_service_get_taddress_utxos<V: Validator>(validator: &ValidatorKin
 
 #[allow(deprecated)]
 async fn fetch_service_get_taddress_utxos_stream<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -1934,8 +1969,9 @@ async fn fetch_service_get_taddress_utxos_stream<V: Validator>(validator: &Valid
 
 #[allow(deprecated)]
 async fn fetch_service_get_lightd_info<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -1955,8 +1991,9 @@ async fn fetch_service_get_lightd_info<V: Validator>(validator: &ValidatorKind) 
 
 #[allow(deprecated)]
 async fn assert_fetch_service_getnetworksols_matches_rpc<V: Validator>(validator: &ValidatorKind) {
-    let mut test_manager = TestManager::<V>::launch(
+    let mut test_manager = TestManager::<V, FetchService>::launch(
         validator,
+        &BackendType::Fetch,
         None,
         None,
         None,
@@ -2109,7 +2146,7 @@ mod zcashd {
         #[allow(deprecated)]
         #[tokio::test(flavor = "multi_thread")]
         pub(crate) async fn block_deltas() {
-            let mut test_manager = TestManager::<FetchService>::launch(
+            let mut test_manager = TestManager::<Zcashd, FetchService>::launch(
                 &ValidatorKind::Zcashd,
                 &BackendType::Fetch,
                 None,
