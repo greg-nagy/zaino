@@ -1001,7 +1001,6 @@ async fn fetch_service_get_best_blockhash<V: Validator>(validator: &ValidatorKin
     )
     .await
     .unwrap();
->>>>>>> origin/dev
 
 
     test_manager
