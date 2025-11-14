@@ -138,7 +138,7 @@ pub(crate) async fn load_vectors_v0db_and_reader() -> (
 
 // *** ZainoDB Tests ***
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn sync_to_height() {
     init_tracing();
 
@@ -157,7 +157,7 @@ async fn sync_to_height() {
     assert_eq!(built_db_height, Height(200));
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn add_blocks_to_db_and_verify() {
     init_tracing();
 
@@ -168,7 +168,7 @@ async fn add_blocks_to_db_and_verify() {
     dbg!(zaino_db.db_height().await.unwrap());
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn delete_blocks_from_db() {
     init_tracing();
 
@@ -188,7 +188,7 @@ async fn delete_blocks_from_db() {
     dbg!(zaino_db.db_height().await.unwrap());
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn save_db_to_file_and_reload() {
     init_tracing();
 
@@ -296,7 +296,7 @@ async fn save_db_to_file_and_reload() {
     .unwrap();
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn create_db_reader() {
     init_tracing();
 
@@ -311,7 +311,7 @@ async fn create_db_reader() {
     assert_eq!(db_height, db_reader_height);
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test(flavor = "multi_thread")]
 async fn get_compact_blocks() {
     init_tracing();
 
