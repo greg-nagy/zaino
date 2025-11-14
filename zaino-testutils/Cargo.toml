@@ -37,19 +37,11 @@ zingo_common_components = { git = "https://github.com/zingolabs/zingo-common.git
 zingo_netutils = { git = "https://github.com/zingolabs/zingo-common.git", tag = "zingo_common_components_v0.1.0"  }
 
 # ZingoLib
-<<<<<<< HEAD
 zingolib = { git = "https://github.com/zingolabs/zingolib.git", rev = "e0eb2b85f4f8754d5597bc2bcd1ce67238728de0", features = [
     "testutils",
 ] }
 zingolib_testutils = { git = "https://github.com/zingolabs/zingolib.git", rev = "e0eb2b85f4f8754d5597bc2bcd1ce67238728de0" }
 zebra_chain_zingolib_testutils_compat = { version = "3.0.0", package = "zebra-chain" }
-||||||| 49bf17ce
-zingolib = { git = "https://github.com/zingolabs/zingolib.git", rev = "f88e1d76ea244d6cc48d7fd4c3a609c6598318dc", features = [
-    "testutils",
-] }
-=======
-zingolib = { workspace = true }
->>>>>>> origin/dev
 
 # Miscellaneous
 http = { workspace = true }
@@ -75,13 +67,3 @@ tracing-subscriber = { workspace = true, features = [
 proptest = { workspace = true }
 lazy_static = { workspace = true }
 zip32 = {workspace = true}
-<<<<<<< HEAD
-
-[dev-dependencies]
-zingo_netutils = { git = "https://github.com/zingolabs/zingo-common.git", branch = "dev"  }
-||||||| 49bf17ce
-
-[dev-dependencies]
-zingo_netutils = { git = "https://github.com/zingolabs/zingo-common.git", tag = "zingo_common_components_v0.1.0"  }
-=======
->>>>>>> origin/dev

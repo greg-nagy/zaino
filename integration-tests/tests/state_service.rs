@@ -17,41 +17,23 @@ use zebra_rpc::methods::{GetAddressBalanceRequest, GetAddressTxIdsRequest, GetIn
 use zip32::AccountId;
 
 #[allow(deprecated)]
-<<<<<<< HEAD
-async fn create_test_manager_and_services<V: Validator>(
-||||||| 49bf17ce
-async fn create_test_manager_and_services(
-=======
 // NOTE: the fetch and state services each have a seperate chain index to the instance of zaino connected to the lightclients and may be out of sync
 // the test manager now includes a service subscriber but not both fetch *and* state which are necessary for these tests.
 // syncronicity is ensured in the following tests by calling `generate_blocks_and_poll_all_chain_indexes`.
-async fn create_test_manager_and_services(
->>>>>>> origin/dev
+async fn create_test_manager_and_services<V: Validator>(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
     enable_zaino: bool,
     enable_clients: bool,
     network: Option<NetworkKind>,
 ) -> (
-<<<<<<< HEAD
     TestManager<V>,
-||||||| 49bf17ce
-    TestManager,
-=======
-    TestManager<FetchService>,
->>>>>>> origin/dev
     FetchService,
     FetchServiceSubscriber,
     StateService,
     StateServiceSubscriber,
 ) {
-<<<<<<< HEAD
     let test_manager = TestManager::<V>::launch(
-||||||| 49bf17ce
-    let test_manager = TestManager::launch(
-=======
-    let test_manager = TestManager::<FetchService>::launch(
->>>>>>> origin/dev
         validator,
         &BackendType::Fetch,
         network,
@@ -156,11 +138,6 @@ async fn create_test_manager_and_services(
     )
 }
 
-<<<<<<< HEAD
-async fn state_service_check_info<V: Validator>(
-||||||| 49bf17ce
-async fn state_service_check_info(
-=======
 #[allow(deprecated)]
 async fn generate_blocks_and_poll_all_chain_indexes(
     n: u32,
@@ -176,9 +153,7 @@ async fn generate_blocks_and_poll_all_chain_indexes(
         .generate_blocks_and_poll_indexer(0, &state_service_subscriber)
         .await;
 }
-
-async fn state_service_check_info(
->>>>>>> origin/dev
+async fn state_service_check_info<V: Validator>(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
     network: NetworkKind,
@@ -189,14 +164,8 @@ async fn state_service_check_info(
         fetch_service_subscriber,
         _state_service,
         state_service_subscriber,
-<<<<<<< HEAD
     ) = create_test_manager_and_services::<V>(validator, chain_cache, false, false, Some(network))
         .await;
-||||||| 49bf17ce
-    ) = create_test_manager_and_services(validator, chain_cache, false, false, Some(network)).await;
-=======
-    ) = create_test_manager_and_services(validator, chain_cache, true, false, Some(network)).await;
->>>>>>> origin/dev
 
     if dbg!(network.to_string()) == *"Regtest" {
         generate_blocks_and_poll_all_chain_indexes(
@@ -1309,11 +1278,6 @@ mod zebra {
             .await;
             let mut chaintip_subscriber = state_service_subscriber.chaintip_update_subscriber();
             for _ in 0..5 {
-<<<<<<< HEAD
-                let _ = test_manager.local_net.generate_blocks_with_delay(1).await;
-||||||| 49bf17ce
-                test_manager.generate_blocks_with_delay(1).await;
-=======
                 generate_blocks_and_poll_all_chain_indexes(
                     1,
                     &test_manager,
@@ -1321,7 +1285,6 @@ mod zebra {
                     state_service_subscriber.clone(),
                 )
                 .await;
->>>>>>> origin/dev
                 assert_eq!(
                     chaintip_subscriber.next_tip_hash().await.unwrap().0,
                     <[u8; 32]>::try_from(
