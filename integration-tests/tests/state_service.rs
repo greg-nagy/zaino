@@ -1,7 +1,7 @@
 use zaino_common::network::ActivationHeights;
 use zaino_common::{DatabaseConfig, ServiceConfig, StorageConfig};
 use zaino_fetch::jsonrpsee::response::address_deltas::GetAddressDeltasParams;
-use zaino_state::BackendType;
+use zaino_state::{BackendType, LightWalletService, ZcashService};
 
 #[allow(deprecated)]
 use zaino_state::{
@@ -10,6 +10,8 @@ use zaino_state::{
 };
 use zaino_testutils::from_inputs;
 use zaino_testutils::{TestManager, ValidatorKind, ZEBRAD_TESTNET_CACHE_DIR};
+use zainodlib::config::ZainodConfig;
+use zainodlib::error::IndexerError;
 use zcash_local_net::validator::{zebrad::Zebrad, Validator};
 use zebra_chain::parameters::NetworkKind;
 use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
@@ -27,13 +29,13 @@ async fn create_test_manager_and_services<V: Validator>(
     enable_clients: bool,
     network: Option<NetworkKind>,
 ) -> (
-    TestManager<V>,
+    TestManager<V, StateService>,
     FetchService,
     FetchServiceSubscriber,
     StateService,
     StateServiceSubscriber,
 ) {
-    let test_manager = TestManager::<V>::launch(
+    let test_manager = TestManager::<V, StateService>::launch(
         validator,
         &BackendType::Fetch,
         network,
@@ -139,12 +141,17 @@ async fn create_test_manager_and_services<V: Validator>(
 }
 
 #[allow(deprecated)]
-async fn generate_blocks_and_poll_all_chain_indexes(
+async fn generate_blocks_and_poll_all_chain_indexes<V, Service>(
     n: u32,
-    test_manager: &TestManager<FetchService>,
+    test_manager: &TestManager<V, Service>,
     fetch_service_subscriber: FetchServiceSubscriber,
     state_service_subscriber: StateServiceSubscriber,
-) {
+) where
+    V: Validator,
+    Service: LightWalletService + Send + Sync + 'static,
+    Service::Config: From<ZainodConfig>,
+    IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
+{
     test_manager.generate_blocks_and_poll(n).await;
     test_manager
         .generate_blocks_and_poll_indexer(0, &fetch_service_subscriber)

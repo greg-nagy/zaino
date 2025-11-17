@@ -50,7 +50,9 @@ const EXPECTED_CHAIN_TIP: u32 = 104;
 const HEIGHT_BEYOND_TIP: u32 = 200;
 const NON_EXISTENT_ADDRESS: &str = "tmVqEASZxBNKFTbmASZikGa5fPLkd68iJyx";
 
-async fn setup_chain<V: Validator>(test_manager: &mut TestManager<V>) -> (String, String) {
+async fn setup_chain<V: Validator>(
+    test_manager: &mut TestManager<V, StateService>,
+) -> (String, String) {
     let mut clients = test_manager
         .clients
         .take()

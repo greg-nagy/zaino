@@ -1,4 +1,6 @@
-use zaino_common::{DatabaseConfig, StorageConfig};
+use zaino_common::{
+    ActivationHeights, DatabaseConfig, StorageConfig, ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
+};
 use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
 #[allow(deprecated)]
 use zaino_state::FetchService;
@@ -6,8 +8,7 @@ use zaino_state::{
     test_dependencies::{BlockCache, BlockCacheConfig, BlockCacheSubscriber},
     BackendType,
 };
-use zaino_testutils::{TestManager, ValidatorKind};
-use zcash_local_net::validator::Validator as _;
+use zaino_testutils::{TestManager, Validator, ValidatorKind};
 use zebra_chain::{block::Height, parameters::NetworkKind};
 use zebra_state::HashOrHeight;
 
@@ -18,7 +19,7 @@ async fn create_test_manager_and_block_cache<V: Validator>(
     enable_zaino: bool,
     enable_clients: bool,
 ) -> (
-    TestManager<V>,
+    TestManager<V, FetchService>,
     JsonRpSeeConnector,
     BlockCache,
     BlockCacheSubscriber,
@@ -28,7 +29,7 @@ async fn create_test_manager_and_block_cache<V: Validator>(
         ValidatorKind::Zcashd => ActivationHeights::default(),
     };
 
-    let test_manager = TestManager::<V>::launch(
+    let test_manager = TestManager::<V, FetchService>::launch(
         validator,
         &BackendType::Fetch,
         None,

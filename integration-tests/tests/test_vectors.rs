@@ -49,7 +49,7 @@ macro_rules! expected_read_response {
 #[ignore = "Not a test! Used to build test vector data for zaino_state::chain_index unit tests."]
 #[allow(deprecated)]
 async fn create_200_block_regtest_chain_vectors() {
-    let mut test_manager = TestManager::<StateService>::launch(
+    let mut test_manager = TestManager::<Zebrad, StateService>::launch(
         &ValidatorKind::Zebrad,
         &BackendType::State,
         None,

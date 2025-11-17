@@ -21,14 +21,14 @@ use zebra_rpc::methods::{GetAddressTxIdsRequest, GetInfo};
 async fn create_zcashd_test_manager_and_fetch_services(
     clients: bool,
 ) -> (
-    TestManager<Zcashd>,
+    TestManager<Zcashd, FetchService>,
     FetchService,
     FetchServiceSubscriber,
     FetchService,
     FetchServiceSubscriber,
 ) {
     println!("Launching test manager..");
-    let test_manager = TestManager::<Zcashd>::launch(
+    let test_manager = TestManager::<Zcashd, FetchService>::launch(
         &ValidatorKind::Zcashd,
         &BackendType::Fetch,
         None,
@@ -110,7 +110,7 @@ async fn create_zcashd_test_manager_and_fetch_services(
 #[allow(deprecated)]
 async fn generate_blocks_and_poll_all_chain_indexes(
     n: u32,
-    test_manager: &TestManager<FetchService>,
+    test_manager: &TestManager<Zcashd, FetchService>,
     zaino_subscriber: FetchServiceSubscriber,
     zcashd_subscriber: FetchServiceSubscriber,
 ) {
