@@ -26,12 +26,16 @@ use zaino_state::{
 };
 use zainodlib::{config::ZainodConfig, error::IndexerError, indexer::Indexer};
 pub use zcash_local_net as services;
-use zcash_local_net::indexer::empty::{Empty, EmptyConfig};
-use zcash_local_net::process::Process;
 use zcash_local_net::validator::zcashd::{Zcashd, ZcashdConfig};
 use zcash_local_net::validator::zebrad::{Zebrad, ZebradConfig};
 pub use zcash_local_net::validator::Validator;
 use zcash_local_net::LocalNetConfig;
+use zcash_local_net::{
+    indexer::empty::{Empty, EmptyConfig},
+    validator::ValidatorConfig as _,
+};
+use zcash_local_net::{process::Process, validator::ValidatorConfig as _};
+use zcash_protocol::PoolType;
 use zebra_chain::parameters::NetworkKind;
 use zebra_chain_zingolib_testutils_compat::parameters::testnet::ConfiguredActivationHeights;
 use zingo_netutils::{GetClientError, GrpcConnector, UnderlyingService};
@@ -249,10 +253,28 @@ where
         }
 
         // Launch LocalNet:
+
+        let mut config = C::Config::default();
+        // Cannot use from impl as From is impled for our version of this type, and not the
+        // compatibility special import
+        let configured_activation_heights = ConfiguredActivationHeights {
+            before_overwinter: activation_heights.before_overwinter,
+            overwinter: activation_heights.overwinter,
+            sapling: activation_heights.sapling,
+            blossom: activation_heights.blossom,
+            heartwood: activation_heights.heartwood,
+            canopy: activation_heights.canopy,
+            nu5: activation_heights.nu5,
+            nu6: activation_heights.nu6,
+            nu6_1: activation_heights.nu6_1,
+            nu7: activation_heights.nu7,
+        };
+        config.set_test_parameters(PoolType::Transparent, configured_activation_heights, None);
+
         let grpc_listen_port = portpicker::pick_unused_port().expect("No ports free");
         let full_node_grpc_listen_address =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), grpc_listen_port);
-        let local_net = C::launch_default()
+        let local_net = C::launch(config)
             .await
             .expect("to launch a default validator");
         let rpc_listen_port = local_net.get_port();
