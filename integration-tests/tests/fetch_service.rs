@@ -97,6 +97,13 @@ async fn fetch_service_get_address_balance<V: Validator>(validator: &ValidatorKi
         clients.faucet.sync_and_await().await.unwrap();
     };
 
+    dbg!(clients
+        .faucet
+        .account_balance(AccountId::ZERO)
+        .await
+        .unwrap());
+    dbg!(clients.faucet.transaction_summaries(false).await.unwrap());
+
     zaino_testutils::from_inputs::quick_send(
         &mut clients.faucet,
         vec![(recipient_address.as_str(), 250_000, None)],
