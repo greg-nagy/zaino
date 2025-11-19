@@ -269,7 +269,11 @@ where
             nu6_1: activation_heights.nu6_1,
             nu7: activation_heights.nu7,
         };
-        config.set_test_parameters(PoolType::Transparent, configured_activation_heights, None);
+        config.set_test_parameters(
+            PoolType::Transparent,
+            configured_activation_heights,
+            chain_cache.clone(),
+        );
 
         let grpc_listen_port = portpicker::pick_unused_port().expect("No ports free");
         let full_node_grpc_listen_address =
