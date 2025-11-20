@@ -270,7 +270,11 @@ where
             nu7: activation_heights.nu7,
         };
         config.set_test_parameters(
-            PoolType::Transparent,
+            if validator == &ValidatorKind::Zebrad {
+                PoolType::Transparent
+            } else {
+                PoolType::ORCHARD
+            },
             configured_activation_heights,
             chain_cache.clone(),
         );
