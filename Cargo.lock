@@ -8722,6 +8722,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tonic 0.13.1",
+ "tracing",
  "tracing-subscriber",
  "zaino-common",
  "zaino-proto",

@@ -13,6 +13,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
 };
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 use zaino_common::{
     network::{ActivationHeights, ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS},
@@ -311,6 +312,7 @@ where
             let zaino_json_listen_port = portpicker::pick_unused_port().expect("No ports free");
             let zaino_json_listen_address =
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), zaino_json_listen_port);
+            info!("{}", full_node_grpc_listen_address);
             let indexer_config = zainodlib::config::ZainodConfig {
                 // TODO: Make configurable.
                 backend: Service::BACKEND_TYPE,

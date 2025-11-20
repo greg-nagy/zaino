@@ -50,6 +50,7 @@ portpicker = { workspace = true }
 tokio = { workspace = true }
 tonic = { version = "0.13" } # TODO: unify in the workspace
 tempfile = { workspace = true }
+tracing.workspace = true
 tracing-subscriber = { workspace = true, features = [
     "fmt",
     "env-filter",
