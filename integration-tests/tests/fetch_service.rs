@@ -1606,10 +1606,8 @@ async fn fetch_service_get_mempool_tx(validator: &ValidatorKind) {
     let mut sorted_fetch_mempool_tx = fetch_mempool_tx.clone();
     sorted_fetch_mempool_tx.sort_by_key(|tx| tx.hash.clone());
 
-    let mut tx1_bytes = *tx_1.first().as_ref();
-    tx1_bytes.reverse();
-    let mut tx2_bytes = *tx_2.first().as_ref();
-    tx2_bytes.reverse();
+    let tx1_bytes = *tx_1.first().as_ref();
+    let tx2_bytes = *tx_2.first().as_ref();
 
     let mut sorted_txids = [tx1_bytes, tx2_bytes];
     sorted_txids.sort_by_key(|hash| *hash);
@@ -1618,7 +1616,7 @@ async fn fetch_service_get_mempool_tx(validator: &ValidatorKind) {
     assert_eq!(sorted_fetch_mempool_tx[1].hash, sorted_txids[1]);
 
     let exclude_list = Exclude {
-        txid: vec![sorted_txids[0][..8].to_vec()],
+        txid: vec![sorted_txids[0][8..].to_vec()],
     };
 
     let exclude_fetch_service_stream = fetch_service_subscriber
