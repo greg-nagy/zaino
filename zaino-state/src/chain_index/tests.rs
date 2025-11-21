@@ -391,9 +391,7 @@ mod mockchain_tests {
             })
             .unwrap_or_default();
         let exclude_tx = mempool_transactions.pop().unwrap();
-        let exclude_txid = exclude_tx
-            .hash()
-            .to_string();
+        let exclude_txid = exclude_tx.hash().to_string();
         mempool_transactions.sort_by_key(|a| a.hash());
 
         let mut found_mempool_transactions: Vec<zebra_chain::transaction::Transaction> =

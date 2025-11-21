@@ -1219,7 +1219,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                 async {
                     for (mempool_key, mempool_value) in
                         mempool.get_filtered_mempool(exclude_txids).await
-                    {                        
+                    {
                         let txid = match TransactionHash::from_hex(mempool_key.txid) {
                             Ok(bytes) => bytes,
                             Err(error) => {
