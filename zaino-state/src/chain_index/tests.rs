@@ -154,7 +154,7 @@ mod mockchain_tests {
                         .branch_id()
                         .map(u32::from)
                 } else {
-                    zebra_chain::parameters::NetworkUpgrade::Nu6
+                    zebra_chain::parameters::NetworkUpgrade::Nu6_1
                         .branch_id()
                         .map(u32::from)
                 }
