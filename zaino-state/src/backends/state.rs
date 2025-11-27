@@ -229,12 +229,12 @@ impl ZcashService for StateService {
         info!("Using Zcash build: {}", data);
 
         info!("Launching Chain Syncer..");
-        info!("{}", config.validator_grpc_address);
+        info!("{}", config.validator_rpc_address);
         let (mut read_state_service, _latest_chain_tip, chain_tip_change, sync_task_handle) =
             init_read_state_with_syncer(
                 config.validator_state_config.clone(),
                 &config.network.to_zebra_network(),
-                config.validator_grpc_address,
+                config.validator_rpc_address,
             )
             .await??;
 
