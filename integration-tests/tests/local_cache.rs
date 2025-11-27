@@ -8,12 +8,12 @@ use zaino_state::{
     test_dependencies::{BlockCache, BlockCacheConfig, BlockCacheSubscriber},
     BackendType,
 };
-use zaino_testutils::{TestManager, Validator, ValidatorKind};
+use zaino_testutils::{TestManager, Validator, ValidatorExt, ValidatorKind};
 use zebra_chain::{block::Height, parameters::NetworkKind};
 use zebra_state::HashOrHeight;
 
 #[allow(deprecated)]
-async fn create_test_manager_and_block_cache<V: Validator>(
+async fn create_test_manager_and_block_cache<V: ValidatorExt>(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
     enable_zaino: bool,
@@ -31,7 +31,6 @@ async fn create_test_manager_and_block_cache<V: Validator>(
 
     let test_manager = TestManager::<V, FetchService>::launch(
         validator,
-        &BackendType::Fetch,
         None,
         None,
         chain_cache,
@@ -91,7 +90,7 @@ async fn create_test_manager_and_block_cache<V: Validator>(
     )
 }
 
-async fn launch_local_cache<V: Validator>(validator: &ValidatorKind) {
+async fn launch_local_cache<V: ValidatorExt>(validator: &ValidatorKind) {
     let (_test_manager, _json_service, _block_cache, block_cache_subscriber) =
         create_test_manager_and_block_cache::<V>(validator, None, false, false).await;
 
@@ -99,7 +98,7 @@ async fn launch_local_cache<V: Validator>(validator: &ValidatorKind) {
 }
 
 /// Launches a testmanager and block cache and generates `n*100` blocks, checking blocks are stored and fetched correctly.
-async fn launch_local_cache_process_n_block_batches<V: Validator>(
+async fn launch_local_cache_process_n_block_batches<V: ValidatorExt>(
     validator: &ValidatorKind,
     batches: u32,
 ) {

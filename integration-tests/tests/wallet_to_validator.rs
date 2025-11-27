@@ -9,6 +9,7 @@ use zaino_state::ZcashIndexer;
 use zaino_state::ZcashService;
 use zaino_testutils::from_inputs;
 use zaino_testutils::TestManager;
+use zaino_testutils::ValidatorExt;
 use zaino_testutils::ValidatorKind;
 use zainodlib::config::ZainodConfig;
 use zainodlib::error::IndexerError;
@@ -19,13 +20,13 @@ async fn connect_to_node_get_info_for_validator<V, Service>(
     validator: &ValidatorKind,
     backend: &BackendType,
 ) where
-    V: Validator,
+    V: ValidatorExt,
     Service: LightWalletService + Send + Sync + 'static,
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
     let mut test_manager =
-        TestManager::<V, Service>::launch(validator, backend, None, None, None, true, false, true)
+        TestManager::<V, Service>::launch(validator, None, None, None, true, false, true)
             .await
             .unwrap();
     let clients = test_manager
@@ -41,13 +42,13 @@ async fn connect_to_node_get_info_for_validator<V, Service>(
 
 async fn send_to_orchard<V, Service>(validator: &ValidatorKind, backend: &BackendType)
 where
-    V: Validator,
+    V: ValidatorExt,
     Service: LightWalletService + Send + Sync + 'static,
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
     let mut test_manager =
-        TestManager::<V, Service>::launch(validator, backend, None, None, None, true, false, true)
+        TestManager::<V, Service>::launch(validator, None, None, None, true, false, true)
             .await
             .unwrap();
     let mut clients = test_manager
@@ -89,13 +90,13 @@ where
 
 async fn send_to_sapling<V, Service>(validator: &ValidatorKind, backend: &BackendType)
 where
-    V: Validator,
+    V: ValidatorExt,
     Service: LightWalletService + Send + Sync + 'static,
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
     let mut test_manager =
-        TestManager::<V, Service>::launch(validator, backend, None, None, None, true, false, true)
+        TestManager::<V, Service>::launch(validator, None, None, None, true, false, true)
             .await
             .unwrap();
     let mut clients = test_manager
@@ -137,13 +138,13 @@ where
 
 async fn send_to_transparent<V, Service>(validator: &ValidatorKind, backend: &BackendType)
 where
-    V: Validator,
+    V: ValidatorExt,
     Service: LightWalletService + Send + Sync + 'static,
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
     let mut test_manager =
-        TestManager::<V, Service>::launch(validator, backend, None, None, None, true, false, true)
+        TestManager::<V, Service>::launch(validator, None, None, None, true, false, true)
             .await
             .unwrap();
     let mut clients = test_manager
@@ -235,13 +236,13 @@ where
 
 async fn send_to_all<V, Service>(validator: &ValidatorKind, backend: &BackendType)
 where
-    V: Validator,
+    V: ValidatorExt,
     Service: LightWalletService + Send + Sync + 'static,
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
     let mut test_manager =
-        TestManager::<V, Service>::launch(validator, backend, None, None, None, true, false, true)
+        TestManager::<V, Service>::launch(validator, None, None, None, true, false, true)
             .await
             .unwrap();
     let mut clients = test_manager
@@ -321,13 +322,13 @@ where
 
 async fn shield_for_validator<V, Service>(validator: &ValidatorKind, backend: &BackendType)
 where
-    V: Validator,
+    V: ValidatorExt,
     Service: LightWalletService + Send + Sync + 'static,
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
     let mut test_manager =
-        TestManager::<V, Service>::launch(validator, backend, None, None, None, true, false, true)
+        TestManager::<V, Service>::launch(validator, None, None, None, true, false, true)
             .await
             .unwrap();
     let mut clients = test_manager
@@ -391,13 +392,13 @@ async fn monitor_unverified_mempool_for_validator<V, Service>(
     validator: &ValidatorKind,
     backend: &BackendType,
 ) where
-    V: Validator,
+    V: ValidatorExt,
     Service: LightWalletService + Send + Sync + 'static,
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
     let mut test_manager =
-        TestManager::<V, Service>::launch(validator, backend, None, None, None, true, false, true)
+        TestManager::<V, Service>::launch(validator, None, None, None, true, false, true)
             .await
             .unwrap();
     let mut clients = test_manager

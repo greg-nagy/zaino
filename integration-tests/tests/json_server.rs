@@ -30,7 +30,6 @@ async fn create_zcashd_test_manager_and_fetch_services(
     println!("Launching test manager..");
     let test_manager = TestManager::<Zcashd, FetchService>::launch(
         &ValidatorKind::Zcashd,
-        &BackendType::Fetch,
         None,
         None,
         None,

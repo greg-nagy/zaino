@@ -3,7 +3,7 @@ use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConne
 #[allow(deprecated)]
 use zaino_state::FetchService;
 use zaino_state::{BackendType, ZcashIndexer, ZcashService};
-use zaino_testutils::{TestManager, Validator as _, ValidatorKind};
+use zaino_testutils::{TestManager, Validator as _, ValidatorExt, ValidatorKind};
 use zainodlib::config::ZainodConfig;
 use zainodlib::error::IndexerError;
 
@@ -16,13 +16,12 @@ async fn create_test_manager_and_connector<T, Service>(
     enable_clients: bool,
 ) -> (TestManager<T, Service>, JsonRpSeeConnector)
 where
-    T: zcash_local_net::validator::Validator,
+    T: ValidatorExt,
     Service: zaino_state::ZcashService<Config: From<ZainodConfig>> + Send + Sync + 'static,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
 {
     let test_manager = TestManager::<T, Service>::launch(
         validator,
-        &BackendType::Fetch,
         None,
         activation_heights,
         chain_cache,
@@ -94,7 +93,7 @@ mod chain_query_interface {
         NodeBackedChainIndexSubscriber,
     )
     where
-        C: zcash_local_net::validator::Validator,
+        C: ValidatorExt,
         Service: zaino_state::ZcashService<Config: From<ZainodConfig>> + Send + Sync + 'static,
         IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
     {
@@ -279,7 +278,7 @@ mod chain_query_interface {
 
     async fn get_block_range<C, Service>(validator: &ValidatorKind)
     where
-        C: zcash_local_net::validator::Validator,
+        C: ValidatorExt,
         Service: zaino_state::ZcashService<Config: From<ZainodConfig>> + Send + Sync + 'static,
         IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
     {
@@ -329,7 +328,7 @@ mod chain_query_interface {
 
     async fn find_fork_point<C, Service>(validator: &ValidatorKind)
     where
-        C: zcash_local_net::validator::Validator,
+        C: ValidatorExt,
         Service: zaino_state::ZcashService<Config: From<ZainodConfig>> + Send + Sync + 'static,
         IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
     {
@@ -369,7 +368,7 @@ mod chain_query_interface {
 
     async fn get_raw_transaction<C, Service>(validator: &ValidatorKind)
     where
-        C: zcash_local_net::validator::Validator,
+        C: ValidatorExt,
         Service: zaino_state::ZcashService<Config: From<ZainodConfig>> + Send + Sync + 'static,
         IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
     {
@@ -431,7 +430,7 @@ mod chain_query_interface {
 
     async fn get_transaction_status<C, Service>(validator: &ValidatorKind)
     where
-        C: zcash_local_net::validator::Validator,
+        C: ValidatorExt,
         Service: zaino_state::ZcashService<Config: From<ZainodConfig>> + Send + Sync + 'static,
         IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
     {
@@ -477,7 +476,7 @@ mod chain_query_interface {
 
     async fn sync_large_chain<C, Service>(validator: &ValidatorKind)
     where
-        C: zcash_local_net::validator::Validator,
+        C: ValidatorExt,
         Service: zaino_state::ZcashService<Config: From<ZainodConfig>> + Send + Sync + 'static,
         IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
     {

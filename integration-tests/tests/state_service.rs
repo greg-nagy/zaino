@@ -8,7 +8,7 @@ use zaino_state::{
     FetchService, FetchServiceConfig, FetchServiceSubscriber, LightWalletIndexer, StateService,
     StateServiceConfig, StateServiceSubscriber, ZcashIndexer, ZcashService as _,
 };
-use zaino_testutils::from_inputs;
+use zaino_testutils::{from_inputs, ValidatorExt};
 use zaino_testutils::{TestManager, ValidatorKind, ZEBRAD_TESTNET_CACHE_DIR};
 use zainodlib::config::ZainodConfig;
 use zainodlib::error::IndexerError;
@@ -22,7 +22,7 @@ use zip32::AccountId;
 // NOTE: the fetch and state services each have a seperate chain index to the instance of zaino connected to the lightclients and may be out of sync
 // the test manager now includes a service subscriber but not both fetch *and* state which are necessary for these tests.
 // syncronicity is ensured in the following tests by calling `generate_blocks_and_poll_all_chain_indexes`.
-async fn create_test_manager_and_services<V: Validator>(
+async fn create_test_manager_and_services<V: ValidatorExt>(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
     enable_zaino: bool,
@@ -37,7 +37,6 @@ async fn create_test_manager_and_services<V: Validator>(
 ) {
     let test_manager = TestManager::<V, StateService>::launch(
         validator,
-        &BackendType::Fetch,
         network,
         None,
         chain_cache.clone(),
@@ -147,7 +146,7 @@ async fn generate_blocks_and_poll_all_chain_indexes<V, Service>(
     fetch_service_subscriber: FetchServiceSubscriber,
     state_service_subscriber: StateServiceSubscriber,
 ) where
-    V: Validator,
+    V: ValidatorExt,
     Service: LightWalletService + Send + Sync + 'static,
     Service::Config: From<ZainodConfig>,
     IndexerError: From<<<Service as ZcashService>::Subscriber as ZcashIndexer>::Error>,
@@ -160,7 +159,7 @@ async fn generate_blocks_and_poll_all_chain_indexes<V, Service>(
         .generate_blocks_and_poll_indexer(0, &state_service_subscriber)
         .await;
 }
-async fn state_service_check_info<V: Validator>(
+async fn state_service_check_info<V: ValidatorExt>(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
     network: NetworkKind,
@@ -294,7 +293,7 @@ async fn state_service_check_info<V: Validator>(
     test_manager.close().await;
 }
 
-async fn state_service_get_address_balance<V: Validator>(validator: &ValidatorKind) {
+async fn state_service_get_address_balance<V: ValidatorExt>(validator: &ValidatorKind) {
     let (
         mut test_manager,
         _fetch_service,
@@ -514,7 +513,7 @@ async fn state_service_get_block_object(
     test_manager.close().await;
 }
 
-async fn state_service_get_raw_mempool<V: Validator>(validator: &ValidatorKind) {
+async fn state_service_get_raw_mempool<V: ValidatorExt>(validator: &ValidatorKind) {
     let (
         mut test_manager,
         _fetch_service,
@@ -621,7 +620,7 @@ async fn state_service_get_raw_mempool_testnet() {
     test_manager.close().await;
 }
 
-async fn state_service_z_get_treestate<V: Validator>(validator: &ValidatorKind) {
+async fn state_service_z_get_treestate<V: ValidatorExt>(validator: &ValidatorKind) {
     let (
         mut test_manager,
         _fetch_service,
@@ -719,7 +718,7 @@ async fn state_service_z_get_treestate_testnet() {
     test_manager.close().await;
 }
 
-async fn state_service_z_get_subtrees_by_index<V: Validator>(validator: &ValidatorKind) {
+async fn state_service_z_get_subtrees_by_index<V: ValidatorExt>(validator: &ValidatorKind) {
     let (
         mut test_manager,
         _fetch_service,
@@ -840,7 +839,7 @@ async fn state_service_z_get_subtrees_by_index_testnet() {
 }
 
 use zcash_local_net::logs::LogsToStdoutAndStderr;
-async fn state_service_get_raw_transaction<V: Validator + LogsToStdoutAndStderr>(
+async fn state_service_get_raw_transaction<V: ValidatorExt + LogsToStdoutAndStderr>(
     validator: &ValidatorKind,
 ) {
     let (
@@ -944,7 +943,7 @@ async fn state_service_get_raw_transaction_testnet() {
     test_manager.close().await;
 }
 
-async fn state_service_get_address_tx_ids<V: Validator>(validator: &ValidatorKind) {
+async fn state_service_get_address_tx_ids<V: ValidatorExt>(validator: &ValidatorKind) {
     let (
         mut test_manager,
         _fetch_service,
@@ -1070,7 +1069,7 @@ async fn state_service_get_address_tx_ids_testnet() {
     test_manager.close().await;
 }
 
-async fn state_service_get_address_utxos<V: Validator>(validator: &ValidatorKind) {
+async fn state_service_get_address_utxos<V: ValidatorExt>(validator: &ValidatorKind) {
     let (
         mut test_manager,
         _fetch_service,

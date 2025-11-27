@@ -51,7 +51,6 @@ macro_rules! expected_read_response {
 async fn create_200_block_regtest_chain_vectors() {
     let mut test_manager = TestManager::<Zebrad, StateService>::launch(
         &ValidatorKind::Zebrad,
-        &BackendType::State,
         None,
         None,
         None,
