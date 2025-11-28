@@ -449,7 +449,7 @@ where
             full_node_rpc_listen_address,
             full_node_grpc_listen_address: validator_settings
                 .validator_grpc_listen_address
-                .expect("todo fix"),
+                .unwrap_or(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0)),
             zaino_handle,
             zaino_json_rpc_listen_address: zaino_json_listen_address,
             zaino_grpc_listen_address,
