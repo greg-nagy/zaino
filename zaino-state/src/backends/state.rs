@@ -234,7 +234,7 @@ impl ZcashService for StateService {
             init_read_state_with_syncer(
                 config.validator_state_config.clone(),
                 &config.network.to_zebra_network(),
-                config.validator_rpc_address,
+                config.validator_grpc_address,
             )
             .await??;
 
