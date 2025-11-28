@@ -221,7 +221,7 @@ impl ValidatorExt for Zebrad {
             ),
             validator_grpc_listen_address: Some(SocketAddr::new(
                 IpAddr::V4(Ipv4Addr::LOCALHOST),
-                zebrad.network_listen_port(),
+                *zebrad.indexer_listen_port(),
             )),
             validator_cookie_path: None,
             validator_user: Some("xxxxxx".to_string()),
@@ -329,9 +329,6 @@ where
             chain_cache.clone(),
         );
 
-        let grpc_listen_port = portpicker::pick_unused_port().expect("No ports free");
-        let full_node_grpc_listen_address =
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), grpc_listen_port);
         let (local_net, validator_settings) =
             C::launch_local_net_and_return_validator_config(config)
                 .await
@@ -362,7 +359,7 @@ where
             let zaino_json_listen_port = portpicker::pick_unused_port().expect("No ports free");
             let zaino_json_listen_address =
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), zaino_json_listen_port);
-            info!("{}", full_node_grpc_listen_address);
+            info!("{:?}", validator_settings.validator_grpc_listen_address);
             let indexer_config = zainodlib::config::ZainodConfig {
                 // TODO: Make configurable.
                 backend: Service::BACKEND_TYPE,
@@ -378,7 +375,7 @@ where
                     listen_address: zaino_grpc_listen_address,
                     tls: None,
                 },
-                validator_settings,
+                validator_settings: validator_settings.clone(),
                 service: ServiceConfig::default(),
                 storage: StorageConfig {
                     cache: CacheConfig::default(),
@@ -450,7 +447,9 @@ where
             data_dir,
             network: network_kind,
             full_node_rpc_listen_address,
-            full_node_grpc_listen_address,
+            full_node_grpc_listen_address: validator_settings
+                .validator_grpc_listen_address
+                .expect("todo fix"),
             zaino_handle,
             zaino_json_rpc_listen_address: zaino_json_listen_address,
             zaino_grpc_listen_address,

@@ -39,5 +39,5 @@ tokio = { workspace = true }
 zingolib = { workspace = true }
 
 # Zingo-infra
-zcash_local_net = { git = "https://github.com/zingolabs/infrastructure.git", tag = "zcash_local_net_v0.3.0" }
-zingo_test_vectors = { git = "https://github.com/zingolabs/infrastructure.git", tag = "zcash_local_net_v0.1.0" }
+zcash_local_net = { git = "https://github.com/zingolabs/infrastructure.git", rev = "30f1dc3f0712d05d825b756c8cedff4a1b3bd068" }
+zingo_test_vectors = { git = "https://github.com/zingolabs/infrastructure.git", rev = "30f1dc3f0712d05d825b756c8cedff4a1b3bd068" }
