@@ -375,7 +375,7 @@ where
                     listen_address: zaino_grpc_listen_address,
                     tls: None,
                 },
-                validator_settings: validator_settings.clone(),
+                validator_settings: dbg!(validator_settings.clone()),
                 service: ServiceConfig::default(),
                 storage: StorageConfig {
                     cache: CacheConfig::default(),

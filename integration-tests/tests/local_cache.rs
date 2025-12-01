@@ -103,7 +103,7 @@ async fn launch_local_cache_process_n_block_batches<V: ValidatorExt>(
     batches: u32,
 ) {
     let (test_manager, json_service, mut block_cache, mut block_cache_subscriber) =
-        create_test_manager_and_block_cache::<V>(validator, None, false, false).await;
+        create_test_manager_and_block_cache::<V>(validator, None, true, false).await;
 
     let finalised_state = block_cache.finalised_state.take().unwrap();
     let finalised_state_subscriber = block_cache_subscriber.finalised_state.take().unwrap();

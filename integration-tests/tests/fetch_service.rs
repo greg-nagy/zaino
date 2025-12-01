@@ -11,6 +11,7 @@ use zaino_state::FetchServiceSubscriber;
 use zaino_state::{BackendType, FetchService, LightWalletIndexer, StatusType, ZcashIndexer};
 use zaino_testutils::{TestManager, ValidatorExt, ValidatorKind};
 use zcash_local_net::validator::Validator;
+use zebra_chain::parameters::subsidy::ParameterSubsidy as _;
 use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
 use zebra_rpc::client::ValidateAddressResponse;
 use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetBlock, GetBlockHash};
@@ -750,6 +751,10 @@ async fn fetch_service_get_block_subsidy<V: ValidatorExt>(validator: &ValidatorK
     let fetch_service_subscriber = test_manager.service_subscriber.take().unwrap();
 
     const BLOCK_LIMIT: u32 = 10;
+    dbg!(fetch_service_subscriber
+        .network()
+        .to_zebra_network()
+        .height_for_first_halving());
 
     for i in 0..BLOCK_LIMIT {
         test_manager

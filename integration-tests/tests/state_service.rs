@@ -58,7 +58,21 @@ async fn create_test_manager_and_services<V: ValidatorExt>(
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
             zaino_common::Network::Testnet
         }
-        _ => zaino_common::Network::Regtest(ActivationHeights::default()),
+        _ => zaino_common::Network::Regtest({
+            let activation_heights = test_manager.local_net.get_activation_heights().await;
+            ActivationHeights {
+                before_overwinter: activation_heights.before_overwinter,
+                overwinter: activation_heights.overwinter,
+                sapling: activation_heights.sapling,
+                blossom: activation_heights.blossom,
+                heartwood: activation_heights.heartwood,
+                canopy: activation_heights.canopy,
+                nu5: activation_heights.nu5,
+                nu6: activation_heights.nu6,
+                nu6_1: activation_heights.nu6_1,
+                nu7: activation_heights.nu7,
+            }
+        }),
     };
 
     // TODO: implement trait test_manager.local_net.print_stdout();
