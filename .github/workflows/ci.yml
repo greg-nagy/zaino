@@ -2,6 +2,10 @@ name: CI - PR
 
 on:
   workflow_call:
+    inputs:
+      nextest-profile:
+        type: string
+        default: 'quick'
   workflow_dispatch:
   push:
     tags:
@@ -155,13 +159,13 @@ jobs:
         env:
           TEST_BINARIES_DIR: ${{ github.workspace }}/test_binaries/bins
         run: |
-          cargo nextest run --verbose --profile quick --retries 2 --no-tests fail --archive-file nextest-archive.tar.zst \
+          cargo nextest run --verbose --profile ${{ inputs.nextest-profile || 'quick' }} --retries 2 --no-tests fail --archive-file nextest-archive.tar.zst \
             --workspace-remap ./ --filterset "binary_id(${{ matrix.partition }})" ${{ env.NEXTEST-FLAGS }}
 
       - name: Test Summary
         uses: test-summary/action@v2
         with:
-          paths: "target/nextest/quick/junit.xml"
+          paths: "target/nextest/${{ inputs.nextest-profile || 'quick' }}/junit.xml"
 
   fmt:
     name: Rustfmt

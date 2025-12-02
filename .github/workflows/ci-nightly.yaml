@@ -17,6 +17,8 @@ env:
 jobs:
   pr-checks:
     uses: ./.github/workflows/ci.yml
+    with:
+      nextest-profile: ci
 
   compute-tag:
     uses: ./.github/workflows/compute-tag.yml
