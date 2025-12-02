@@ -129,3 +129,6 @@ default-filter = """
         test(/^zebrad::get::peer_info$/)
     )
 """
+
+[profile.quick.junit]
+path = "junit.xml"
