@@ -224,7 +224,7 @@ impl ValidatorExt for Zebrad {
             ),
             validator_grpc_listen_address: Some(SocketAddr::new(
                 IpAddr::V4(Ipv4Addr::LOCALHOST),
-                zebrad.indexer_listen_port(),
+                *zebrad.indexer_listen_port(),
             )),
             validator_cookie_path: None,
             validator_user: Some("xxxxxx".to_string()),
