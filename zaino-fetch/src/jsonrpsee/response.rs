@@ -23,7 +23,7 @@ use zebra_chain::{
     work::difficulty::CompactDifficulty,
 };
 use zebra_rpc::{
-    client::{GetBlockchainInfoBalance, ValidateAddressResponse},
+    client::{Commitments, GetBlockchainInfoBalance, Treestate, ValidateAddressResponse},
     methods::opthex,
 };
 
@@ -1024,13 +1024,20 @@ impl TryFrom<GetTreestateResponse> for zebra_rpc::client::GetTreestateResponse {
             zebra_chain::serialization::SerializationError::Parse("negative block height")
         })?;
 
+        let sapling_bytes = value.sapling.commitments().final_state().clone();
+        let sapling = Treestate::new(Commitments::new(None, sapling_bytes));
+
+        let orchard_bytes = value.orchard.commitments().final_state().clone();
+        let orchard = Treestate::new(Commitments::new(None, orchard_bytes));
+
         Ok(zebra_rpc::client::GetTreestateResponse::new(
             parsed_hash,
             zebra_chain::block::Height(height_u32),
             value.time,
+            // Sprout
             None,
-            value.sapling,
-            value.orchard,
+            sapling,
+            orchard,
         ))
     }
 }

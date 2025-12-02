@@ -75,7 +75,7 @@ async fn create_test_manager_and_services<V: ValidatorExt>(
         }),
     };
 
-    // TODO: implement trait test_manager.local_net.print_stdout();
+    test_manager.local_net.print_stdout();
 
     let fetch_service = FetchService::spawn(FetchServiceConfig::new(
         test_manager.full_node_rpc_listen_address,

@@ -28,7 +28,6 @@ use zaino_state::{
 };
 use zainodlib::{config::ZainodConfig, error::IndexerError, indexer::Indexer};
 pub use zcash_local_net as services;
-use zcash_local_net::process::Process;
 use zcash_local_net::validator::zebrad::{Zebrad, ZebradConfig};
 pub use zcash_local_net::validator::Validator;
 use zcash_local_net::validator::ValidatorConfig as _;
@@ -36,6 +35,7 @@ use zcash_local_net::{
     error::LaunchError,
     validator::zcashd::{Zcashd, ZcashdConfig},
 };
+use zcash_local_net::{logs::LogsToStdoutAndStderr, process::Process};
 use zcash_protocol::PoolType;
 use zebra_chain::parameters::NetworkKind;
 use zebra_chain_zingolib_testutils_compat::parameters::testnet::ConfiguredActivationHeights;
@@ -204,7 +204,7 @@ pub struct TestManager<C: Validator, Service: LightWalletService + Send + Sync +
 ///
 /// TODO: Either move to Validator zcash_client_backend trait or document
 /// why it should not be moved.
-pub trait ValidatorExt: Validator {
+pub trait ValidatorExt: Validator + LogsToStdoutAndStderr {
     /// Launch the validator, and return a validator config containing the
     /// ports used by the validator, etc
     fn launch_local_net_and_return_validator_config(
