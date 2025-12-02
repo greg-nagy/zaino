@@ -8,21 +8,20 @@ use zaino_proto::proto::service::{
 };
 use zaino_state::FetchServiceSubscriber;
 #[allow(deprecated)]
-use zaino_state::{BackendType, FetchService, LightWalletIndexer, StatusType, ZcashIndexer};
+use zaino_state::{FetchService, LightWalletIndexer, StatusType, ZcashIndexer};
 use zaino_testutils::{TestManager, ValidatorExt, ValidatorKind};
-use zcash_local_net::validator::Validator;
 use zebra_chain::parameters::subsidy::ParameterSubsidy as _;
 use zebra_chain::subtree::NoteCommitmentSubtreeIndex;
 use zebra_rpc::client::ValidateAddressResponse;
-use zebra_rpc::methods::{AddressStrings, GetAddressTxIdsRequest, GetBlock, GetBlockHash};
+use zebra_rpc::methods::{
+    GetAddressBalanceRequest, GetAddressTxIdsRequest, GetBlock, GetBlockHash,
+};
 use zip32::AccountId;
 
 #[allow(deprecated)]
 async fn create_test_manager_and_fetch_service<V: ValidatorExt>(
     validator: &ValidatorKind,
     chain_cache: Option<std::path::PathBuf>,
-    enable_zaino: bool,
-    _zaino_no_sync: bool,
     enable_clients: bool,
 ) -> (TestManager<V, FetchService>, FetchServiceSubscriber) {
     let mut test_manager = TestManager::<V, FetchService>::launch(
@@ -32,7 +31,7 @@ async fn create_test_manager_and_fetch_service<V: ValidatorExt>(
         chain_cache,
         true,
         false,
-        false,
+        enable_clients,
     )
     .await
     .unwrap();
@@ -46,8 +45,7 @@ async fn launch_fetch_service<V: ValidatorExt>(
     chain_cache: Option<std::path::PathBuf>,
 ) {
     let (mut test_manager, fetch_service_subscriber) =
-        create_test_manager_and_fetch_service::<V>(validator, chain_cache, false, true, false)
-            .await;
+        create_test_manager_and_fetch_service::<V>(validator, chain_cache, false).await;
     assert_eq!(fetch_service_subscriber.status(), StatusType::Ready);
     dbg!(fetch_service_subscriber.data.clone());
     dbg!(fetch_service_subscriber.get_info().await.unwrap());
@@ -114,7 +112,7 @@ async fn fetch_service_get_address_balance<V: ValidatorExt>(validator: &Validato
         .unwrap();
 
     let fetch_service_balance = fetch_service_subscriber
-        .z_get_address_balance(AddressStrings::new(vec![recipient_address]))
+        .z_get_address_balance(GetAddressBalanceRequest::new(vec![recipient_address]))
         .await
         .unwrap();
 
@@ -593,7 +591,7 @@ async fn fetch_service_get_address_utxos<V: ValidatorExt>(validator: &ValidatorK
     clients.faucet.sync_and_await().await.unwrap();
 
     let fetch_service_utxos = fetch_service_subscriber
-        .z_get_address_utxos(AddressStrings::new(vec![recipient_taddr]))
+        .z_get_address_utxos(GetAddressBalanceRequest::new(vec![recipient_taddr]))
         .await
         .unwrap();
     let (_, fetch_service_txid, ..) = fetch_service_utxos[0].into_parts();

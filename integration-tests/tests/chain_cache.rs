@@ -1,9 +1,7 @@
 use zaino_common::network::ActivationHeights;
 use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
-#[allow(deprecated)]
-use zaino_state::FetchService;
-use zaino_state::{BackendType, ZcashIndexer, ZcashService};
-use zaino_testutils::{TestManager, Validator as _, ValidatorExt, ValidatorKind};
+use zaino_state::{ZcashIndexer, ZcashService};
+use zaino_testutils::{TestManager, ValidatorExt, ValidatorKind};
 use zainodlib::config::ZainodConfig;
 use zainodlib::error::IndexerError;
 
@@ -68,7 +66,7 @@ mod chain_query_interface {
         },
         Height, StateService, StateServiceConfig, ZcashService,
     };
-    use zcash_local_net::validator::{zcashd::Zcashd, zebrad::Zebrad, Validator};
+    use zcash_local_net::validator::{zcashd::Zcashd, zebrad::Zebrad};
     use zebra_chain::{
         parameters::{
             testnet::{ConfiguredActivationHeights, RegtestParameters},

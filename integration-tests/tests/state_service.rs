@@ -1,12 +1,12 @@
 use zaino_common::network::ActivationHeights;
 use zaino_common::{DatabaseConfig, ServiceConfig, StorageConfig};
 use zaino_fetch::jsonrpsee::response::address_deltas::GetAddressDeltasParams;
-use zaino_state::{BackendType, LightWalletService, ZcashService};
+use zaino_state::{LightWalletService, ZcashService};
 
 #[allow(deprecated)]
 use zaino_state::{
     FetchService, FetchServiceConfig, FetchServiceSubscriber, LightWalletIndexer, StateService,
-    StateServiceConfig, StateServiceSubscriber, ZcashIndexer, ZcashService as _,
+    StateServiceConfig, StateServiceSubscriber, ZcashIndexer,
 };
 use zaino_testutils::{from_inputs, ValidatorExt};
 use zaino_testutils::{TestManager, ValidatorKind, ZEBRAD_TESTNET_CACHE_DIR};

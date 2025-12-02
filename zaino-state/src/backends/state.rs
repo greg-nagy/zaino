@@ -63,11 +63,11 @@ use zebra_rpc::{
         ValidateAddressResponse,
     },
     methods::{
-        chain_tip_difficulty, AddressBalance, AddressStrings, ConsensusBranchIdHex,
-        GetAddressTxIdsRequest, GetAddressUtxos, GetBlock, GetBlockHash,
-        GetBlockHeader as GetBlockHeaderZebra, GetBlockHeaderObject, GetBlockTransaction,
-        GetBlockTrees, GetBlockchainInfoResponse, GetInfo, GetRawTransaction, NetworkUpgradeInfo,
-        NetworkUpgradeStatus, SentTransactionHash, TipConsensusBranch, ValidateAddresses as _,
+        chain_tip_difficulty, AddressBalance, ConsensusBranchIdHex, GetAddressTxIdsRequest,
+        GetAddressUtxos, GetBlock, GetBlockHash, GetBlockHeader as GetBlockHeaderZebra,
+        GetBlockHeaderObject, GetBlockTransaction, GetBlockTrees, GetBlockchainInfoResponse,
+        GetInfo, GetRawTransaction, NetworkUpgradeInfo, NetworkUpgradeStatus, SentTransactionHash,
+        TipConsensusBranch, ValidateAddresses as _,
     },
     server::error::LegacyCode,
     sync::init_read_state_with_syncer,
@@ -1813,7 +1813,7 @@ impl ZcashIndexer for StateServiceSubscriber {
         }
 
         let request = ReadRequest::TransactionIdsByAddresses {
-            addresses: AddressStrings::new(addresses)
+            addresses: GetAddressBalanceRequest::new(addresses)
                 .valid_addresses()
                 .map_err(|e| RpcError::new_from_errorobject(e, "invalid adddress"))?,
 
@@ -1847,7 +1847,7 @@ impl ZcashIndexer for StateServiceSubscriber {
 
     async fn z_get_address_utxos(
         &self,
-        address_strings: AddressStrings,
+        address_strings: GetAddressBalanceRequest,
     ) -> Result<Vec<GetAddressUtxos>, Self::Error> {
         let mut state = self.read_state_service.clone();
 
@@ -2086,7 +2086,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
         &self,
         request: AddressList,
     ) -> Result<zaino_proto::proto::service::Balance, Self::Error> {
-        let taddrs = AddressStrings::new(request.addresses);
+        let taddrs = GetAddressBalanceRequest::new(request.addresses);
         let balance = self.z_get_address_balance(taddrs).await?;
         let checked_balance: i64 = match i64::try_from(balance.balance()) {
             Ok(balance) => balance,
@@ -2119,7 +2119,7 @@ impl LightWalletIndexer for StateServiceSubscriber {
                     loop {
                         match channel_rx.recv().await {
                             Some(taddr) => {
-                                let taddrs = AddressStrings::new(vec![taddr]);
+                                let taddrs = GetAddressBalanceRequest::new(vec![taddr]);
                                 let balance =
                                     fetch_service_clone.z_get_address_balance(taddrs).await?;
                                 total_balance += balance.balance();

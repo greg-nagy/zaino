@@ -10,6 +10,7 @@ pub mod test_vectors {
 
 use once_cell::sync::Lazy;
 use std::{
+    future::Future,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
 };
@@ -27,18 +28,14 @@ use zaino_state::{
 };
 use zainodlib::{config::ZainodConfig, error::IndexerError, indexer::Indexer};
 pub use zcash_local_net as services;
+use zcash_local_net::process::Process;
 use zcash_local_net::validator::zebrad::{Zebrad, ZebradConfig};
 pub use zcash_local_net::validator::Validator;
-use zcash_local_net::LocalNetConfig;
+use zcash_local_net::validator::ValidatorConfig as _;
 use zcash_local_net::{
     error::LaunchError,
     validator::zcashd::{Zcashd, ZcashdConfig},
 };
-use zcash_local_net::{
-    indexer::empty::{Empty, EmptyConfig},
-    validator::ValidatorConfig as _,
-};
-use zcash_local_net::{process::Process, validator::ValidatorConfig as _};
 use zcash_protocol::PoolType;
 use zebra_chain::parameters::NetworkKind;
 use zebra_chain_zingolib_testutils_compat::parameters::testnet::ConfiguredActivationHeights;
@@ -203,10 +200,16 @@ pub struct TestManager<C: Validator, Service: LightWalletService + Send + Sync +
     pub clients: Option<Clients>,
 }
 
+/// Needed validator functionality that is not implemented in infrastructure
+///
+/// TODO: Either move to Validator zcash_client_backend trait or document
+/// why it should not be moved.
 pub trait ValidatorExt: Validator {
-    async fn launch_local_net_and_return_validator_config(
+    /// Launch the validator, and return a validator config containing the
+    /// ports used by the validator, etc
+    fn launch_local_net_and_return_validator_config(
         config: Self::Config,
-    ) -> Result<(Self, ValidatorConfig), LaunchError>;
+    ) -> impl Future<Output = Result<(Self, ValidatorConfig), LaunchError>> + Send + Sync;
 }
 
 impl ValidatorExt for Zebrad {
@@ -221,7 +224,7 @@ impl ValidatorExt for Zebrad {
             ),
             validator_grpc_listen_address: Some(SocketAddr::new(
                 IpAddr::V4(Ipv4Addr::LOCALHOST),
-                *zebrad.indexer_listen_port(),
+                zebrad.indexer_listen_port(),
             )),
             validator_cookie_path: None,
             validator_user: Some("xxxxxx".to_string()),
@@ -266,6 +269,8 @@ where
     /// If clients is set to active zingolib lightclients will be created for test use.
     ///
     /// TODO: Add TestManagerConfig struct and constructor methods of common test setups.
+    ///
+    /// TODO: Remove validator argument in favour of adding C::VALIDATOR associated const
     pub async fn launch(
         validator: &ValidatorKind,
         network: Option<NetworkKind>,

@@ -5,8 +5,7 @@ use zaino_common::{DatabaseConfig, ServiceConfig, StorageConfig};
 
 #[allow(deprecated)]
 use zaino_state::{
-    BackendType, FetchService, FetchServiceConfig, FetchServiceSubscriber, ZcashIndexer,
-    ZcashService as _,
+    FetchService, FetchServiceConfig, FetchServiceSubscriber, ZcashIndexer, ZcashService as _,
 };
 use zaino_testutils::from_inputs;
 use zaino_testutils::{TestManager, ValidatorKind};
