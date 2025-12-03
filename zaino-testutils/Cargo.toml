@@ -41,6 +41,7 @@ zingolib = { git = "https://github.com/zingolabs/zingolib.git", rev = "e0eb2b85f
     "testutils",
 ] }
 zingolib_testutils = { git = "https://github.com/zingolabs/zingolib.git", rev = "e0eb2b85f4f8754d5597bc2bcd1ce67238728de0" }
+## It would be really nice to not need this. 
 zebra_chain_zingolib_testutils_compat = { version = "3.0.0", package = "zebra-chain" }
 
 # Miscellaneous
