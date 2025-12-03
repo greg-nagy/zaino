@@ -558,7 +558,7 @@ where
         chain_index: &NodeBackedChainIndexSubscriber,
     ) {
         let chain_height = self.local_net.get_chain_height().await;
-        let mut next_block_height = u32::from(chain_height) + 1;
+        let mut next_block_height = chain_height + 1;
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(200));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         interval.tick().await;
@@ -567,7 +567,7 @@ where
                 .snapshot_nonfinalized_state()
                 .best_chaintip()
                 .height,
-        ) < u32::from(chain_height) + n
+        ) < chain_height + n
         {
             if n == 0 {
                 interval.tick().await;
