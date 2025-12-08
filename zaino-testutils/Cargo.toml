@@ -29,8 +29,8 @@ zebra-chain = { workspace = true }
 zebra-state.workspace = true
 
 # Zingo-infra
-zcash_local_net = { git = "https://github.com/zingolabs/infrastructure.git", rev = "30f1dc3f0712d05d825b756c8cedff4a1b3bd068" }
-zingo_test_vectors = { git = "https://github.com/zingolabs/infrastructure.git", rev = "30f1dc3f0712d05d825b756c8cedff4a1b3bd068" }
+zcash_local_net = { git = "https://github.com/zingolabs/infrastructure.git", rev = "20f3c206321825952fdf2d9d84947f5c9d2a1cf4" }
+zingo_test_vectors = { git = "https://github.com/zingolabs/infrastructure.git", rev = "20f3c206321825952fdf2d9d84947f5c9d2a1cf4" }
 
 # Zingo-common
 zingo_common_components = { git = "https://github.com/zingolabs/zingo-common.git", tag = "zingo_common_components_v0.1.0", features = [ "for_test" ]}
@@ -41,7 +41,7 @@ zingolib = { git = "https://github.com/zingolabs/zingolib.git", rev = "e0eb2b85f
     "testutils",
 ] }
 zingolib_testutils = { git = "https://github.com/zingolabs/zingolib.git", rev = "e0eb2b85f4f8754d5597bc2bcd1ce67238728de0" }
-## It would be really nice to not need this. 
+## It would be really nice to not need this.
 zebra_chain_zingolib_testutils_compat = { version = "3.0.0", package = "zebra-chain" }
 
 # Miscellaneous
