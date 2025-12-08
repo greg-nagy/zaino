@@ -750,16 +750,27 @@ async fn fetch_service_get_block_subsidy<V: ValidatorExt>(validator: &ValidatorK
 
     let fetch_service_subscriber = test_manager.service_subscriber.take().unwrap();
 
-    const BLOCK_LIMIT: u32 = 10;
-    dbg!(fetch_service_subscriber
+    let first_halving_height = fetch_service_subscriber
         .network()
         .to_zebra_network()
-        .height_for_first_halving());
+        .height_for_first_halving();
+    let block_limit = match validator {
+        // Block generation is more expensive in zcashd, and 10 is sufficient
+        ValidatorKind::Zcashd => 10,
+        // To stay consistent with zcashd, ten successful examples. Any calls
+        // below the first halving height should fail.
+        ValidatorKind::Zebrad => first_halving_height.0 + 10,
+    };
 
-    for i in 0..BLOCK_LIMIT {
+    for i in 0..block_limit {
         test_manager
             .generate_blocks_and_poll_indexer(1, &fetch_service_subscriber)
             .await;
+        // Zebrad does not support the founders' reward block subsidy
+        if i < first_halving_height.0 && validator == &ValidatorKind::Zebrad {
+            assert!(fetch_service_subscriber.get_block_subsidy(i).await.is_err());
+            continue;
+        }
         let fetch_service_get_block_subsidy =
             fetch_service_subscriber.get_block_subsidy(i).await.unwrap();
 
