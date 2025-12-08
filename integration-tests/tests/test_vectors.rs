@@ -20,14 +20,11 @@ use zaino_state::CompactSize;
 #[allow(deprecated)]
 use zaino_state::StateService;
 use zaino_state::ZcashIndexer;
-use zaino_state::{BackendType, ChainWork, IndexedBlock};
+use zaino_state::{ChainWork, IndexedBlock};
 use zaino_testutils::from_inputs;
 use zaino_testutils::test_vectors::transactions::get_test_vectors;
 use zaino_testutils::{TestManager, ValidatorKind};
-use zcash_local_net::logs::LogsToStdoutAndStderr;
 use zcash_local_net::validator::zebrad::Zebrad;
-use zcash_local_net::validator::Validator;
-use zebra_chain::parameters::NetworkKind;
 use zebra_chain::serialization::{ZcashDeserialize, ZcashSerialize};
 use zebra_rpc::methods::GetAddressUtxos;
 use zebra_rpc::methods::{GetAddressBalanceRequest, GetAddressTxIdsRequest, GetBlockTransaction};

@@ -2,13 +2,10 @@ use zaino_common::{
     ActivationHeights, DatabaseConfig, StorageConfig, ZEBRAD_DEFAULT_ACTIVATION_HEIGHTS,
 };
 use zaino_fetch::jsonrpsee::connector::{test_node_and_return_url, JsonRpSeeConnector};
+use zaino_state::test_dependencies::{BlockCache, BlockCacheConfig, BlockCacheSubscriber};
 #[allow(deprecated)]
 use zaino_state::FetchService;
-use zaino_state::{
-    test_dependencies::{BlockCache, BlockCacheConfig, BlockCacheSubscriber},
-    BackendType,
-};
-use zaino_testutils::{TestManager, Validator, ValidatorExt, ValidatorKind};
+use zaino_testutils::{TestManager, ValidatorExt, ValidatorKind};
 use zebra_chain::{block::Height, parameters::NetworkKind};
 use zebra_state::HashOrHeight;
 

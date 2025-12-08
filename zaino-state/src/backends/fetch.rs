@@ -15,9 +15,9 @@ use zebra_rpc::{
         ValidateAddressResponse,
     },
     methods::{
-        AddressBalance, AddressStrings, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock,
-        GetBlockHashResponse, GetBlockchainInfoResponse, GetInfo, GetRawTransaction,
-        SentTransactionHash, ValidateAddresses as _,
+        AddressBalance, GetAddressTxIdsRequest, GetAddressUtxos, GetBlock, GetBlockHashResponse,
+        GetBlockchainInfoResponse, GetInfo, GetRawTransaction, SentTransactionHash,
+        ValidateAddresses as _,
     },
 };
 
@@ -1090,7 +1090,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
 
     /// Returns the total balance for a list of taddrs
     async fn get_taddress_balance(&self, request: AddressList) -> Result<Balance, Self::Error> {
-        let taddrs = AddressStrings::new(request.addresses);
+        let taddrs = GetAddressBalanceRequest::new(request.addresses);
         let balance = self.z_get_address_balance(taddrs).await?;
         let checked_balance: i64 = match i64::try_from(balance.balance()) {
             Ok(balance) => balance,
@@ -1123,7 +1123,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                     loop {
                         match channel_rx.recv().await {
                             Some(taddr) => {
-                                let taddrs = AddressStrings::new(vec![taddr]);
+                                let taddrs = GetAddressBalanceRequest::new(vec![taddr]);
                                 let balance =
                                     fetch_service_clone.z_get_address_balance(taddrs).await?;
                                 total_balance += balance.balance();
@@ -1484,7 +1484,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         &self,
         request: GetAddressUtxosArg,
     ) -> Result<GetAddressUtxosReplyList, Self::Error> {
-        let taddrs = AddressStrings::new(request.addresses);
+        let taddrs = GetAddressBalanceRequest::new(request.addresses);
         let utxos = self.z_get_address_utxos(taddrs).await?;
         let mut address_utxos: Vec<GetAddressUtxosReply> = Vec::new();
         let mut entries: u32 = 0;
@@ -1536,7 +1536,7 @@ impl LightWalletIndexer for FetchServiceSubscriber {
         &self,
         request: GetAddressUtxosArg,
     ) -> Result<UtxoReplyStream, Self::Error> {
-        let taddrs = AddressStrings::new(request.addresses);
+        let taddrs = GetAddressBalanceRequest::new(request.addresses);
         let utxos = self.z_get_address_utxos(taddrs).await?;
         let service_timeout = self.config.service.timeout;
         let (channel_tx, channel_rx) = mpsc::channel(self.config.service.channel_size as usize);

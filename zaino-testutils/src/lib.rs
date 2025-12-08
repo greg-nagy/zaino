@@ -10,6 +10,7 @@ pub mod test_vectors {
 
 use once_cell::sync::Lazy;
 use std::{
+    future::Future,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
 };
@@ -29,16 +30,12 @@ use zainodlib::{config::ZainodConfig, error::IndexerError, indexer::Indexer};
 pub use zcash_local_net as services;
 use zcash_local_net::validator::zebrad::{Zebrad, ZebradConfig};
 pub use zcash_local_net::validator::Validator;
-use zcash_local_net::LocalNetConfig;
+use zcash_local_net::validator::ValidatorConfig as _;
 use zcash_local_net::{
     error::LaunchError,
     validator::zcashd::{Zcashd, ZcashdConfig},
 };
-use zcash_local_net::{
-    indexer::empty::{Empty, EmptyConfig},
-    validator::ValidatorConfig as _,
-};
-use zcash_local_net::{process::Process, validator::ValidatorConfig as _};
+use zcash_local_net::{logs::LogsToStdoutAndStderr, process::Process};
 use zcash_protocol::PoolType;
 use zebra_chain::parameters::NetworkKind;
 use zebra_chain_zingolib_testutils_compat::parameters::testnet::ConfiguredActivationHeights;
@@ -203,10 +200,16 @@ pub struct TestManager<C: Validator, Service: LightWalletService + Send + Sync +
     pub clients: Option<Clients>,
 }
 
-pub trait ValidatorExt: Validator {
-    async fn launch_local_net_and_return_validator_config(
+/// Needed validator functionality that is not implemented in infrastructure
+///
+/// TODO: Either move to Validator zcash_client_backend trait or document
+/// why it should not be moved.
+pub trait ValidatorExt: Validator + LogsToStdoutAndStderr {
+    /// Launch the validator, and return a validator config containing the
+    /// ports used by the validator, etc
+    fn launch_local_net_and_return_validator_config(
         config: Self::Config,
-    ) -> Result<(Self, ValidatorConfig), LaunchError>;
+    ) -> impl Future<Output = Result<(Self, ValidatorConfig), LaunchError>> + Send + Sync;
 }
 
 impl ValidatorExt for Zebrad {
@@ -266,6 +269,8 @@ where
     /// If clients is set to active zingolib lightclients will be created for test use.
     ///
     /// TODO: Add TestManagerConfig struct and constructor methods of common test setups.
+    ///
+    /// TODO: Remove validator argument in favour of adding C::VALIDATOR associated const
     pub async fn launch(
         validator: &ValidatorKind,
         network: Option<NetworkKind>,
@@ -553,7 +558,7 @@ where
         chain_index: &NodeBackedChainIndexSubscriber,
     ) {
         let chain_height = self.local_net.get_chain_height().await;
-        let mut next_block_height = u32::from(chain_height) + 1;
+        let mut next_block_height = chain_height + 1;
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(200));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         interval.tick().await;
@@ -562,7 +567,7 @@ where
                 .snapshot_nonfinalized_state()
                 .best_chaintip()
                 .height,
-        ) < u32::from(chain_height) + n
+        ) < chain_height + n
         {
             if n == 0 {
                 interval.tick().await;
@@ -789,10 +794,7 @@ mod launch_testmanager {
                 )
                 .await
                 .unwrap();
-                assert_eq!(
-                    2,
-                    u32::from(test_manager.local_net.get_chain_height().await)
-                );
+                assert_eq!(2, (test_manager.local_net.get_chain_height().await));
                 test_manager.close().await;
             }
 
@@ -810,10 +812,7 @@ mod launch_testmanager {
                 )
                 .await
                 .unwrap();
-                assert_eq!(
-                    2,
-                    u32::from(test_manager.local_net.get_chain_height().await)
-                );
+                assert_eq!(2, (test_manager.local_net.get_chain_height().await));
                 test_manager.local_net.generate_blocks(1).await.unwrap();
                 assert_eq!(3, (test_manager.local_net.get_chain_height().await));
                 test_manager.close().await;
@@ -834,10 +833,7 @@ mod launch_testmanager {
                 )
                 .await
                 .unwrap();
-                assert_eq!(
-                    52,
-                    u32::from(test_manager.local_net.get_chain_height().await)
-                );
+                assert_eq!(52, (test_manager.local_net.get_chain_height().await));
                 test_manager.close().await;
             }
 
@@ -1079,10 +1075,7 @@ mod launch_testmanager {
                 )
                 .await
                 .unwrap();
-                assert_eq!(
-                    2,
-                    u32::from(test_manager.local_net.get_chain_height().await)
-                );
+                assert_eq!(2, (test_manager.local_net.get_chain_height().await));
                 test_manager.close().await;
             }
 
@@ -1100,15 +1093,9 @@ mod launch_testmanager {
                 )
                 .await
                 .unwrap();
-                assert_eq!(
-                    2,
-                    u32::from(test_manager.local_net.get_chain_height().await)
-                );
+                assert_eq!(2, (test_manager.local_net.get_chain_height().await));
                 test_manager.local_net.generate_blocks(1).await.unwrap();
-                assert_eq!(
-                    3,
-                    u32::from(test_manager.local_net.get_chain_height().await)
-                );
+                assert_eq!(3, (test_manager.local_net.get_chain_height().await));
                 test_manager.close().await;
             }
 
@@ -1127,10 +1114,7 @@ mod launch_testmanager {
                 )
                 .await
                 .unwrap();
-                assert_eq!(
-                    52,
-                    u32::from(test_manager.local_net.get_chain_height().await)
-                );
+                assert_eq!(52, (test_manager.local_net.get_chain_height().await));
                 test_manager.close().await;
             }
 
