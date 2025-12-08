@@ -207,13 +207,13 @@ pub struct TestManager<C: Validator, Service: LightWalletService + Send + Sync +
 pub trait ValidatorExt: Validator + LogsToStdoutAndStderr {
     /// Launch the validator, and return a validator config containing the
     /// ports used by the validator, etc
-    fn launch_local_net_and_return_validator_config(
+    fn launch_validator_and_return_config(
         config: Self::Config,
     ) -> impl Future<Output = Result<(Self, ValidatorConfig), LaunchError>> + Send + Sync;
 }
 
 impl ValidatorExt for Zebrad {
-    async fn launch_local_net_and_return_validator_config(
+    async fn launch_validator_and_return_config(
         config: ZebradConfig,
     ) -> Result<(Self, ValidatorConfig), LaunchError> {
         let zebrad = Zebrad::launch(config).await?;
@@ -235,7 +235,7 @@ impl ValidatorExt for Zebrad {
 }
 
 impl ValidatorExt for Zcashd {
-    async fn launch_local_net_and_return_validator_config(
+    async fn launch_validator_and_return_config(
         config: Self::Config,
     ) -> Result<(Self, ValidatorConfig), LaunchError> {
         let zcashd = Zcashd::launch(config).await?;
@@ -334,10 +334,9 @@ where
             chain_cache.clone(),
         );
 
-        let (local_net, validator_settings) =
-            C::launch_local_net_and_return_validator_config(config)
-                .await
-                .expect("to launch a default validator");
+        let (local_net, validator_settings) = C::launch_validator_and_return_config(config)
+            .await
+            .expect("to launch a default validator");
         let rpc_listen_port = local_net.get_port();
         let full_node_rpc_listen_address =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rpc_listen_port);
