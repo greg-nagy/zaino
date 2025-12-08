@@ -796,7 +796,7 @@ mod launch_testmanager {
                 .unwrap();
                 assert_eq!(
                     2,
-                    u32::from(test_manager.local_net.get_chain_height().await)
+                    (test_manager.local_net.get_chain_height().await)
                 );
                 test_manager.close().await;
             }
@@ -817,7 +817,7 @@ mod launch_testmanager {
                 .unwrap();
                 assert_eq!(
                     2,
-                    u32::from(test_manager.local_net.get_chain_height().await)
+                    (test_manager.local_net.get_chain_height().await)
                 );
                 test_manager.local_net.generate_blocks(1).await.unwrap();
                 assert_eq!(3, (test_manager.local_net.get_chain_height().await));
@@ -841,7 +841,7 @@ mod launch_testmanager {
                 .unwrap();
                 assert_eq!(
                     52,
-                    u32::from(test_manager.local_net.get_chain_height().await)
+                    (test_manager.local_net.get_chain_height().await)
                 );
                 test_manager.close().await;
             }
@@ -1086,7 +1086,7 @@ mod launch_testmanager {
                 .unwrap();
                 assert_eq!(
                     2,
-                    u32::from(test_manager.local_net.get_chain_height().await)
+                    (test_manager.local_net.get_chain_height().await)
                 );
                 test_manager.close().await;
             }
@@ -1107,12 +1107,12 @@ mod launch_testmanager {
                 .unwrap();
                 assert_eq!(
                     2,
-                    u32::from(test_manager.local_net.get_chain_height().await)
+                    (test_manager.local_net.get_chain_height().await)
                 );
                 test_manager.local_net.generate_blocks(1).await.unwrap();
                 assert_eq!(
                     3,
-                    u32::from(test_manager.local_net.get_chain_height().await)
+                    (test_manager.local_net.get_chain_height().await)
                 );
                 test_manager.close().await;
             }
@@ -1134,7 +1134,7 @@ mod launch_testmanager {
                 .unwrap();
                 assert_eq!(
                     52,
-                    u32::from(test_manager.local_net.get_chain_height().await)
+                    (test_manager.local_net.get_chain_height().await)
                 );
                 test_manager.close().await;
             }
