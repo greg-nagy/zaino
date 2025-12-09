@@ -111,26 +111,12 @@ mod chain_query_interface {
                     None => test_manager.data_dir.clone(),
                 };
                 let network = match test_manager.network {
-                    NetworkKind::Regtest => {
-                        // Unfortunate hack to work around local_net returning a configured activation
-                        // heights from the wrong zebra-state version. Remove when we can get these
-                        // aligned
-                        let heights = test_manager.local_net.get_activation_heights().await;
-                        zebra_chain::parameters::Network::new_regtest(RegtestParameters::from(
-                            ConfiguredActivationHeights {
-                                before_overwinter: heights.before_overwinter,
-                                overwinter: heights.overwinter,
-                                sapling: heights.sapling,
-                                blossom: heights.blossom,
-                                heartwood: heights.heartwood,
-                                canopy: heights.canopy,
-                                nu5: heights.nu5,
-                                nu6: heights.nu6,
-                                nu6_1: heights.nu6_1,
-                                nu7: heights.nu7,
-                            },
-                        ))
-                    }
+                    NetworkKind::Regtest => zebra_chain::parameters::Network::new_regtest(
+                        RegtestParameters::from(ConfiguredActivationHeights::from(
+                            test_manager.local_net.get_activation_heights().await,
+                        )),
+                    ),
+
                     NetworkKind::Testnet => zebra_chain::parameters::Network::new_default_testnet(),
                     NetworkKind::Mainnet => zebra_chain::parameters::Network::Mainnet,
                 };
@@ -173,25 +159,9 @@ mod chain_query_interface {
                         ..Default::default()
                     },
                     db_version: 1,
-                    network: zaino_common::Network::Regtest({
-                        // Unfortunate hack to work around local_net returning a configured activation
-                        // heights from the wrong zebra-state version. Remove when we can get these
-                        // aligned
-                        let heights = test_manager.local_net.get_activation_heights().await;
-                        ConfiguredActivationHeights {
-                            before_overwinter: heights.before_overwinter,
-                            overwinter: heights.overwinter,
-                            sapling: heights.sapling,
-                            blossom: heights.blossom,
-                            heartwood: heights.heartwood,
-                            canopy: heights.canopy,
-                            nu5: heights.nu5,
-                            nu6: heights.nu6,
-                            nu6_1: heights.nu6_1,
-                            nu7: heights.nu7,
-                        }
-                        .into()
-                    }),
+                    network: zaino_common::Network::Regtest(ActivationHeights::from(
+                        test_manager.local_net.get_activation_heights().await,
+                    )),
                 };
                 let chain_index = NodeBackedChainIndex::new(
                     ValidatorConnector::State(chain_index::source::State {
@@ -227,25 +197,7 @@ mod chain_query_interface {
                     },
                     db_version: 1,
                     network: zaino_common::Network::Regtest(
-                        {
-                            // Unfortunate hack to work around local_net returning a configured activation
-                            // heights from the wrong zebra-state version. Remove when we can get these
-                            // aligned
-                            let heights = test_manager.local_net.get_activation_heights().await;
-                            ConfiguredActivationHeights {
-                                before_overwinter: heights.before_overwinter,
-                                overwinter: heights.overwinter,
-                                sapling: heights.sapling,
-                                blossom: heights.blossom,
-                                heartwood: heights.heartwood,
-                                canopy: heights.canopy,
-                                nu5: heights.nu5,
-                                nu6: heights.nu6,
-                                nu6_1: heights.nu6_1,
-                                nu7: heights.nu7,
-                            }
-                        }
-                        .into(),
+                        test_manager.local_net.get_activation_heights().await.into(),
                     ),
                 };
                 let chain_index = NodeBackedChainIndex::new(
