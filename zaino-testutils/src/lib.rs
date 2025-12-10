@@ -37,8 +37,7 @@ use zcash_local_net::{
 };
 use zcash_local_net::{logs::LogsToStdoutAndStderr, process::Process};
 use zcash_protocol::PoolType;
-use zebra_chain::parameters::NetworkKind;
-use zebra_chain_zingolib_testutils_compat::parameters::testnet::ConfiguredActivationHeights;
+use zebra_chain::parameters::{testnet::ConfiguredActivationHeights, NetworkKind};
 use zingo_netutils::{GetClientError, GrpcConnector, UnderlyingService};
 use zingo_test_vectors::seeds;
 pub use zingolib::get_base_address_macro;
@@ -310,27 +309,13 @@ where
         // Launch LocalNet:
 
         let mut config = C::Config::default();
-        // Cannot use from impl as From is impled for our version of this type, and not the
-        // compatibility special import
-        let configured_activation_heights = ConfiguredActivationHeights {
-            before_overwinter: activation_heights.before_overwinter,
-            overwinter: activation_heights.overwinter,
-            sapling: activation_heights.sapling,
-            blossom: activation_heights.blossom,
-            heartwood: activation_heights.heartwood,
-            canopy: activation_heights.canopy,
-            nu5: activation_heights.nu5,
-            nu6: activation_heights.nu6,
-            nu6_1: activation_heights.nu6_1,
-            nu7: activation_heights.nu7,
-        };
         config.set_test_parameters(
             if validator == &ValidatorKind::Zebrad {
                 PoolType::Transparent
             } else {
                 PoolType::ORCHARD
             },
-            configured_activation_heights,
+            activation_heights.into(),
             chain_cache.clone(),
         );
 
