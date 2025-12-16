@@ -1,4 +1,7 @@
-extend = "makefiles/lints.toml"
+extend = [
+    { path = "makefiles/lints.toml" },
+    { path = "makefiles/notify.toml" },
+]
 env_files = [".env.testing-artifacts"]
 
 [config]
@@ -271,6 +274,7 @@ DOCKER_PID=$!
 # Wait for the docker process
 wait $DOCKER_PID
 '''
+script.post = "makers notify"
 
 # -------------------------------------------------------------------
 
