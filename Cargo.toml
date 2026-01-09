@@ -129,13 +129,14 @@ derive_more = "2.0.1"
 lazy_static = "1.5.0"
 
 [patch.crates-io]
-zcash_client_backend = { git = "https://github.com/zcash/librustzcash", rev = "3ba772c9b8"}
-zcash_address = { git = "https://github.com/zcash/librustzcash", rev = "3ba772c9b8"}
-zcash_keys = { git = "https://github.com/zcash/librustzcash", rev = "3ba772c9b8"}
-zcash_primitives = { git = "https://github.com/zcash/librustzcash", rev = "3ba772c9b8"}
-zcash_protocol = { git = "https://github.com/zcash/librustzcash", rev = "3ba772c9b8"}
-zcash_transparent = { git = "https://github.com/zcash/librustzcash", rev = "3ba772c9b8"}
-
+# Local patches for tag-PIR development
+orchard = { path = "../orchard" }
+zcash_client_backend = { path = "../librustzcash/zcash_client_backend" }
+zcash_address = { path = "../librustzcash/components/zcash_address" }
+zcash_keys = { path = "../librustzcash/zcash_keys" }
+zcash_primitives = { path = "../librustzcash/zcash_primitives" }
+zcash_protocol = { path = "../librustzcash/components/zcash_protocol" }
+zcash_transparent = { path = "../librustzcash/zcash_transparent" }
 
 [profile.test]
 opt-level = 3
