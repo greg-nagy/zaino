@@ -1394,7 +1394,10 @@ impl LightWalletIndexer for FetchServiceSubscriber {
     /// The block can be specified by either height or hash.
     async fn get_tree_state(&self, request: BlockId) -> Result<TreeState, Self::Error> {
         let chain_info = self.get_blockchain_info().await?;
-        let hash_or_height = if request.height != 0 {
+        // Use hash if provided and non-empty, otherwise use height (even if 0)
+        let hash_or_height = if !request.hash.is_empty() {
+            hex::encode(&request.hash)
+        } else {
             match u32::try_from(request.height) {
                 Ok(height) => {
                     if height > chain_info.blocks().0 {
@@ -1416,8 +1419,6 @@ impl LightWalletIndexer for FetchServiceSubscriber {
                     ));
                 }
             }
-        } else {
-            hex::encode(request.hash)
         };
         match self.z_get_treestate(hash_or_height).await {
             Ok(state) => {
