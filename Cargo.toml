@@ -137,6 +137,7 @@ zcash_keys = { path = "../librustzcash/zcash_keys" }
 zcash_primitives = { path = "../librustzcash/zcash_primitives" }
 zcash_protocol = { path = "../librustzcash/components/zcash_protocol" }
 zcash_transparent = { path = "../librustzcash/zcash_transparent" }
+zebra-chain = { path = "../zebra/zebra-chain" }
 
 [profile.test]
 opt-level = 3
