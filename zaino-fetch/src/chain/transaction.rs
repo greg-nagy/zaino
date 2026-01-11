@@ -1574,4 +1574,91 @@ mod tests {
             );
         }
     }
+
+    /// Test parsing v5 transactions using test vectors.
+    /// Validates that V5 transactions with Orchard actions parse correctly,
+    /// and that all Orchard actions have empty tags (tag field only exists in V6+).
+    #[test]
+    fn test_v5_transaction_parsing_with_test_vectors() {
+        let test_vectors = get_test_vectors();
+        let v5_vectors: Vec<_> = test_vectors.iter().filter(|tv| tv.version == 5).collect();
+
+        assert!(!v5_vectors.is_empty(), "No v5 test vectors found");
+
+        for (i, vector) in v5_vectors.iter().enumerate() {
+            let result = FullTransaction::parse_from_slice(
+                &vector.tx,
+                Some(vec![vector.txid.to_vec()]),
+                None,
+            );
+
+            assert!(
+                result.is_ok(),
+                "Failed to parse v5 test vector #{}: {:?}. Description: {}",
+                i,
+                result.err(),
+                vector.description
+            );
+
+            let (remaining, parsed_tx) = result.unwrap();
+            assert!(
+                remaining.is_empty(),
+                "Should consume all data for v5 transaction #{}: {} bytes remaining",
+                i,
+                remaining.len()
+            );
+
+            // Verify version matches
+            assert_eq!(
+                parsed_tx.raw_transaction.version, 5,
+                "Version mismatch for v5 transaction #{i}"
+            );
+
+            // Verify transaction properties match test vector expectations
+            assert_eq!(
+                parsed_tx.raw_transaction.transparent_inputs.len(),
+                vector.transparent_inputs,
+                "Transparent inputs mismatch for v5 transaction #{i}"
+            );
+
+            assert_eq!(
+                parsed_tx.raw_transaction.transparent_outputs.len(),
+                vector.transparent_outputs,
+                "Transparent outputs mismatch for v5 transaction #{i}"
+            );
+
+            // V5 transactions should have empty tags on all Orchard actions
+            for (j, action) in parsed_tx.raw_transaction.orchard_actions.iter().enumerate() {
+                assert!(
+                    action.tag.is_empty(),
+                    "V5 transaction #{i} action #{j} should have empty tag, got {} bytes",
+                    action.tag.len()
+                );
+            }
+        }
+    }
+
+    /// Test that Action parsing correctly differentiates V5 (no tag) vs V6 (with tag).
+    #[test]
+    fn test_action_tag_parsing_by_version() {
+        // Construct minimal V5-style action data (no tag)
+        // 32 (cv) + 32 (nf) + 32 (rk) + 32 (cmx) + 32 (epk) + 580 (enc) + 80 (out) = 820 bytes
+        let v5_action_data = vec![0u8; 820];
+
+        let result = Action::parse_from_slice(&v5_action_data, None, Some(5));
+        assert!(result.is_ok(), "V5 action should parse successfully");
+        let (remaining, action) = result.unwrap();
+        assert_eq!(remaining.len(), 0, "V5 action should consume exactly 820 bytes");
+        assert!(action.tag.is_empty(), "V5 action should have empty tag");
+
+        // Construct V6-style action data (with 16-byte tag)
+        // 820 (base) + 16 (tag) = 836 bytes
+        let v6_action_data = vec![0u8; 836];
+
+        let result = Action::parse_from_slice(&v6_action_data, None, Some(6));
+        assert!(result.is_ok(), "V6 action should parse successfully");
+        let (remaining, action) = result.unwrap();
+        assert_eq!(remaining.len(), 0, "V6 action should consume exactly 836 bytes");
+        assert_eq!(action.tag.len(), 16, "V6 action should have 16-byte tag");
+    }
 }

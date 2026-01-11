@@ -3002,3 +3002,117 @@ pub mod serde_arrays {
             .map_err(|_| serde::de::Error::custom(format!("invalid length for [u8; {N}]")))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chain_index::encoding::ZainoVersionedSerde;
+    use std::io::Cursor;
+
+    /// Test CompactOrchardAction serialization round-trip without tag (V5 style).
+    #[test]
+    fn test_compact_orchard_action_roundtrip_without_tag() {
+        let action = CompactOrchardAction::new(
+            [1u8; 32],  // nullifier
+            [2u8; 32],  // cmx
+            [3u8; 32],  // ephemeral_key
+            [4u8; 52],  // ciphertext
+            None,       // no tag (V5)
+        );
+
+        // Serialize
+        let mut buf = Vec::new();
+        action.serialize(&mut buf).expect("serialization should succeed");
+
+        // Deserialize
+        let mut cursor = Cursor::new(&buf);
+        let decoded = CompactOrchardAction::deserialize(&mut cursor)
+            .expect("deserialization should succeed");
+
+        assert_eq!(action, decoded, "round-trip should preserve data");
+        assert!(decoded.tag().is_none(), "tag should remain None");
+    }
+
+    /// Test CompactOrchardAction serialization round-trip with tag (V6 style).
+    #[test]
+    fn test_compact_orchard_action_roundtrip_with_tag() {
+        let tag = [0xABu8; 16];
+        let action = CompactOrchardAction::new(
+            [1u8; 32],   // nullifier
+            [2u8; 32],   // cmx
+            [3u8; 32],   // ephemeral_key
+            [4u8; 52],   // ciphertext
+            Some(tag),   // with tag (V6)
+        );
+
+        // Serialize
+        let mut buf = Vec::new();
+        action.serialize(&mut buf).expect("serialization should succeed");
+
+        // Deserialize
+        let mut cursor = Cursor::new(&buf);
+        let decoded = CompactOrchardAction::deserialize(&mut cursor)
+            .expect("deserialization should succeed");
+
+        assert_eq!(action, decoded, "round-trip should preserve data");
+        assert_eq!(decoded.tag(), Some(&tag), "tag should be preserved");
+    }
+
+    /// Test V1 backward compatibility - V1 encoded data should decode without tag.
+    #[test]
+    fn test_compact_orchard_action_v1_backward_compat() {
+        // Manually construct V1 format: version byte + 148 bytes body (no tag)
+        let mut v1_data = vec![0x01]; // V1 version
+        v1_data.extend_from_slice(&[1u8; 32]); // nullifier
+        v1_data.extend_from_slice(&[2u8; 32]); // cmx
+        v1_data.extend_from_slice(&[3u8; 32]); // ephemeral_key
+        v1_data.extend_from_slice(&[4u8; 52]); // ciphertext
+
+        let mut cursor = Cursor::new(&v1_data);
+        let decoded = CompactOrchardAction::deserialize(&mut cursor)
+            .expect("V1 data should deserialize");
+
+        assert_eq!(decoded.nullifier(), &[1u8; 32]);
+        assert_eq!(decoded.cmx(), &[2u8; 32]);
+        assert_eq!(decoded.ephemeral_key(), &[3u8; 32]);
+        assert_eq!(decoded.ciphertext(), &[4u8; 52]);
+        assert!(decoded.tag().is_none(), "V1 data should have no tag");
+    }
+
+    /// Test into_compact produces correct proto format with tag.
+    #[test]
+    fn test_compact_orchard_action_into_compact_with_tag() {
+        let tag = [0x42u8; 16];
+        let action = CompactOrchardAction::new(
+            [1u8; 32],
+            [2u8; 32],
+            [3u8; 32],
+            [4u8; 52],
+            Some(tag),
+        );
+
+        let proto = action.into_compact();
+
+        assert_eq!(proto.nullifier, vec![1u8; 32]);
+        assert_eq!(proto.cmx, vec![2u8; 32]);
+        assert_eq!(proto.ephemeral_key, vec![3u8; 32]);
+        assert_eq!(proto.ciphertext, vec![4u8; 52]);
+        assert_eq!(proto.tag, tag.to_vec(), "proto tag should match");
+    }
+
+    /// Test into_compact produces empty tag vec when no tag present.
+    #[test]
+    fn test_compact_orchard_action_into_compact_without_tag() {
+        let action = CompactOrchardAction::new(
+            [1u8; 32],
+            [2u8; 32],
+            [3u8; 32],
+            [4u8; 52],
+            None,
+        );
+
+        let proto = action.into_compact();
+
+        assert!(proto.tag.is_empty(), "proto tag should be empty when None");
+    }
+}
