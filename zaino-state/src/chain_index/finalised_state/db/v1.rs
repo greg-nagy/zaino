@@ -15,7 +15,7 @@ use crate::{
     config::BlockCacheConfig,
     error::FinalisedStateError,
     AddrHistRecord, AddrScript, AtomicStatus, BlockHash, BlockHeaderData, CommitmentTreeData,
-    CompactOrchardAction, CompactSaplingOutput, CompactSaplingSpend, CompactSize, CompactTxData,
+    CompactSaplingOutput, CompactSaplingSpend, CompactSize, CompactTxData,
     FixedEncodedLen as _, Height, IndexedBlock, OrchardCompactTx, OrchardTxList, Outpoint,
     SaplingCompactTx, SaplingTxList, StatusType, TransparentCompactTx, TransparentTxList,
     TxInCompact, TxLocation, TxOutCompact, TxidList, ZainoVersionedSerde as _,
@@ -3909,9 +3909,26 @@ impl DbV1 {
         // Read number of actions (CompactSize)
         let action_len = CompactSize::read(&mut *cursor)? as usize;
 
-        // Skip actions: each is 1-byte version + 148-byte body
-        let action_skip = action_len * CompactOrchardAction::VERSIONED_LEN;
-        cursor.set_position(cursor.position() + action_skip as u64);
+        // Skip actions: each has variable length due to optional tag field
+        // V1: 1-byte version + 148-byte body (no tag)
+        // V2: 1-byte version + 148-byte body + 1-byte tag flag + (0 or 16 bytes tag)
+        for _ in 0..action_len {
+            let mut version = [0u8; 1];
+            cursor.read_exact(&mut version)?;
+
+            // Fixed body: 32 (nf) + 32 (cmx) + 32 (epk) + 52 (ciphertext) = 148 bytes
+            cursor.set_position(cursor.position() + 148);
+
+            if version[0] >= 2 {
+                // V2+ has tag flag
+                let mut tag_flag = [0u8; 1];
+                cursor.read_exact(&mut tag_flag)?;
+                if tag_flag[0] == 1 {
+                    // Skip 16-byte tag
+                    cursor.set_position(cursor.position() + 16);
+                }
+            }
+        }
 
         Ok(())
     }

@@ -119,4 +119,7 @@ pub struct CompactOrchardAction {
     /// \[52\] The first 52 bytes of the encCiphertext field
     #[prost(bytes = "vec", tag = "4")]
     pub ciphertext: ::prost::alloc::vec::Vec<u8>,
+    /// \[16\] Detection tag for PIR-based scanning (V6+ only, empty for V5)
+    #[prost(bytes = "vec", tag = "5")]
+    pub tag: ::prost::alloc::vec::Vec<u8>,
 }

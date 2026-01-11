@@ -81,4 +81,5 @@ message CompactOrchardAction {
     bytes cmx = 2;              // [32] The x-coordinate of the note commitment for the output note
     bytes ephemeralKey = 3;     // [32] An encoding of an ephemeral Pallas public key
     bytes ciphertext = 4;       // [52] The first 52 bytes of the encCiphertext field
+    bytes tag = 5;              // [16] Detection tag for PIR-based scanning (V6+ only, empty for V5)
 }

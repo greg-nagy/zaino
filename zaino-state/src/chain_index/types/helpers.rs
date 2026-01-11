@@ -279,11 +279,19 @@ impl<'a> BlockWithMetadata<'a> {
                     let cipher: [u8; 52] = <[u8; 580]>::from(action.enc_ciphertext)[..52]
                         .try_into()
                         .unwrap(); // TODO: Remove unwrap
+
+                    // Tag is only present in V6/NU7+ transactions (gated behind cfg)
+                    #[cfg(all(zcash_unstable = "nu7", feature = "tx_v6"))]
+                    let tag = Some(action.tag);
+                    #[cfg(not(all(zcash_unstable = "nu7", feature = "tx_v6")))]
+                    let tag: Option<[u8; 16]> = None;
+
                     CompactOrchardAction::new(
                         <[u8; 32]>::from(action.nullifier),
                         <[u8; 32]>::from(action.cm_x),
                         <[u8; 32]>::from(action.ephemeral_key),
                         cipher,
+                        tag,
                     )
                 })
                 .collect::<Vec<_>>(),

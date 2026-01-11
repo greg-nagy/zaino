@@ -353,15 +353,20 @@ struct Action {
     /// Size\[bytes\]: 580
     enc_ciphertext: Vec<u8>,
     // OutCiphertext \[IGNORED\] - Size\[bytes\]: 80
+    /// Detection tag for PIR-based scanning (V6+ only).
+    ///
+    /// Size\[bytes\]: 16 (V6+) or 0 (V5)
+    tag: Vec<u8>,
 }
 
 impl Action {
-    fn into_parts(self) -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {
+    fn into_parts(self) -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {
         (
             self.nullifier,
             self.cmx,
             self.ephemeral_key,
             self.enc_ciphertext,
+            self.tag,
         )
     }
 }
@@ -377,11 +382,11 @@ impl ParseFromSlice for Action {
                 "txid must be None for Action::parse_from_slice".to_string(),
             ));
         }
-        if tx_version.is_some() {
-            return Err(ParseError::InvalidData(
-                "tx_version must be None for Action::parse_from_slice".to_string(),
-            ));
-        }
+        let tx_version = tx_version.ok_or_else(|| {
+            ParseError::InvalidData(
+                "tx_version must be used for Action::parse_from_slice".to_string(),
+            )
+        })?;
         let mut cursor = Cursor::new(data);
 
         skip_bytes(&mut cursor, 32, "Error skipping Action::Cv")?;
@@ -392,6 +397,13 @@ impl ParseFromSlice for Action {
         let enc_ciphertext = read_bytes(&mut cursor, 580, "Error reading Action::enc_ciphertext")?;
         skip_bytes(&mut cursor, 80, "Error skipping Action::OutCiphertext")?;
 
+        // Read tag for V6+ transactions only
+        let tag = if tx_version >= 6 {
+            read_bytes(&mut cursor, 16, "Error reading Action::tag")?
+        } else {
+            vec![]
+        };
+
         Ok((
             &data[cursor.position() as usize..],
             Action {
@@ -399,6 +411,7 @@ impl ParseFromSlice for Action {
                 cmx,
                 ephemeral_key,
                 enc_ciphertext,
+                tag,
             },
         ))
     }
@@ -858,7 +871,173 @@ impl TransactionData {
         let mut orchard_actions = Vec::with_capacity(actions_count as usize);
         for _ in 0..actions_count {
             let (remaining_data, action) =
-                Action::parse_from_slice(&data[cursor.position() as usize..], None, None)?;
+                Action::parse_from_slice(&data[cursor.position() as usize..], None, Some(version))?;
+            orchard_actions.push(action);
+            cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
+        }
+
+        let mut value_balance_orchard = None;
+        let mut anchor_orchard = None;
+        if actions_count > 0 {
+            skip_bytes(
+                &mut cursor,
+                1,
+                "Error skipping TransactionData::flagsOrchard",
+            )?;
+            value_balance_orchard = Some(read_i64(
+                &mut cursor,
+                "Error reading TransactionData::valueBalanceOrchard",
+            )?);
+            anchor_orchard = Some(read_bytes(
+                &mut cursor,
+                32,
+                "Error reading TransactionData::anchorOrchard",
+            )?);
+            let proofs_count = CompactSize::read(&mut cursor)?;
+            skip_bytes(
+                &mut cursor,
+                proofs_count as usize,
+                "Error skipping TransactionData::proofsOrchard",
+            )?;
+            skip_bytes(
+                &mut cursor,
+                (64 * actions_count) as usize,
+                "Error skipping TransactionData::vSpendAuthSigsOrchard",
+            )?;
+            skip_bytes(
+                &mut cursor,
+                64,
+                "Error skipping TransactionData::bindingSigOrchard",
+            )?;
+        }
+
+        Ok((
+            &data[cursor.position() as usize..],
+            TransactionData {
+                f_overwintered: true,
+                version,
+                n_version_group_id: Some(n_version_group_id),
+                consensus_branch_id,
+                transparent_inputs,
+                transparent_outputs,
+                value_balance_sapling,
+                shielded_spends,
+                shielded_outputs,
+                join_splits: Vec::new(),
+                orchard_actions,
+                value_balance_orchard,
+                anchor_orchard,
+            },
+        ))
+    }
+
+    fn parse_v6(
+        data: &[u8],
+        version: u32,
+        n_version_group_id: u32,
+    ) -> Result<(&[u8], Self), ParseError> {
+        // V6 version group ID is 0xFFFFFFFF (ZIP-230)
+        if n_version_group_id != 0xFFFFFFFF {
+            return Err(ParseError::InvalidData(format!(
+                "version group ID {n_version_group_id:x} must be 0xFFFFFFFF for v6 transactions"
+            )));
+        }
+        let mut cursor = Cursor::new(data);
+
+        let consensus_branch_id = read_u32(
+            &mut cursor,
+            "Error reading TransactionData::ConsensusBranchId",
+        )?;
+
+        skip_bytes(&mut cursor, 4, "Error skipping TransactionData::nLockTime")?;
+        skip_bytes(
+            &mut cursor,
+            4,
+            "Error skipping TransactionData::nExpiryHeight",
+        )?;
+
+        let (remaining_data, transparent_inputs, transparent_outputs) =
+            parse_transparent(&data[cursor.position() as usize..])?;
+        cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
+
+        let spend_count = CompactSize::read(&mut cursor)?;
+        if spend_count >= (1 << 16) {
+            return Err(ParseError::InvalidData(format!(
+                "spendCount ({spend_count}) must be less than 2^16"
+            )));
+        }
+        let mut shielded_spends = Vec::with_capacity(spend_count as usize);
+        for _ in 0..spend_count {
+            let (remaining_data, spend) =
+                Spend::parse_from_slice(&data[cursor.position() as usize..], None, Some(6))?;
+            shielded_spends.push(spend);
+            cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
+        }
+        let output_count = CompactSize::read(&mut cursor)?;
+        if output_count >= (1 << 16) {
+            return Err(ParseError::InvalidData(format!(
+                "outputCount ({output_count}) must be less than 2^16"
+            )));
+        }
+        let mut shielded_outputs = Vec::with_capacity(output_count as usize);
+        for _ in 0..output_count {
+            let (remaining_data, output) =
+                Output::parse_from_slice(&data[cursor.position() as usize..], None, Some(6))?;
+            shielded_outputs.push(output);
+            cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
+        }
+
+        let value_balance_sapling = if spend_count + output_count > 0 {
+            Some(read_i64(
+                &mut cursor,
+                "Error reading TransactionData::valueBalanceSapling",
+            )?)
+        } else {
+            None
+        };
+        if spend_count > 0 {
+            skip_bytes(
+                &mut cursor,
+                32,
+                "Error skipping TransactionData::anchorSapling",
+            )?;
+            skip_bytes(
+                &mut cursor,
+                (192 * spend_count) as usize,
+                "Error skipping TransactionData::vSpendProofsSapling",
+            )?;
+            skip_bytes(
+                &mut cursor,
+                (64 * spend_count) as usize,
+                "Error skipping TransactionData::vSpendAuthSigsSapling",
+            )?;
+        }
+        if output_count > 0 {
+            skip_bytes(
+                &mut cursor,
+                (192 * output_count) as usize,
+                "Error skipping TransactionData::vOutputProofsSapling",
+            )?;
+        }
+        if spend_count + output_count > 0 {
+            skip_bytes(
+                &mut cursor,
+                64,
+                "Error skipping TransactionData::bindingSigSapling",
+            )?;
+        }
+
+        let actions_count = CompactSize::read(&mut cursor)?;
+        if actions_count >= (1 << 16) {
+            return Err(ParseError::InvalidData(format!(
+                "actionsCount ({actions_count}) must be less than 2^16"
+            )));
+        }
+        let mut orchard_actions = Vec::with_capacity(actions_count as usize);
+        for _ in 0..actions_count {
+            // V6 actions include the 16-byte tag (handled in Action::parse_from_slice)
+            let (remaining_data, action) =
+                Action::parse_from_slice(&data[cursor.position() as usize..], None, Some(version))?;
             orchard_actions.push(action);
             cursor.set_position(data.len() as u64 - remaining_data.len() as u64);
         }
@@ -964,7 +1143,7 @@ impl ParseFromSlice for FullTransaction {
                     ));
                 }
             }
-            3..=5 => {
+            3..=6 => {
                 if !f_overwintered {
                     return Err(ParseError::InvalidData(
                         "fOverwintered must be set for tx versions 3 and above".to_string(),
@@ -979,7 +1158,7 @@ impl ParseFromSlice for FullTransaction {
         }
 
         let n_version_group_id: Option<u32> = match version {
-            3..=5 => Some(read_u32(
+            3..=6 => Some(read_u32(
                 &mut cursor,
                 "Error reading FullTransaction::n_version_group_id",
             )?),
@@ -1000,6 +1179,11 @@ impl ParseFromSlice for FullTransaction {
                 n_version_group_id.unwrap(), // This won't fail, because of the above match
             )?,
             5 => TransactionData::parse_v5(
+                &data[cursor.position() as usize..],
+                version,
+                n_version_group_id.unwrap(), // This won't fail, because of the above match
+            )?,
+            6 => TransactionData::parse_v6(
                 &data[cursor.position() as usize..],
                 version,
                 n_version_group_id.unwrap(), // This won't fail, because of the above match
@@ -1094,9 +1278,9 @@ impl FullTransaction {
         None
     }
 
-    /// Returns a vec of orchard actions (nullifier, cmx, ephemeral_key, enc_ciphertext) for the transaction.
+    /// Returns a vec of orchard actions (nullifier, cmx, ephemeral_key, enc_ciphertext, tag) for the transaction.
     #[allow(clippy::complexity)]
-    pub fn orchard_actions(&self) -> Vec<(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>)> {
+    pub fn orchard_actions(&self) -> Vec<(Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>)> {
         self.raw_transaction
             .orchard_actions
             .iter()
@@ -1157,6 +1341,7 @@ impl FullTransaction {
                 cmx: action.cmx.clone(),
                 ephemeral_key: action.ephemeral_key.clone(),
                 ciphertext: action.enc_ciphertext[..52].to_vec(),
+                tag: action.tag.clone(),
             })
             .collect();
 

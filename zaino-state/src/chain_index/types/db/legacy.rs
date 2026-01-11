@@ -1461,6 +1461,7 @@ impl CompactTxData {
                     cmx: a.cmx().to_vec(),
                     ephemeral_key: a.ephemeral_key().to_vec(),
                     ciphertext: a.ciphertext().to_vec(),
+                    tag: a.tag().map(|t| t.to_vec()).unwrap_or_default(),
                 },
             )
             .collect();
@@ -1558,7 +1559,7 @@ impl TryFrom<(u64, zaino_fetch::chain::transaction::FullTransaction)> for Compac
         let actions: Vec<CompactOrchardAction> = tx
             .orchard_actions()
             .into_iter()
-            .map(|(nf, cmx, epk, ct)| {
+            .map(|(nf, cmx, epk, ct, tag)| {
                 let nf: [u8; 32] = nf
                     .try_into()
                     .map_err(|_| "orchard nullifier must be 32 bytes".to_string())?;
@@ -1573,7 +1574,13 @@ impl TryFrom<(u64, zaino_fetch::chain::transaction::FullTransaction)> for Compac
                     .ok_or("orchard ciphertext must be at least 52 bytes")?
                     .try_into()
                     .map_err(|_| "orchard ciphertext must be 52 bytes".to_string())?;
-                Ok::<_, String>(CompactOrchardAction::new(nf, cmx, epk, ct))
+                // Tag is empty for V5, 16 bytes for V6+
+                let tag: Option<[u8; 16]> = if tag.is_empty() {
+                    None
+                } else {
+                    Some(tag.try_into().map_err(|_| "orchard tag must be 16 bytes".to_string())?)
+                };
+                Ok::<_, String>(CompactOrchardAction::new(nf, cmx, epk, ct, tag))
             })
             .collect::<Result<_, _>>()?;
 
@@ -2212,7 +2219,7 @@ impl ZainoVersionedSerde for OrchardCompactTx {
 }
 
 /// Compact representation of Orchard shielded action (note spend or output).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub struct CompactOrchardAction {
     /// Nullifier preventing double spends of the Orchard note.
@@ -2224,6 +2231,8 @@ pub struct CompactOrchardAction {
     /// Encrypted ciphertext of the Orchard note (minimal required portion).
     #[cfg_attr(test, serde(with = "serde_arrays"))]
     ciphertext: [u8; 52],
+    /// Detection tag for PIR-based scanning (V6+ only, empty for V5).
+    tag: Option<[u8; 16]>,
 }
 
 impl CompactOrchardAction {
@@ -2233,12 +2242,14 @@ impl CompactOrchardAction {
         cmx: [u8; 32],
         ephemeral_key: [u8; 32],
         ciphertext: [u8; 52],
+        tag: Option<[u8; 16]>,
     ) -> Self {
         Self {
             nullifier,
             cmx,
             ephemeral_key,
             ciphertext,
+            tag,
         }
     }
 
@@ -2262,6 +2273,11 @@ impl CompactOrchardAction {
         &self.ciphertext
     }
 
+    /// Returns tag (V6+ only, None for V5).
+    pub fn tag(&self) -> Option<&[u8; 16]> {
+        self.tag.as_ref()
+    }
+
     /// Creates a Proto CompactOrchardAction from this record.
     pub fn into_compact(&self) -> zaino_proto::proto::compact_formats::CompactOrchardAction {
         zaino_proto::proto::compact_formats::CompactOrchardAction {
@@ -2269,23 +2285,35 @@ impl CompactOrchardAction {
             cmx: self.cmx.to_vec(),
             ephemeral_key: self.ephemeral_key.to_vec(),
             ciphertext: self.ciphertext.to_vec(),
+            tag: self.tag.map(|t| t.to_vec()).unwrap_or_default(),
         }
     }
 }
 
 impl ZainoVersionedSerde for CompactOrchardAction {
-    const VERSION: u8 = version::V1;
+    const VERSION: u8 = version::V2;
 
     fn encode_body<W: Write>(&self, w: &mut W) -> io::Result<()> {
         let mut w = w;
         write_fixed_le::<32, _>(&mut w, &self.nullifier)?;
         write_fixed_le::<32, _>(&mut w, &self.cmx)?;
         write_fixed_le::<32, _>(&mut w, &self.ephemeral_key)?;
-        write_fixed_le::<52, _>(&mut w, &self.ciphertext)
+        write_fixed_le::<52, _>(&mut w, &self.ciphertext)?;
+        // Write tag: 1 byte presence flag + 16 bytes if present
+        match &self.tag {
+            Some(tag) => {
+                w.write_all(&[1])?;
+                write_fixed_le::<16, _>(&mut w, tag)?;
+            }
+            None => {
+                w.write_all(&[0])?;
+            }
+        }
+        Ok(())
     }
 
     fn decode_latest<R: Read>(r: &mut R) -> io::Result<Self> {
-        Self::decode_v1(r)
+        Self::decode_v2(r)
     }
 
     fn decode_v1<R: Read>(r: &mut R) -> io::Result<Self> {
@@ -2294,14 +2322,26 @@ impl ZainoVersionedSerde for CompactOrchardAction {
         let cmx = read_fixed_le::<32, _>(&mut r)?;
         let epk = read_fixed_le::<32, _>(&mut r)?;
         let ctxt = read_fixed_le::<52, _>(&mut r)?;
-        Ok(CompactOrchardAction::new(nf, cmx, epk, ctxt))
+        // V1 has no tag
+        Ok(CompactOrchardAction::new(nf, cmx, epk, ctxt, None))
     }
-}
 
-// CompactOrchardAction = 148 bytes
-impl FixedEncodedLen for CompactOrchardAction {
-    /// 32-byte nullifier + 32-byte cmx + 32-byte ephemeral_key + 52-byte ciphertext
-    const ENCODED_LEN: usize = 32 + 32 + 32 + 52;
+    fn decode_v2<R: Read>(r: &mut R) -> io::Result<Self> {
+        let mut r = r;
+        let nf = read_fixed_le::<32, _>(&mut r)?;
+        let cmx = read_fixed_le::<32, _>(&mut r)?;
+        let epk = read_fixed_le::<32, _>(&mut r)?;
+        let ctxt = read_fixed_le::<52, _>(&mut r)?;
+        // Read tag presence flag
+        let mut flag = [0u8; 1];
+        r.read_exact(&mut flag)?;
+        let tag = if flag[0] == 1 {
+            Some(read_fixed_le::<16, _>(&mut r)?)
+        } else {
+            None
+        };
+        Ok(CompactOrchardAction::new(nf, cmx, epk, ctxt, tag))
+    }
 }
 
 /// Identifies a transaction's location by block height and transaction index.
