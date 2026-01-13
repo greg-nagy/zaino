@@ -955,6 +955,12 @@ impl TransactionData {
             4,
             "Error skipping TransactionData::nExpiryHeight",
         )?;
+        // ZIP-230: V6 transactions have a zip233_amount field (8 bytes) before transparent
+        skip_bytes(
+            &mut cursor,
+            8,
+            "Error skipping TransactionData::zip233_amount",
+        )?;
 
         let (remaining_data, transparent_inputs, transparent_outputs) =
             parse_transparent(&data[cursor.position() as usize..])?;
